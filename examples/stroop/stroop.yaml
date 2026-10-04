@@ -1,0 +1,76 @@
+name: stroop
+description: >
+  Classic colour-word Stroop with eye tracking, EEG and physiology all time-locked
+  to the word onset. Run without hardware using:  edge run examples/stroop/stroop.yaml --dry-run
+
+settings:
+  window: {size: [1280, 720], background: "#111111", units: px}
+  participant: {participant: "001", session: "1"}
+
+devices:
+  - {id: eyetracker, type: gazepoint, required: false}
+  - {id: eeg, type: lsl_inlet, options: {stream_type: EEG}, required: false}
+  - {id: physio, type: mindware, options: {trigger: serial, port: COM3}, required: false}
+  - {id: lsl, type: lsl_markers, required: false}
+
+variables:
+  score: 0
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          Name the INK colour of each word.
+
+          r = red    g = green    b = blue
+
+          Press SPACE to begin
+        height: 30
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: fix, type: fixation, duration: 0.5}
+      - id: word
+        type: text
+        text: $word
+        color: $ink
+        height: 80
+        start: 0.5
+        marker: $f"word_{'congruent' if congruent else 'incongruent'}"
+      - id: resp
+        type: keyboard
+        keys: [r, g, b]
+        start: 0.5
+        duration: 2.0
+        correct: $correct_key
+        end_routine: true
+      - id: tally
+        type: variable
+        when: end
+        set: {score: "$score + (resp.corr or 0)"}
+
+  feedback:
+    duration: 0.6
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#55dd55' if resp.corr else '#ff5555'"
+
+  thanks:
+    duration: 2
+    components:
+      - {id: bye, type: text, text: "$f'Done! You scored {score} / {trials.total}'"}
+
+flow:
+  - instructions
+  - loop: trials
+    conditions: stroop.csv
+    order: random
+    repeats: 2
+    max_repeat: {ink: 2}
+    children: [trial, feedback]
+  - thanks

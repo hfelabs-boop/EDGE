@@ -1,0 +1,10 @@
+word,ink,congruent,correct_key
+RED,red,1,r
+RED,green,0,g
+RED,blue,0,b
+GREEN,red,0,r
+GREEN,green,1,g
+GREEN,blue,0,b
+BLUE,red,0,r
+BLUE,green,0,g
+BLUE,blue,1,b

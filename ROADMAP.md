@@ -1,0 +1,44 @@
+# Roadmap
+
+## Done in 0.1
+- Experiment model, sandboxed expressions, validator with TTL-collision warnings
+- Frame-locked engine; loops (5 orders, constraints, Latin squares), branches, staircases
+- Components: text, shape, fixation, image, sound, keyboard, mouse, slider, gaze ROI, gaze follow,
+  calibrate, marker, variable, code, wait
+- Drivers: Tobii Pro, Gazepoint, g.tec (LSL/Unicorn/gds), MindWare, LSL in/out, serial TTL,
+  parallel port, simulators
+- Clock models, aligned stream files, quality report, external alignment
+- Browser builder: timeline, flow, properties, live preview, devices, hardware scan, dry run, YAML
+- Dry runs with a virtual participant; real-time headless mode for screenless studies
+
+## Next: hardware validation (highest priority)
+- [ ] Run every driver against physical devices; photodiode + TTL loopback timing benchmarks
+      published per OS/GPU (Windows 11, macOS, Ubuntu)
+- [ ] `edge latency-test`: a guided photodiode/trigger self-test that writes a lab timing certificate
+- [ ] Low-latency audio backend (PortAudio/WASAPI exclusive) with measured onset latency
+- [ ] Hardware keyboard/button boxes (Cedrus RB, Black Box ToolKit, Arduino) with µs timestamps
+
+## More devices
+- [ ] EyeLink (pylink), Pupil Labs Neon/Core, Smart Eye, Tobii Pro Lab external presenter events
+- [ ] Brain Products (RDA/RCS), BioSemi, ANT Neuro, OpenBCI, Muse via native APIs
+- [ ] BIOPAC (AcqKnowledge network data transfer), Shimmer, Empatica, Polar H10
+- [ ] fNIRS (NIRx, Artinis), MRI scanner trigger input (TR sync), TMS/tDCS triggering
+- [ ] Generic "device from a description file" (serial/TCP/UDP protocols declared in YAML)
+
+## Builder
+- [ ] Drag-and-drop flow reordering, multi-select, copy/paste between experiments
+- [ ] Conditions spreadsheet editor with xlsx round trip
+- [ ] Inline expression checking and autocompletion of variables in scope
+- [ ] Live device dashboards (gaze overlay, signal quality, impedance) during sessions
+- [ ] Experimenter console: participant queue, session notes, run log, abort and resume
+
+## Runtime
+- [ ] Movie component (hardware-decoded, frame-locked)
+- [ ] Online runner: compile the same YAML to a browser runtime (JATOS / Pavlovia / Prolific)
+- [ ] VR/AR backend (OpenXR) with eye tracking in headsets
+- [ ] Resume interrupted sessions from `trials.jsonl`
+- [ ] BIDS / BIDS-EEG / BIDS-eyetracking export; XDF export
+
+## Analysis
+- [ ] Built-in epoching (EEG/physio/pupil around markers), fixation/saccade detection, AOI reports
+- [ ] One-click export to MNE-Python, EEGLAB, R

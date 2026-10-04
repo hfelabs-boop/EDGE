@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "edge-experiments"
+version = "0.1.0"
+description = "EDGE: a hardware-first experiment builder and runtime for behavioral, eye-tracking, physiology and EEG research."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["PyYAML>=6"]
+
+[project.optional-dependencies]
+display = ["pyglet>=2.0"]
+lsl = ["pylsl>=1.16"]
+tobii = ["tobii-research>=1.10"]
+serial = ["pyserial>=3.5"]
+gtec = []  # pygds ships with g.NEEDaccess; install it from g.tec's SDK
+all = ["pyglet>=2.0", "pylsl>=1.16", "pyserial>=3.5", "numpy>=1.24"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+edge = "edge.cli:main"
+
+[project.entry-points."edge.devices"]
+# third-party packages can register drivers here, e.g.
+# mydevice = "my_pkg.driver:MyDevice"
+
+[tool.setuptools.packages.find]
+include = ["edge*"]
+
+[tool.setuptools.package-data]
+"edge.builder" = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

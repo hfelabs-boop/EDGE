@@ -1,0 +1,51 @@
+# Architecture
+
+```
+edge/
+  model.py          Experiment document: parse, validate, save (YAML/JSON)
+  expressions.py    sandboxed $expressions
+  conditions.py     trial lists: files, factorial, ordering, constraints, Latin squares, staircases
+  engine.py         Runner (flow, loops, branches) + RoutineRun (frame loop)
+  runtime.py        Session: backend + devices + data + markers + guaranteed cleanup
+  components/       stimulus, response, eye-tracking, hardware and logic components (registry + plugins)
+  backends/         pyglet (OpenGL window) and headless (virtual clock or real-time)
+  devices/          drivers + registry + base class (streams, sinks, threads, clock models)
+  sync.py           clock models: linear fit, round trip, arrival envelope
+  data.py           session folder writers
+  report.py         post-session timing / integrity / sync analysis
+  align.py          external-recording alignment via TTL code sequences
+  participant.py    virtual participant for dry runs
+  scan.py           hardware discovery
+  templates.py      starter experiments
+  builder/          local web server + single-page builder (no build step)
+  cli.py            `edge` command
+```
+
+## Frame loop (RoutineRun.run)
+
+```
+prepare components (code on_begin and variable(start) run here, in order)
+loop:
+  predict next flip time
+  decide which components start / stop on that flip   (time, frame, start_after, start_if, stop_if, finished)
+  non-visual on_frame  →  visual on_frame (draw, list order)
+  flip  →  measured flip time
+  starting: on_start(flip) + onset markers  ·  stopping: on_stop(flip) + offset markers
+  input events → active components
+  poll devices (non-threaded drivers read here)
+  escape → abort (data is still saved)
+  end conditions: end_routine component done/timed out · routine duration · end_if · all finished
+```
+
+## Design principles
+
+* **The document is the experiment.** The builder, the CLI and scripts all edit the same YAML.
+  Nothing is generated and then hand-edited.
+* **Every device is a driver with the same small interface.** connect, start, poll, send_marker,
+  stop, close. Streams go through one sink to disk. Clock models are per device.
+* **Simulate everything.** Each backend and driver has a simulated twin, so a whole study can be
+  tested on a laptop and in CI.
+* **Data you can trust without EDGE.** Plain CSV/JSON, raw and aligned times side by side, the exact
+  experiment and seed saved with every session.
+* **Fail loudly before participants arrive.** Validation, dry runs (a routine that can never end is
+  an error) and the quality report.
