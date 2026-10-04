@@ -211,12 +211,16 @@ def create_server(root: str | Path = ".") -> FastMCP:
           add_branch(condition, then, otherwise, parent, position)
           add_device(dtype, did, options, required, record, markers, calibrate) · update_device(did, options, ...)
           remove_device(did) · update_settings(patch) · set_variables(values, replace) · set_info(name, description)
+          add_state_machine(mid, states, start, parent, position, max_steps)
+          update_state(mid, state, run, next, max_visits, description, rename_to, make_start) · remove_state(mid, state)
+          add_rule(rid, when, do, repeat, name) · remove_rule(rid, index)
         Example: [{"op":"add_routine","rid":"trial"},{"op":"add_component","rid":"trial","ctype":"text",
                    "properties":{"text":"$word","duration":1}}]"""
         allowed = {"add_routine", "update_routine", "rename_routine", "remove_routine", "duplicate_routine",
                    "add_component", "update_component", "remove_component", "move_component", "insert_flow",
                    "remove_from_flow", "move_in_flow", "add_loop", "update_loop", "set_conditions", "add_branch",
-                   "add_device", "update_device", "remove_device", "update_settings", "set_variables", "set_info"}
+                   "add_device", "update_device", "remove_device", "update_settings", "set_variables", "set_info",
+                   "add_state_machine", "update_state", "remove_state", "add_rule", "remove_rule"}
         p = ws.path(path)
         doc = ExperimentDoc.open(p)
         snapshot = copy.deepcopy(doc.doc)
@@ -346,6 +350,58 @@ def create_server(root: str | Path = ".") -> FastMCP:
             else:
                 raise EditError("action must be insert, remove or move")
         return edit(path, op, f"flow {action} {name}")
+
+    @tool
+    def add_workflow(path: str, workflow: str, states: dict[str, Any], start: str = "", parent: str = "",
+                     position: int | None = None) -> dict[str, Any]:
+        """Add a state machine (workflow) to the flow for if/else logic between blocks, repeat-until-criterion,
+        adaptive paths, screening. states = {"practice": {"run": ["prac_loop_or_routine"], "max_visits": 3,
+        "next": [{"if": "$practice.accuracy >= 0.8", "goto": "main"}, {"goto": "practice"}]},
+        "main": {"run": ["main_block"], "next": ["end"]}}. Routes are checked in order; one without "if" is the
+        default; "end" finishes. Routines/loops already in the flow are moved into the state. Loop results usable in
+        conditions: $loopid.accuracy, .n_correct, .mean_rt, .total; workflow: $workflow.state, $workflow.visit."""
+        return edit(path, lambda d: d.add_state_machine(workflow, states, start or None, parent or None, position),
+                    f"add workflow {workflow}")
+
+    @tool
+    def update_workflow_state(path: str, workflow: str, state: str, run: list[Any] | None = None,
+                              routes: list[Any] | None = None, max_visits: int | None = None, rename_to: str = "",
+                              make_start: bool = False, remove: bool = False) -> dict[str, Any]:
+        """Add or change one state of a workflow: its contents (`run`), its `routes` ([{"if": ..., "goto": ...,
+        "set": {...}}, ...]), max_visits, name, or make it the start state; remove=true deletes it."""
+        def op(d: ExperimentDoc) -> None:
+            if remove:
+                d.remove_state(workflow, state)
+            else:
+                d.update_state(workflow, state, run, routes, max_visits if max_visits is not None else "__keep__",
+                               None, rename_to or None, make_start)
+        return edit(path, op, f"workflow {workflow}.{state}")
+
+    @tool
+    def add_routine_rule(path: str, routine: str, when: str, do: list[Any], repeat: bool = False,
+                         name: str = "") -> dict[str, Any]:
+        """Add a "when → do" rule to a routine, checked every frame. when: expression ("$t > 3",
+        "$resp.keys == 'q'", "$roi.completed"). do: [{"end_routine": true}, {"start": "hint"}, {"stop": "stim"},
+        {"set": {"score": "$score + 1"}}, {"marker": "hint_shown"}, {"goto": "debrief"}]. repeat=true lets it
+        fire again each time the condition becomes true."""
+        return edit(path, lambda d: d.add_rule(routine, when, do, repeat, name or None), f"rule in {routine}")
+
+    @tool
+    def import_experiment(source: str, out_dir: str = "", platform: str = "") -> dict[str, Any]:
+        """Import a PsychoPy (.psyexp), E-Prime (generated .ebs3/.ebs2 script, plus List .txt exports next to it),
+        OpenSesame (.osexp/.opensesame) or jsPsych (.html/.js) experiment from the workspace. Returns the new EDGE
+        experiment path, what was converted, and items that need manual work. Follow with dry_run."""
+        from .importers import ImportError_, import_experiment as do_import
+        try:
+            path, res = do_import(ws.path(source), ws.path(out_dir, must_exist=False) if out_dir else None,
+                                  platform or None)
+        except ImportError_ as e:
+            raise EditError(str(e)) from None
+        doc = ExperimentDoc.open(path)
+        return {"ok": True, "path": ws.rel(path), "platform": res.platform, "converted": res.stats,
+                "needs_manual_work": [f"{n['where']}: {n['message'][:300]}" for n in res.notes if n["level"] == "unsupported"],
+                "approximate": [f"{n['where']}: {n['message'][:200]}" for n in res.notes if n["level"] == "approx"],
+                "report": ws.rel(path.parent / "IMPORT_REPORT.md"), "outline": doc.outline(), **_issues(doc)}
 
     # ================================================================ devices & settings
     @tool

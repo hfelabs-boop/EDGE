@@ -59,6 +59,8 @@ If `edge` isn't on the PATH Claude Desktop uses, give the full path to the execu
 | Routines | `add_routine`, `update_routine`, `remove_routine` |
 | Components | `add_component`, `update_component`, `remove_component`, `move_component` |
 | Flow | `add_loop`, `update_loop`, `set_conditions`, `add_branch`, `modify_flow` |
+| Workflow logic | `add_workflow` (state machines), `update_workflow_state`, `add_routine_rule` |
+| Import | `import_experiment`: PsychoPy, E-Prime, OpenSesame, jsPsych |
 | Devices & settings | `add_device`, `update_device`, `remove_device`, `update_settings` |
 | Test & run | `validate_experiment`, `dry_run`, `run_experiment`, `run_status` |
 | Data | `list_sessions`, `analyze_session`, `export_data` |

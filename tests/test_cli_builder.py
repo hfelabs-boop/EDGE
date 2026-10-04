@@ -98,3 +98,17 @@ def test_builder_api(server):
 def test_builder_refuses_paths_outside_root(server):
     with pytest.raises(urllib.error.HTTPError):
         _get(server + "/api/experiment?path=../../etc/passwd")
+
+
+def test_builder_upload_and_import(server):
+    from pathlib import Path
+    fx = Path(__file__).parent / "fixtures" / "opensesame" / "flanker.opensesame"
+    req = urllib.request.Request(server + "/api/upload?path=imports/flanker/source/flanker.opensesame",
+                                 data=fx.read_bytes(), method="POST")
+    urllib.request.urlopen(req).read()
+    r = _post(server + "/api/import", {"source": "imports/flanker/source/flanker.opensesame", "out": "imports/flanker"})
+    assert r["path"] == "imports/flanker/Flanker_task.yaml" and r["platform"] == "OpenSesame"
+    assert "# Import report" in r["report"]
+    assert _get(server + "/api/experiment?path=" + r["path"])["experiment"]["name"] == "Flanker_task"
+    with pytest.raises(urllib.error.HTTPError):
+        urllib.request.urlopen(urllib.request.Request(server + "/api/upload?path=../evil.txt", data=b"x", method="POST"))

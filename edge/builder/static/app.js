@@ -20,6 +20,7 @@ const SCHED_FIELDS = {
   start_frame: {type: "int", default: null, help: "start on frame N (overrides start)"},
   duration_frames: {type: "int", default: null, help: "duration in frames (overrides duration)"},
   end_routine: {type: "bool", default: false, help: "end the routine when this responds or times out"},
+  if: {type: "expr", default: null, help: "include this component only when true, e.g. $practice or $trials.n < 5"},
   disabled: {type: "bool", default: false},
   save: {type: "bool", default: true, help: "save results in the data file"},
 };
@@ -106,11 +107,23 @@ function walkFlow(fn, nodes = S.exp.flow, path = []) {
     fn(n, p);
     if (n && typeof n === "object") {
       if (n.loop !== undefined) walkFlow(fn, n.children ||= [], [...p, "children"]);
-      if (n.if !== undefined) { walkFlow(fn, n.then ||= [], [...p, "then"]); walkFlow(fn, n.else ||= [], [...p, "else"]); }
+      if (n.if !== undefined && n.then !== undefined) { walkFlow(fn, n.then ||= [], [...p, "then"]); walkFlow(fn, n.else ||= [], [...p, "else"]); }
+      if (n.statemachine !== undefined) for (const [name, st] of Object.entries(n.states ||= {}))
+        walkFlow(fn, st.run ||= [], [...p, "states", name, "run"]);
     }
   });
 }
-function loopIds() { const s = new Set(); walkFlow((n) => { if (n?.loop) s.add(n.loop); }); return s; }
+function loopIds() { const s = new Set(); walkFlow((n) => { if (n?.loop) s.add(n.loop); if (n?.statemachine) s.add(n.statemachine); }); return s; }
+function enclosing(rid) {
+  // loops and state machines that contain routine `rid` (for variable suggestions)
+  const loops = new Set(), machines = new Set();
+  walkFlow((n, path) => {
+    if (routineOfNode(n) !== rid) return;
+    let cur = S.exp.flow;
+    for (const k of path) { if (cur && cur.loop !== undefined) loops.add(cur); if (cur && cur.statemachine !== undefined) machines.add(cur); cur = cur[k]; }
+  });
+  return {loops: [...loops], machines: [...machines]};
+}
 
 /* ------------------------------------------------------------------ boot */
 async function boot() {
@@ -119,7 +132,7 @@ async function boot() {
   const last = localStorage.getItem("edge.last");
   if (last && files.some((f) => f.path === last)) await openFile(last);
   else if (files.length === 1) await openFile(files[0].path);
-  else loadDoc(clone(await api("/api/template?name=blank")), null);
+  else { loadDoc(clone(await api("/api/template?name=blank")), null); welcome(files); }
   wire();
   setInterval(pollExternalChanges, 1500);
 }
@@ -311,6 +324,10 @@ function routineSpan(rid) {
 
 function renderTimeline() {
   const el = $("#timeline"); el.innerHTML = "";
+  const wf = S.sel && (S.sel.kind === "machine" || S.sel.kind === "state");
+  $("#preview-wrap").style.display = wf ? "none" : "";
+  $("#routine-body").classList.toggle("wide", !!wf);
+  if (wf) return renderDiagram(el);
   const rid = S.routine;
   if (!rid) { el.append(h("div", {class: "tl-empty"}, "No routines yet. Click “+ routine”.")); return; }
   const r = S.exp.routines[rid];
@@ -319,6 +336,7 @@ function renderTimeline() {
   el.append(h("div", {class: "tl-routine-info", onclick: () => { S.sel = {kind: "routine", routine: rid}; renderProps(); }},
     `Routine “${rid}”`, r.duration != null ? ` · duration ${r.duration}s` : "", r.end_if ? ` · ends if ${r.end_if}` : "",
     " · drag bars to move, drag right edge to resize, drop components here"));
+  el.append(h("div", {class: "tl-summary"}, describeRoutine(rid)));
   const ruler = h("div", {class: "tl-ruler"});
   const step = span > 10 ? 2 : span > 4 ? 1 : 0.5;
   for (let t = 0; t <= span + 1e-9; t += step) ruler.append(h("span", {style: `left:${(t / span) * 100}%`}, t + "s"));
@@ -386,20 +404,47 @@ function renderSeq(nodes, path) {
 }
 
 function addBtn(listPath, index) {
-  return h("span", {class: "fl-add", title: "Insert here", onclick: (e) => flowInsertMenu(e, listPath, index)}, "+");
+  const el = h("span", {class: "fl-add", title: "Insert here (or drop a flow item here)", onclick: (e) => flowInsertMenu(e, listPath, index)}, "+");
+  el.addEventListener("dragover", (e) => { if (e.dataTransfer.types.includes("edge/flowpath")) { e.preventDefault(); el.classList.add("drop"); } });
+  el.addEventListener("dragleave", () => el.classList.remove("drop"));
+  el.addEventListener("drop", (e) => { e.preventDefault(); el.classList.remove("drop");
+    moveFlowNode(JSON.parse(e.dataTransfer.getData("edge/flowpath")), listPath, index); });
+  return el;
+}
+function draggableNode(el, path) {
+  el.draggable = true;
+  el.addEventListener("dragstart", (e) => { e.stopPropagation(); e.dataTransfer.setData("edge/flowpath", JSON.stringify(path)); el.classList.add("dragging"); });
+  el.addEventListener("dragend", () => el.classList.remove("dragging"));
+  return el;
+}
+function moveFlowNode(from, toList, toIndex) {
+  // refuse to drop an item inside itself
+  if (toList.length >= from.length && from.every((x, i) => toList[i] === x)) return toast("Can't move an item into itself");
+  const {list: srcList, index: srcIdx} = parentOf(from);
+  const node = srcList[srcIdx];
+  const dst = getNode(toList);
+  srcList.splice(srcIdx, 1);
+  let idx = toIndex;
+  if (dst === srcList && srcIdx < toIndex) idx -= 1;
+  dst.splice(idx, 0, node);
+  S.sel = null; commit();
 }
 
 function samePath(a, b) { return a && b && a.length === b.length && a.every((x, i) => x === b[i]); }
 
 function renderNode(n, path) {
-  const selected = S.sel && ["loop", "branch", "flowref"].includes(S.sel.kind) && samePath(S.sel.path, path);
+  return draggableNode(renderNodeInner(n, path), path);
+}
+function renderNodeInner(n, path) {
+  const selected = S.sel && ["loop", "branch", "flowref", "machine"].includes(S.sel.kind) && samePath(S.sel.path, path);
   if (typeof n === "string" || (n && n.routine !== undefined)) {
     const rid = routineOfNode(n);
-    return h("div", {class: "fl-routine" + (rid === S.routine ? " active" : "") + (selected ? " sel" : ""),
-      title: n.if ? `runs only if ${n.if}` : "click: edit routine · right-click: options",
-      onclick: () => { S.routine = rid; S.sel = {kind: "routine", routine: rid, path}; S.previewT = 0; renderAll(); },
-      oncontextmenu: (e) => { e.preventDefault(); nodeMenu(e, path); }}, rid, n.if ? " ⁇" : "");
+    return h("div", {class: "fl-routine" + (rid === S.routine && S.sel?.kind !== "machine" && S.sel?.kind !== "state" ? " active" : "") + (selected ? " sel" : ""),
+      title: (n.if ? `runs only if ${n.if} · ` : "") + "click: edit · drag: move · right-click: options",
+      onclick: (e) => { e.stopPropagation(); S.routine = rid; S.sel = {kind: "routine", routine: rid, path}; S.previewT = 0; renderAll(); },
+      oncontextmenu: (e) => { e.preventDefault(); e.stopPropagation(); nodeMenu(e, path); }}, rid, n.if ? h("span", {class: "cond-badge", title: n.if}, "if") : "");
   }
+  if (n.statemachine !== undefined) return renderMachine(n, path, selected);
   if (n.loop !== undefined) {
     const desc = n.staircase ? `staircase on ${n.staircase.variable || "level"}` :
       `${n.order || "sequential"}${n.repeats && n.repeats !== 1 ? " × " + n.repeats : ""}`;
@@ -433,7 +478,10 @@ function flowInsertMenu(e, listPath, index) {
     ["New routine…", () => { const rid = newRoutine(false); if (rid) { list.splice(index, 0, rid); commit(); } }],
     ["Loop", () => { const id = uniqueId("trials", loopIds()); list.splice(index, 0, {loop: id, order: "random", repeats: 1, conditions: [{}], children: []});
       S.sel = {kind: "loop", path: [...listPath, index]}; commit(); }],
-    ["Branch (if / else)", () => { list.splice(index, 0, {if: "$True", then: [], else: []}); S.sel = {kind: "branch", path: [...listPath, index]}; commit(); }]);
+    ["Branch (if / else)", () => { list.splice(index, 0, {if: "$True", then: [], else: []}); S.sel = {kind: "branch", path: [...listPath, index]}; commit(); }],
+    ["State machine (workflow)", () => { const id = uniqueId("workflow", loopIds());
+      list.splice(index, 0, {statemachine: id, start: "start", states: {start: {run: [], next: [{goto: "end"}]}}});
+      S.sel = {kind: "machine", path: [...listPath, index]}; commit(); }]);
   menu(e, items);
 }
 
@@ -493,6 +541,7 @@ function renameRoutine(rid) {
 
 /* ---------------- properties */
 function renderProps() {
+  updateExprVars();
   const el = $("#props"); el.innerHTML = "";
   const sel = S.sel || {kind: "settings"};
   const title = $("#props-title");
@@ -522,9 +571,14 @@ function renderProps() {
     el.append(field("duration", {type: "float", help: "hard limit in seconds (empty = until components end)"}, r.duration, (v) => setProp(r, "duration", v)));
     el.append(field("end_if", {type: "expr", help: "end when this expression becomes true"}, r.end_if, (v) => setProp(r, "end_if", v)));
     el.append(field("description", {type: "text"}, r.description, (v) => setProp(r, "description", v), {noExpr: true}));
+    renderRulesEditor(el, r);
     el.append(h("div", {class: "btns"},
       h("button", {onclick: () => { const nid = uniqueId(sel.routine, new Set(Object.keys(S.exp.routines))); S.exp.routines[nid] = clone(r); S.routine = nid; S.sel = {kind: "routine", routine: nid}; commit(); }}, "Duplicate"),
       h("button", {class: "danger", onclick: () => deleteRoutine(sel.routine)}, "Delete routine")));
+  } else if (sel.kind === "machine") {
+    renderMachineProps(el, title);
+  } else if (sel.kind === "state") {
+    renderStateProps(el, title);
   } else if (sel.kind === "loop") {
     renderLoopProps(el, getNode(sel.path), title);
   } else if (sel.kind === "branch") {
@@ -602,7 +656,7 @@ function field(name, p, value, onChange, opts = {}) {
     if (JSON.stringify(v) !== JSON.stringify(value ?? null)) onChange(v);
   };
   if (exprMode && type !== "code") {
-    input = h("input", {class: "expr", value: value ?? "", placeholder: "$expression", onchange: commitText});
+    input = h("input", {class: "expr", list: "expr-vars", value: value ?? "", placeholder: "$expression (type $ for suggestions)", onchange: commitText});
   } else if (type === "bool") {
     input = h("input", {type: "checkbox", onchange: (e) => onChange(e.target.checked)});
     input.checked = value ?? p.default ?? false;
@@ -777,6 +831,16 @@ function renderPreview() {
   const pos = (p) => Array.isArray(p) ? [conv(+p[0] || 0, "x"), conv(+p[1] || 0, "y")] : [0, 0];
   const t = S.previewT; $("#preview-label").textContent = `t = ${t.toFixed(2)} s`;
   const row = sampleRowFor(S.routine);
+  // HTML pages are previewed live in an iframe on top of the canvas
+  const frame = $("#preview-html");
+  const page = comps(S.routine).find((c) => c.type === "html" && numOr(c.start, 0) <= t && (c.duration == null || t < numOr(c.start, 0) + c.duration));
+  if (page && (page.file || page.html)) {
+    if (page.file && !isExpr(page.file)) {
+      const src = `/api/file?path=${encodeURIComponent((S.path ? S.path.replace(/[^/]*$/, "") : "") + page.file)}`;
+      if (frame.dataset.src !== src) { frame.removeAttribute("srcdoc"); frame.src = src; frame.dataset.src = src; }
+    } else if (page.html) { frame.dataset.src = ""; frame.srcdoc = page.html; }
+    frame.classList.remove("hidden");
+  } else frame.classList.add("hidden");
   for (const c0 of comps(S.routine)) {
     const c = Object.fromEntries(Object.entries(c0).map(([kk, v]) => [kk, previewVal(v, row)]));
     const st = numOr(c.start, 0), du = numOr(c.duration, Infinity);
@@ -948,11 +1012,14 @@ async function openDialog() {
   openModal();
 }
 function openModal() { $("#modal").classList.remove("hidden"); }
-function closeModal() { $("#modal").classList.add("hidden"); }
+function _resetModal() { $("#modal-body").classList.remove("welcome"); }
+function closeModal() { $("#modal").classList.add("hidden"); _resetModal(); }
 
 /* ---------------- wiring */
 function wire() {
-  $("#btn-new").onclick = newFromTemplate;
+  $("#btn-new").onclick = () => welcome();
+  $("#btn-import").onclick = () => { const inp = h("input", {type: "file", multiple: true, onchange: (e) => importFiles([...e.target.files])}); inp.click(); };
+  $("#btn-help").onclick = showHelp;
   $("#btn-open").onclick = openDialog;
   $("#btn-save").onclick = () => save();
   $("#btn-versions").onclick = versionsDialog;
@@ -984,8 +1051,370 @@ function wire() {
       const list = comps(S.sel.routine); const i = list.findIndex((c) => c.id === S.sel.id);
       if (i >= 0) { list.splice(i, 1); S.sel = {kind: "routine", routine: S.routine}; commit(); } }
     else if (e.key === "Escape") closeModal();
+    else if (e.key === "?" && !typing) showHelp();
   });
   window.addEventListener("beforeunload", (e) => { if (S.dirty) { e.preventDefault(); e.returnValue = ""; } });
 }
 
 boot().catch((e) => { document.body.innerHTML = `<pre style="padding:20px;color:#d33">Failed to start: ${e.message}</pre>`; });
+
+
+/* ================================================================== workflow: state machines */
+function renderMachine(n, path, selected) {
+  const box = h("div", {class: "fl-box sm" + (selected ? " sel" : "")});
+  box.append(h("div", {class: "fl-head", onclick: (e) => { e.stopPropagation(); S.sel = {kind: "machine", path}; renderAll(); },
+    oncontextmenu: (e) => { e.preventDefault(); e.stopPropagation(); nodeMenu(e, path); }},
+    `⚙ ${n.statemachine} · workflow`, h("span", {class: "sm-hint"}, " click to see the diagram")));
+  const row = h("div", {class: "sm-states"});
+  for (const [name, st] of Object.entries(n.states || {})) {
+    const isSel = S.sel?.kind === "state" && samePath(S.sel.path, path) && S.sel.name === name;
+    row.append(h("div", {class: "sm-state" + (n.start === name ? " start" : "") + (isSel ? " sel" : "")},
+      h("div", {class: "sm-name", onclick: (e) => { e.stopPropagation(); S.sel = {kind: "state", path, name}; renderAll(); }},
+        (n.start === name ? "▶ " : "") + name, st.max_visits ? h("span", {class: "sm-hint"}, ` ≤${st.max_visits}×`) : ""),
+      renderSeq(st.run ||= [], [...path, "states", name, "run"]),
+      h("div", {class: "sm-next"}, describeTransitions(st))));
+  }
+  row.append(h("button", {class: "mini", title: "Add a state", onclick: (e) => { e.stopPropagation(); addState(path); }}, "+ state"));
+  box.append(row);
+  return box;
+}
+function describeTransitions(st) {
+  const nx = st.next || [];
+  if (!nx.length) return "→ end";
+  return nx.map((t) => typeof t === "string" ? `→ ${t}` : (t.if ? `→ ${t.goto} if ${short(t.if.replace(/^\$/, ""), 28)}` : `→ ${t.goto}`)).join(" · ");
+}
+function short(s, n = 40) { s = String(s); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+function addState(path) {
+  const m = getNode(path);
+  const name = prompt("Name of the new state (e.g. practice, main, debrief):", uniqueId("state", new Set(Object.keys(m.states))));
+  if (!name) return;
+  const id = uniqueId(name, new Set(Object.keys(m.states)));
+  m.states[id] = {run: [], next: [{goto: "end"}]};
+  S.sel = {kind: "state", path, name: id}; commit();
+}
+function renameState(path, old) {
+  const m = getNode(path);
+  const nn = prompt("Rename state:", old);
+  if (!nn || nn === old) return;
+  if (m.states[nn]) return toast("A state with that name exists");
+  const states = {};
+  for (const [k, v] of Object.entries(m.states)) states[k === old ? nn : k] = v;
+  for (const st of Object.values(states)) for (const t of st.next || []) if (typeof t === "object" && t.goto === old) t.goto = nn;
+  m.states = states;
+  if (m.start === old) m.start = nn;
+  S.sel = {kind: "state", path, name: nn}; commit();
+}
+
+function layoutMachine(m) {
+  const names = Object.keys(m.states || {});
+  const col = {}, queue = [m.start];
+  if (m.start in m.states) col[m.start] = 0;
+  while (queue.length) {
+    const cur = queue.shift();
+    for (const t of (m.states[cur]?.next || [])) {
+      const g = typeof t === "string" ? t : t.goto;
+      if (g in m.states && !(g in col)) { col[g] = col[cur] + 1; queue.push(g); }
+    }
+  }
+  let maxc = Math.max(0, ...Object.values(col));
+  for (const n of names) if (!(n in col)) col[n] = ++maxc;
+  const rows = {}, pos = {};
+  const W = 160, H = 64, GX = 150, GY = 56;
+  for (const n of names) { const c = col[n]; rows[c] = (rows[c] || 0); pos[n] = {x: 30 + c * (W + GX), y: 40 + rows[c] * (H + GY), w: W, h: H}; rows[c]++; }
+  const endCol = Math.max(0, ...Object.values(col)) + 1;
+  pos.end = {x: 30 + endCol * (W + GX), y: 70, w: 70, h: H, end: true};
+  for (const p of Object.values(pos)) p.y += 30;   // room for routes that arc over the states
+  return pos;
+}
+
+function renderDiagram(el) {
+  const path = S.sel.path;
+  let m;
+  try { m = getNode(path); } catch { m = null; }
+  if (!m || m.statemachine === undefined) { S.sel = null; return renderTimeline(); }
+  const pos = layoutMachine(m);
+  const W = Math.max(...Object.values(pos).map((p) => p.x + p.w)) + 60;
+  const H = Math.max(...Object.values(pos).map((p) => p.y + p.h)) + 90;
+  el.append(h("div", {class: "tl-routine-info"}, `Workflow “${m.statemachine}”: after a state finishes, its routes are checked top to bottom and the first true one is taken. Click a state to edit it.`));
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", W); svg.setAttribute("class", "wf");
+  svg.style.maxWidth = "100%"; svg.style.height = "auto";
+  const mk = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; return e; };
+  const defs = mk("defs", {});
+  const marker = mk("marker", {id: "arrow", viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse"});
+  marker.append(mk("path", {d: "M0,0 L10,5 L0,10 z", class: "wf-arrowhead"}));
+  defs.append(marker); svg.append(defs);
+  // edges
+  for (const [name, st] of Object.entries(m.states)) {
+    const a = pos[name];
+    (st.next?.length ? st.next : [{goto: "end"}]).forEach((t0, i) => {
+      const t = typeof t0 === "string" ? {goto: t0} : t0;
+      const b = pos[t.goto] || pos.end;
+      const label = t.if ? short(t.if.replace(/^\$/, ""), 22) : ((st.next || []).length > 1 ? "otherwise" : "");
+      let d, lx, ly;
+      if (t.goto === name) {          // self loop
+        const x = a.x + a.w * 0.7, y = a.y;
+        d = `M${x - 24},${y} C${x - 40},${y - 50} ${x + 30},${y - 50} ${x + 10},${y}`;
+        lx = x - 5; ly = y - 46;
+      } else if (b.x > a.x && b.x - (a.x + a.w) < 200) {   // forward to the next column
+        const y1 = a.y + a.h / 2 + (i - ((st.next || []).length - 1) / 2) * 12;
+        d = `M${a.x + a.w},${y1} C${a.x + a.w + 50},${y1} ${b.x - 50},${b.y + b.h / 2} ${b.x},${b.y + b.h / 2}`;
+        lx = (a.x + a.w + b.x) / 2; ly = Math.min(y1, b.y + b.h / 2) - 8;
+      } else if (b.x > a.x) {          // forward, skipping states: arc over the top
+        const y = Math.min(a.y, b.y) - 22 - i * 12;
+        d = `M${a.x + a.w / 2},${a.y} C${a.x + a.w / 2},${y - 20} ${b.x + b.w / 2},${y - 20} ${b.x + b.w / 2},${b.y}`;
+        lx = (a.x + b.x + b.w) / 2; ly = y - 12;
+      } else {                         // backward: arc underneath
+        const y = Math.max(a.y + a.h, b.y + b.h) + 30 + i * 14;
+        d = `M${a.x + a.w / 2},${a.y + a.h} C${a.x + a.w / 2},${y} ${b.x + b.w / 2},${y} ${b.x + b.w / 2},${b.y + b.h}`;
+        lx = (a.x + b.x + b.w) / 2; ly = y - 2;
+      }
+      svg.append(mk("path", {d, class: "wf-edge" + (t.if ? "" : " default"), "marker-end": "url(#arrow)"}));
+      if (label) svg.append(mk("text", {x: lx, y: ly, class: "wf-label", "text-anchor": "middle"}, label));
+    });
+  }
+  // nodes
+  for (const [name, p] of Object.entries(pos)) {
+    const g = mk("g", {class: "wf-node" + (p.end ? " end" : "") + (name === m.start ? " start" : "") +
+      (S.sel.kind === "state" && S.sel.name === name ? " sel" : ""), transform: `translate(${p.x},${p.y})`});
+    if (p.end) {
+      g.append(mk("rect", {width: p.w, height: p.h, rx: p.h / 2}));
+      g.append(mk("text", {x: p.w / 2, y: p.h / 2 + 5, "text-anchor": "middle"}, "end"));
+    } else {
+      const st = m.states[name];
+      g.append(mk("rect", {width: p.w, height: p.h, rx: 10}));
+      g.append(mk("text", {x: 12, y: 24, class: "wf-title"}, (name === m.start ? "▶ " : "") + name));
+      const contents = (st.run || []).map((x) => typeof x === "string" ? x : (x.loop ? `⟳${x.loop}` : x.routine || (x.statemachine ? `⚙${x.statemachine}` : "if"))).join(" → ");
+      g.append(mk("text", {x: 12, y: 44, class: "wf-sub"}, short(contents || "(empty: add routines)", 24)));
+      g.addEventListener("click", () => { S.sel = {kind: "state", path, name}; renderAll(); });
+    }
+    svg.append(g);
+  }
+  el.append(h("div", {class: "wf-wrap"}, svg));
+}
+
+function renderMachineProps(el, title) {
+  const m = getNode(S.sel.path);
+  title.textContent = `Workflow · ${m.statemachine}`;
+  el.append(h("div", {class: "desc"}, "A state machine runs one state at a time. Each state contains routines or loops; when it finishes, its routes decide the next state (or the end). Use it for practice-until-criterion, adaptive blocks, branching studies or consent screening."));
+  el.append(field("id", {type: "str"}, m.statemachine, (v) => { if (v) { m.statemachine = v; commit(); } }, {noExpr: true}));
+  el.append(field("start state", {type: "choice", choices: Object.keys(m.states)}, m.start, (v) => { m.start = v; commit(); }, {noExpr: true}));
+  el.append(field("max_steps", {type: "int", help: "safety limit on state changes"}, m.max_steps, (v) => setProp(m, "max_steps", v), {noExpr: true}));
+  el.append(h("div", {class: "help"}, "In expressions: ", h("code", {}, `$${m.statemachine}.state`), ", ", h("code", {}, `$${m.statemachine}.visit`), " (visits of the current state), loop results like ", h("code", {}, "$practice.accuracy"), "."));
+  el.append(h("div", {class: "btns"}, h("button", {onclick: () => addState(S.sel.path)}, "+ Add state"),
+    h("button", {class: "danger", onclick: () => { const {list, index} = parentOf(S.sel.path); if (confirm("Remove this workflow (its routines stay defined)?")) { list.splice(index, 1); S.sel = null; commit(); } }}, "Remove workflow")));
+}
+
+function renderStateProps(el, title) {
+  const m = getNode(S.sel.path), name = S.sel.name, st = m.states[name];
+  if (!st) { S.sel = {kind: "machine", path: S.sel.path}; return renderProps(); }
+  title.textContent = `State · ${name}`;
+  el.append(h("div", {class: "desc"}, "Add routines or loops to this state in the Flow strip below (use its + buttons). Then define where to go next."));
+  el.append(field("name", {type: "str"}, name, () => renameState(S.sel.path, name), {noExpr: true, readonlyClick: () => renameState(S.sel.path, name)}));
+  el.append(field("description", {type: "text"}, st.description, (v) => setProp(st, "description", v), {noExpr: true}));
+  el.append(field("max_visits", {type: "int", help: "after this many visits, stop repeating this state and take the first route elsewhere"}, st.max_visits, (v) => setProp(st, "max_visits", v), {noExpr: true}));
+  el.append(h("div", {class: "group"}, "Routes (checked top to bottom)"));
+  st.next = (st.next || []).map((t) => typeof t === "string" ? {goto: t} : t);
+  const targets = [...Object.keys(m.states), "end"];
+  st.next.forEach((t, i) => {
+    const goto = h("select", {onchange: (e) => { t.goto = e.target.value; commit(); }}, targets.map((x) => { const o = h("option", {value: x}, x === "end" ? "⏹ end" : x); if (t.goto === x) o.selected = true; return o; }));
+    const cond = h("input", {class: "expr", list: "expr-vars", value: t.if || "", placeholder: "otherwise (always)",
+      onchange: (e) => { const v = e.target.value.trim(); if (v) t.if = v.startsWith("$") ? v : "$" + v; else delete t.if; commit(); }});
+    const setv = h("input", {value: t.set ? JSON.stringify(t.set) : "", placeholder: 'set variables, e.g. {"block": 2}',
+      onchange: (e) => { try { const v = e.target.value.trim(); if (v) t.set = JSON.parse(v); else delete t.set; commit(); } catch { toast("Not valid JSON"); } }});
+    el.append(h("div", {class: "route"},
+      h("div", {class: "route-head"}, h("b", {}, i === 0 ? "if" : "else if"), h("span", {style: "flex:1"}),
+        h("button", {class: "mini", title: "Move up", onclick: () => { if (i > 0) { [st.next[i - 1], st.next[i]] = [st.next[i], st.next[i - 1]]; commit(); } }}, "↑"),
+        h("button", {class: "mini danger", title: "Remove route", onclick: () => { st.next.splice(i, 1); commit(); }}, "×")),
+      cond, h("div", {class: "route-goto"}, "go to ", goto), setv));
+  });
+  el.append(h("div", {class: "btns"},
+    h("button", {onclick: () => { st.next.push({if: "$True", goto: name}); commit(); }}, "+ Route"),
+    m.start !== name ? h("button", {onclick: () => { m.start = name; commit(); }}, "Make start state") : null,
+    h("button", {class: "danger", onclick: () => { if (!confirm(`Delete state ${name}?`)) return; delete m.states[name];
+      for (const s2 of Object.values(m.states)) s2.next = (s2.next || []).filter((t) => (typeof t === "string" ? t : t.goto) !== name);
+      if (m.start === name) m.start = Object.keys(m.states)[0] || ""; S.sel = {kind: "machine", path: S.sel.path}; commit(); }}, "Delete state")));
+  el.append(h("div", {class: "help", style: "margin-top:8px"}, "Example: ", h("code", {}, "$practice.accuracy >= 0.8"), " → main; otherwise → practice (with max_visits 3)."));
+}
+
+/* ================================================================== routine rules ("when → do") */
+const RULE_ACTIONS = {
+  end_routine: {label: "end the routine", param: null},
+  start: {label: "start component", param: "component"},
+  stop: {label: "stop component", param: "component"},
+  set: {label: "set variable", param: "set"},
+  marker: {label: "send marker", param: "text"},
+  goto: {label: "go to workflow state", param: "state"},
+  log: {label: "write to the log", param: "text"},
+};
+function renderRulesEditor(el, r) {
+  el.append(h("div", {class: "group"}, "Rules (when → do)"));
+  el.append(h("div", {class: "help"}, "Rules react while the routine runs, e.g. when ", h("code", {}, "$t > 3"), " start a hint; when ", h("code", {}, "$resp.keys == 'q'"), " go to state 'end'."));
+  r.rules ||= [];
+  const comps_ = (r.components || []).map((c) => c.id);
+  const states = new Set(); walkFlow((n) => { if (n?.statemachine) Object.keys(n.states || {}).forEach((x) => states.add(x)); }); states.add("end");
+  r.rules.forEach((rule, i) => {
+    rule.do = Array.isArray(rule.do) ? rule.do : (rule.do ? [rule.do] : []);
+    const box = h("div", {class: "route"});
+    box.append(h("div", {class: "route-head"}, h("b", {}, "When"), h("span", {style: "flex:1"}),
+      h("label", {class: "help", title: "fire again each time the condition becomes true"},
+        (() => { const cb = h("input", {type: "checkbox", onchange: (e) => { if (e.target.checked) rule.repeat = true; else delete rule.repeat; commit(); }}); cb.checked = !!rule.repeat; return cb; })(), " repeat"),
+      h("button", {class: "mini danger", onclick: () => { r.rules.splice(i, 1); if (!r.rules.length) delete r.rules; commit(); }}, "×")));
+    box.append(h("input", {class: "expr", list: "expr-vars", value: rule.when || "", placeholder: "$resp.keys == 'space'",
+      onchange: (e) => { const v = e.target.value.trim(); rule.when = v.startsWith("$") ? v : "$" + v; commit(); }}));
+    box.append(h("div", {class: "route-goto"}, h("b", {}, "do")));
+    rule.do.forEach((a0, j) => {
+      const a = typeof a0 === "string" ? {[a0]: true} : a0;
+      const kind = Object.keys(a)[0] || "end_routine";
+      const sel = h("select", {onchange: (e) => { const k = e.target.value; rule.do[j] = {[k]: k === "end_routine" ? true : k === "set" ? {x: 1} : (k === "start" || k === "stop") ? comps_[0] || "" : k === "goto" ? [...states][0] : "event"}; commit(); }},
+        Object.entries(RULE_ACTIONS).map(([k, d]) => { const o = h("option", {value: k}, d.label); if (k === kind) o.selected = true; return o; }));
+      let param = null;
+      const pt = RULE_ACTIONS[kind]?.param;
+      if (pt === "component") param = h("select", {onchange: (e) => { rule.do[j] = {[kind]: e.target.value}; commit(); }}, comps_.map((c) => { const o = h("option", {value: c}, c); if (a[kind] === c) o.selected = true; return o; }));
+      else if (pt === "state") param = h("select", {onchange: (e) => { rule.do[j] = {goto: e.target.value}; commit(); }}, [...states].map((c) => { const o = h("option", {value: c}, c); if (a.goto === c) o.selected = true; return o; }));
+      else if (pt === "set") param = h("input", {value: JSON.stringify(a.set), onchange: (e) => { try { rule.do[j] = {set: JSON.parse(e.target.value)}; commit(); } catch { toast('Use JSON, e.g. {"hits": "$hits + 1"}'); } }});
+      else if (pt === "text") param = h("input", {value: a[kind] ?? "", onchange: (e) => { rule.do[j] = {[kind]: e.target.value}; commit(); }});
+      box.append(h("div", {class: "row2", style: "margin-top:4px"}, sel, param, h("button", {class: "mini danger", onclick: () => { rule.do.splice(j, 1); commit(); }}, "×")));
+    });
+    box.append(h("button", {class: "mini", style: "margin-top:4px", onclick: () => { rule.do.push({end_routine: true}); commit(); }}, "+ action"));
+    el.append(box);
+  });
+  el.append(h("div", {class: "btns"}, h("button", {onclick: () => { r.rules.push({when: "$t > 1", do: [{end_routine: true}]}); commit(); }}, "+ Rule")));
+}
+
+/* ================================================================== plain-language descriptions */
+function describeRoutine(rid) {
+  const r = S.exp.routines[rid];
+  if (!r || !(r.components || []).length) return "This routine is empty.";
+  const fmt = (v) => isExpr(v) ? `“${v}”` : `${v} s`;
+  const out = [];
+  for (const c of r.components) {
+    if (c.disabled === true) continue;
+    let when = c.start_after ? `after ${c.start_after} ends` : c.start_if ? `when ${c.start_if}` : c.start_frame != null ? `from frame ${c.start_frame}` :
+      (numOr(c.start, 0) === 0 && !isExpr(c.start) ? "from the start" : `at ${fmt(c.start)}`);
+    const dur = c.duration != null ? `for ${fmt(c.duration)}` : c.duration_frames != null ? `for ${c.duration_frames} frames` : "until the routine ends";
+    const what = {
+      text: () => `shows text ${isExpr(c.text) ? c.text : "“" + short(c.text || "", 30) + "”"}`,
+      image: () => `shows image ${c.image || ""}`, shape: () => `draws a ${c.shape || "rect"}`, fixation: () => "shows a fixation cross",
+      sound: () => `plays ${typeof c.sound === "number" ? c.sound + " Hz tone" : (c.sound || "a sound")}`,
+      keyboard: () => `waits for ${c.keys ? (Array.isArray(c.keys) ? c.keys.join("/") : c.keys) : "any key"}${c.correct ? ` (correct: ${c.correct})` : ""}`,
+      mouse: () => `waits for a click${c.clickable?.length ? " on " + c.clickable.join("/") : ""}`,
+      slider: () => "shows a rating scale", html: () => `shows the page ${c.file || "(inline HTML)"}`,
+      gaze_roi: () => `watches gaze in an area${c.dwell ? ` (dwell ${c.dwell} s)` : ""}`, gaze_follow: () => `moves ${c.target} with the gaze`,
+      calibrate: () => "calibrates the eye tracker", marker: () => `sends marker “${c.label}”`,
+      variable: () => `sets ${Object.keys(c.set || {}).join(", ")}${c.when === "end" ? " at the end" : ""}`,
+      code: () => "runs Python code", wait: () => "waits",
+    }[c.type];
+    let s2 = `${c.id} ${what ? what() : c.type}`;
+    if (!["code", "variable", "marker"].includes(c.type)) s2 += ` ${when}, ${["keyboard", "mouse", "slider", "html", "gaze_roi"].includes(c.type) && c.duration == null ? "until answered" : dur}`;
+    if (c.end_routine) s2 += "; this ends the routine";
+    if (c.if) s2 += ` (only when ${c.if})`;
+    if (c.marker) s2 += `; marks “${typeof c.marker === "object" ? c.marker.onset : c.marker}”`;
+    out.push(s2 + ".");
+  }
+  if (r.duration != null) out.push(`The routine lasts at most ${fmt(r.duration)}.`);
+  if (r.end_if) out.push(`It ends early when ${r.end_if}.`);
+  for (const rule of r.rules || []) out.push(`When ${rule.when}: ${(Array.isArray(rule.do) ? rule.do : [rule.do]).map((a) => typeof a === "string" ? a.replace("_", " ") : Object.entries(a).map(([k, v]) => k === "end_routine" ? "end the routine" : `${k} ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" ")).join(", ")}.`);
+  return out.join(" ");
+}
+
+/* ================================================================== variable suggestions */
+function updateExprVars() {
+  let dl = document.getElementById("expr-vars");
+  if (!dl) { dl = h("datalist", {id: "expr-vars"}); document.body.append(dl); }
+  const vars = new Set(["$t", "$frame", "$participant", "$session"]);
+  const rid = S.routine;
+  const {loops, machines} = rid ? enclosing(rid) : {loops: [], machines: []};
+  for (const lp of loops) {
+    Object.keys(firstRow(lp.conditions) || {}).forEach((k) => vars.add("$" + k));
+    if (lp.staircase) vars.add("$" + (lp.staircase.variable || "level"));
+    ["n", "total", "accuracy", "n_correct", "mean_rt", "repeat"].forEach((k) => vars.add(`$${lp.loop}.${k}`));
+  }
+  for (const m of machines) ["state", "visit"].forEach((k) => vars.add(`$${m.statemachine}.${k}`));
+  walkFlow((n) => { if (n?.loop) ["accuracy", "n_correct", "mean_rt", "total"].forEach((k) => vars.add(`$${n.loop}.${k}`)); });
+  Object.keys(S.exp.variables || {}).forEach((k) => vars.add("$" + k));
+  const results = {keyboard: ["keys", "rt", "corr"], mouse: ["clicked", "x", "y", "rt", "corr"], slider: ["rating", "rt"],
+    gaze_roi: ["entered", "dwell_time", "completed", "first_entry"], html: ["submitted", "rt"]};
+  for (const r of Object.values(S.exp.routines)) for (const c of r.components || [])
+    for (const k of results[c.type] || []) vars.add(`$${c.id}.${k}`);
+  dl.innerHTML = "";
+  for (const v of [...vars].sort()) dl.append(h("option", {value: v}));
+}
+
+/* ================================================================== welcome & import */
+async function welcome(files) {
+  files = files || (await api("/api/files")).files;
+  const body = $("#modal-body"); body.innerHTML = "";
+  body.classList.add("welcome");
+  const tpl = Object.entries(S.schema.templates).map(([key, t]) => h("div", {class: "card", onclick: async () => {
+    if (S.dirty && !confirm("Discard unsaved changes?")) return;
+    closeModal(); loadDoc(clone(await api(`/api/template?name=${key}`)), null); toast("Template loaded: Save to choose where it lives"); }},
+    h("b", {}, key.replace(/_/g, " ")), h("small", {}, t.description || t.name)));
+  const recent = files.slice(0, 8).map((f) => h("div", {class: "card", onclick: async () => { closeModal(); await openFile(f.path); }},
+    h("b", {}, f.name), h("small", {}, f.path)));
+  const drop = h("div", {class: "dropzone"}, h("b", {}, "Import from PsychoPy, E-Prime, OpenSesame or jsPsych"),
+    h("small", {}, "Drop the files here (for E-Prime: the generated .ebs3 script plus List .txt exports, images…) or click to choose"));
+  const input = h("input", {type: "file", multiple: true, style: "display:none", onchange: (e) => importFiles([...e.target.files])});
+  drop.onclick = () => input.click();
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("drop"); };
+  drop.ondragleave = () => drop.classList.remove("drop");
+  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("drop"); importFiles([...e.dataTransfer.files]); };
+  body.append(h("h2", {}, "Welcome to EDGE"),
+    h("p", {class: "lead"}, "Build an experiment visually: routines are screens made of components on a timeline; the flow puts routines in order, repeats them in loops, and branches with if/else or full workflows."),
+    h("div", {class: "welcome-grid"},
+      h("div", {}, h("h3", {}, "Start from a template"), ...tpl),
+      h("div", {}, h("h3", {}, "Open"), ...(recent.length ? recent : [h("div", {class: "help"}, "No experiments in this folder yet.")]),
+        h("h3", {style: "margin-top:16px"}, "Import"), drop, input)),
+    h("div", {class: "btns"}, h("button", {onclick: () => { closeModal(); }}, "Start with a blank experiment"),
+      h("button", {onclick: () => { closeModal(); showHelp(); }}, "How EDGE works (?)")));
+  openModal();
+}
+
+async function importFiles(files) {
+  if (!files.length) return;
+  const exts = S.schema.import_extensions;
+  const main = files.find((f) => exts.some((x) => f.name.toLowerCase().endsWith(x)) && !f.name.toLowerCase().endsWith(".js")) ||
+    files.find((f) => exts.some((x) => f.name.toLowerCase().endsWith(x)));
+  if (!main) return toast("None of these files is a PsychoPy/E-Prime/OpenSesame/jsPsych experiment", 4000);
+  const stem = main.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "_");
+  const base = `imports/${stem}`;
+  toast(`Importing ${main.name}…`, 6000);
+  try {
+    for (const f of files) {
+      const rel = f.webkitRelativePath || f.name;
+      await fetch(`/api/upload?path=${encodeURIComponent(base + "/source/" + rel)}`, {method: "POST", body: await f.arrayBuffer()});
+    }
+    const r = await api("/api/import", {source: `${base}/source/${main.name}`, out: base});
+    const body = $("#modal-body"); body.innerHTML = ""; body.classList.remove("welcome");
+    const n = (lvl) => r.notes.filter((x) => x.level === lvl);
+    body.append(h("h3", {}, `Imported from ${r.platform}`),
+      h("p", {}, "Converted: " + Object.entries(r.stats).map(([k, v]) => `${v} ${k}`).join(", ")),
+      h("div", {class: "kpis"}, h("div", {class: "kpi"}, h("b", {}, n("unsupported").length), h("span", {}, "need manual work")),
+        h("div", {class: "kpi"}, h("b", {}, n("approx").length), h("span", {}, "approximate, please check")),
+        h("div", {class: "kpi"}, h("b", {}, n("info").length), h("span", {}, "notes"))),
+      ...["unsupported", "approx"].flatMap((lvl) => n(lvl).map((x) => h("div", {class: "issue " + (lvl === "unsupported" ? "error" : "warning")}, `${x.where}: ${x.message.split("\n")[0]}`))),
+      h("p", {class: "help"}, `Saved as ${r.path}, with IMPORT_REPORT.md next to it. Run a dry run before collecting data.`),
+      h("div", {class: "btns"}, h("button", {class: "primary", onclick: async () => { closeModal(); await openFile(r.path); dryRun(); }}, "Open and dry-run"),
+        h("button", {onclick: async () => { closeModal(); await openFile(r.path); }}, "Open")));
+    openModal();
+  } catch (e) { toast("Import failed: " + e.message, 6000); }
+}
+
+function showHelp() {
+  const body = $("#modal-body"); body.innerHTML = ""; body.classList.remove("welcome");
+  const kb = [["Ctrl/⌘ S", "save"], ["Ctrl/⌘ Z / Shift+Z", "undo / redo"], ["Delete", "remove the selected component"], ["?", "this help"], ["Esc", "close dialogs"]];
+  body.append(h("h3", {}, "How EDGE works"),
+    h("ul", {class: "help-list"},
+      h("li", {}, h("b", {}, "Routine"), ": one screen/event sequence (trial, instructions, feedback). Components sit on its timeline; drag bars to change timing."),
+      h("li", {}, h("b", {}, "Component"), ": a stimulus, response, eye-tracking element, marker or logic step. Set ", h("code", {}, "if"), " to include it only sometimes."),
+      h("li", {}, h("b", {}, "Flow"), ": the order of routines. Drag items to reorder; use + to insert routines, loops, branches or workflows."),
+      h("li", {}, h("b", {}, "Loop"), ": repeats routines once per row of a conditions table; columns become ", h("code", {}, "$variables"), ". Loops also track ", h("code", {}, "$loop.accuracy"), " and ", h("code", {}, "$loop.mean_rt"), " live."),
+      h("li", {}, h("b", {}, "Workflow (state machine)"), ": states with routes like “if ", h("code", {}, "$practice.accuracy >= 0.8"), " go to main, otherwise repeat practice”."),
+      h("li", {}, h("b", {}, "Rules"), ": inside a routine, “when ", h("code", {}, "$t > 3"), " → start hint”, “when ", h("code", {}, "$resp.keys == 'q'"), " → go to state end”."),
+      h("li", {}, h("b", {}, "Expressions"), ": any value starting with $ is computed at run time. Type $ in a field to see the variables available there."),
+      h("li", {}, h("b", {}, "HTML pages"), ": the html component shows consent forms, questionnaires or custom JS tasks; every form field is saved."),
+      h("li", {}, h("b", {}, "Dry run"), ": tests the whole experiment in seconds with simulated hardware and a virtual participant.")),
+    h("h3", {}, "Keyboard"), h("table", {class: "grid"}, kb.map(([k, v]) => h("tr", {}, h("td", {}, k), h("td", {}, v)))));
+  openModal();
+}

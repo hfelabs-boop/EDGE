@@ -137,7 +137,7 @@ table.grid th { background: var(--panel2); position: sticky; top: 0; }
 #modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 10; }
 #modal.hidden { display: none; }
 .modal-box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 380px;
-  max-width: 720px; max-height: 80vh; overflow: auto; }
+  max-width: min(1000px, 94vw); max-height: 86vh; overflow: auto; }
 .choice { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px; cursor: pointer; }
 .choice:hover { border-color: var(--accent); }
 .choice small { display: block; color: var(--muted); }
@@ -161,3 +161,56 @@ table.grid th { background: var(--panel2); position: sticky; top: 0; }
 .subtabs { display: flex; gap: 4px; margin: 6px 0; flex-wrap: wrap; }
 .subtabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 input[type=checkbox] { width: auto; }
+
+/* ---------- flow: drag and drop, conditions, workflows */
+.fl-add.drop { background: var(--accent); color: #fff; border-style: solid; transform: scale(1.3); }
+.dragging { opacity: .4; }
+[draggable=true] { cursor: grab; }
+.cond-badge { font-size: 9px; background: var(--warn); color: #fff; border-radius: 3px; padding: 0 3px; margin-left: 4px; vertical-align: middle; }
+.fl-box.sm { border-color: var(--eye); }
+.fl-box.sm > .fl-head { color: var(--eye); }
+.sm-hint { color: var(--muted); font-size: 10px; font-weight: 400; }
+.sm-states { display: flex; gap: 8px; align-items: stretch; padding: 2px 0; }
+.sm-state { border: 1px solid var(--line); border-radius: 8px; padding: 2px 6px 4px; background: var(--panel2); min-width: 120px; }
+.sm-state.start { border-color: var(--eye); }
+.sm-state.sel { outline: 2px solid var(--accent); }
+.sm-name { font-weight: 600; font-size: 12px; cursor: pointer; padding: 2px 0; }
+.sm-next { font-size: 10px; color: var(--muted); max-width: 260px; }
+/* ---------- workflow diagram */
+#routine-body.wide { grid-template-columns: 1fr; }
+.wf-wrap { overflow: auto; padding: 4px; }
+svg.wf { font: 12px system-ui, sans-serif; }
+.wf-node rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+.wf-node.start rect { stroke: var(--eye); stroke-width: 2.5; }
+.wf-node.sel rect { stroke: var(--accent); stroke-width: 3; }
+.wf-node.end rect { fill: var(--panel2); }
+.wf-node { cursor: pointer; }
+.wf-node text { fill: var(--text); }
+.wf-title { font-weight: 700; font-size: 13px; }
+.wf-sub { fill: var(--muted) !important; font-size: 11px; }
+.wf-edge { fill: none; stroke: var(--accent); stroke-width: 1.8; }
+.wf-edge.default { stroke: var(--muted); stroke-dasharray: 5 4; }
+.wf-arrowhead { fill: var(--accent); }
+.wf-label { font-size: 11px; fill: var(--text); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; }
+.tl-summary { font-size: 12px; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; line-height: 1.45; }
+/* ---------- routes & rules */
+.route { border: 1px solid var(--line); border-radius: 8px; padding: 6px; margin-bottom: 8px; background: var(--panel2); }
+.route-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.route-goto { display: flex; align-items: center; gap: 6px; margin: 4px 0; font-size: 12px; }
+.route input, .route select { margin-top: 2px; }
+/* ---------- preview */
+.preview-stack { position: relative; }
+#preview-html { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; border-radius: 4px; }
+#preview-html.hidden { display: none; }
+/* ---------- welcome */
+#modal-body.welcome { width: min(960px, 88vw); }
+.welcome h2 { margin: 0 0 4px; }
+.lead { color: var(--muted); margin: 0 0 14px; }
+.welcome-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
+.card:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.card small { display: block; color: var(--muted); }
+.dropzone { border: 2px dashed var(--line); border-radius: 10px; padding: 22px; text-align: center; cursor: pointer; }
+.dropzone.drop, .dropzone:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.dropzone small { display: block; color: var(--muted); margin-top: 4px; }
+.help-list li { margin-bottom: 6px; }

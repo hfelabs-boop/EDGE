@@ -98,6 +98,7 @@ routines:
         stop_if: "$resp.keys is not None"
         end_routine: false     # true: the routine ends when this responds or times out
         disabled: false        # bool or expression
+        if: "$practice"        # include this component only when true (evaluated when the routine starts)
         save: true             # include results in trials.csv
         marker: "$f'word_{cond}'"   # or {onset: ..., offset: ..., code: 12}
         # --- component properties ---
@@ -123,6 +124,7 @@ help text.
 | | `fixation` | size, line_width | |
 | | `image` | image, size | |
 | | `sound` | sound (file or Hz), volume, tone_duration | onset |
+| | `html` | file or html, display (auto/webview/browser), fullscreen, continue_button | every form field, submitted, rt |
 | response | `keyboard` | keys, store (first/last/all), correct, record_release, response_marker | keys, rt, corr, time, duration |
 | | `mouse` | buttons, clickable (component ids), correct, track, response_marker | x, y, button, clicked, rt, corr, path |
 | | `slider` | ticks, labels, granularity, require_confirm | rating, rt, history |
@@ -174,3 +176,95 @@ flow:
 
 The threshold (mean of the final reversals) is saved in `session.json` and becomes the
 variable `stairs_threshold` for the rest of the experiment.
+
+## Workflow logic
+
+EDGE has four levels of control flow. Use the simplest one that does the job.
+
+| need | use |
+|---|---|
+| show a component only on some trials | component `if: "$practice"` |
+| skip a routine sometimes | flow entry `{routine: feedback, if: "$practice"}` |
+| choose between two sequences once | flow `if` / `then` / `else` |
+| react *during* a routine (timeouts, hints, abort keys, gaze events) | routine `rules` |
+| repeat a block until a criterion, adaptive paths, screening, multi-stage studies | flow `statemachine` |
+
+### Routine rules ("when → do")
+
+```yaml
+routines:
+  trial:
+    rules:
+      - name: hint                       # optional; recorded in the data column rules_fired
+        when: "$t > 3 and resp.keys is None"
+        do: [{start: hint}, {marker: hint_shown}]
+      - when: "$resp.keys == 'q'"
+        do: [{goto: debrief}]            # leave the current workflow state immediately
+      - when: "$roi.completed"
+        do: [{set: {fixated: true}}, end_routine]
+        repeat: false                    # true: fire again each time the condition becomes true
+    components: [...]
+```
+
+Rules are checked every frame after input is processed and fire when their condition *becomes*
+true. Actions: `set` (variables), `start` / `stop` (a component of this routine), `marker`,
+`end_routine`, `goto` (a state of the enclosing workflow, or `end`), and `log`.
+
+### Workflows (state machines)
+
+```yaml
+flow:
+  - statemachine: session
+    start: practice
+    states:
+      practice:
+        run:
+          - loop: prac
+            conditions: practice.csv
+            children: [trial]
+        max_visits: 3                       # after 3 visits, stop repeating and move on
+        next:
+          - {if: "$prac.accuracy >= 0.8", goto: main, set: {passed: true}}
+          - {goto: practice}                # default route (no condition)
+      main:
+        run: [main_block_loop_or_routines]
+        next: [end]
+```
+
+After a state's contents finish, its routes are checked top to bottom and the first one whose
+`if` is true is taken (a route without `if` always matches; `end` leaves the workflow). `set`
+assigns variables on the way. A rule `goto` jumps immediately. `max_visits` bounds repetition:
+once reached, routes back to the same state are skipped and, if nothing else matches, the first
+route to another state is taken. `max_steps` (default 1000) guards against endless loops.
+
+Workflows can contain loops, branches and other workflows. The data gets `<workflow>.state` and
+`<workflow>.visit` columns, and `session.json` records the path taken.
+
+### Live performance of loops
+
+While a loop runs (and after it ends), its results are available to expressions:
+`trials.accuracy`, `trials.n_correct`, `trials.n_responses`, `trials.mean_rt`, alongside `trials.n`
+and `trials.total`. Accuracy uses every `*.corr` result recorded inside the loop; RT uses every
+`*.rt`. These values are what makes adaptive rules like `$prac.accuracy >= 0.8` work.
+
+## HTML pages
+
+```yaml
+- id: consent
+  type: html
+  file: pages/consent.html          # or  html: "<p>Inline page</p>"
+  end_routine: true
+```
+
+* Any form on the page ends it when submitted. Every named field becomes a data column
+  (`consent.agree`, `demo.age` …), with numbers converted, plus `rt` and `submitted`.
+* `{{variable}}` placeholders are filled with trial values (HTML-escaped). JavaScript sees all
+  values in `window.edge.vars`.
+* Custom JS tasks call `edge.submit({...})` to save results and finish, and `edge.marker("label")`
+  to send an event marker to every device.
+* Pages without a form get a **Continue** button (`continue_button: auto|yes|no`).
+* Images, CSS and JS next to the page are served with it and included in `.edgez` bundles.
+* Display: a native full-screen window when `pywebview` is installed (`pip install pywebview`),
+  otherwise the system browser.
+* In dry runs the virtual participant fills in every form (respecting `required`, `min`/`max`,
+  options), so questionnaires appear in the test data.

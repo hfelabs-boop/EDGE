@@ -130,6 +130,9 @@ class ExperimentDoc:
                     for key in ("children", "then", "else"):
                         if isinstance(n.get(key), list):
                             yield from walk(n[key])
+                    for st in (n.get("states") or {}).values():
+                        if isinstance(st, dict):
+                            yield from walk(st.setdefault("run", []))
         yield from walk(self.doc["flow"])
 
     def loop(self, lid: str) -> dict[str, Any]:
@@ -138,12 +141,26 @@ class ExperimentDoc:
                 return n
         raise EditError(f"no loop '{lid}'. Loops: {', '.join(self.loop_ids()) or '(none)'}")
 
+    def machine(self, mid: str) -> dict[str, Any]:
+        for n, _, _ in self.walk_flow():
+            if isinstance(n, dict) and n.get("statemachine") == mid:
+                return n
+        ids = [n["statemachine"] for n, _, _ in self.walk_flow() if isinstance(n, dict) and "statemachine" in n]
+        raise EditError(f"no workflow '{mid}'. Workflows: {', '.join(ids) or '(none)'}")
+
     def loop_ids(self) -> list[str]:
         return [n["loop"] for n, _, _ in self.walk_flow() if isinstance(n, dict) and "loop" in n]
 
     def _container(self, parent: str | None, branch: str = "then") -> list[Any]:
+        """Where to insert: None = top-level flow, a loop id, "machine.state" (a workflow state), or "if:<n>"."""
         if not parent:
             return self.doc["flow"]
+        if "." in parent:
+            mid, _, sname = parent.partition(".")
+            m = self.machine(mid)
+            if sname not in m["states"]:
+                raise EditError(f"workflow '{mid}' has no state '{sname}'. States: {', '.join(m['states'])}")
+            return m["states"][sname].setdefault("run", [])
         for n, _, _ in self.walk_flow():
             if isinstance(n, dict) and n.get("loop") == parent:
                 return n.setdefault("children", [])
@@ -162,6 +179,8 @@ class ExperimentDoc:
             return n
         if "loop" in n:
             return n["loop"]
+        if "statemachine" in n:
+            return n["statemachine"]
         if "routine" in n:
             return n["routine"]
         return f"if {n.get('if')}"
@@ -465,6 +484,167 @@ class ExperimentDoc:
             node["else"] = list(otherwise)
         self.insert_flow(node, parent=parent, position=position)
 
+    # ------------------------------------------------------------------ workflows (state machines)
+    @staticmethod
+    def _routes(next_: Any) -> list[dict[str, Any]]:
+        out = []
+        for t in ([next_] if isinstance(next_, (str, dict)) else (next_ or [])):
+            if isinstance(t, str):
+                out.append({"goto": t})
+            else:
+                r = {}
+                if t.get("if"):
+                    r["if"] = t["if"] if str(t["if"]).startswith("$") else "$" + str(t["if"])
+                r["goto"] = str(t.get("goto", "end"))
+                if t.get("set"):
+                    r["set"] = dict(t["set"])
+                out.append(r)
+        return out
+
+    def add_state_machine(self, mid: str, states: dict[str, Any], start: str | None = None,
+                          parent: str | None = None, position: int | None = None, max_steps: int | None = None) -> str:
+        """states: {name: {"run": [routine or loop dict ...], "next": [{"if": "$expr", "goto": "other"}, "end"],
+        "max_visits": 3}}. Routine names in "run" must exist; with wrap semantics, items already in the flow at
+        the same level are *moved* into the state."""
+        if not IDENT.match(mid):
+            raise EditError(f"workflow id '{mid}' must be an identifier, e.g. 'session'")
+        if mid in self.loop_ids() or mid in self.routines:
+            raise EditError(f"'{mid}' is already used")
+        if not states:
+            raise EditError("a workflow needs at least one state")
+        container = self._container(parent)
+        node_states: dict[str, Any] = {}
+        insert_at = position
+        for name, sd in states.items():
+            if not IDENT.match(name):
+                raise EditError(f"state name '{name}' must be an identifier")
+            sd = sd or {}
+            run = []
+            for item in sd.get("run", []) or []:
+                if isinstance(item, str):
+                    self.routine(item)
+                    idx = next((i for i, n in enumerate(container) if self._node_name(n) == item), None)
+                    if idx is not None:          # move it from the flow into the state
+                        moved = container.pop(idx)
+                        insert_at = idx if insert_at is None else min(insert_at, idx)
+                        run.append(moved)
+                        continue
+                elif isinstance(item, dict) and "loop" in item:
+                    idx = next((i for i, n in enumerate(container) if self._node_name(n) == item["loop"]), None)
+                    if idx is not None and len(item) == 1:   # {"loop": "trials"} refers to an existing loop
+                        insert_at = idx if insert_at is None else min(insert_at, idx)
+                        run.append(container.pop(idx))
+                        continue
+                run.append(item)
+            st: dict[str, Any] = {"run": run}
+            routes = self._routes(sd.get("next"))
+            if routes:
+                st["next"] = routes
+            for k in ("max_visits", "description"):
+                if sd.get(k):
+                    st[k] = sd[k]
+            node_states[name] = st
+        for name, st in node_states.items():
+            for r in st.get("next", []):
+                if r["goto"] != "end" and r["goto"] not in node_states:
+                    raise EditError(f"state '{name}' routes to unknown state '{r['goto']}' (use 'end' to finish)")
+        node: dict[str, Any] = {"statemachine": mid, "start": start or next(iter(node_states)), "states": node_states}
+        if max_steps:
+            node["max_steps"] = max_steps
+        if insert_at is None or insert_at >= len(container):
+            container.append(node)
+        else:
+            container.insert(insert_at, node)
+        self.changes.append(f"added workflow {mid} with states {', '.join(node_states)}")
+        return mid
+
+    def update_state(self, mid: str, state: str, run: list[Any] | None = None, next: Any = None,
+                     max_visits: Any = "__keep__", description: str | None = None, rename_to: str | None = None,
+                     make_start: bool = False) -> None:
+        m = self.machine(mid)
+        if state not in m["states"]:
+            m["states"][state] = {"run": []}
+            self.changes.append(f"added state {mid}.{state}")
+        st = m["states"][state]
+        if run is not None:
+            for item in run:
+                if isinstance(item, str):
+                    self.routine(item)
+            st["run"] = list(run)
+        if next is not None:
+            routes = self._routes(next)
+            for r in routes:
+                if r["goto"] != "end" and r["goto"] not in m["states"]:
+                    raise EditError(f"route to unknown state '{r['goto']}'; states: {', '.join(m['states'])}, end")
+            st["next"] = routes
+        if max_visits != "__keep__":
+            if max_visits:
+                st["max_visits"] = int(max_visits)
+            else:
+                st.pop("max_visits", None)
+        if description is not None:
+            st["description"] = description
+        if make_start:
+            m["start"] = state
+        if rename_to and rename_to != state:
+            if not IDENT.match(rename_to) or rename_to in m["states"]:
+                raise EditError(f"invalid or duplicate state name '{rename_to}'")
+            m["states"] = {(rename_to if k == state else k): v for k, v in m["states"].items()}
+            for s2 in m["states"].values():
+                for r in s2.get("next", []) or []:
+                    if isinstance(r, dict) and r.get("goto") == state:
+                        r["goto"] = rename_to
+            if m["start"] == state:
+                m["start"] = rename_to
+        self.changes.append(f"updated state {mid}.{state}")
+
+    def remove_state(self, mid: str, state: str) -> None:
+        m = self.machine(mid)
+        if state not in m["states"]:
+            raise EditError(f"no state '{state}'")
+        del m["states"][state]
+        for s2 in m["states"].values():
+            s2["next"] = [r for r in s2.get("next", []) or [] if (r if isinstance(r, str) else r.get("goto")) != state]
+        if m["start"] == state:
+            m["start"] = next(iter(m["states"]), "")
+        self.changes.append(f"removed state {mid}.{state}")
+
+    # ------------------------------------------------------------------ routine rules
+    def add_rule(self, rid: str, when: str, do: list[Any], repeat: bool = False, name: str | None = None) -> int:
+        """do: actions like [{"end_routine": true}, {"start": "hint"}, {"stop": "stim"}, {"set": {"x": "$x+1"}},
+        {"marker": "label"}, {"goto": "state"}, {"log": "text"}]."""
+        from .model import RULE_ACTIONS
+        r = self.routine(rid)
+        acts = do if isinstance(do, list) else [do]
+        comp_ids = {c.get("id") for c in r["components"]}
+        for a in acts:
+            keys = set(a) if isinstance(a, dict) else {a}
+            bad = keys - RULE_ACTIONS
+            if bad:
+                raise EditError(f"unknown rule action {', '.join(map(str, bad))}; valid: {', '.join(sorted(RULE_ACTIONS))}")
+            if isinstance(a, dict):
+                for k in ("start", "stop"):
+                    if k in a and a[k] not in comp_ids:
+                        raise EditError(f"rule action {k}: routine '{rid}' has no component '{a[k]}'")
+        rule: dict[str, Any] = {"when": when if str(when).startswith("$") else "$" + str(when), "do": acts}
+        if name:
+            rule["name"] = name
+        if repeat:
+            rule["repeat"] = True
+        r.setdefault("rules", []).append(rule)
+        self.changes.append(f"added rule to {rid}")
+        return len(r["rules"]) - 1
+
+    def remove_rule(self, rid: str, index: int) -> None:
+        r = self.routine(rid)
+        rules = r.get("rules") or []
+        if not 0 <= index < len(rules):
+            raise EditError(f"routine '{rid}' has {len(rules)} rule(s)")
+        rules.pop(index)
+        if not rules:
+            r.pop("rules", None)
+        self.changes.append(f"removed rule {index} from {rid}")
+
     # ------------------------------------------------------------------ conditions
     def set_conditions(self, lid: str, rows: list[dict[str, Any]] | None = None, file: str | None = None,
                        factorial: dict[str, list[Any]] | None = None, write_file: bool = False) -> None:
@@ -588,6 +768,16 @@ class ExperimentDoc:
                         desc = f"{src}, {n.get('order', 'sequential')}, repeats {n.get('repeats', 1)}"
                     lines.append(f"{pad}- loop {n['loop']} [{desc}]")
                     flow(n.get("children", []), depth + 1)
+                elif "statemachine" in n:
+                    lines.append(f"{pad}- workflow {n['statemachine']} (start: {n.get('start')})")
+                    for sname, st in (n.get("states") or {}).items():
+                        routes = []
+                        for r in st.get("next") or []:
+                            r = {"goto": r} if isinstance(r, str) else r
+                            routes.append(f"{r.get('goto')} if {r['if']}" if r.get("if") else f"{r.get('goto')}")
+                        extra = f", max {st['max_visits']} visits" if st.get("max_visits") else ""
+                        lines.append(f"{pad}  state {sname}{extra} -> {' | '.join(routes) or 'end'}:")
+                        flow(st.get("run") or [], depth + 2)
                 elif "if" in n:
                     lines.append(f"{pad}- if {n['if']}:")
                     flow(n.get("then", []), depth + 1)
@@ -604,6 +794,8 @@ class ExperimentDoc:
             if r.get("end_if"):
                 extra.append(f"ends if {r['end_if']}")
             lines.append(f"  {rid}" + (f" ({', '.join(extra)})" if extra else "") + ":")
+            for rule in r.get("rules") or []:
+                lines.append(f"    rule: when {rule.get('when')} do {rule.get('do')}")
             if not r["components"]:
                 lines.append("    (empty)")
             for c in r["components"]:
@@ -614,6 +806,8 @@ class ExperimentDoc:
                 key = {k: v for k, v in c.items() if k not in SCHEDULE_KEYS}
                 summary = ", ".join(f"{k}={_short(v)}" for k, v in list(key.items())[:5])
                 flags = " [ends routine]" if c.get("end_routine") else ""
+                if c.get("if"):
+                    flags += f" [only if {c['if']}]"
                 lines.append(f"    - {c['id']} ({c['type']}; {timing}){flags} {summary}")
         return "\n".join(lines)
 

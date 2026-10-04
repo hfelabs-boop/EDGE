@@ -15,6 +15,7 @@
   <nav class="actions">
     <button id="btn-new" title="New from template">New</button>
     <button id="btn-open" title="Open experiment">Open</button>
+    <button id="btn-import" title="Import a PsychoPy, E-Prime, OpenSesame or jsPsych experiment">Import</button>
     <button id="btn-save" title="Save (Ctrl+S)">Save</button>
     <button id="btn-versions" title="Saved versions (automatic backups)">Versions</button>
     <button id="btn-bundle" title="Download the experiment with all its files (.edgez)">Bundle</button>
@@ -26,6 +27,7 @@
     <button id="btn-validate" title="Check for errors">Validate</button>
     <button id="btn-dryrun" class="accent" title="Run headless with simulated devices and a virtual participant">▶ Dry run</button>
     <button id="btn-run" class="primary" title="Run for real (opens the experiment window)">▶ Run</button>
+    <button id="btn-help" title="How EDGE works (?)">?</button>
   </nav>
 </header>
 
@@ -49,7 +51,10 @@
       <div id="routine-body">
         <div id="timeline"></div>
         <div id="preview-wrap">
-          <canvas id="preview" width="480" height="270"></canvas>
+          <div class="preview-stack">
+            <canvas id="preview" width="480" height="270"></canvas>
+            <iframe id="preview-html" class="hidden" title="HTML page preview" sandbox="allow-scripts allow-forms"></iframe>
+          </div>
           <div class="preview-ctl">
             <input type="range" id="preview-t" min="0" max="5" step="0.01" value="0">
             <span id="preview-label">t = 0.00 s</span>

@@ -18,6 +18,7 @@ tobii = ["tobii-research>=1.10"]
 serial = ["pyserial>=3.5"]
 gtec = []  # pygds ships with g.NEEDaccess; install it from g.tec's SDK
 mcp = ["mcp>=1.2"]
+html = ["pywebview>=4"]
 export = ["pyarrow>=12", "scipy>=1.10"]
 all = ["pyglet>=2.0", "pylsl>=1.16", "pyserial>=3.5", "numpy>=1.24", "mcp>=1.2"]
 dev = ["pytest>=7", "mcp>=1.2", "openpyxl>=3"]

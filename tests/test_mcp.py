@@ -15,7 +15,8 @@ def call(server, tool, **args):
     # FastMCP returns (content, structured) for tools with a return annotation
     if isinstance(res, tuple):
         structured = res[1]
-        return structured.get("result", structured)
+        # FastMCP wraps non-dict return values as {"result": value}
+        return structured["result"] if set(structured) == {"result"} else structured
     return json.loads(res[0].text)
 
 
@@ -113,3 +114,40 @@ def test_real_stdio_session(tmp_path):
                 assert "Expressions" in doc.contents[0].text
 
     asyncio.run(go())
+
+
+def test_workflow_rules_and_import_tools(server, tmp_path):
+    import shutil
+    from pathlib import Path
+    call(server, "create_experiment", path="w.yaml")
+    r = call(server, "edit_experiment", path="w.yaml", operations=[
+        {"op": "add_routine", "rid": "trial", "add_to_flow": False},
+        {"op": "add_component", "rid": "trial", "ctype": "keyboard", "properties": {"keys": ["f", "j"],
+                                                                                     "correct": "f", "end_routine": True}},
+        {"op": "add_routine", "rid": "main_trial"},
+        {"op": "add_component", "rid": "main_trial", "ctype": "keyboard", "properties": {"end_routine": True}},
+        {"op": "add_loop", "lid": "practice", "children": ["trial"], "repeats": 4},
+        {"op": "add_loop", "lid": "main", "children": ["main_trial"], "repeats": 2}])
+    assert r["ok"], r
+    r = call(server, "add_workflow", path="w.yaml", workflow="session", states={
+        "train": {"run": [{"loop": "practice"}], "max_visits": 3,
+                  "next": [{"if": "$practice.accuracy >= 0.75", "goto": "test"}, {"goto": "train"}]},
+        "test": {"run": [{"loop": "main"}], "next": ["end"]}})
+    assert r["ok"] and r["valid"], r
+    doc = json.loads(json.dumps(__import__("yaml").safe_load((tmp_path / "w.yaml").read_text())))
+    assert doc["flow"] == [doc["flow"][0]] and doc["flow"][0]["statemachine"] == "session"   # loops moved inside
+    assert doc["flow"][0]["states"]["train"]["run"][0]["loop"] == "practice"
+    r = call(server, "add_routine_rule", path="w.yaml", routine="trial", when="$t > 5", do=[{"goto": "test"}])
+    assert r["ok"]
+    bad = call(server, "add_routine_rule", path="w.yaml", routine="trial", when="$t > 5", do=[{"start": "ghost"}])
+    assert not bad["ok"] and "ghost" in bad["error"]
+    out = call(server, "describe_experiment", path="w.yaml")["outline"]
+    assert "workflow session" in out and "state train, max 3 visits -> test if $practice.accuracy >= 0.75 | train" in out
+    dr = call(server, "dry_run", path="w.yaml")
+    assert dr["ok"], dr
+    # import a PsychoPy experiment through MCP
+    src = Path(__file__).parent / "fixtures" / "psychopy"
+    shutil.copytree(src, tmp_path / "pp")
+    imp = call(server, "import_experiment", source="pp/stroop.psyexp", out_dir="pp_edge")
+    assert imp["ok"] and imp["path"] == "pp_edge/stroop.yaml" and imp["valid"]
+    assert any("Movie" in x for x in imp["needs_manual_work"])

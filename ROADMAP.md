@@ -14,7 +14,11 @@
   format migrations, .edgez bundles
 - Data: one-row-per-trial tables, automatic summaries and data dictionaries, xlsx/csv/tsv/json/parquet/mat/BIDS
   exports, multi-participant merge, builder Data tab
-- MCP server (40 tools, resources, prompts) for Claude Code, Claude Desktop and VS Code
+- MCP server (44 tools, resources, prompts) for Claude Code, Claude Desktop and VS Code
+- Workflow logic: state machines with a visual diagram editor, routine "when → do" rules, component `if`,
+  live loop performance
+- HTML pages as experiment steps (forms, questionnaires, JS tasks) with saved answers
+- Importers: PsychoPy, E-Prime (generated script), OpenSesame, jsPsych; builder start screen and import dialog
 
 ## Next: hardware validation (highest priority)
 - [ ] Run every driver against physical devices; photodiode + TTL loopback timing benchmarks
@@ -30,8 +34,12 @@
 - [ ] fNIRS (NIRx, Artinis), MRI scanner trigger input (TR sync), TMS/tDCS triggering
 - [ ] Generic "device from a description file" (serial/TCP/UDP protocols declared in YAML)
 
+## Import
+- [ ] Inquisit (.iqx), Gorilla, PsyToolkit, Presentation (.sce/.pcl), Psychtoolbox scripts (common patterns)
+- [ ] Validate importers against large public corpora of real experiments (Pavlovia, OSF)
+
 ## Builder
-- [ ] Drag-and-drop flow reordering, multi-select, copy/paste between experiments
+- [ ] Multi-select, copy/paste between experiments, drag positions in the stimulus preview
 - [ ] Conditions spreadsheet editor with xlsx round trip
 - [ ] Inline expression checking and autocompletion of variables in scope
 - [ ] Live device dashboards (gaze overlay, signal quality, impedance) during sessions

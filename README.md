@@ -31,6 +31,9 @@ edge report data/012_1_study_…     # timing, data-integrity and sync report
 | Data tables | one row per trial (E-DataAid) | one row per loop iteration | one row per trial, ordered columns, **automatic per-condition summary and data dictionary**, Excel/BIDS/Parquet/MATLAB exports, multi-participant merge |
 | Saving | single file | single file | atomic saves, automatic version history with undo, conflict detection, crash recovery, `.edgez` bundles |
 | Natural language | — | — | **MCP server**: Claude or VS Code builds, edits, dry-runs and analyzes experiments, and edits appear live in the builder |
+| Workflow logic | E-Basic scripting | code components | **visual state machines** (repeat until criterion, adaptive paths, screening), "when → do" routine rules, per-component `if`, live loop accuracy/RT |
+| HTML | — | Forms component | **HTML pages as experiment steps**: consent, questionnaires, custom JS tasks, with every field saved |
+| Import | — | — | **PsychoPy, E-Prime, OpenSesame and jsPsych** experiments, with a conversion report |
 | Extending | E-Basic | Python | Python plugins for devices and components (entry points) |
 | License | commercial | GPL | MIT |
 
@@ -95,6 +98,42 @@ flow:
 
 See [docs/EXPERIMENT_FORMAT.md](docs/EXPERIMENT_FORMAT.md) for the full reference.
 
+### Workflows, rules and HTML pages
+
+```yaml
+flow:
+  - statemachine: session
+    start: consent
+    states:
+      consent:
+        run: [consent_page]                          # an html component with a consent form
+        next: [{if: "$consent.agree == 'yes'", goto: practice}, {goto: end}]
+      practice:
+        run: [practice_loop]
+        max_visits: 3
+        next: [{if: "$practice_loop.accuracy >= 0.8", goto: main}, {goto: practice}]
+      main:
+        run: [main_loop]
+routines:
+  trial:
+    rules:
+      - {when: "$t > 3 and resp.keys is None", do: [{start: hint}]}
+      - {when: "$resp.keys == 'q'", do: [{goto: end}]}
+```
+
+![Workflow editor](docs/workflow.png)
+
+In the builder, selecting a workflow shows its live diagram. States, routes and rules are edited
+with forms, and every expression field suggests the variables available there.
+
+### Bring your existing experiments
+
+```bash
+edge import stroop.psyexp       # also .ebs3 (E-Prime), .osexp (OpenSesame), jsPsych .html
+```
+
+See [docs/IMPORT.md](docs/IMPORT.md) for what converts and how.
+
 ## Hardware
 
 | Device | Driver | How |
@@ -144,7 +183,7 @@ claude mcp add edge -- edge mcp --root .          # Claude Code (VS Code: .vscod
 > "Build a 2-back task with letters, 3 blocks of 30 trials, g.tec EEG over LSL and TTL triggers,
 > dry-run it and give me the expected session length."
 
-The 40 tools cover building and editing experiments (with all-or-nothing batch edits), devices,
+The 44 tools cover building and editing experiments (with all-or-nothing batch edits), devices,
 validation, dry runs, real runs, session analysis, exports, undo and version history, and
 opening the visual builder. Edits are validated, backed up and show up live in an open builder.
 See [docs/MCP.md](docs/MCP.md).

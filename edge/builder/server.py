@@ -35,6 +35,7 @@ def schema() -> dict[str, Any]:
         "devices": {k: v.describe() for k, v in device_registry().items()},
         "loop_orders": list(LOOP_ORDERS),
         "templates": {k: {"name": v["name"], "description": v.get("description", "")} for k, v in TEMPLATES.items()},
+        "import_extensions": [".psyexp", ".ebs3", ".ebs2", ".ebs", ".osexp", ".opensesame", ".html", ".htm", ".js"],
         "default_settings": DEFAULT_SETTINGS,
     }
 
@@ -180,6 +181,12 @@ def make_handler(app: BuilderApp):
             n = int(self.headers.get("Content-Length") or 0)
             return json.loads(self.rfile.read(n) or b"{}")
 
+        def _raw(self, limit: int = 200 * 1024 * 1024) -> bytes:
+            n = int(self.headers.get("Content-Length") or 0)
+            if n > limit:
+                raise ValueError("file too large")
+            return self.rfile.read(n)
+
         def do_GET(self) -> None:  # noqa: N802
             u = urlparse(self.path)
             q = {k: v[0] for k, v in parse_qs(u.query).items()}
@@ -252,7 +259,21 @@ def make_handler(app: BuilderApp):
             u = urlparse(self.path)
             q = {k: v[0] for k, v in parse_qs(u.query).items()}
             try:
+                if u.path == "/api/upload":
+                    dest = app.safe_path(q["path"])
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(self._raw())
+                    return self._json({"saved": str(dest.relative_to(app.root))})
                 body = self._body()
+                if u.path == "/api/import":
+                    from ..importers import ImportError_, import_experiment
+                    try:
+                        path, res = import_experiment(app.safe_path(body["source"]),
+                                                      app.safe_path(body["out"]) if body.get("out") else None)
+                    except ImportError_ as e:
+                        return self._json({"error": str(e)}, 400)
+                    return self._json({"path": str(path.relative_to(app.root)), "platform": res.platform,
+                                       "notes": res.notes, "stats": res.stats, "report": res.report_markdown()})
                 if u.path == "/api/experiment":
                     try:
                         return self._json(app.save(q["path"], body, q.get("fingerprint"), q.get("force") == "1"))
