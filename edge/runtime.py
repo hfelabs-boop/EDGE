@@ -89,8 +89,8 @@ class Session:
         root = SessionData.make_dir(self.data_root, self.settings["data"]["filename"], fields)
         self.data = SessionData(root)
         if self.exp.source:
-            import yaml
-            self.data.write_text("experiment.yaml", yaml.safe_dump(self.exp.source, sort_keys=False, allow_unicode=True))
+            from .storage import dumps
+            self.data.write_text("experiment.yaml", dumps(self.exp.source))
         if hasattr(self.backend, "base_dir"):
             self.backend.base_dir = self.exp.base_dir
         self.backend.open(self.settings["window"])
@@ -236,6 +236,13 @@ class Session:
         if self.data:
             self.data.close()
             self.data.write_json("session.json", summary)
+            try:
+                from .export import auto_export
+                auto_export(self.data.root, self.settings)
+            except Exception as e:  # never lose a session because an export failed
+                self.errors.append(f"automatic export failed: {type(e).__name__}: {e}")
+                summary["errors"] = self.errors
+                self.data.write_json("session.json", summary)
         try:
             self.backend.close()
         except Exception:

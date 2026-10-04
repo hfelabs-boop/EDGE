@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "edge": {
+      "type": "stdio",
+      "command": "edge",
+      "args": ["mcp", "--root", "${workspaceFolder}"]
+    }
+  }
+}

@@ -149,3 +149,15 @@ table.grid th { background: var(--panel2); position: sticky; top: 0; }
 .menu div { padding: 5px 10px; border-radius: 4px; cursor: pointer; }
 .menu div:hover { background: var(--panel2); }
 .menu hr { border: none; border-top: 1px solid var(--line); margin: 4px 0; }
+
+#banner { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); background: var(--warn); color: #fff;
+  padding: 8px 14px; border-radius: 8px; z-index: 25; display: flex; gap: 10px; align-items: center; box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+#banner.hidden { display: none; }
+#banner button { background: rgba(255,255,255,.2); color: #fff; border-color: rgba(255,255,255,.5); }
+.data-layout { display: grid; grid-template-columns: 260px 1fr; gap: 12px; height: 100%; }
+.sess { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 4px; cursor: pointer; font-size: 12px; }
+.sess:hover, .sess.sel { border-color: var(--accent); }
+.sess small { color: var(--muted); display: block; }
+.subtabs { display: flex; gap: 4px; margin: 6px 0; flex-wrap: wrap; }
+.subtabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+input[type=checkbox] { width: auto; }

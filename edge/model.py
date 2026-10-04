@@ -29,16 +29,12 @@ See docs/EXPERIMENT_FORMAT.md for the full reference.
 from __future__ import annotations
 
 import copy
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Union
 
-import yaml
-
 from . import expressions
 
-FORMAT_VERSION = 1
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "window": {
@@ -55,6 +51,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "dir": "data",
         "filename": "{participant}_{session}_{experiment}_{date}",
         "save_frame_log": True,
+        "exports": ["csv"],      # also: xlsx, tsv, json, jsonl, parquet, mat, bids (written at session end)
+        "summary": {},           # optional overrides: {by: [factor, ...], rt: comp.rt, correct: comp.corr}
     },
     "participant": {"participant": "001", "session": "1"},
     "timing": {
@@ -230,6 +228,9 @@ class Experiment:
     description: str = ""
     base_dir: Path = field(default_factory=Path.cwd)
     source: dict[str, Any] = field(default_factory=dict)
+    path: Path | None = None
+    fingerprint: str | None = None
+    migrations: list[str] = field(default_factory=list)
 
     # ---------------------------------------------------------------- loading
     @classmethod
@@ -250,14 +251,19 @@ class Experiment:
 
     @classmethod
     def load(cls, path: str | Path) -> "Experiment":
-        path = Path(path)
-        text = path.read_text(encoding="utf-8")
-        data = json.loads(text) if path.suffix.lower() == ".json" else yaml.safe_load(text)
-        if not isinstance(data, dict):
-            raise ValueError(f"{path}: experiment file must contain a mapping at the top level")
-        return cls.from_dict(data, base_dir=path.parent)
+        """Load a YAML/JSON experiment (migrating older formats). Raises storage.DocumentError
+        with line/column information for syntax errors."""
+        from .storage import load_document
+
+        loaded = load_document(path)
+        exp = cls.from_dict(loaded.doc, base_dir=loaded.path.parent)
+        exp.path = loaded.path
+        exp.fingerprint = loaded.fingerprint
+        exp.migrations = loaded.migrations
+        return exp
 
     def to_dict(self) -> dict[str, Any]:
+        from .storage import FORMAT_VERSION
         return {
             "edge_format": FORMAT_VERSION,
             "name": self.name,
@@ -269,13 +275,19 @@ class Experiment:
             "flow": [_flow_to_dict(n) for n in self.flow],
         }
 
-    def save(self, path: str | Path) -> None:
-        path = Path(path)
-        d = self.to_dict()
-        if path.suffix.lower() == ".json":
-            path.write_text(json.dumps(d, indent=2), encoding="utf-8")
-        else:
-            path.write_text(yaml.safe_dump(d, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    def save(self, path: str | Path | None = None, check_conflicts: bool = True) -> str:
+        """Atomic save with automatic backup. If this experiment was loaded from the same file
+        and the file has changed on disk since, storage.ConflictError is raised."""
+        from .storage import save_document
+
+        target = Path(path) if path else self.path
+        if target is None:
+            raise ValueError("no path given")
+        expected = self.fingerprint if (check_conflicts and self.path is not None
+                                        and Path(target).resolve() == Path(self.path).resolve()) else None
+        self.fingerprint = save_document(target, self.to_dict(), expected_fingerprint=expected)
+        self.path = Path(target)
+        return self.fingerprint
 
     # ------------------------------------------------------------- validation
     def validate(self) -> list["Issue"]:

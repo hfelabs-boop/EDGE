@@ -8,6 +8,7 @@ every device as part of the experiment, not something bolted on afterwards.
 
 ```
 edge builder                       # visual builder in your browser
+edge mcp                           # let Claude / VS Code build experiments from plain-language requests
 edge run study.yaml --dry-run      # simulated devices + virtual participant, takes seconds
 edge run study.yaml -p 012         # the real thing
 edge report data/012_1_study_…     # timing, data-integrity and sync report
@@ -27,6 +28,9 @@ edge report data/012_1_study_…     # timing, data-integrity and sync report
 | Test before booking participants | — | partial (pilot mode) | **dry run**: every device simulated on its own drifting clock, a virtual participant answering with realistic RTs, full data output in seconds |
 | Gaze-contingent design | scripting | scripting | `gaze_roi` (dwell triggers, AOI stats) and `gaze_follow` components |
 | Adaptive procedures | scripting | staircase loops | staircase loops plus constrained randomization (`max_repeat`), Williams Latin squares |
+| Data tables | one row per trial (E-DataAid) | one row per loop iteration | one row per trial, ordered columns, **automatic per-condition summary and data dictionary**, Excel/BIDS/Parquet/MATLAB exports, multi-participant merge |
+| Saving | single file | single file | atomic saves, automatic version history with undo, conflict detection, crash recovery, `.edgez` bundles |
+| Natural language | — | — | **MCP server**: Claude or VS Code builds, edits, dry-runs and analyzes experiments, and edits appear live in the builder |
 | Extending | E-Basic | Python | Python plugins for devices and components (entry points) |
 | License | commercial | GPL | MIT |
 
@@ -112,20 +116,42 @@ See [docs/DEVICES.md](docs/DEVICES.md) for setup, wiring and how the synchroniza
 
 ## Data
 
-Each session writes one plain-text folder that opens anywhere:
+Each session writes one plain-text folder that opens anywhere, with analysis-ready tables
+generated automatically:
 
 ```
-session.json      settings, devices, clock models, marker codebook, timing summary, seed, software version
-experiment.yaml   the exact experiment that ran
-trials.csv        one row per routine: conditions, responses, RTs, onsets (trials.jsonl is crash-safe)
-events.jsonl      every marker with flip time and per-device delivery time
-frames.csv        every screen flip
-streams/*.csv     device data with device time, arrival time and aligned master time
+trials_wide.csv      one row per trial, columns ordered ids → design → conditions → responses → timing
+summary.csv          accuracy, miss rate, RT mean/median/SD per participant and condition level (correct trials, outliers removed)
+data_dictionary.csv  every column explained: meaning, type, units, levels, range, missing
+events.jsonl         every marker with flip time and per-device delivery time
+streams/*.csv        device data with device time, arrival time and aligned master time
+session.json         settings, devices, clock models, marker codebook, timing summary, seed, software version
 ```
+
+```bash
+edge export data/ --formats csv,xlsx,bids    # merge all participants; Excel workbook; BIDS tree
+```
+
+See [docs/DATA.md](docs/DATA.md) for how the tables are built and for all save, load and export features.
+
+## Talk to it: MCP for Claude and VS Code
+
+```bash
+pip install -e ".[mcp]"
+claude mcp add edge -- edge mcp --root .          # Claude Code (VS Code: .vscode/mcp.json is included)
+```
+
+> "Build a 2-back task with letters, 3 blocks of 30 trials, g.tec EEG over LSL and TTL triggers,
+> dry-run it and give me the expected session length."
+
+The 40 tools cover building and editing experiments (with all-or-nothing batch edits), devices,
+validation, dry runs, real runs, session analysis, exports, undo and version history, and
+opening the visual builder. Edits are validated, backed up and show up live in an open builder.
+See [docs/MCP.md](docs/MCP.md).
 
 ## Status
 
-This is an early release (0.1). The runtime, builder, data pipeline, simulators and the LSL and
+This is an early release (0.1). The runtime, builder, data pipeline, exports, MCP server, simulators and the LSL and
 Gazepoint protocol paths are covered by the test suite (`pytest`; LSL against real liblsl,
 Gazepoint against a protocol-level mock server). The Tobii, g.tec, MindWare, serial and parallel
 drivers follow the vendors' documented APIs but have **not yet been run against physical devices**.

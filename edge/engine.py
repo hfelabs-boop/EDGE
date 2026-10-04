@@ -269,7 +269,9 @@ class Runner:
         run = RoutineRun(routine, self.session, self)
         row = run.run()
         self.routine_count += 1
-        full: dict[str, Any] = {"experiment": self.exp.name, **self.session.participant, "routine_index": self.routine_count}
+        full: dict[str, Any] = {"experiment": self.exp.name, **self.session.participant, "routine_index": self.routine_count,
+                                "trial_key": "|".join(f"{f['loop']}={f['state']['n']}" for f in self.stack),
+                                "loop": self.stack[-1]["loop"] if self.stack else ""}
         for f in self.stack:
             st = f["state"]
             full[f"{f['loop']}.n"] = st["n"]
@@ -298,6 +300,7 @@ class Runner:
                 if loop.stop_if and self._eval(loop.stop_if):
                     break
             s.loop_summaries[loop.id] = {"type": "staircase", "threshold": sc.threshold,
+                                         "columns": [sc.variable, "staircase_trial"], "source": "staircase",
                                          "reversals": sc.reversal_levels, "trials": len(sc.history),
                                          "history": sc.history}
             s.vars[f"{loop.id}_threshold"] = sc.threshold
@@ -309,7 +312,14 @@ class Runner:
         p_index = _participant_index(s.participant)
         trials = order_trials(rows, loop.order, repeats, s.rng, loop.max_repeat, p_index)
         n_per_rep = max(len(rows), 1)
+        columns: list[str] = []
+        for r in rows:
+            columns += [k for k in r if k not in columns]
         s.loop_summaries[loop.id] = {"type": "trials", "order": loop.order, "n_trials": len(trials),
+                                     "columns": columns,
+                                     "source": loop.conditions if isinstance(loop.conditions, str) else
+                                     ("factorial" if isinstance(loop.conditions, dict) else
+                                      ("inline table" if loop.conditions else None)),
                                      "sequence": [t.get("_row") for t in trials]}
         for i, row in enumerate(trials):
             state = LoopState(n=i, total=len(trials), remaining=len(trials) - i - 1, repeat=i // n_per_rep,

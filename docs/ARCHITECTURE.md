@@ -11,7 +11,11 @@ edge/
   backends/         pyglet (OpenGL window) and headless (virtual clock or real-time)
   devices/          drivers + registry + base class (streams, sinks, threads, clock models)
   sync.py           clock models: linear fit, round trip, arrival envelope
-  data.py           session folder writers
+  data.py           session folder writers (raw logs)
+  storage.py        atomic save/load, backups & undo, conflict detection, migrations, .edgez bundles
+  editing.py        validated document-editing API (used by the MCP server and scripts)
+  export.py         wide trial tables, summaries, data dictionary, xlsx/csv/json/parquet/mat/BIDS, merging
+  mcp_server.py     MCP server: natural-language control from Claude / VS Code
   report.py         post-session timing / integrity / sync analysis
   align.py          external-recording alignment via TTL code sequences
   participant.py    virtual participant for dry runs

@@ -48,7 +48,7 @@ async function api(path, body) {
   const opt = body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)};
   const r = await fetch(path, opt);
   const j = await r.json();
-  if (!r.ok || j.error) throw new Error(j.error || r.statusText);
+  if (!r.ok || j.error) { const e = new Error(j.error || r.statusText); e.status = r.status; e.data = j; throw e; }
   return j;
 }
 
@@ -66,9 +66,15 @@ function commit(render = true) {
   S.future = [];
   S._snapshot = JSON.stringify(S.exp);
   setDirty(true);
+  saveDraft();
   if (render) renderAll();
   scheduleValidate();
 }
+const draftKey = () => "edge.draft." + (S.path || "untitled");
+function saveDraft() {
+  try { localStorage.setItem(draftKey(), JSON.stringify({doc: S.exp, base: S.fingerprint || "", time: new Date().toISOString()})); } catch {}
+}
+function clearDraft() { try { localStorage.removeItem(draftKey()); } catch {} }
 function undo() { if (!S.history.length) return; S.future.push(S._snapshot); S._snapshot = S.history.pop();
   S.exp = JSON.parse(S._snapshot); fixSelection(); setDirty(true); renderAll(); }
 function redo() { if (!S.future.length) return; S.history.push(S._snapshot); S._snapshot = S.future.pop();
@@ -115,19 +121,33 @@ async function boot() {
   else if (files.length === 1) await openFile(files[0].path);
   else loadDoc(clone(await api("/api/template?name=blank")), null);
   wire();
+  setInterval(pollExternalChanges, 1500);
 }
 
-function loadDoc(exp, path) {
-  S.exp = normalize(exp); S.path = path; S.history = []; S.future = []; S._snapshot = JSON.stringify(S.exp);
-  S.routine = routineInFlowOrder()[0] || Object.keys(S.exp.routines)[0] || null;
-  S.sel = S.routine ? {kind: "routine", routine: S.routine} : {kind: "settings"};
+function loadDoc(exp, path, fp = null, opts = {}) {
+  S.fingerprint = fp; S.path = path;
+  if (!opts.silent) {
+    let draft = null; try { draft = JSON.parse(localStorage.getItem(draftKey()) || "null"); } catch {}
+    if (draft && draft.base === (fp || "") && JSON.stringify(draft.doc) !== JSON.stringify(exp)
+        && confirm(`Restore unsaved changes from ${draft.time.replace("T", " ").slice(0, 19)}?`)) {
+      exp = draft.doc; setTimeout(() => setDirty(true), 0);
+    } else if (draft) clearDraft();
+  }
+  S.exp = normalize(exp); S.history = []; S.future = []; S._snapshot = JSON.stringify(S.exp);
+  if (opts.keepSelection && S.exp.routines[S.routine]) fixSelection();
+  else {
+    S.routine = routineInFlowOrder()[0] || Object.keys(S.exp.routines)[0] || null;
+    S.sel = S.routine ? {kind: "routine", routine: S.routine} : {kind: "settings"};
+  }
   $("#filename").textContent = path || "untitled (not saved)";
   setDirty(false); renderAll(); validate();
 }
 function routineInFlowOrder() { const out = []; walkFlow((n) => { const r = routineOfNode(n); if (typeof r === "string" && !out.includes(r)) out.push(r); }); return out; }
 
-async function openFile(path) {
-  loadDoc(await api(`/api/experiment?path=${encodeURIComponent(path)}`), path);
+async function openFile(path, opts = {}) {
+  const j = await api(`/api/experiment?path=${encodeURIComponent(path)}`);
+  loadDoc(j.experiment, path, j.fingerprint, opts);
+  if (j.migrations && j.migrations.length) toast("Upgraded from an older format: " + j.migrations.join("; "), 5000);
   localStorage.setItem("edge.last", path);
 }
 
@@ -137,9 +157,99 @@ async function save(asNew = false) {
     path = prompt("Save as (path relative to the builder folder):", `${S.exp.name || "experiment"}.yaml`);
     if (!path) return;
   }
-  await api(`/api/experiment?path=${encodeURIComponent(path)}`, S.exp);
-  S.path = path; localStorage.setItem("edge.last", path);
-  $("#filename").textContent = path; setDirty(false); toast("Saved " + path);
+  const newPath = path !== S.path;
+  const fp = newPath ? "" : (S.fingerprint || "");
+  let r;
+  try {
+    r = await api(`/api/experiment?path=${encodeURIComponent(path)}&fingerprint=${fp}`, S.exp);
+  } catch (e) {
+    if (e.status !== 409) throw e;
+    if (!confirm("This file was changed outside the builder (another window, your editor, or Claude via MCP).\n\n" +
+                 "OK = overwrite with my version (theirs is kept as a backup)\nCancel = keep theirs")) {
+      await openFile(path, {silent: true, keepSelection: true}); hideBanner(); toast("Loaded the other version"); return;
+    }
+    r = await api(`/api/experiment?path=${encodeURIComponent(path)}&force=1`, S.exp);
+  }
+  clearDraft();
+  S.path = path; S.fingerprint = r.fingerprint; localStorage.setItem("edge.last", path);
+  $("#filename").textContent = path; setDirty(false); hideBanner(); toast("Saved " + path + " (previous version backed up)");
+}
+
+/* ---------------- live sync with edits made elsewhere (MCP, editor, another window) */
+let _bannerFor = null;
+function hideBanner() { $("#banner").classList.add("hidden"); _bannerFor = null; }
+async function pollExternalChanges() {
+  if (!S.path || document.hidden) return;
+  let fp;
+  try { fp = (await api(`/api/fingerprint?path=${encodeURIComponent(S.path)}`)).fingerprint; } catch { return; }
+  if (!fp || fp === S.fingerprint) return;
+  if (!S.dirty) {
+    await openFile(S.path, {silent: true, keepSelection: true});
+    validate(); toast("Updated: the file was changed outside the builder (e.g. by Claude)", 3500);
+  } else if (_bannerFor !== fp) {
+    _bannerFor = fp;
+    const b = $("#banner"); b.innerHTML = "";
+    b.append("This experiment was changed outside the builder.",
+      h("button", {onclick: async () => { clearDraft(); await openFile(S.path, {silent: true, keepSelection: true}); hideBanner(); }}, "Load their version"),
+      h("button", {onclick: hideBanner}, "Keep mine"));
+    b.classList.remove("hidden");
+  }
+}
+
+async function versionsDialog() {
+  if (!S.path) return toast("Save the experiment first");
+  const {backups} = await api(`/api/backups?path=${encodeURIComponent(S.path)}`);
+  const body = $("#modal-body"); body.innerHTML = "";
+  body.append(h("h3", {}, `Saved versions of ${S.path}`));
+  body.append(h("div", {class: "help", style: "color:var(--muted);margin-bottom:8px"},
+    "Every save keeps the previous version. Restoring also backs up the current one, so nothing is lost."));
+  if (!backups.length) body.append(h("div", {}, "No earlier versions yet."));
+  for (const b of backups) body.append(h("div", {class: "choice", onclick: async () => {
+    if (S.dirty && !confirm("Discard unsaved changes and restore this version?")) return;
+    await api(`/api/restore?path=${encodeURIComponent(S.path)}&id=${encodeURIComponent(b.id)}`, {});
+    closeModal(); clearDraft(); await openFile(S.path, {silent: true, keepSelection: true}); toast("Restored " + b.time);
+  }}, h("b", {}, b.time.replace("T", " ")), h("small", {}, b.label || b.id)));
+  openModal();
+}
+
+/* ---------------- data tab: sessions, intelligent tables, exports */
+const D = {sessions: [], sel: null, sub: "trials", tables: null, dry: false};
+async function renderData() {
+  const el = $("#tab-data"); el.innerHTML = "Loading sessions…";
+  try { D.sessions = (await api(`/api/sessions?dry_runs=${D.dry ? 1 : 0}`)).sessions; }
+  catch (e) { el.textContent = e.message; return; }
+  el.innerHTML = "";
+  const left = h("div", {});
+  const dry = h("input", {type: "checkbox", onchange: (e) => { D.dry = e.target.checked; renderData(); }}); dry.checked = D.dry;
+  left.append(h("label", {style: "display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:12px"}, dry, "include dry runs"));
+  left.append(h("div", {class: "subtabs"},
+    h("button", {onclick: () => exportData(".", ["csv", "xlsx"])}, "Export all → CSV + Excel"),
+    h("button", {onclick: () => exportData(".", ["bids"])}, "All → BIDS")));
+  if (!D.sessions.length) left.append(h("div", {class: "help", style: "color:var(--muted)"}, "No sessions yet. Run the experiment (or a dry run with “include dry runs”)."));
+  for (const ss of D.sessions) left.append(h("div", {class: "sess" + (D.sel === ss.path ? " sel" : ""), onclick: () => { D.sel = ss.path; renderData(); }},
+    h("b", {}, `${ss.participant ?? "?"} · ${ss.experiment ?? ""}`), h("small", {}, `${(ss.started || "").replace("T", " ")}${ss.dry_run ? " · dry run" : ""}${ss.aborted ? " · aborted" : ""}`)));
+  const right = h("div", {style: "overflow:auto"});
+  el.append(h("div", {class: "data-layout"}, h("div", {style: "overflow:auto"}, left), right));
+  if (!D.sel) { right.append(h("div", {class: "help", style: "color:var(--muted)"}, "Select a session to see its trial table, summary and data dictionary.")); return; }
+  right.append("Loading tables…");
+  const t = await api(`/api/session_tables?path=${encodeURIComponent(D.sel)}`);
+  right.innerHTML = "";
+  right.append(h("div", {}, t.report.verdict.map((v) => h("div", {class: v.startsWith("OK") ? "ok" : "issue warning"}, v))));
+  const subs = [["trials", `Trials (${t.trials.total})`], ["summary", "Summary"], ["dictionary", "Data dictionary"]];
+  right.append(h("div", {class: "subtabs"}, subs.map(([k, label]) => h("button", {class: D.sub === k ? "active" : "", onclick: () => { D.sub = k; renderData(); }}, label)),
+    h("span", {style: "flex:1"}),
+    ...[["csv", "CSV"], ["xlsx", "Excel"], ["tsv", "TSV"], ["json", "JSON"], ["bids", "BIDS"]].map(([f, label]) => h("button", {onclick: () => exportData(D.sel, [f])}, "↓ " + label))));
+  const tb = t[D.sub];
+  right.append(rowsTable(tb.rows.map((r) => Object.fromEntries(tb.columns.map((c) => [c, r[c]])))));
+}
+async function exportData(path, formats) {
+  try {
+    const {files} = await api("/api/export", {path, formats, dry_runs: D.dry});
+    const body = $("#modal-body"); body.innerHTML = "";
+    body.append(h("h3", {}, `Exported ${files.length} file(s)`));
+    for (const f of files.slice(0, 60)) body.append(h("div", {}, h("a", {href: `/api/file?download=1&path=${encodeURIComponent(f)}`}, f)));
+    openModal();
+  } catch (e) { toast("Export failed: " + e.message, 5000); }
 }
 
 /* ------------------------------------------------------------------ render */
@@ -737,6 +847,7 @@ function showTab(name) {
   document.querySelectorAll("#console .tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll("#console .tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + name));
   if (name === "source") renderSource();
+  if (name === "data") renderData();
 }
 
 async function renderSource() { $("#yaml").value = (await api("/api/to_yaml", S.exp)).yaml; }
@@ -844,6 +955,10 @@ function wire() {
   $("#btn-new").onclick = newFromTemplate;
   $("#btn-open").onclick = openDialog;
   $("#btn-save").onclick = () => save();
+  $("#btn-versions").onclick = versionsDialog;
+  $("#btn-bundle").onclick = () => { if (!S.path) return toast("Save the experiment first");
+    if (S.dirty) toast("Bundling the saved version (you have unsaved changes)");
+    location.href = `/api/bundle?path=${encodeURIComponent(S.path)}`; };
   $("#btn-undo").onclick = undo; $("#btn-redo").onclick = redo;
   $("#btn-settings").onclick = () => { S.sel = {kind: "settings"}; renderAll(); };
   $("#btn-validate").onclick = () => { validate(); showTab("issues"); };

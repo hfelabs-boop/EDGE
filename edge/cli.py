@@ -134,6 +134,60 @@ def cmd_new(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export(a: argparse.Namespace) -> int:
+    from .export import export_many, export_session
+
+    formats = [f.strip() for f in a.formats.split(",") if f.strip()]
+    p = Path(a.path)
+    if (p / "session.json").exists():
+        files = export_session(p, formats, a.out, a.layout)
+        print("\n".join(str(f) for f in files))
+    else:
+        res = export_many(p, formats, a.out, a.include_dry_runs, a.name)
+        print(f"{res['sessions']} session(s), {res['participants']} participant(s), {res['trials']} trials")
+        print("\n".join(res["files"]))
+    return 0
+
+
+def cmd_bundle(a: argparse.Namespace) -> int:
+    from .storage import export_bundle
+
+    res = export_bundle(a.experiment, a.out)
+    print(f"wrote {res['bundle']} ({len(res['files'])} files)")
+    if res["missing"]:
+        print("missing (not included): " + ", ".join(res["missing"]))
+    return 1 if res["missing"] else 0
+
+
+def cmd_unbundle(a: argparse.Namespace) -> int:
+    from .storage import import_bundle
+
+    print(f"extracted {import_bundle(a.bundle, a.directory)}")
+    return 0
+
+
+def cmd_backups(a: argparse.Namespace) -> int:
+    from .storage import list_backups, restore_backup
+
+    if a.restore is not None:
+        rid = restore_backup(a.experiment, a.restore or None)
+        print(f"restored {rid}")
+        return 0
+    for b in list_backups(a.experiment):
+        print(f"{b['id']:40s} {b['time']}  {b['label']}")
+    return 0
+
+
+def cmd_mcp(a: argparse.Namespace) -> int:
+    try:
+        from .mcp_server import main as mcp_main
+    except ImportError:
+        print("the MCP server needs the 'mcp' package: pip install 'edge-experiments[mcp]'", file=sys.stderr)
+        return 2
+    mcp_main(a.root, a.transport)
+    return 0
+
+
 def cmd_builder(a: argparse.Namespace) -> int:
     from .builder.server import serve
 
@@ -200,6 +254,35 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--port", type=int, default=8765)
     b.add_argument("--no-browser", action="store_true")
     b.set_defaults(fn=cmd_builder)
+
+    ex = sub.add_parser("export", help="export analysis-ready tables (one session or a whole data folder)")
+    ex.add_argument("path", help="session folder or data folder")
+    ex.add_argument("--formats", default="csv,xlsx", help="csv,tsv,xlsx,json,jsonl,parquet,mat,bids")
+    ex.add_argument("--layout", default="wide", choices=["wide", "long"])
+    ex.add_argument("--out", help="output folder (default: <path>/exports)")
+    ex.add_argument("--name", help="file name stem for merged exports")
+    ex.add_argument("--include-dry-runs", action="store_true")
+    ex.set_defaults(fn=cmd_export)
+
+    bu = sub.add_parser("bundle", help="pack an experiment and its files into a .edgez archive")
+    bu.add_argument("experiment")
+    bu.add_argument("--out")
+    bu.set_defaults(fn=cmd_bundle)
+
+    ub = sub.add_parser("unbundle", help="extract a .edgez archive")
+    ub.add_argument("bundle")
+    ub.add_argument("directory", nargs="?", default=".")
+    ub.set_defaults(fn=cmd_unbundle)
+
+    bk = sub.add_parser("backups", help="list or restore automatic backups of an experiment")
+    bk.add_argument("experiment")
+    bk.add_argument("--restore", nargs="?", const="", help="restore the newest backup, or the given id")
+    bk.set_defaults(fn=cmd_backups)
+
+    m = sub.add_parser("mcp", help="run the MCP server (natural-language control from Claude / VS Code)")
+    m.add_argument("--root", default=".", help="workspace folder the server may read and write")
+    m.add_argument("--transport", default="stdio", choices=["stdio", "sse", "streamable-http"])
+    m.set_defaults(fn=cmd_mcp)
 
     a = p.parse_args(argv)
     return a.fn(a)

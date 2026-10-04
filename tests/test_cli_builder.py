@@ -1,6 +1,7 @@
 import json
 import shutil
 import threading
+import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -66,7 +67,8 @@ def test_builder_api(server):
     assert "text" in schema["components"] and "tobii" in schema["devices"]
     files = _get(server + "/api/files")["files"]
     assert files == [{"path": "stroop/stroop.yaml", "name": "stroop"}]
-    exp = _get(server + "/api/experiment?path=stroop/stroop.yaml")
+    loaded = _get(server + "/api/experiment?path=stroop/stroop.yaml")
+    exp, fp = loaded["experiment"], loaded["fingerprint"]
     assert _post(server + "/api/validate", {"experiment": exp, "path": "stroop/stroop.yaml"})["issues"] == []
     rows = _get(server + "/api/conditions?spec=%22stroop.csv%22&exp=stroop/stroop.yaml")["rows"]
     assert rows[0]["word"] == "RED"
@@ -74,7 +76,23 @@ def test_builder_api(server):
     assert res["ok"] and res["trials"] and res["report"]["verdict"]
     exp["name"] = "stroop2"
     _post(server + "/api/experiment?path=stroop/copy.yaml", exp)
-    assert _get(server + "/api/experiment?path=stroop/copy.yaml")["name"] == "stroop2"
+    assert _get(server + "/api/experiment?path=stroop/copy.yaml")["experiment"]["name"] == "stroop2"
+    # saving with the fingerprint from load works; a stale fingerprint is a 409 conflict
+    saved = _post(server + f"/api/experiment?path=stroop/stroop.yaml&fingerprint={fp}", exp)
+    with pytest.raises(urllib.error.HTTPError) as e:
+        _post(server + f"/api/experiment?path=stroop/stroop.yaml&fingerprint={fp}", exp | {"name": "x"})
+    assert e.value.code == 409
+    assert _get(server + "/api/fingerprint?path=stroop/stroop.yaml")["fingerprint"] == saved["fingerprint"]
+    assert _get(server + "/api/backups?path=stroop/stroop.yaml")["backups"]
+    # data endpoints
+    sessions = _get(server + "/api/sessions?dry_runs=1")["sessions"]
+    assert sessions and sessions[0]["experiment"] == "stroop"
+    tables = _get(server + "/api/session_tables?path=" + urllib.parse.quote(sessions[0]["path"]))
+    assert tables["trials"]["total"] > 10 and tables["summary"]["rows"][0]["factor"] == "(all)"
+    files = _post(server + "/api/export", {"path": sessions[0]["path"], "formats": ["xlsx"]})["files"]
+    assert files[0].endswith(".xlsx")
+    with urllib.request.urlopen(server + "/api/bundle?path=stroop/stroop.yaml") as r:
+        assert r.read(2) == b"PK"
 
 
 def test_builder_refuses_paths_outside_root(server):

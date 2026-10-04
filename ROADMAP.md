@@ -10,6 +10,11 @@
 - Clock models, aligned stream files, quality report, external alignment
 - Browser builder: timeline, flow, properties, live preview, devices, hardware scan, dry run, YAML
 - Dry runs with a virtual participant; real-time headless mode for screenless studies
+- Storage: atomic saves, version history/undo, conflict detection, live builder sync, crash-recovery drafts,
+  format migrations, .edgez bundles
+- Data: one-row-per-trial tables, automatic summaries and data dictionaries, xlsx/csv/tsv/json/parquet/mat/BIDS
+  exports, multi-participant merge, builder Data tab
+- MCP server (40 tools, resources, prompts) for Claude Code, Claude Desktop and VS Code
 
 ## Next: hardware validation (highest priority)
 - [ ] Run every driver against physical devices; photodiode + TTL loopback timing benchmarks
@@ -37,7 +42,8 @@
 - [ ] Online runner: compile the same YAML to a browser runtime (JATOS / Pavlovia / Prolific)
 - [ ] VR/AR backend (OpenXR) with eye tracking in headsets
 - [ ] Resume interrupted sessions from `trials.jsonl`
-- [ ] BIDS / BIDS-EEG / BIDS-eyetracking export; XDF export
+- [ ] Full BIDS-EEG (EDF/BrainVision writing) and BEP020 eye-tracking compliance; XDF export
+- [ ] SPSS (.sav) and R (.rds) exports with value labels from the data dictionary
 
 ## Analysis
 - [ ] Built-in epoching (EEG/physio/pupil around markers), fixation/saccade detection, AOI reports

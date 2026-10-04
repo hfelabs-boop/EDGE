@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import yaml
+import copy
+
+from .storage import save_document
 
 _INSTR = lambda text: {  # noqa: E731
     "components": [
@@ -99,5 +101,5 @@ def write_template(name: str, directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     data = TEMPLATES[name]
     path = directory / f"{data['name']}.yaml"
-    path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    save_document(path, copy.deepcopy(data))
     return path

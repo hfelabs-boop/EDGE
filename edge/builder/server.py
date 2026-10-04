@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-import yaml
+from .. import storage
 
 STATIC = Path(__file__).parent / "static"
 
@@ -59,26 +59,54 @@ class BuilderApp:
                     and not (p.parent / "session.json").exists() \
                     and not any(part.startswith(".") for part in parts):
                 try:
-                    d = yaml.safe_load(p.read_text(encoding="utf-8"))
+                    d = storage.loads(p.read_text(encoding="utf-8"), storage.fmt_of(p), str(p))
                 except Exception:
                     continue
-                if isinstance(d, dict) and ("routines" in d or "flow" in d):
+                if "routines" in d or "flow" in d:
                     out.append({"path": str(p.relative_to(self.root)), "name": d.get("name", p.stem)})
         return out
 
     def load(self, rel: str) -> dict[str, Any]:
-        p = self.safe_path(rel)
-        text = p.read_text(encoding="utf-8")
-        return json.loads(text) if p.suffix == ".json" else yaml.safe_load(text)
+        loaded = storage.load_document(self.safe_path(rel))
+        return {"experiment": loaded.doc, "fingerprint": loaded.fingerprint, "migrations": loaded.migrations}
 
-    def save(self, rel: str, data: dict[str, Any]) -> dict[str, Any]:
+    def save(self, rel: str, data: dict[str, Any], expected: str | None, force: bool) -> dict[str, Any]:
         p = self.safe_path(rel)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        if p.suffix == ".json":
-            p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        fp = storage.save_document(p, data, expected_fingerprint=None if force or not expected else expected,
+                                   label="builder")
+        return {"saved": str(p.relative_to(self.root)), "fingerprint": fp}
+
+    # --------------------------------------------------------------- data
+    def sessions(self, include_dry_runs: bool) -> list[dict[str, Any]]:
+        from ..export import SessionTables, find_sessions, timing_row
+        out = []
+        for root in find_sessions(self.root, include_dry_runs):
+            try:
+                row = timing_row(SessionTables(root))
+                row["path"] = str(root.relative_to(self.root))
+                out.append(row)
+            except Exception as e:
+                out.append({"path": str(root.relative_to(self.root)), "error": str(e)})
+        return sorted(out, key=lambda r: r.get("started") or "", reverse=True)
+
+    def session_tables(self, rel: str) -> dict[str, Any]:
+        from ..export import SessionTables, session_tables
+        from ..report import analyze_session
+        root = self.safe_path(rel)
+        tables = session_tables(SessionTables(root))
+        out: dict[str, Any] = {k: {"columns": c, "rows": r[:300], "total": len(r)} for k, (c, r) in tables.items()
+                               if k in ("trials", "summary", "dictionary")}
+        out["report"] = analyze_session(root)
+        return out
+
+    def export(self, rel: str, formats: list[str], layout: str, include_dry_runs: bool) -> dict[str, Any]:
+        from ..export import export_many, export_session
+        p = self.safe_path(rel)
+        if (p / "session.json").exists():
+            files = export_session(p, formats, None, layout)
         else:
-            p.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
-        return {"saved": str(p.relative_to(self.root))}
+            files = [Path(f) for f in export_many(p, formats, None, include_dry_runs)["files"]]
+        return {"files": [str(Path(f).resolve().relative_to(self.root)) for f in files]}
 
     def experiment(self, data: dict[str, Any], rel: str | None):
         from ..model import Experiment
@@ -169,8 +197,39 @@ def make_handler(app: BuilderApp):
                     return self._json({"root": str(app.root), "files": app.list_files()})
                 if u.path == "/api/experiment":
                     return self._json(app.load(q["path"]))
+                if u.path == "/api/fingerprint":
+                    return self._json({"fingerprint": storage.fingerprint(app.safe_path(q["path"]))})
+                if u.path == "/api/backups":
+                    return self._json({"backups": [{k: v for k, v in b.items() if k != "path"}
+                                                   for b in storage.list_backups(app.safe_path(q["path"]))]})
+                if u.path == "/api/bundle":
+                    import tempfile
+                    with tempfile.TemporaryDirectory() as td:
+                        res = storage.export_bundle(app.safe_path(q["path"]), Path(td) / "bundle.edgez")
+                        data = Path(res["bundle"]).read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/zip")
+                    self.send_header("Content-Disposition",
+                                     f'attachment; filename="{Path(q["path"]).stem}.edgez"')
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return None
+                if u.path == "/api/sessions":
+                    return self._json({"sessions": app.sessions(q.get("dry_runs") == "1")})
+                if u.path == "/api/session_tables":
+                    return self._json(app.session_tables(q["path"]))
                 if u.path == "/api/file":
                     p = app.safe_path(q["path"])
+                    if q.get("download"):
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/octet-stream")
+                        self.send_header("Content-Disposition", f'attachment; filename="{p.name}"')
+                        data = p.read_bytes()
+                        self.send_header("Content-Length", str(len(data)))
+                        self.end_headers()
+                        self.wfile.write(data)
+                        return None
                     return self._send(200, p.read_bytes(), mimetypes.guess_type(str(p))[0] or "application/octet-stream")
                 if u.path == "/api/conditions":
                     from ..conditions import load_conditions
@@ -195,7 +254,16 @@ def make_handler(app: BuilderApp):
             try:
                 body = self._body()
                 if u.path == "/api/experiment":
-                    return self._json(app.save(q["path"], body))
+                    try:
+                        return self._json(app.save(q["path"], body, q.get("fingerprint"), q.get("force") == "1"))
+                    except storage.ConflictError as e:
+                        return self._json({"error": str(e), "conflict": True}, 409)
+                if u.path == "/api/restore":
+                    rid = storage.restore_backup(app.safe_path(q["path"]), q.get("id") or None)
+                    return self._json({"restored": rid})
+                if u.path == "/api/export":
+                    return self._json(app.export(body["path"], body.get("formats") or ["csv", "xlsx"],
+                                                 body.get("layout", "wide"), bool(body.get("dry_runs"))))
                 if u.path == "/api/validate":
                     return self._json({"issues": app.validate(body["experiment"], body.get("path"))})
                 if u.path == "/api/dryrun":
@@ -203,9 +271,12 @@ def make_handler(app: BuilderApp):
                 if u.path == "/api/run":
                     return self._json(app.run_real(body["path"], body.get("participant") or {}, bool(body.get("simulate"))))
                 if u.path == "/api/to_yaml":
-                    return self._json({"yaml": yaml.safe_dump(body, sort_keys=False, allow_unicode=True)})
+                    return self._json({"yaml": storage.dumps(body)})
                 if u.path == "/api/from_yaml":
-                    return self._json({"experiment": yaml.safe_load(body["yaml"])})
+                    try:
+                        return self._json({"experiment": storage.loads(body["yaml"], "yaml", "YAML")})
+                    except storage.DocumentError as e:
+                        return self._json({"error": str(e)}, 400)
                 return self._json({"error": "not found"}, 404)
             except Exception as e:
                 return self._json({"error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()}, 500)
