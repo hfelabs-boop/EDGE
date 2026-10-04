@@ -20,12 +20,28 @@ from . import expressions
 from .components import component_registry
 from .components.base import FINISHED, NOT_STARTED, STARTED, Component, Results
 from .conditions import Staircase, load_conditions, order_trials, select_rows
-from .model import Branch, Experiment, Loop, Routine, RoutineRef
+from .model import Branch, Experiment, Loop, Routine, RoutineRef, StateMachine
 from .runtime import ExperimentAborted, Session
 
 
 class LoopState(Results):
-    """Exposed to expressions under the loop id: ``trials.n``, ``trials.total`` ..."""
+    """Exposed to expressions under the loop id: ``trials.n``, ``trials.total``, and live performance:
+    ``trials.accuracy``, ``trials.n_correct``, ``trials.n_responses``, ``trials.mean_rt`` (so far in this loop run)."""
+
+
+class StateJump(Exception):
+    """Raised by a routine rule ``goto`` to leave the current state of a state machine immediately."""
+
+    def __init__(self, target: str):
+        super().__init__(target)
+        self.target = target
+
+
+def _perf(acc: dict[str, list[float]]) -> dict[str, Any]:
+    corr, rts = acc["corr"], acc["rt"]
+    return {"n_responses": len(corr), "n_correct": int(sum(corr)),
+            "accuracy": round(sum(corr) / len(corr), 4) if corr else None,
+            "mean_rt": round(sum(rts) / len(rts), 5) if rts else None}
 
 
 class RoutineRun:
@@ -38,6 +54,8 @@ class RoutineRun:
         self.frame = 0
         self._end = False
         self._ns_cache: dict[str, Any] | None = None
+        self.goto: str | None = None
+        self.fired_rules: list[str] = []
 
     # ----------------------------------------------------------- namespace
     def namespace(self) -> dict[str, Any]:
@@ -66,6 +84,8 @@ class RoutineRun:
         return v
 
     def _should_start(self, c: Component, t_next: float) -> bool:
+        if getattr(c, "_force_start", False):
+            return True
         s = c.spec
         if s.start_after:
             other = self.components.get(s.start_after)
@@ -82,6 +102,8 @@ class RoutineRun:
         return start is not None and t_next >= float(start) - self._half
 
     def _should_stop(self, c: Component, t_next: float) -> bool:
+        if getattr(c, "_force_stop", False):
+            return True
         s = c.spec
         if c.finished and not c.visual:
             return True
@@ -102,6 +124,8 @@ class RoutineRun:
         for spec in self.routine.components:
             if spec.disabled is True or (isinstance(spec.disabled, str) and self._val(spec.disabled)):
                 continue
+            if spec.only_if and not self._val(spec.only_if):
+                continue
             comp = registry[spec.type](spec, self)
             comp._duration = None
             comp._started_called = False
@@ -112,6 +136,8 @@ class RoutineRun:
             except Exception as e:
                 raise RuntimeError(f"routine '{self.routine.id}', component '{comp.id}': {e}") from e
         comps = list(self.components.values())
+        self._rule_prev = [False] * len(self.routine.rules)
+        self._rule_fired = [0] * len(self.routine.rules)
         max_dur = self._val(self.routine.duration) if self.routine.duration is not None else None
         dry_limit = float(session.settings["timing"].get("dry_run_routine_limit", 600)) \
             if session.virtual_participant is not None else None
@@ -162,6 +188,8 @@ class RoutineRun:
                         c.on_event(ev)
             session.poll_devices()
             session.check_abort()
+            if self.routine.rules:
+                self._run_rules(t_flip)
             self.frame += 1
 
             t_now = t_flip - self.t0
@@ -177,7 +205,9 @@ class RoutineRun:
                 break
             if self.routine.end_if and self._val(self.routine.end_if):
                 break
-            if comps and all(c.status == FINISHED for c in comps):
+            # helpers (code/variable/marker) don't hold the routine open, unless they are still scheduled to start
+            alive = [c for c in comps if c.keeps_routine_alive or c.status == NOT_STARTED]
+            if alive and all(c.status == FINISHED for c in alive):
                 break
             if not comps:
                 break
@@ -191,6 +221,39 @@ class RoutineRun:
                 self._component_marker(c, "offset", t_end)
             c.release()
         return self._collect(t_end)
+
+    def _run_rules(self, t: float) -> None:
+        """Edge-triggered "when <condition> do <actions>" rules. A rule fires when its condition
+        becomes true; with ``repeat: true`` it can fire again after the condition was false."""
+        for i, rule in enumerate(self.routine.rules):
+            now = bool(self._val(str(rule["when"])))
+            rising = now and not self._rule_prev[i]
+            self._rule_prev[i] = now
+            if not rising or (self._rule_fired[i] and not rule.get("repeat")):
+                continue
+            self._rule_fired[i] += 1
+            self.fired_rules.append(rule.get("name") or f"rule{i}")
+            acts = rule.get("do") or []
+            for a in acts if isinstance(acts, list) else [acts]:
+                if isinstance(a, str):
+                    a = {a: True}
+                if "set" in a:
+                    for k, v in a["set"].items():
+                        self.session.vars[k] = expressions.resolve(v, self.namespace())
+                if "start" in a and a["start"] in self.components:
+                    self.components[a["start"]]._force_start = True
+                if "stop" in a and a["stop"] in self.components:
+                    self.components[a["stop"]]._force_stop = True
+                if "marker" in a:
+                    label = expressions.resolve(a["marker"], self.namespace())
+                    self.session.marker(str(label), source=f"{self.routine.id}.rule", time=t)
+                if "log" in a:
+                    self.session.log(f"[rule] {expressions.resolve(a['log'], self.namespace())}")
+                if "goto" in a:
+                    self.goto = str(a["goto"])
+                    self._end = True
+                if a.get("end_routine"):
+                    self._end = True
 
     def _component_marker(self, c: Component, which: str, t: float) -> None:
         m = c.spec.props.get("marker")
@@ -211,6 +274,8 @@ class RoutineRun:
         row: dict[str, Any] = {"routine": self.routine.id,
                                "routine_start": self.t0,
                                "routine_duration": (t_end - self.t0) if self.t0 is not None else None}
+        if self.fired_rules:
+            row["rules_fired"] = self.fired_rules
         for c in self.components.values():
             if not c.spec.save:
                 continue
@@ -227,6 +292,7 @@ class Runner:
         self.stack: list[dict[str, Any]] = []
         self.results: dict[str, Results] = {}
         self.routine_count = 0
+        self.machines: list[dict[str, Any]] = []   # active state machines (innermost last)
 
     def run(self) -> dict[str, Any]:
         s = self.session
@@ -236,6 +302,8 @@ class Runner:
         except ExperimentAborted:
             s.aborted = True
             s.log("[edge] aborted by user; data saved")
+        except StateJump as j:
+            s.errors.append(f"goto '{j.target}' used outside a state machine that has that state")
         except BaseException as e:
             s.aborted = True
             s.errors.append(f"{type(e).__name__}: {e}")
@@ -255,6 +323,8 @@ class Runner:
                 self.run_loop(node)
             elif isinstance(node, Branch):
                 self.run_nodes(node.then if self._eval(node.condition) else node.else_)
+            elif isinstance(node, StateMachine):
+                self.run_statemachine(node)
 
     def _eval(self, src: str) -> Any:
         ns: dict[str, Any] = {**self.session.participant, **self.session.vars}
@@ -269,9 +339,21 @@ class Runner:
         run = RoutineRun(routine, self.session, self)
         row = run.run()
         self.routine_count += 1
+        key = [f"{m['id']}:{m['state']}#{m['visit']}" for m in self.machines]
+        key += [f"{f['loop']}={f['state']['n']}" for f in self.stack]
         full: dict[str, Any] = {"experiment": self.exp.name, **self.session.participant, "routine_index": self.routine_count,
-                                "trial_key": "|".join(f"{f['loop']}={f['state']['n']}" for f in self.stack),
+                                "trial_key": "|".join(key) if self.stack else "",
                                 "loop": self.stack[-1]["loop"] if self.stack else ""}
+        for m in self.machines:
+            full[f"{m['id']}.state"] = m["state"]
+            full[f"{m['id']}.visit"] = m["visit"]
+        # live performance per enclosing loop (for adaptive logic: $practice.accuracy >= 0.8)
+        corr = [v for k, v in row.items() if k.endswith(".corr") and isinstance(v, (int, float, bool))]
+        rts = [v for k, v in row.items() if k.endswith(".rt") and isinstance(v, (int, float)) and not isinstance(v, bool)]
+        for f in self.stack:
+            f["acc"]["corr"] += [float(c) for c in corr]
+            f["acc"]["rt"] += [float(r) for r in rts]
+            f["state"].update(_perf(f["acc"]))
         for f in self.stack:
             st = f["state"]
             full[f"{f['loop']}.n"] = st["n"]
@@ -284,14 +366,66 @@ class Runner:
                 full[k] = v
         if self.session.data:
             self.session.data.add_trial(full)
+        if run.goto:
+            raise StateJump(run.goto)
+
+    def run_statemachine(self, m: StateMachine) -> None:
+        s = self.session
+        visits: dict[str, int] = {}
+        path: list[str] = []
+        info = LoopState(state=m.start, steps=0, visits=visits, previous=None)
+        self.results[m.id] = info
+        frame = {"id": m.id, "state": m.start, "visit": 0}
+        self.machines.append(frame)
+        cur, steps = m.start, 0
+        try:
+            while cur != "end":
+                if cur not in m.states:
+                    raise RuntimeError(f"state machine '{m.id}': unknown state '{cur}'")
+                steps += 1
+                if steps > m.max_steps:
+                    s.errors.append(f"state machine '{m.id}' stopped after max_steps={m.max_steps}")
+                    break
+                st = m.states[cur]
+                visits[cur] = visits.get(cur, 0) + 1
+                frame.update(state=cur, visit=visits[cur])
+                info.update(state=cur, steps=steps, visit=visits[cur], visits=dict(visits))
+                path.append(cur)
+                jumped = None
+                try:
+                    self.run_nodes(st.run)
+                except StateJump as j:
+                    if j.target != "end" and j.target not in m.states:
+                        raise
+                    jumped = j.target
+                if jumped is not None:
+                    nxt = jumped
+                else:
+                    nxt = "end"
+                    forced = bool(st.max_visits and visits[cur] >= st.max_visits)
+                    cands = [t for t in st.next if t.goto != cur] if forced else st.next
+                    chosen = next((t for t in cands if t.condition is None or self._eval(t.condition)), None)
+                    if chosen is None and forced and cands:
+                        chosen = cands[0]  # visit limit reached: leave by the first route to another state
+                    if chosen is not None:
+                        for k, v in chosen.set.items():
+                            s.vars[k] = expressions.resolve(v, {**s.vars, **self.results})
+                        nxt = chosen.goto
+                info["previous"] = cur
+                cur = nxt
+        finally:
+            self.machines.pop()
+            s.loop_summaries[m.id] = {"type": "statemachine", "path": path, "visits": visits, "columns": []}
+            info.update(state="end", steps=steps, visits=dict(visits))
 
     def run_loop(self, loop: Loop) -> None:
         s = self.session
+        acc: dict[str, list[float]] = {"corr": [], "rt": []}
         if loop.staircase:
             sc = Staircase(loop.staircase)
             for row in sc:
-                state = LoopState(n=row["_row"], total=sc.max_trials, repeat=0, staircase=sc.level)
-                self.stack.append({"loop": loop.id, "row": row, "state": state})
+                state = LoopState(n=row["_row"], total=sc.max_trials, repeat=0, staircase=sc.level, **_perf(acc))
+                self.stack.append({"loop": loop.id, "row": row, "state": state, "acc": acc})
                 try:
                     self.run_nodes(loop.children)
                     sc.update(bool(self._eval(str(sc.correct_expr))))
@@ -304,7 +438,8 @@ class Runner:
                                          "reversals": sc.reversal_levels, "trials": len(sc.history),
                                          "history": sc.history}
             s.vars[f"{loop.id}_threshold"] = sc.threshold
-            self.results[loop.id] = LoopState(n=len(sc.history) - 1, total=len(sc.history), threshold=sc.threshold)
+            self.results[loop.id] = LoopState(n=len(sc.history) - 1, total=len(sc.history), threshold=sc.threshold,
+                                              **_perf(acc))
             return
 
         rows = select_rows(load_conditions(loop.conditions, self.exp.base_dir), loop.select)
@@ -323,8 +458,8 @@ class Runner:
                                      "sequence": [t.get("_row") for t in trials]}
         for i, row in enumerate(trials):
             state = LoopState(n=i, total=len(trials), remaining=len(trials) - i - 1, repeat=i // n_per_rep,
-                              first=i == 0, last=i == len(trials) - 1)
-            self.stack.append({"loop": loop.id, "row": row, "state": state})
+                              first=i == 0, last=i == len(trials) - 1, **_perf(acc))
+            self.stack.append({"loop": loop.id, "row": row, "state": state, "acc": acc})
             try:
                 self.run_nodes(loop.children)
                 stop = bool(loop.stop_if and self._eval(loop.stop_if))

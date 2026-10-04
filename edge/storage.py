@@ -255,8 +255,24 @@ def restore_backup(path: str | Path, backup_id: str | None = None) -> str:
 FILE_PROP_TYPES = {"file"}
 
 
-def referenced_files(doc: dict[str, Any]) -> set[str]:
-    """Relative paths of files an experiment depends on (conditions, images, sounds)."""
+def _html_assets(page: str, base_dir: Path) -> set[str]:
+    """Local files (images, css, js) referenced by an HTML page, relative to the experiment folder."""
+    p = base_dir / page
+    if not p.exists():
+        return set()
+    found = set()
+    for ref in re.findall(r"""(?:src|href)\s*=\s*["']([^"'#?]+)""", p.read_text(encoding="utf-8", errors="ignore")):
+        if re.match(r"^(?:[a-z]+:|//|/)", ref):
+            continue
+        target = (p.parent / ref).resolve()
+        if target.is_file() and base_dir.resolve() in target.parents:
+            found.add(str(target.relative_to(base_dir.resolve()).as_posix()))
+    return found
+
+
+def referenced_files(doc: dict[str, Any], base_dir: Path | None = None) -> set[str]:
+    """Relative paths of files an experiment depends on (conditions, images, sounds, HTML pages and
+    the assets those pages use)."""
     from .components import component_registry
 
     reg = component_registry()
@@ -282,6 +298,9 @@ def referenced_files(doc: dict[str, Any]) -> set[str]:
                 yield from walk(n.get("then"))
                 yield from walk(n.get("else"))
 
+    html_pages = [f for f in out if f.lower().endswith((".html", ".htm"))]
+    out |= {a for page in html_pages for a in _html_assets(page, base_dir)} if base_dir else set()
+
     for n in walk(doc.get("flow")):
         cond = n.get("conditions")
         if isinstance(cond, dict):
@@ -304,7 +323,7 @@ def export_bundle(path: str | Path, out: str | Path | None = None) -> dict[str, 
     loaded = load_document(path)
     base = loaded.path.parent
     out = Path(out) if out else loaded.path.with_suffix(".edgez")
-    files = sorted(referenced_files(loaded.doc))
+    files = sorted(referenced_files(loaded.doc, base))
     included, missing = [], []
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("experiment.yaml", dumps(loaded.doc))

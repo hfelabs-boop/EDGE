@@ -33,6 +33,12 @@ def parse_color(c: Any) -> tuple[int, int, int, int]:
     """Accepts '#rrggbb', '#rrggbbaa', named colors, (r,g,b[,a]) 0-255 or 0-1 floats, PsychoPy-style -1..1."""
     if c is None:
         return (0, 0, 0, 0)
+    if isinstance(c, str) and c.strip().lstrip("$").startswith(("[", "(")):
+        import ast
+        try:
+            c = list(ast.literal_eval(c.strip().lstrip("$")))   # "[1,-1,-1]" from a conditions file
+        except (ValueError, SyntaxError):
+            raise ValueError(f"unknown color '{c}'") from None
     if isinstance(c, str):
         s = c.strip().lower()
         if s in NAMED_COLORS:

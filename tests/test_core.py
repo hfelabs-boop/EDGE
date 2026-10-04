@@ -154,3 +154,13 @@ def test_roundtrip_save_load(tmp_path):
     again = Experiment.load(tmp_path / "copy.yaml")
     assert again.to_dict()["flow"] == exp.to_dict()["flow"]
     assert again.to_dict()["routines"] == exp.to_dict()["routines"]
+
+
+def test_result_values_shadow_dict_methods():
+    from edge.components.base import Results
+    r = Results(keys=None, items=3, values="v")
+    assert expressions.evaluate("resp.keys is None", {"resp": r}) is True
+    assert expressions.evaluate("resp.items + 1", {"resp": r}) == 4
+    assert expressions.evaluate("resp.values", {"resp": r}) == "v"
+    with pytest.raises(expressions.ExpressionError):
+        expressions.evaluate("resp.missing", {"resp": r})

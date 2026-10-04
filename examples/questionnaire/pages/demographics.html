@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><link rel="stylesheet" href="style.css"></head>
+<body>
+  <h2>About you</h2>
+  <form>
+    <p>Age <input type="number" name="age" min="18" max="99" required></p>
+    <p>Handedness
+      <select name="handedness" required>
+        <option value="">choose…</option>
+        <option value="right">Right</option><option value="left">Left</option><option value="both">Both</option>
+      </select></p>
+    <fieldset><legend>How alert do you feel right now?</legend>
+      <label><input type="radio" name="alertness" value="1" required> 1 very sleepy</label>
+      <label><input type="radio" name="alertness" value="2"> 2</label>
+      <label><input type="radio" name="alertness" value="3"> 3</label>
+      <label><input type="radio" name="alertness" value="4"> 4</label>
+      <label><input type="radio" name="alertness" value="5"> 5 very alert</label>
+    </fieldset>
+    <p>Comments <textarea name="comments"></textarea></p>
+    <button type="submit">Next</button>
+  </form>
+</body>
+</html>

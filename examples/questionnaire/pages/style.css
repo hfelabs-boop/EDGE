@@ -1,0 +1,3 @@
+body { font: 18px/1.5 system-ui, sans-serif; max-width: 860px; margin: 40px auto; padding: 0 20px; }
+fieldset { border: 1px solid #ccc; border-radius: 8px; margin-bottom: 14px; }
+button { font-size: 18px; padding: 8px 24px; }

@@ -1,0 +1,71 @@
+'Generated E-Basic script (representative excerpt) for tests
+Dim TrialList As List
+Dim TrialProc As Procedure
+Dim Instructions As TextDisplay
+Dim Fixation As TextDisplay
+Dim Stimulus As TextDisplay
+Dim Feedback As FeedbackDisplay
+Dim SessionProc As Procedure
+Dim Goodbye As Slide
+Dim Goodbye_State As SlideState
+Dim Goodbye_SlideText As SlideText
+
+Sub InitObjects(c as Context)
+	Set SessionProc = New Procedure
+	SessionProc.Name = "SessionProc"
+	Set Instructions = New TextDisplay
+	Instructions.Name = "Instructions"
+	Instructions.Text = "Press the key for the INK colour.\nPress SPACE to begin."
+	Instructions.ForeColor = CColor("white")
+	Instructions.Duration = CLng("-1")
+	Set TrialList = New List
+	TrialList.Name = "TrialList"
+	Set TrialList.Order = New RandomOrder
+	TrialList.AddAttrib "Word"
+	TrialList.AddAttrib "InkColor"
+	TrialList.AddAttrib "CorrectAnswer"
+	TrialList.Filename = ""
+	TrialList.LoadMethod = ebLoadMethodEmbedded
+	TrialList.Load
+	Set TrialList.TerminateCondition = Cycles(2)
+	Set TrialProc = New Procedure
+	TrialProc.Name = "TrialProc"
+	Set Fixation = New TextDisplay
+	Fixation.Name = "Fixation"
+	Fixation.Text = "+"
+	Fixation.Duration = 500
+	Set Stimulus = New TextDisplay
+	Stimulus.Name = "Stimulus"
+	Stimulus.FontSize = 48
+	Set Feedback = New FeedbackDisplay
+	Feedback.Duration = 1000
+	Set Goodbye = New Slide
+	Goodbye.Duration = 2000
+	Set Goodbye_State = Goodbye.States("Default")
+	Set Goodbye_SlideText = CSlideText(Goodbye_State.Objects("Text1"))
+	Goodbye_SlideText.Text = "Thank you, [Subject]!"
+	Goodbye_SlideText.X = "center"
+	Goodbye_SlideText.Y = "75%"
+End Sub
+
+Sub SessionProc_Run(c as Context)
+	Instructions.InputMasks.Reset
+	Instructions.InputMasks.Add Keyboard.CreateInputMask("{SPACE}", "", CLng(Instructions.Duration), CLng("1"), ebEndResponseActionTerminate, CLogical("Yes"), "", "", "ResponseMode:All ProcessBackspace:Yes")
+	Instructions.Run
+	TrialList.Run c
+	'InLine: SaveScore
+	c.SetAttrib "Score", c.GetAttrib("Stimulus.ACC")
+	'--------------------------------------------------------------------------
+	Goodbye.Run
+End Sub
+
+Sub TrialProc_Run(c as Context)
+	Fixation.Run
+	Stimulus.Text = c.GetAttrib("Word")
+	Stimulus.ForeColor = CColor(c.GetAttrib("InkColor"))
+	Stimulus.Duration = 2000
+	Stimulus.InputMasks.Reset
+	Stimulus.InputMasks.Add Keyboard.CreateInputMask("rgb", c.GetAttrib("CorrectAnswer"), CLng(Stimulus.Duration), CLng("1"), ebEndResponseActionTerminate, CLogical("Yes"), "", "", "ResponseMode:All ProcessBackspace:Yes")
+	Stimulus.Run
+	Feedback.Run
+End Sub

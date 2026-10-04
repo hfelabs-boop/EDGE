@@ -1,0 +1,46 @@
+name: questionnaire_demo
+description: >
+  HTML pages inside an experiment: consent and demographics forms, a per-trial rating page that shows
+  the trial's word, and an adaptive state machine. Try:  edge run examples/questionnaire/questionnaire.yaml --dry-run
+settings:
+  window: {size: [1280, 720], background: "#202020"}
+  data: {exports: [csv, xlsx]}
+routines:
+  consent:
+    components:
+      - {id: consent, type: html, file: pages/consent.html, end_routine: true}
+  demographics:
+    components:
+      - {id: demo, type: html, file: pages/demographics.html, end_routine: true}
+  trial:
+    components:
+      - {id: fix, type: fixation, duration: 0.5}
+      - {id: word, type: text, text: $word, start: 0.5, duration: 1.0, height: 60}
+  rate:
+    components:
+      - {id: rating, type: html, file: pages/rating.html, end_routine: true}
+  goodbye:
+    duration: 2
+    components:
+      - {id: bye, type: text, text: "Thank you!"}
+flow:
+  - statemachine: session
+    start: consent
+    states:
+      consent:
+        run: [consent]
+        next:
+          - {if: "$consent.agree == 'yes'", goto: questions}
+          - {goto: end}                                    # no consent: finish immediately
+      questions:
+        run: [demographics]
+        next: [{goto: words}]
+      words:
+        run:
+          - loop: words
+            conditions: [{word: sunshine}, {word: spider}, {word: holiday}, {word: dentist}]
+            order: random
+            children: [trial, rate]
+        next: [{goto: end_screen}]
+      end_screen:
+        run: [goodbye]

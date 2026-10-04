@@ -107,7 +107,7 @@ def find_sessions(path: str | Path, include_dry_runs: bool = False) -> list[Path
 # ============================================================================ wide trials
 def _is_loop_col(col: str, loops: Iterable[str]) -> bool:
     head, _, tail = col.rpartition(".")
-    return tail in ("n", "repeat", "row") and head in loops
+    return tail in ("n", "repeat", "row", "state", "visit") and head in loops
 
 
 def wide_trials(st: SessionTables, drop_empty: bool = True) -> tuple[list[str], list[dict[str, Any]]]:
@@ -186,6 +186,11 @@ def classify(col: str, st: SessionTables) -> str:
     if col in st.variables:
         return "variable"
     suffix = col.rpartition(".")[2]
+    comp = col.rpartition(".")[0]
+    if comp in (st.experiment.get("routines") or {}) and suffix in ("start", "duration"):
+        return "timing"
+    if st.comp_types.get(comp) == "html" and suffix not in ("onset", "duration"):
+        return "response"
     if "." in col and suffix.rstrip("_0123456789") in RESPONSE_SUFFIXES:
         return "response"
     if "." in col and suffix in TIMING_SUFFIXES or col in ("routine_start", "routine_duration"):
@@ -343,7 +348,9 @@ def describe_column(col: str, st: SessionTables) -> str:
         lid, _, what = col.rpartition(".")
         return {"n": f"Iteration index within loop '{lid}' (0-based)",
                 "repeat": f"Repetition number of loop '{lid}' (0-based)",
-                "row": f"Row of loop '{lid}''s conditions table used for this trial (0-based)"}[what]
+                "row": f"Row of loop '{lid}''s conditions table used for this trial (0-based)",
+                "state": f"Current state of state machine '{lid}'",
+                "visit": f"How many times the current state of '{lid}' has been entered (1 = first)"}[what]
     if group == "condition":
         lid = st.condition_cols[col]
         src = st.loops.get(lid, {}).get("source")
@@ -357,6 +364,12 @@ def describe_column(col: str, st: SessionTables) -> str:
                 "duration": f"Duration (s) of routine '{comp}'"}[attr]
     ctype = st.comp_types.get(comp.split(".")[-1], "")
     who = f"'{comp}'" + (f" ({ctype})" if ctype else "")
+    if ctype == "html" and attr not in ("onset", "duration", "rt", "submitted"):
+        return f"Answer to form field '{attr}' on HTML page {who}"
+    if ctype == "html" and attr == "submitted":
+        return f"1 if the HTML page {who} was submitted"
+    if ctype == "html" and attr == "rt":
+        return f"Time (s) from showing the HTML page {who} to its submission"
     templates = {
         "keys": f"Key(s) pressed in {who}; empty = no response",
         "rt": f"Response time (s) of {who}, from its onset flip to the response",

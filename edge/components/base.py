@@ -35,7 +35,15 @@ COMMON_PROPS: dict[str, dict[str, Any]] = {
 
 
 class Results(dict):
-    """Dict that also allows attribute access in expressions: ``resp.rt``."""
+    """Dict that also allows attribute access in expressions: ``resp.rt``.
+
+    Stored values win over dict methods, so ``resp.keys`` is the pressed key, not ``dict.keys``.
+    """
+
+    def __getattribute__(self, k: str) -> Any:
+        if k in self:
+            return self[k]
+        return super().__getattribute__(k)
 
     def __getattr__(self, k: str) -> Any:
         try:
@@ -49,6 +57,8 @@ class Component:
     category: ClassVar[str] = "other"   # stimulus | response | eyetracking | hardware | logic
     description: ClassVar[str] = ""
     visual: ClassVar[bool] = False
+    # False for helpers (code, variable, marker) that should not keep a routine running on their own
+    keeps_routine_alive: ClassVar[bool] = True
     props_schema: ClassVar[dict[str, dict[str, Any]]] = {}
     # properties that are re-evaluated every frame when given as expressions
     dynamic: ClassVar[set[str]] = set()

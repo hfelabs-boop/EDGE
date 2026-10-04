@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Simple RT</title>
+  <script src="https://unpkg.com/jspsych@7.3.4"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.3"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-likert@1.1.3"></script>
+</head>
+<body></body>
+<script>
+  const jsPsych = initJsPsych({ on_finish: function () { jsPsych.data.displayData(); } });
+  let timeline = [];
+
+  // welcome message
+  const welcome = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: '<p style="font-size:32px">Welcome! Press any key.</p>',
+  };
+  timeline.push(welcome);
+
+  const instructions = {
+    type: jsPsychInstructions,
+    pages: ['<p>In this task a circle appears.</p>', `<p>Press <b>F</b> for blue, <b>J</b> for orange.</p>`],
+    show_clickable_nav: true,
+  };
+
+  const fixation = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: '<div style="font-size:60px;">+</div>',
+    choices: "NO_KEYS",
+    trial_duration: function () { return jsPsych.randomization.sampleWithoutReplacement([250, 500], 1)[0]; },
+    data: { task: 'fixation' }
+  };
+
+  const test = {
+    type: jsPsychImageKeyboardResponse,
+    stimulus: jsPsych.timelineVariable('stimulus'),
+    choices: ['f', 'j'],
+    trial_duration: 1500,
+    data: { task: 'response', correct_response: jsPsych.timelineVariable('correct_response') },
+  };
+
+  const test_procedure = {
+    timeline: [fixation, test],
+    timeline_variables: [
+      { stimulus: 'img/blue.png', correct_response: 'f' },
+      { stimulus: 'img/orange.png', correct_response: 'j' },
+    ],
+    repetitions: 5,
+    randomize_order: true,
+  };
+
+  const survey = {
+    type: jsPsychSurveyLikert,
+    questions: [
+      { prompt: "How focused were you?", name: 'focus', labels: ["Not at all", "Somewhat", "Very"], required: true },
+    ],
+  };
+
+  timeline.push(instructions, test_procedure, survey);
+  jsPsych.run(timeline);
+</script>
+</html>

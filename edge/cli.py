@@ -178,6 +178,23 @@ def cmd_backups(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_import(a: argparse.Namespace) -> int:
+    from .importers import ImportError_, import_experiment
+
+    try:
+        path, res = import_experiment(a.source, a.out, a.platform, a.name)
+    except ImportError_ as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    n_unsup = sum(n["level"] == "unsupported" for n in res.notes)
+    n_approx = sum(n["level"] == "approx" for n in res.notes)
+    print(f"imported {res.platform} experiment -> {path}")
+    print("converted: " + ", ".join(f"{v} {k}" for k, v in sorted(res.stats.items())))
+    print(f"{n_approx} item(s) converted approximately, {n_unsup} not converted: see {path.parent / 'IMPORT_REPORT.md'}")
+    print(f"next:  edge run {path} --dry-run --report")
+    return 0
+
+
 def cmd_mcp(a: argparse.Namespace) -> int:
     try:
         from .mcp_server import main as mcp_main
@@ -278,6 +295,13 @@ def main(argv: list[str] | None = None) -> int:
     bk.add_argument("experiment")
     bk.add_argument("--restore", nargs="?", const="", help="restore the newest backup, or the given id")
     bk.set_defaults(fn=cmd_backups)
+
+    im = sub.add_parser("import", help="import a PsychoPy, E-Prime, OpenSesame or jsPsych experiment")
+    im.add_argument("source", help=".psyexp, .ebs3/.ebs2, .osexp/.opensesame, or jsPsych .html/.js")
+    im.add_argument("--out", help="output folder (default: <source>_edge next to the source)")
+    im.add_argument("--platform", choices=["psychopy", "eprime", "opensesame", "jspsych"])
+    im.add_argument("--name", help="name for the imported experiment")
+    im.set_defaults(fn=cmd_import)
 
     m = sub.add_parser("mcp", help="run the MCP server (natural-language control from Claude / VS Code)")
     m.add_argument("--root", default=".", help="workspace folder the server may read and write")

@@ -1,0 +1,5 @@
+Weight	Nested	Procedure	Word	InkColor	CorrectAnswer
+2		TrialProc	RED	red	r
+1		TrialProc	RED	green	g
+1		TrialProc	GREEN	blue	b
+2		TrialProc	BLUE	blue	b

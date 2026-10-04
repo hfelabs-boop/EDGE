@@ -10,6 +10,7 @@ from .base import Component
 
 class MarkerComp(Component):
     type_name = "marker"
+    keeps_routine_alive = False
     category = "hardware"
     description = ("Send an event marker at this component's onset (time-locked to the screen flip) to all "
                    "devices or a chosen subset: TTL codes, LSL markers, Gazepoint USER_DATA, Tobii sample tags.")
@@ -32,6 +33,7 @@ class MarkerComp(Component):
 
 class Variable(Component):
     type_name = "variable"
+    keeps_routine_alive = False
     category = "logic"
     description = "Set experiment variables from expressions, e.g. set: {score: '$score + resp.corr'}."
     props_schema = {
@@ -63,6 +65,7 @@ class Variable(Component):
 
 class Code(Component):
     type_name = "code"
+    keeps_routine_alive = False
     category = "logic"
     description = ("Full Python for anything the builder can't express. Snippets run when the routine begins "
                    "(on_begin), every frame (on_frame) and when it ends (on_end), with access to trial variables, "

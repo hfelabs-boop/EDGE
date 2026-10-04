@@ -64,8 +64,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 # Keys that belong to the component's scheduling rather than its properties.
 SCHEDULE_KEYS = {
     "id", "type", "start", "start_frame", "start_after", "start_if",
-    "duration", "duration_frames", "stop_if", "end_routine", "disabled", "save",
+    "duration", "duration_frames", "stop_if", "end_routine", "disabled", "save", "if",
 }
+
+# Actions allowed in routine rules ("when <condition> do <actions>").
+RULE_ACTIONS = {"set", "end_routine", "start", "stop", "marker", "goto", "log"}
 
 
 def deep_merge(base: dict, override: dict) -> dict:
@@ -92,6 +95,7 @@ class ComponentSpec:
     end_routine: bool = False
     disabled: Any = False
     save: bool = True
+    only_if: str | None = None   # YAML key "if": the component exists in this run only when true
     props: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -110,6 +114,7 @@ class ComponentSpec:
             end_routine=bool(d.get("end_routine", False)),
             disabled=d.get("disabled", False),
             save=bool(d.get("save", True)),
+            only_if=d.get("if"),
             props=props,
         )
 
@@ -117,8 +122,9 @@ class ComponentSpec:
         d: dict[str, Any] = {"id": self.id, "type": self.type}
         defaults = ComponentSpec(id="", type="")
         for k in SCHEDULE_KEYS - {"id", "type"}:
-            v = getattr(self, k)
-            if v != getattr(defaults, k):
+            attr = "only_if" if k == "if" else k
+            v = getattr(self, attr)
+            if v != getattr(defaults, attr):
                 d[k] = v
         d.update(self.props)
         return d
@@ -131,6 +137,8 @@ class Routine:
     duration: Any = None      # hard cap in seconds (number or expression)
     end_if: str | None = None  # expression checked every frame
     description: str = ""
+    # event rules checked every frame: [{when: "$resp.keys == 'q'", do: [{end_routine: true}], repeat: false}]
+    rules: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, rid: str, d: dict[str, Any]) -> "Routine":
@@ -140,6 +148,7 @@ class Routine:
             duration=d.get("duration"),
             end_if=d.get("end_if"),
             description=d.get("description", ""),
+            rules=list(d.get("rules") or []),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -150,6 +159,8 @@ class Routine:
             d["end_if"] = self.end_if
         if self.description:
             d["description"] = self.description
+        if self.rules:
+            d["rules"] = self.rules
         return d
 
 
@@ -179,7 +190,35 @@ class Branch:
     else_: list["FlowNode"] = field(default_factory=list)
 
 
-FlowNode = Union[RoutineRef, Loop, Branch]
+@dataclass
+class Transition:
+    goto: str                       # a state name, or "end" to leave the state machine
+    condition: str | None = None    # YAML key "if"; no condition = always (use as the default, last)
+    set: dict[str, Any] = field(default_factory=dict)  # variables to assign when taken
+
+
+@dataclass
+class State:
+    name: str
+    run: list["FlowNode"]
+    next: list[Transition] = field(default_factory=list)
+    max_visits: int | None = None   # after this many visits, transitions back to this state are skipped and,
+                                    # if no other condition holds, the first route to another state is taken
+    description: str = ""
+
+
+@dataclass
+class StateMachine:
+    """A workflow of states with conditional transitions (if/else between blocks, repeat-until,
+    adaptive branching). After a state's contents run, its transitions are checked in order
+    and the first one whose condition is true is taken."""
+    id: str
+    start: str
+    states: dict[str, State]
+    max_steps: int = 1000
+
+
+FlowNode = Union[RoutineRef, Loop, Branch, StateMachine]
 
 
 @dataclass
@@ -338,6 +377,28 @@ class Experiment:
                 if dev and dev not in dev_ids:
                     issues.append(Issue("error", where, f"references unknown device '{dev}'"))
             for c in routine.components:
+                if c.only_if:
+                    _check_expr(c.only_if if c.only_if.startswith("$") else "$" + c.only_if,
+                                f"routines.{rid}.{c.id}.if", issues)
+            for i, rule in enumerate(routine.rules):
+                where = f"routines.{rid}.rules[{i}]"
+                if not isinstance(rule, dict) or "when" not in rule:
+                    issues.append(Issue("error", where, "a rule needs 'when' (a condition) and 'do' (actions)"))
+                    continue
+                w_ = str(rule["when"])
+                _check_expr(w_ if w_.startswith("$") else "$" + w_, where + ".when", issues)
+                acts = rule.get("do") or []
+                for a in acts if isinstance(acts, list) else [acts]:
+                    keys = set(a) if isinstance(a, dict) else {a}
+                    bad = keys - RULE_ACTIONS
+                    if bad:
+                        issues.append(Issue("error", where, f"unknown rule action {', '.join(map(str, bad))}",
+                                            hint=", ".join(sorted(RULE_ACTIONS))))
+                    if isinstance(a, dict):
+                        for k in ("start", "stop"):
+                            if k in a and a[k] not in ids:
+                                issues.append(Issue("error", where, f"{k}: no component '{a[k]}' in this routine"))
+            for c in routine.components:
                 if c.start_after and c.start_after not in ids:
                     issues.append(Issue("error", f"routines.{rid}.{c.id}", f"start_after refers to unknown component '{c.start_after}'"))
             onsets: dict[Any, list[str]] = {}
@@ -379,6 +440,10 @@ class Experiment:
                     _check_expr(n.condition if n.condition.startswith("$") else "$" + n.condition, w + ".if", issues)
                     walk(n.then, w + ".then")
                     walk(n.else_, w + ".else")
+                elif isinstance(n, StateMachine):
+                    validate_state_machine(n, w, issues)
+                    for sname, st in n.states.items():
+                        walk(st.run, f"{w}.{n.id}.{sname}")
 
         walk(self.flow, "flow")
         for rid in self.routines:
@@ -391,6 +456,38 @@ class Experiment:
 
 
 LOOP_ORDERS = ("sequential", "random", "fullrandom", "latin_square", "counterbalance")
+
+
+def validate_state_machine(m: StateMachine, where: str, issues: list["Issue"]) -> None:
+    if not m.states:
+        issues.append(Issue("error", where, f"state machine '{m.id}' has no states"))
+        return
+    if m.start not in m.states:
+        issues.append(Issue("error", where, f"state machine '{m.id}': start state '{m.start}' does not exist",
+                            hint=", ".join(m.states)))
+    reachable, todo = set(), [m.start]
+    while todo:
+        s_ = todo.pop()
+        if s_ in reachable or s_ not in m.states:
+            continue
+        reachable.add(s_)
+        todo += [t.goto for t in m.states[s_].next]
+    for name, st in m.states.items():
+        w = f"{where}.{m.id}.{name}"
+        if not st.next:
+            issues.append(Issue("info", w, "no transitions: the state machine ends after this state"))
+        for i, t in enumerate(st.next):
+            if t.goto != "end" and t.goto not in m.states:
+                issues.append(Issue("error", w, f"transition {i} goes to unknown state '{t.goto}'",
+                                    hint="use 'end' to finish"))
+            if t.condition:
+                _check_expr(t.condition if t.condition.startswith("$") else "$" + t.condition, f"{w}.next[{i}]", issues)
+            if t.condition is None and i < len(st.next) - 1:
+                issues.append(Issue("warning", w, f"transition {i} has no condition, so the ones after it never run"))
+        if st.next and all(t.condition for t in st.next):
+            issues.append(Issue("info", w, "every transition has a condition; if none is true the machine ends"))
+        if name not in reachable:
+            issues.append(Issue("warning", w, f"state '{name}' can never be reached"))
 
 
 @dataclass
@@ -447,7 +544,22 @@ def _parse_flow_node(n: Any, idx: Any) -> FlowNode:
         )
     if "if" in n:
         return Branch(str(n["if"]), _parse_nodes(n.get("then"), f"if{idx}"), _parse_nodes(n.get("else"), f"else{idx}"))
-    raise ValueError(f"flow entry must be a routine name or contain 'routine', 'loop' or 'if': {n!r}")
+    if "statemachine" in n:
+        sid = str(n["statemachine"])
+        states = {}
+        for name, sd in (n.get("states") or {}).items():
+            sd = sd or {}
+            run = sd.get("run", [])
+            nxt = sd.get("next") or []
+            if isinstance(nxt, (str, dict)):
+                nxt = [nxt]
+            trans = [Transition(goto=str(t), condition=None) if isinstance(t, str) else
+                     Transition(goto=str(t.get("goto", "end")), condition=t.get("if"), set=dict(t.get("set") or {}))
+                     for t in nxt]
+            states[str(name)] = State(str(name), _parse_nodes(run, f"{sid}_{name}"), trans,
+                                      sd.get("max_visits"), sd.get("description", ""))
+        return StateMachine(sid, str(n.get("start") or next(iter(states), "")), states, int(n.get("max_steps", 1000)))
+    raise ValueError(f"flow entry must be a routine name or contain 'routine', 'loop', 'if' or 'statemachine': {n!r}")
 
 
 def _flow_to_dict(n: FlowNode) -> Any:
@@ -466,4 +578,28 @@ def _flow_to_dict(n: FlowNode) -> Any:
         if n.else_:
             d["else"] = [_flow_to_dict(c) for c in n.else_]
         return d
+    if isinstance(n, StateMachine):
+        states = {}
+        for name, st in n.states.items():
+            sd: dict[str, Any] = {"run": [_flow_to_dict(c) for c in st.run]}
+            nxt = []
+            for t in st.next:
+                td: dict[str, Any] = {}
+                if t.condition:
+                    td["if"] = t.condition
+                td["goto"] = t.goto
+                if t.set:
+                    td["set"] = t.set
+                nxt.append(td)
+            if nxt:
+                sd["next"] = nxt
+            if st.max_visits:
+                sd["max_visits"] = st.max_visits
+            if st.description:
+                sd["description"] = st.description
+            states[name] = sd
+        out: dict[str, Any] = {"statemachine": n.id, "start": n.start, "states": states}
+        if n.max_steps != 1000:
+            out["max_steps"] = n.max_steps
+        return out
     raise TypeError(n)
