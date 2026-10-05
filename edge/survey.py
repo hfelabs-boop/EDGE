@@ -3,6 +3,7 @@
     - id: about_you
       type: survey
       title: A few questions about you
+      language: en                                   # he, ar … switch the page to right-to-left
       questions:
         - {instrument: demographics}                  # from the library (edge/survey_library.py)
         - {id: mood, type: likert, scale: agree7, text: "I feel good right now."}
@@ -11,77 +12,126 @@
         - {type: page_break}
         - {instrument: phq9}
 
-Question types (modelled on the standard set of professional survey tools):
+Question types follow the standard catalogue of professional survey platforms:
 
-=============  ==========================================================================
-text_block     text or HTML without an answer (instructions, section headings, images)
-single         one answer from a list (radio buttons; ``layout: horizontal``; ``other_option``)
-dropdown       one answer from a drop-down list
-multiple       any number of answers (checkboxes; ``min_choices``, ``max_choices``, ``exclusive``)
-likert         one statement rated on a scale (``scale: agree5`` … or your own ``options``)
-matrix         several statements (``items``) rated on the same scale, as a table
-semantic       bipolar items (``left``/``right`` adjectives) on an N-point scale (semantic differential)
-scale          a numbered scale 1..N (``points``) with end labels (e.g. valence 1-9)
-nps            0-10 "how likely are you to recommend" scale
-slider         a visual analogue scale (``min``, ``max``, ``step``, end ``labels``)
-text           one line of text (``validate: email | number | integer``, ``pattern``, ``max_length``)
-essay          several lines of text (``min_length``, ``max_length``, ``rows``)
-number         a number (``min``, ``max``, ``step``)
-date           a date
-rank           put options in order (drag, or the ↑/↓ buttons)
-constant_sum   share a total (e.g. 100 points) across options
-page_break     starts a new page
-=============  ==========================================================================
+Standard
+  text_block     text, HTML, an image, video or audio (``media``) without an answer
+  single         one answer (radio buttons; ``layout: horizontal``; ``other_option``)
+  dropdown       one answer from a drop-down list
+  multiple       several answers (checkboxes; ``layout: listbox`` = multi-select box; ``min_choices``,
+                 ``max_choices``, ``exclusive``)
+  likert         one statement on a scale (``scale: agree5`` … or your own ``options``)
+  matrix         statements (``items``) on a shared scale; ``multi: true`` = checkboxes per row,
+                 ``display: dropdown`` = a drop-down per row
+  semantic       bipolar items (``left``/``right``) on an N-point scale (semantic differential)
+  scale          a number scale 1..N (``points``), optionally for several ``items``
+  nps            Net Promoter 0-10, with promoter / passive / detractor saved
+  slider         slider(s) (``min``, ``max``, ``step``, end ``labels``; ``items`` for several)
+  graphic_slider faces that change with the value, or clickable stars / hearts (``style``)
+  text           one line (``validate: email | number | integer``, ``pattern``, ``secret`` = password)
+  essay          several lines (``rows``; 2 rows = multi-line short text)
+  number         a number (``min``, ``max``, ``unit``)
+  date           a calendar date picker (``min``, ``max``); ``calendar`` is the same
+  form           several labelled fields (name, e-mail, phone …) in one question (``fields``)
+  rank           put options in order (``method: drag | select | text``)
+  side_by_side   several questions (``columns``) for the same rows (``items``) in one table
+Advanced
+  constant_sum   share a ``total`` across options (``must_total: exact | at_most | at_least``, ``unit``)
+  group          pick, group & rank: sort ``items`` into ``groups`` (``rank_within``, ``require_all``)
+  hot_spot       clickable regions on an image (``mode: select | rate``)
+  heat_map       clicks anywhere on an image (x, y; ``max_clicks``; optional ``regions`` to count hits)
+  drill_down     cascading drop-downs (``levels`` + ``tree``, e.g. country → region → city)
+  highlight      highlight words of a ``passage`` in categories (e.g. like / dislike)
+  signature      draw a signature (saved as a PNG file in the session folder)
+  timing         invisible: time on page, clicks; ``min_seconds`` before Next, ``max_seconds`` auto-advance
+  meta_info      invisible: browser, operating system, screen size, language, time zone
+  file_upload    attach a file (``accept``, ``max_mb``; saved in the session folder)
+  captcha        a typed code check (offline, no external service)
+  autocomplete   a text field with suggestions (``options`` or ``list: countries | languages``)
+Specialty
+  tree_test      find an item in a navigation tree (``tree``, ``task``, ``correct``): path, success, directness
+  video_response record video or audio with the webcam / microphone (``audio_only``, ``max_seconds``)
+  screen_capture capture the screen and black out private parts (saved as PNG)
+  location       mark a place on a map image (``bounds`` → latitude/longitude) or use the device location
+  page_break     starts a new page
 
-Every question can have ``required``, ``help`` (small print under the question), ``show_if``
-(display logic based on earlier answers) and, for choice questions, ``randomize`` (shuffle the
-options, the order shown is saved). ``correct`` marks a right answer (knowledge or attention checks).
-
-``test_answer`` fixes what the virtual participant answers in test runs (the consent question uses
-``test_answer: yes`` so test runs go through the whole study).
+Every question can have ``required``, ``help``, ``show_if`` (display logic based on earlier answers) and,
+for choice questions, ``randomize`` (the order shown is saved). ``correct`` marks a right answer (knowledge
+or attention checks). ``test_answer`` fixes what the virtual participant answers in test runs (the consent
+question uses ``test_answer: yes`` so test runs go through the whole study).
 
 ``show_if`` examples: ``{gender: Woman}``, ``{age: {">=": 18}}``, ``{hobbies: {contains: Sport}}``,
 ``{consent: yes, age: {">=": 18}}`` (all must hold), ``{any: [{a: 1}, {b: 1}]}``,
 ``{email: {answered: true}}``. Questions can show earlier answers with ``{{answer.<id>}}``.
 
-Data: one column per answer (``about_you.age``, ``about_you.phq9_3`` …), checkbox questions as
-``a; b`` plus one 0/1 column per option, rank orders and constant sums one column per option,
-``<id>_other`` for "other" text, ``pageN_time`` (seconds per page), and every score defined by the
-instruments or by ``scores:`` (``phq9_total``, ``phq9_total_band`` …).
+Right-to-left: ``language: he`` / ``ar`` / ``fa`` … or ``direction: rtl`` lays the page out right to left
+(and translates the buttons and messages where a translation exists). With ``direction: auto`` (the
+default) the page follows the language, or the first strong character of the title and first question.
 """
 
 from __future__ import annotations
 
+import base64
 import copy
 import html as htmllib
 import json
 import random
 import re
+from pathlib import Path
 from typing import Any
 
 from . import survey_library as lib
 
 QUESTION_TYPES: dict[str, dict[str, Any]] = {
-    "text_block": {"label": "Text / instructions", "group": "Display", "answer": False},
-    "single": {"label": "Single choice", "group": "Choice", "answer": True},
-    "dropdown": {"label": "Drop-down list", "group": "Choice", "answer": True},
-    "multiple": {"label": "Multiple choice (checkboxes)", "group": "Choice", "answer": True},
-    "likert": {"label": "Likert item", "group": "Rating", "answer": True},
-    "matrix": {"label": "Matrix / Likert table", "group": "Rating", "answer": True},
-    "semantic": {"label": "Semantic differential (bipolar)", "group": "Rating", "answer": True},
-    "scale": {"label": "Numbered scale (1-N)", "group": "Rating", "answer": True},
-    "nps": {"label": "Net Promoter (0-10)", "group": "Rating", "answer": True},
-    "slider": {"label": "Slider / visual analogue scale", "group": "Rating", "answer": True},
-    "text": {"label": "Short text", "group": "Text entry", "answer": True},
-    "essay": {"label": "Long text (essay)", "group": "Text entry", "answer": True},
-    "number": {"label": "Number", "group": "Text entry", "answer": True},
-    "date": {"label": "Date", "group": "Text entry", "answer": True},
-    "rank": {"label": "Rank order", "group": "Advanced", "answer": True},
+    "text_block": {"label": "Text / graphic", "group": "Standard", "answer": False},
+    "single": {"label": "Single choice", "group": "Standard", "answer": True},
+    "dropdown": {"label": "Drop-down list", "group": "Standard", "answer": True},
+    "multiple": {"label": "Multiple choice (checkboxes)", "group": "Standard", "answer": True},
+    "likert": {"label": "Likert item", "group": "Standard", "answer": True},
+    "matrix": {"label": "Matrix table", "group": "Standard", "answer": True},
+    "semantic": {"label": "Bipolar / semantic differential", "group": "Standard", "answer": True},
+    "scale": {"label": "Number scale", "group": "Standard", "answer": True},
+    "nps": {"label": "Net Promoter Score", "group": "Standard", "answer": True},
+    "slider": {"label": "Slider", "group": "Standard", "answer": True},
+    "text": {"label": "Text entry (single line)", "group": "Standard", "answer": True},
+    "essay": {"label": "Text entry (essay)", "group": "Standard", "answer": True},
+    "number": {"label": "Number", "group": "Standard", "answer": True},
+    "date": {"label": "Calendar (date)", "group": "Standard", "answer": True},
+    "form": {"label": "Form fields", "group": "Standard", "answer": True},
+    "rank": {"label": "Rank order", "group": "Standard", "answer": True},
+    "side_by_side": {"label": "Side by side", "group": "Standard", "answer": True},
     "constant_sum": {"label": "Constant sum", "group": "Advanced", "answer": True},
+    "group": {"label": "Pick, group & rank", "group": "Advanced", "answer": True},
+    "hot_spot": {"label": "Hot spot (image regions)", "group": "Advanced", "answer": True},
+    "heat_map": {"label": "Heat map (image clicks)", "group": "Advanced", "answer": True},
+    "graphic_slider": {"label": "Graphic slider (faces / stars)", "group": "Advanced", "answer": True},
+    "drill_down": {"label": "Drill down (cascading lists)", "group": "Advanced", "answer": True},
+    "highlight": {"label": "Highlight words", "group": "Advanced", "answer": True},
+    "signature": {"label": "Signature", "group": "Advanced", "answer": True},
+    "timing": {"label": "Timing (invisible)", "group": "Advanced", "answer": True},
+    "meta_info": {"label": "Meta info (invisible)", "group": "Advanced", "answer": True},
+    "file_upload": {"label": "File upload", "group": "Advanced", "answer": True},
+    "captcha": {"label": "Captcha (typed code)", "group": "Advanced", "answer": True},
+    "autocomplete": {"label": "Autocomplete", "group": "Advanced", "answer": True},
+    "tree_test": {"label": "Tree testing", "group": "Specialty", "answer": True},
+    "video_response": {"label": "Video / audio response", "group": "Specialty", "answer": True},
+    "screen_capture": {"label": "Screen capture", "group": "Specialty", "answer": True},
+    "location": {"label": "Location (map / device)", "group": "Specialty", "answer": True},
     "page_break": {"label": "Page break", "group": "Display", "answer": False},
 }
+ALIASES = {"calendar": "date", "text_graphic": "text_block", "descriptive": "text_block", "form_field": "form",
+           "pick_group_rank": "group", "multiple_choice": "single"}
 CHOICE_TYPES = {"single", "dropdown", "multiple", "likert"}
+OPTION_TYPES = CHOICE_TYPES | {"matrix", "nps", "scale", "semantic", "rank", "constant_sum", "autocomplete"}
+ITEM_TYPES = {"matrix", "semantic"}                 # always have items
+FILE_TYPES = {"signature", "file_upload", "video_response", "screen_capture"}
+INVISIBLE = {"timing", "meta_info"}
 OPS = {"=", "==", "!=", ">", ">=", "<", "<=", "in", "not_in", "contains", "answered"}
+FORM_FIELD_TYPES = {"text", "email", "number", "tel", "date", "password", "url"}
+META_KEYS = ["browser", "os", "screen", "viewport", "pixel_ratio", "language", "timezone", "touch", "user_agent"]
+TIMING_KEYS = ["first_click", "last_click", "submit", "clicks"]
+PNG_1PX = ("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8"
+           "AAAAASUVORK5CYII=")
 
 
 class SurveyError(ValueError):
@@ -94,20 +144,7 @@ def slug(text: Any) -> str:
     return (s or "option")[:40]
 
 
-def norm_options(q: dict[str, Any]) -> list[dict[str, Any]]:
-    """Options as [{value, label}], from ``options`` (strings or dicts) or a named ``scale``."""
-    if q.get("type") in ("nps",):
-        return [{"value": i, "label": str(i)} for i in range(11)]
-    if q.get("type") == "scale":
-        n = int(q.get("points") or 7)
-        start = int(q.get("start", 1))
-        return [{"value": i, "label": str(i)} for i in range(start, start + n)]
-    if q.get("type") == "semantic":
-        n = int(q.get("points") or 7)
-        return [{"value": i, "label": str(i)} for i in range(1, n + 1)]
-    raw = q.get("options")
-    if raw is None and q.get("scale"):
-        return lib.scale_options(str(q["scale"]))
+def _norm_list(raw: Any) -> list[dict[str, Any]]:
     out = []
     for o in raw or []:
         if isinstance(o, dict):
@@ -118,8 +155,37 @@ def norm_options(q: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+def norm_options(q: dict[str, Any]) -> list[dict[str, Any]]:
+    """Options as [{value, label}], from ``options`` (strings or dicts), a named ``scale`` or a built-in ``list``."""
+    t = q.get("type")
+    if t == "nps":
+        return [{"value": i, "label": str(i)} for i in range(11)]
+    if t == "scale":
+        n = int(q.get("points") or 7)
+        start = int(q.get("start", 1))
+        return [{"value": i, "label": str(i)} for i in range(start, start + n)]
+    if t == "semantic":
+        n = int(q.get("points") or 7)
+        return [{"value": i, "label": str(i)} for i in range(1, n + 1)]
+    if t == "autocomplete" and q.get("list") and not q.get("options"):
+        from .survey_lists import LISTS
+        if q["list"] not in LISTS:
+            raise SurveyError(f"unknown list '{q['list']}' (available: {', '.join(LISTS)})")
+        return _norm_list(LISTS[q["list"]])
+    if q.get("options") is None and q.get("scale"):
+        return lib.scale_options(str(q["scale"]))
+    return _norm_list(q.get("options"))
+
+
+def _items(q: dict[str, Any]) -> list[dict[str, Any]]:
+    out = []
+    for i, it in enumerate(q.get("items") or [], 1):
+        out.append(dict(it) if isinstance(it, dict) else {"id": f"{q.get('id', 'item')}_{i}", "text": str(it)})
+    return out
+
+
 def expand(questions: list[Any], rng: random.Random | None = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Expand ``{instrument: …}`` entries, resolve scales and (with ``rng``) shuffle what should be
+    """Expand ``{instrument: …}`` entries, resolve scales and lists and (with ``rng``) shuffle what should be
     shuffled. Returns (flat question list, scores)."""
     flat: list[dict[str, Any]] = []
     scores: dict[str, Any] = {}
@@ -135,15 +201,43 @@ def expand(questions: list[Any], rng: random.Random | None = None) -> tuple[list
                         it["required"] = bool(q["required"])
             for it in items:
                 it.setdefault("source", ins["id"])
-            sub, sub_scores = expand(items, rng)
+            sub, _ = expand(items, rng)
             flat += sub
             scores.update(ins.get("scores") or {})
             continue
         q = copy.deepcopy(q)
-        t = q.get("type", "single")
+        t = ALIASES.get(q.get("type", "single"), q.get("type", "single"))
         q["type"] = t
-        if t in CHOICE_TYPES or t in ("matrix", "nps", "scale", "semantic", "rank", "constant_sum"):
+        if t in OPTION_TYPES:
             q["options"] = norm_options(q)
+        if t == "side_by_side":
+            for c in q.get("columns") or []:
+                c.setdefault("type", "single")
+                if c["type"] in ("single", "multiple", "dropdown"):
+                    c["options"] = norm_options({**c, "type": c["type"]})
+        if t == "group":
+            q["items"] = _norm_list(q.get("items"))
+            q["groups"] = [g if isinstance(g, dict) else {"id": slug(g), "label": str(g)} for g in q.get("groups") or []]
+            for g in q["groups"]:
+                g.setdefault("id", slug(g.get("label", "group")))
+                g.setdefault("label", g["id"])
+        if t == "highlight" and not q.get("categories"):
+            q["categories"] = [{"id": "like", "label": "Like", "color": "#9be3b0"},
+                               {"id": "dislike", "label": "Dislike", "color": "#f5a3a3"}]
+        if t == "highlight":
+            for c in q["categories"]:
+                c.setdefault("id", slug(c.get("label", "cat")))
+                c.setdefault("label", c["id"])
+                c.setdefault("color", "#ffe58a")
+        if t in ("hot_spot", "heat_map"):
+            for i, r in enumerate(q.get("regions") or [], 1):
+                r.setdefault("id", f"r{i}")
+        if t in ("drill_down", "tree_test") and q.get("rows") and not q.get("tree"):
+            q["tree"] = rows_to_tree(q["rows"])
+        if t == "form":
+            for f in q.get("fields") or []:
+                f.setdefault("type", "text")
+                f.setdefault("label", f.get("id", ""))
         if rng is not None and q.get("randomize") and t in ("single", "multiple", "dropdown", "rank", "constant_sum"):
             fixed_tail = [o for o in q["options"] if o.get("label") in (q.get("other_option"),) or
                           o.get("value") in (q.get("exclusive") or [])]
@@ -151,21 +245,50 @@ def expand(questions: list[Any], rng: random.Random | None = None) -> tuple[list
             rng.shuffle(movable)
             q["options"] = movable + fixed_tail
             q["shown_order"] = [o["value"] for o in q["options"]]
-        if t in ("matrix", "semantic"):
-            q["items"] = [dict(it) if isinstance(it, dict) else {"id": f"{q.get('id', 'item')}_{i}", "text": str(it)}
-                          for i, it in enumerate(q.get("items") or [], 1)]
+        if t in ITEM_TYPES or (t in ("scale", "slider", "side_by_side") and q.get("items")):
+            q["items"] = _items(q)
             if rng is not None and q.get("randomize"):
                 rng.shuffle(q["items"])
                 q["shown_order"] = [it["id"] for it in q["items"]]
+        if rng is not None and q.get("randomize") and t == "group":
+            rng.shuffle(q["items"])
+            q["shown_order"] = [it["value"] for it in q["items"]]
         flat.append(q)
     return flat, scores
+
+
+def rows_to_tree(rows: list[list[Any]]) -> dict[str, Any]:
+    """[[USA, California, LA], [USA, California, SF]] -> {USA: {California: [LA, SF]}}"""
+    tree: dict[str, Any] = {}
+    for row in rows:
+        row = [str(x) for x in row if str(x) != ""]
+        if not row:
+            continue
+        node: Any = tree
+        for i, part in enumerate(row[:-1]):
+            if i == len(row) - 2:
+                lst = node.setdefault(part, [])
+                if isinstance(lst, list) and row[-1] not in lst:
+                    lst.append(row[-1])
+            else:
+                nxt = node.setdefault(part, {})
+                if isinstance(nxt, list):          # deeper rows under a former leaf list
+                    nxt = node[part] = {x: [] for x in nxt}
+                node = nxt
+        if len(row) == 1:
+            node.setdefault(row[0], [])
+    return tree
 
 
 def answer_ids(q: dict[str, Any]) -> list[str]:
     """Data ids a question produces (before suffixes)."""
     t = q.get("type")
-    if t in ("matrix", "semantic"):
+    if t in ITEM_TYPES or (t in ("scale", "slider") and q.get("items")):
         return [str(it["id"]) for it in q.get("items") or []]
+    if t == "side_by_side":
+        return [f"{it['id']}_{c['id']}" for it in q.get("items") or [] for c in q.get("columns") or []]
+    if t == "form":
+        return [str(f["id"]) for f in q.get("fields") or []]
     if QUESTION_TYPES.get(t, {}).get("answer") and q.get("id"):
         return [str(q["id"])]
     return []
@@ -173,7 +296,7 @@ def answer_ids(q: dict[str, Any]) -> list[str]:
 
 def count_items(questions: list[Any]) -> int:
     flat, _ = expand(questions)
-    return sum(len(answer_ids(q)) for q in flat)
+    return sum(len(answer_ids(q)) for q in flat if q["type"] not in INVISIBLE)
 
 
 def pages(flat: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
@@ -185,6 +308,48 @@ def pages(flat: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
         else:
             out[-1].append(q)
     return [p for p in out if p] or [[]]
+
+
+def _children(tree: Any, k: Any) -> Any:
+    return None if isinstance(tree, list) else tree[k]
+
+
+def tree_paths(tree: Any, prefix: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
+    """Every node path of a navigation tree (dict of dicts / lists)."""
+    out = []
+    for k in (tree if isinstance(tree, list) else list((tree or {}).keys())):
+        p = prefix + (str(k),)
+        out.append(p)
+        child = _children(tree, k)
+        if child:
+            out += tree_paths(child, p)
+    return out
+
+
+def tree_leaves(tree: Any, prefix: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
+    out = []
+    for k in (tree if isinstance(tree, list) else list((tree or {}).keys())):
+        p = prefix + (str(k),)
+        child = _children(tree, k)
+        out += tree_leaves(child, p) if child else [p]
+    return out
+
+
+def _path(p: Any) -> tuple[str, ...]:
+    if isinstance(p, (list, tuple)):
+        return tuple(str(x) for x in p)
+    return tuple(x.strip() for x in re.split(r"\s*(?:>|/|›)\s*", str(p)) if x.strip())
+
+
+def _correct_paths(q: dict[str, Any]) -> list[tuple[str, ...]]:
+    corr = q.get("correct")
+    if not corr:
+        return []
+    if isinstance(corr, list) and corr and isinstance(corr[0], (list, tuple)):
+        return [_path(c) for c in corr]
+    if isinstance(corr, list) and corr and all(isinstance(c, str) and (">" in c or "/" in c) for c in corr):
+        return [_path(c) for c in corr]
+    return [_path(corr)]
 
 
 def validate(questions: list[Any], scores: dict[str, Any] | None = None) -> list[str]:
@@ -201,14 +366,14 @@ def validate(questions: list[Any], scores: dict[str, Any] | None = None) -> list
         if t not in QUESTION_TYPES:
             problems.append(f"{label}: unknown question type '{t}' (choose: {', '.join(QUESTION_TYPES)})")
             continue
-        if QUESTION_TYPES[t]["answer"]:
+        if QUESTION_TYPES[t]["answer"] and t != "form":
             if not q.get("id"):
                 problems.append(f"{label}: needs an id (the name of its data column)")
             elif not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(q["id"])):
                 problems.append(f"{label}: id '{q['id']}' must use letters, digits and _ only")
-        if t in CHOICE_TYPES | {"matrix", "rank", "constant_sum"} and not q.get("options"):
+        if t in CHOICE_TYPES | {"matrix", "rank", "constant_sum", "autocomplete"} and not q.get("options"):
             problems.append(f"{label}: needs options (or a scale such as agree5)")
-        if t in ("matrix", "semantic") and not q.get("items"):
+        if t in ITEM_TYPES and not q.get("items"):
             problems.append(f"{label}: needs items (the statements to rate)")
         if t == "semantic":
             for it in q.get("items") or []:
@@ -217,9 +382,66 @@ def validate(questions: list[Any], scores: dict[str, Any] | None = None) -> list
                     break
         if t == "slider" and float(q.get("max", 100)) <= float(q.get("min", 0)):
             problems.append(f"{label}: max must be larger than min")
-        if t == "multiple" and q.get("min_choices") and q.get("max_choices") and \
+        if t in ("multiple", "matrix") and q.get("min_choices") and q.get("max_choices") and \
                 int(q["min_choices"]) > int(q["max_choices"]):
             problems.append(f"{label}: min_choices is larger than max_choices")
+        if t == "side_by_side":
+            if not q.get("items") or not q.get("columns"):
+                problems.append(f"{label}: needs items (rows) and columns (the questions)")
+            for c in q.get("columns") or []:
+                if not c.get("id") or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(c.get("id"))):
+                    problems.append(f"{label}: every column needs an id (letters, digits, _)")
+                elif c["type"] not in ("single", "multiple", "dropdown", "text", "number"):
+                    problems.append(f"{label}: column '{c['id']}' type must be single, multiple, dropdown, text or number")
+                elif c["type"] in ("single", "multiple", "dropdown") and not c.get("options"):
+                    problems.append(f"{label}: column '{c['id']}' needs options (or a scale)")
+        if t == "form":
+            if not q.get("fields"):
+                problems.append(f"{label}: needs fields")
+            for f in q.get("fields") or []:
+                if not f.get("id") or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", str(f.get("id"))):
+                    problems.append(f"{label}: every field needs an id (letters, digits, _)")
+                elif f["type"] not in FORM_FIELD_TYPES:
+                    problems.append(f"{label}: field '{f['id']}' type must be one of {', '.join(sorted(FORM_FIELD_TYPES))}")
+        if t == "group" and (not q.get("items") or not q.get("groups")):
+            problems.append(f"{label}: needs items (to sort) and groups (the categories)")
+        if t in ("hot_spot", "heat_map") and not q.get("image"):
+            problems.append(f"{label}: needs an image")
+        if t == "hot_spot":
+            if not q.get("regions"):
+                problems.append(f"{label}: needs regions (x, y, w, h in % of the image)")
+            for r in q.get("regions") or []:
+                if any(not isinstance(r.get(k), (int, float)) or not 0 <= r[k] <= 100 for k in ("x", "y", "w", "h")):
+                    problems.append(f"{label}: region '{r.get('id')}' needs x, y, w, h between 0 and 100 (% of the image)")
+                    break
+            if q.get("mode", "select") not in ("select", "rate"):
+                problems.append(f"{label}: mode must be select or rate")
+        if t == "location":
+            if not q.get("image") and not q.get("allow_geolocation"):
+                problems.append(f"{label}: needs a map image or allow_geolocation: true")
+            b = q.get("bounds")
+            if b is not None and (not isinstance(b, dict) or set(b) != {"north", "south", "east", "west"}):
+                problems.append(f"{label}: bounds needs north, south, east and west")
+        if t == "drill_down" and (not q.get("levels") or not (q.get("tree") or q.get("file"))):
+            problems.append(f"{label}: needs levels (the names of the lists) and a tree (or rows, or a file)")
+        if t == "highlight" and not q.get("passage"):
+            problems.append(f"{label}: needs a passage (the text to highlight)")
+        if t == "tree_test":
+            if not q.get("tree"):
+                problems.append(f"{label}: needs a tree (the menu structure)")
+            else:
+                paths = set(tree_paths(q["tree"]))
+                for c in _correct_paths(q):
+                    if c not in paths:
+                        problems.append(f"{label}: correct answer '{' > '.join(c)}' is not in the tree")
+        if t == "graphic_slider" and q.get("style", "faces") not in ("faces", "stars", "hearts"):
+            problems.append(f"{label}: style must be faces, stars or hearts")
+        if t == "constant_sum" and q.get("must_total", "exact") not in ("exact", "at_most", "at_least"):
+            problems.append(f"{label}: must_total must be exact, at_most or at_least")
+        if t == "rank" and q.get("method", "drag") not in ("drag", "select", "text"):
+            problems.append(f"{label}: method must be drag, select or text")
+        if t == "multiple" and q.get("layout") not in (None, "vertical", "horizontal", "listbox"):
+            problems.append(f"{label}: layout must be vertical, horizontal or listbox")
         for aid in answer_ids(q):
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", aid):
                 problems.append(f"{label}: item id '{aid}' must use letters, digits and _ only")
@@ -240,6 +462,18 @@ def validate(questions: list[Any], scores: dict[str, Any] | None = None) -> list
             if it not in seen:
                 problems.append(f"score '{name}': no question or item called '{it}'")
     return problems
+
+
+def media_files(questions: list[Any]) -> list[str]:
+    """Local image / media files the questions use (for checks and bundles)."""
+    flat, _ = expand(questions)
+    out = []
+    for q in flat:
+        for k in ("media", "image"):
+            v = q.get(k)
+            if isinstance(v, str) and v and not re.match(r"^(https?:|data:|/)", v):
+                out.append(v)
+    return out
 
 
 def _cond_refs(cond: Any) -> list[str]:
@@ -295,7 +529,7 @@ def condition_holds(cond: Any, answers: dict[str, Any]) -> bool:
 
 
 def _empty(a: Any) -> bool:
-    return a is None or a == "" or a == []
+    return a is None or a == "" or a == [] or a == {}
 
 
 def _num(x: Any) -> float | None:
@@ -334,75 +568,230 @@ def auto_answer(flat: list[dict[str, Any]], rng: random.Random, attention: float
     ans: dict[str, Any] = {}
     for pi, page in enumerate(pages(flat), 1):
         for q in page:
-            if not condition_holds(q.get("show_if"), ans):
-                continue
             t = q["type"]
+            if not condition_holds(q.get("show_if"), ans) and t != "meta_info":
+                continue
             opts = q.get("options") or []
             if not QUESTION_TYPES.get(t, {}).get("answer"):
                 continue
-            if not q.get("required") and rng.random() < 0.05:
-                continue      # an occasional skipped optional question, like real data
+            qid = q.get("id")
             if q.get("test_answer") is not None:          # e.g. consent: test runs go through the study
-                ans[q["id"]] = q["test_answer"]
+                ans[qid] = q["test_answer"]
                 continue
-            if q.get("correct") is not None and rng.random() < attention:
-                ans[q["id"]] = q["correct"]
+            if not q.get("required") and t not in INVISIBLE and rng.random() < 0.05:
+                continue      # an occasional skipped optional question, like real data
+            if q.get("correct") is not None and t != "tree_test" and rng.random() < attention:
+                ans[qid] = q["correct"]
                 continue
-            if t in ("single", "dropdown", "likert", "scale", "nps"):
+            if t in ("single", "dropdown", "likert", "nps", "autocomplete") or (t == "scale" and not q.get("items")):
                 o = rng.choice(opts)
-                ans[q["id"]] = o["value"]
+                ans[qid] = o["value"]
                 if q.get("other_option") and o["label"] == q["other_option"]:
-                    ans[q["id"] + "_other"] = "virtual participant"
+                    ans[qid + "_other"] = "virtual participant"
+            elif t == "scale":
+                for it in q["items"]:
+                    ans[it["id"]] = rng.choice(opts)["value"]
             elif t == "multiple":
                 excl = [str(x) for x in q.get("exclusive") or []]
                 pool = [o["value"] for o in opts if str(o["value"]) not in excl]
                 lo = int(q.get("min_choices") or (1 if q.get("required") else 0))
                 hi = int(q.get("max_choices") or len(pool))
                 k = rng.randint(min(lo, len(pool)), max(min(hi, len(pool)), min(lo, len(pool))))
-                ans[q["id"]] = rng.sample(pool, k) if pool else []
+                ans[qid] = rng.sample(pool, k) if pool else []
             elif t in ("matrix", "semantic"):
                 for it in q["items"]:
-                    ans[it["id"]] = rng.choice(opts)["value"]
+                    if q.get("multi"):
+                        lo = int(q.get("min_choices") or 1)
+                        hi = int(q.get("max_choices") or len(opts))
+                        k = rng.randint(min(lo, len(opts)), min(hi, len(opts)))
+                        ans[it["id"]] = [o["value"] for o in rng.sample(opts, k)]
+                    else:
+                        ans[it["id"]] = rng.choice(opts)["value"]
+            elif t == "side_by_side":
+                for it in q["items"]:
+                    for c in q["columns"]:
+                        key = f"{it['id']}_{c['id']}"
+                        if c["type"] in ("single", "dropdown"):
+                            ans[key] = rng.choice(c["options"])["value"]
+                        elif c["type"] == "multiple":
+                            ans[key] = [o["value"] for o in rng.sample(c["options"], rng.randint(1, len(c["options"])))]
+                        elif c["type"] == "number":
+                            ans[key] = rng.randint(0, 10)
+                        else:
+                            ans[key] = "virtual participant"
             elif t == "slider":
                 lo, hi, st = float(q.get("min", 0)), float(q.get("max", 100)), float(q.get("step", 1))
                 n = int(round((hi - lo) / st))
-                v = lo + rng.randint(0, n) * st
-                ans[q["id"]] = int(v) if float(v).is_integer() else round(v, 6)
+                for key in ([it["id"] for it in q["items"]] if q.get("items") else [qid]):
+                    v = lo + rng.randint(0, n) * st
+                    ans[key] = int(v) if float(v).is_integer() else round(v, 6)
+            elif t == "graphic_slider":
+                ans[qid] = rng.randint(1, int(q.get("points") or 5))
             elif t == "number":
                 lo, hi = int(_num(q.get("min")) or 0), int(_num(q.get("max")) or 99)
-                ans[q["id"]] = rng.randint(lo, max(lo, hi))
+                ans[qid] = rng.randint(lo, max(lo, hi))
             elif t == "text":
-                ans[q["id"]] = {"email": "virtual.participant@example.org", "number": "42",
-                                "integer": "42"}.get(q.get("validate"), "virtual participant")
+                ans[qid] = {"email": "virtual.participant@example.org", "number": "42",
+                            "integer": "42"}.get(q.get("validate"), "virtual participant")
             elif t == "essay":
-                ans[q["id"]] = "An answer written by the virtual participant."
+                ans[qid] = "An answer written by the virtual participant."
             elif t == "date":
-                ans[q["id"]] = "2000-01-01"
+                ans[qid] = q.get("min") or "2000-01-01"
+            elif t == "form":
+                for f in q["fields"]:
+                    ans[f["id"]] = {"email": "virtual.participant@example.org", "number": "42", "tel": "+1 555 0100",
+                                    "date": "2000-01-01", "url": "https://example.org", "password": "secret"}.get(
+                        f["type"], "virtual participant")
             elif t == "rank":
                 order = [o["value"] for o in opts]
                 rng.shuffle(order)
-                ans[q["id"]] = order
+                ans[qid] = order
             elif t == "constant_sum":
                 total = float(q.get("total", 100))
                 cuts = sorted(rng.uniform(0, total) for _ in range(len(opts) - 1))
                 parts = [b - a for a, b in zip([0.0] + cuts, cuts + [total])]
                 ints = [int(round(p)) for p in parts]
                 ints[-1] += int(total) - sum(ints)
-                ans[q["id"]] = {str(o["value"]): v for o, v in zip(opts, ints)}
+                ans[qid] = {str(o["value"]): v for o, v in zip(opts, ints)}
+            elif t == "group":
+                out: dict[str, list] = {g["id"]: [] for g in q["groups"]}
+                for it in q["items"]:
+                    if q.get("require_all") or rng.random() < 0.85:
+                        out[rng.choice(q["groups"])["id"]].append(it["value"])
+                ans[qid] = out
+            elif t == "hot_spot":
+                if q.get("mode") == "rate":
+                    ans[qid] = {r["id"]: rng.choice([1, 0, -1]) for r in q["regions"]}
+                else:
+                    k = rng.randint(1, min(len(q["regions"]), int(q.get("max_select") or len(q["regions"]))))
+                    chosen = {r["id"] for r in rng.sample(q["regions"], k)}
+                    ans[qid] = {r["id"]: int(r["id"] in chosen) for r in q["regions"]}
+            elif t == "heat_map":
+                ans[qid] = [[round(rng.random(), 4), round(rng.random(), 4)] for _ in range(int(q.get("max_clicks") or 1))]
+            elif t == "location":
+                if q.get("image"):
+                    x, y = round(rng.random(), 4), round(rng.random(), 4)
+                    a = {"x": x, "y": y, "source": "map"}
+                    b = q.get("bounds")
+                    if b:
+                        a.update(lat=b["north"] - y * (b["north"] - b["south"]), lon=b["west"] + x * (b["east"] - b["west"]))
+                    ans[qid] = a
+                else:
+                    ans[qid] = {"lat": 52.52, "lon": 13.405, "accuracy": 20, "source": "gps"}
+            elif t == "drill_down":
+                path, node = [], q.get("tree")
+                for _ in q.get("levels") or []:
+                    keys = node if isinstance(node, list) else list((node or {}).keys())
+                    if not keys:
+                        break
+                    k = rng.choice(keys)
+                    path.append(str(k))
+                    node = _children(node, k)
+                ans[qid] = path
+            elif t == "highlight":
+                words = [w for w in re.split(r"\s+", str(q.get("passage") or "")) if w]
+                picked: dict[str, list] = {}
+                for w in (rng.sample(words, min(len(words), rng.randint(1, 3))) if words else []):
+                    picked.setdefault(rng.choice(q["categories"])["id"], []).append(w)
+                ans[qid] = picked
+            elif t == "signature":
+                ans[qid] = PNG_1PX
+            elif t == "screen_capture":
+                ans[qid] = {"data": PNG_1PX, "name": f"{qid}.png", "boxes": 0}
+            elif t == "file_upload":
+                data = "data:text/plain;base64," + base64.b64encode(b"Test run: no real file was uploaded.\n").decode()
+                ans[qid] = {"name": "test_run.txt", "size": 37, "type": "text/plain", "data": data}
+            elif t == "video_response":
+                data = "data:text/plain;base64," + base64.b64encode(b"Test run: no real recording.\n").decode()
+                ans[qid] = {"data": data, "type": "text/plain", "duration": float(q.get("min_seconds") or 5),
+                            "name": f"{qid}.txt"}
+            elif t == "captcha":
+                ans[qid] = 1
+                ans[qid + "_attempts"] = 1
+            elif t == "tree_test":
+                leaves = tree_leaves(q.get("tree"))
+                correct = _correct_paths(q)
+                path = rng.choice(correct) if correct and rng.random() < 0.7 else rng.choice(leaves)
+                visited = [" > ".join(path[:i]) for i in range(1, len(path) + 1)]
+                ans[qid] = {"path": list(path), "clicks": len(visited) + rng.randint(0, 3), "visited": visited,
+                            "time": round(4 + rng.random() * 12, 2)}
+            elif t == "timing":
+                first = round(0.5 + rng.random() * 3, 2)
+                ans[qid] = {"first_click": first, "last_click": round(first + rng.random() * 8, 2),
+                            "submit": round(first + 8 + rng.random() * 4, 2), "clicks": rng.randint(1, 12)}
+            elif t == "meta_info":
+                ans[qid] = {"browser": "virtual participant", "os": "test run", "screen": "1920x1080",
+                            "viewport": "1280x720", "pixel_ratio": 1, "language": "en", "timezone": "UTC", "touch": 0,
+                            "user_agent": "EDGE virtual participant"}
         ans[f"page{pi}_time"] = round(4 + rng.random() * 6 + 1.5 * len(page), 2)
     return ans
 
 
-def _coerce_value(v: Any, q: dict[str, Any]) -> Any:
+def _coerce_value(v: Any, opts: list[dict[str, Any]] | None, numeric: bool = False) -> Any:
     """Map a submitted value back to the option's own value (numbers stay numbers)."""
-    for o in q.get("options") or []:
+    for o in opts or []:
         if str(o["value"]) == str(v):
             return o["value"]
-    if q.get("type") in ("number", "slider") or (q.get("type") == "text" and q.get("validate") in ("number", "integer")):
+    if numeric and not (isinstance(v, str) and not v.strip()):
         n = _num(v)
         if n is not None:
             return int(n) if n.is_integer() else n
     return v
+
+
+def _join(vals: list[Any]) -> str:
+    return "; ".join(str(x) for x in vals)
+
+
+DATA_EXT = {"image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "application/pdf": ".pdf",
+            "text/plain": ".txt", "video/webm": ".webm", "audio/webm": ".webm", "video/mp4": ".mp4", "audio/ogg": ".ogg",
+            "audio/wav": ".wav", "audio/mpeg": ".mp3"}
+
+
+def _decode_data_url(data: str) -> tuple[bytes, str]:
+    m = re.match(r"data:([^;,]*)(;[^,]*)?,(.*)", data or "", re.S)
+    if not m:
+        raise SurveyError("not a data URL")
+    mime, params, body = m.group(1) or "application/octet-stream", m.group(2) or "", m.group(3)
+    raw = base64.b64decode(body) if ";base64" in params else body.encode()
+    return raw, mime.split(";")[0]
+
+
+def extract_files(flat: list[dict[str, Any]], raw: dict[str, Any], outdir: Path | None, prefix: str = "") -> dict[str, Any]:
+    """Write uploaded files, signatures, recordings and screenshots to ``outdir``; the answers then hold the
+    file's path (relative to the session folder) instead of the file's contents."""
+    raw = dict(raw)
+    for q in flat:
+        qid = q.get("id")
+        if q["type"] not in FILE_TYPES or qid not in raw or _empty(raw.get(qid)):
+            continue
+        v = raw[qid]
+        meta = dict(v) if isinstance(v, dict) else {"data": v}
+        data = meta.pop("data", "")
+        try:
+            content, mime = _decode_data_url(data)
+        except (SurveyError, ValueError):
+            raw[qid] = {**meta, "path": None}
+            continue
+        ext = Path(str(meta.get("name") or "")).suffix.lower() or DATA_EXT.get(mime, ".bin")
+        if not re.fullmatch(r"\.[a-z0-9]{1,6}", ext):
+            ext = ".bin"
+        rel = None
+        if outdir is not None:
+            outdir.mkdir(parents=True, exist_ok=True)
+            fname = f"{prefix}{qid}{ext}"
+            n = 2
+            while (outdir / fname).exists():
+                fname = f"{prefix}{qid}_{n}{ext}"
+                n += 1
+            (outdir / fname).write_bytes(content)
+            rel = f"{outdir.name}/{fname}"
+        raw[qid] = {**meta, "path": rel, "bytes": len(content), "mime": mime}
+    return raw
+
+
+def _dict(v: Any) -> dict[str, Any]:
+    return v if isinstance(v, dict) else {}
 
 
 def process(flat: list[dict[str, Any]], scores: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:
@@ -413,45 +802,165 @@ def process(flat: list[dict[str, Any]], scores: dict[str, Any], raw: dict[str, A
         t = q["type"]
         if not QUESTION_TYPES.get(t, {}).get("answer"):
             continue
-        shown = condition_holds(q.get("show_if"), answers)
-        if t in ("matrix", "semantic"):
+        shown = condition_holds(q.get("show_if"), answers) or t == "meta_info"
+        qid = q.get("id")
+
+        def get(k: str) -> Any:
+            return raw.get(k) if shown else None
+
+        opts = q.get("options") or []
+        if t in ("matrix", "semantic") or (t in ("scale", "slider") and q.get("items")):
             for it in q["items"]:
-                v = raw.get(it["id"]) if shown else None
-                v = None if _empty(v) else _coerce_value(v, q)
-                out[it["id"]] = answers[it["id"]] = v
+                v = get(it["id"])
+                if q.get("multi"):
+                    vals = [] if _empty(v) else [_coerce_value(x, opts) for x in (v if isinstance(v, list) else [v])]
+                    answers[it["id"]] = vals
+                    out[it["id"]] = _join(vals) if shown else None
+                    for o in opts:
+                        out[f"{it['id']}_{slug(o['value'])}"] = (1 if any(str(x) == str(o["value"]) for x in vals) else 0) \
+                            if shown else None
+                else:
+                    v = None if _empty(v) else _coerce_value(v, opts, numeric=True)
+                    out[it["id"]] = answers[it["id"]] = v
+        elif t == "side_by_side":
+            for it in q["items"]:
+                for c in q["columns"]:
+                    key = f"{it['id']}_{c['id']}"
+                    v = get(key)
+                    if c["type"] == "multiple":
+                        vals = [] if _empty(v) else [_coerce_value(x, c["options"]) for x in (v if isinstance(v, list) else [v])]
+                        answers[key] = vals
+                        out[key] = _join(vals) if shown else None
+                    else:
+                        v = None if _empty(v) else _coerce_value(v, c.get("options"), numeric=c["type"] == "number")
+                        out[key] = answers[key] = v
+        elif t == "form":
+            for f in q["fields"]:
+                v = get(f["id"])
+                v = None if _empty(v) else (_coerce_value(v, None, numeric=True) if f["type"] == "number" else v)
+                out[f["id"]] = answers[f["id"]] = v
         elif t == "multiple":
-            v = raw.get(q["id"]) if shown else None
+            v = get(qid)
             vals = [] if _empty(v) else (v if isinstance(v, list) else [v])
-            vals = [_coerce_value(x, q) for x in vals]
-            answers[q["id"]] = vals
-            out[q["id"]] = "; ".join(str(x) for x in vals) if shown else None
-            for o in q["options"]:
-                out[f"{q['id']}_{slug(o['value'])}"] = (1 if any(str(x) == str(o["value"]) for x in vals) else 0) \
-                    if shown else None
+            vals = [_coerce_value(x, opts) for x in vals]
+            answers[qid] = vals
+            out[qid] = _join(vals) if shown else None
+            for o in opts:
+                out[f"{qid}_{slug(o['value'])}"] = (1 if any(str(x) == str(o["value"]) for x in vals) else 0) if shown else None
         elif t == "rank":
-            v = raw.get(q["id"]) if shown else None
-            order = [_coerce_value(x, q) for x in (v or [])] if isinstance(v, list) else []
-            answers[q["id"]] = order
-            out[q["id"]] = " > ".join(str(x) for x in order) if order else None
-            for o in q["options"]:
-                pos = next((i for i, x in enumerate(order, 1) if str(x) == str(o["value"])), None)
-                out[f"{q['id']}_{slug(o['value'])}"] = pos
+            v = get(qid)
+            order = [_coerce_value(x, opts) for x in (v or [])] if isinstance(v, list) else []
+            answers[qid] = order
+            out[qid] = " > ".join(str(x) for x in order) if order else None
+            for o in opts:
+                out[f"{qid}_{slug(o['value'])}"] = next((i for i, x in enumerate(order, 1) if str(x) == str(o["value"])), None)
         elif t == "constant_sum":
-            v = raw.get(q["id"]) if shown else None
-            v = v if isinstance(v, dict) else {}
-            answers[q["id"]] = v
-            for o in q["options"]:
-                x = v.get(str(o["value"]))
-                n = _num(x)
-                out[f"{q['id']}_{slug(o['value'])}"] = (int(n) if n is not None and n.is_integer() else n)
+            v = _dict(get(qid))
+            answers[qid] = v
+            for o in opts:
+                n = _num(v.get(str(o["value"])))
+                out[f"{qid}_{slug(o['value'])}"] = (int(n) if n is not None and n.is_integer() else n)
+        elif t == "group":
+            v = _dict(get(qid))
+            answers[qid] = v
+            where = {str(x): g for g, xs in v.items() for x in (xs or [])}
+            for it in q["items"]:
+                g = where.get(str(it["value"]))
+                out[f"{qid}_{slug(it['value'])}"] = g if shown else None
+                if q.get("rank_within"):
+                    out[f"{qid}_{slug(it['value'])}_rank"] = ([str(x) for x in v.get(g, [])].index(str(it["value"])) + 1) \
+                        if g else None
+            for g in q["groups"]:
+                out[f"{qid}_{g['id']}"] = _join(v.get(g["id"]) or []) if shown else None
+        elif t == "hot_spot":
+            v = _dict(get(qid))
+            answers[qid] = [k for k, x in v.items() if x]
+            for r in q["regions"]:
+                out[f"{qid}_{r['id']}"] = int(v.get(r["id"]) or 0) if shown else None
+            out[f"{qid}_n"] = sum(1 for x in v.values() if x) if shown else None
+        elif t == "heat_map":
+            pts = get(qid) if isinstance(get(qid), list) else []
+            pts = [[float(p[0]), float(p[1])] for p in pts if isinstance(p, (list, tuple)) and len(p) == 2]
+            answers[qid] = pts
+            out[qid] = json.dumps(pts) if pts else None
+            out[f"{qid}_x"] = pts[0][0] if pts else None
+            out[f"{qid}_y"] = pts[0][1] if pts else None
+            out[f"{qid}_clicks"] = len(pts) if shown else None
+            for r in q.get("regions") or []:
+                out[f"{qid}_{r['id']}"] = sum(1 for x, y in pts if r["x"] <= x * 100 <= r["x"] + r["w"]
+                                              and r["y"] <= y * 100 <= r["y"] + r["h"]) if shown else None
+        elif t == "location":
+            v = _dict(get(qid))
+            answers[qid] = v
+            keys = (["x", "y"] if q.get("image") else []) + \
+                (["lat", "lon"] if q.get("bounds") or q.get("allow_geolocation") else []) + \
+                (["accuracy"] if q.get("allow_geolocation") else []) + ["source"]
+            for k in keys:
+                out[f"{qid}_{k}"] = v.get(k)
+        elif t == "drill_down":
+            v = get(qid) if isinstance(get(qid), list) else []
+            answers[qid] = v
+            out[qid] = " > ".join(str(x) for x in v) if v else None
+            for i, lev in enumerate(q.get("levels") or []):
+                out[f"{qid}_{slug(lev)}"] = v[i] if i < len(v) else None
+        elif t == "highlight":
+            v = _dict(get(qid))
+            answers[qid] = v
+            for c in q["categories"]:
+                words = v.get(c["id"]) or []
+                out[f"{qid}_{c['id']}"] = " | ".join(words) if words else None
+                out[f"{qid}_{c['id']}_n"] = len(words) if shown else None
+        elif t in FILE_TYPES:
+            v = get(qid)
+            meta = v if isinstance(v, dict) else ({"path": v} if isinstance(v, str) and not v.startswith("data:") else {})
+            answers[qid] = meta.get("path")
+            out[qid] = meta.get("path")
+            if t == "signature":
+                out[f"{qid}_signed"] = (1 if (meta.get("path") or meta.get("bytes") or (isinstance(v, str) and v)) else 0) \
+                    if shown else None
+            if t == "file_upload":
+                out[f"{qid}_name"] = meta.get("name")
+                out[f"{qid}_size"] = meta.get("size") or meta.get("bytes")
+            if t == "video_response":
+                out[f"{qid}_duration"] = meta.get("duration")
+            if t == "screen_capture":
+                out[f"{qid}_blackouts"] = meta.get("boxes")
+        elif t == "captcha":
+            v = get(qid)
+            answers[qid] = v
+            out[f"{qid}_passed"] = (1 if str(v) == "1" else 0) if shown else None
+            out[f"{qid}_attempts"] = raw.get(qid + "_attempts")
+        elif t == "tree_test":
+            v = _dict(get(qid))
+            path = tuple(str(x) for x in v.get("path") or [])
+            answers[qid] = " > ".join(path)
+            out[qid] = " > ".join(path) if path else None
+            if q.get("correct"):
+                out[f"{qid}_correct"] = (1 if path in _correct_paths(q) else 0) if path else None
+            ancestors = {" > ".join(path[:i]) for i in range(1, len(path) + 1)}
+            out[f"{qid}_direct"] = (1 if all(x in ancestors for x in v.get("visited") or []) else 0) if path else None
+            out[f"{qid}_clicks"] = v.get("clicks")
+            out[f"{qid}_time"] = v.get("time")
+        elif t == "timing":
+            v = _dict(get(qid))
+            for k in TIMING_KEYS:
+                out[f"{qid}_{k}"] = v.get(k)
+        elif t == "meta_info":
+            v = _dict(raw.get(qid))
+            for k in META_KEYS:
+                out[f"{qid}_{k}"] = v.get(k)
         else:
-            v = raw.get(q["id"]) if shown else None
-            v = None if _empty(v) else _coerce_value(v, q)
-            out[q["id"]] = answers[q["id"]] = v
+            v = get(qid)
+            numeric = t in ("number", "slider", "graphic_slider", "scale", "nps") or \
+                (t == "text" and q.get("validate") in ("number", "integer"))
+            v = None if _empty(v) else _coerce_value(v, opts, numeric=numeric)
+            out[qid] = answers[qid] = v
             if q.get("other_option"):
-                out[q["id"] + "_other"] = raw.get(q["id"] + "_other") or None
+                out[qid + "_other"] = raw.get(qid + "_other") or None
+            if t == "nps":
+                out[qid + "_group"] = None if v is None else ("promoter" if v >= 9 else "passive" if v >= 7 else "detractor")
         if q.get("shown_order"):
-            out[q["id"] + "_order"] = " ".join(str(x) for x in q["shown_order"])
+            out[qid + "_order"] = " ".join(str(x) for x in q["shown_order"])
     for k, v in raw.items():
         if re.fullmatch(r"page\d+_time", str(k)):
             out[k] = _num(v)
@@ -464,9 +973,12 @@ def compute_scores(flat: list[dict[str, Any]], scores: dict[str, Any], answers: 
     info: dict[str, dict[str, Any]] = {}       # item id -> {reverse, min, max, correct}
     for q in flat:
         vals = [_num(o["value"]) for o in q.get("options") or [] if _num(o["value"]) is not None]
+        if q["type"] == "slider":
+            vals = [float(q.get("min", 0)), float(q.get("max", 100))]
         lo, hi = (min(vals), max(vals)) if vals else (None, None)
         for it in q.get("items") or []:
-            info[it["id"]] = {"reverse": bool(it.get("reverse")), "min": lo, "max": hi}
+            if "id" in it:
+                info[it["id"]] = {"reverse": bool(it.get("reverse")), "min": lo, "max": hi}
         if q.get("id"):
             info.setdefault(q["id"], {"reverse": bool(q.get("reverse")), "min": lo, "max": hi,
                                       "correct": q.get("correct")})
@@ -517,29 +1029,105 @@ def columns(questions: list[Any], scores: dict[str, Any] | None = None) -> dict[
     def txt(s: Any) -> str:
         return re.sub(r"<[^>]+>", "", str(s or "")).strip()
 
+    def codes_of(opts: list[dict[str, Any]] | None) -> str:
+        c = "; ".join(f"{o['value']} = {o['label']}" for o in opts or [] if str(o["value"]) != o["label"])
+        return f" [{c}]" if c else ""
+
     for q in flat:
         t = q["type"]
         if not QUESTION_TYPES.get(t, {}).get("answer"):
             continue
-        codes = "; ".join(f"{o['value']} = {o['label']}" for o in q.get("options") or []
-                          if str(o["value"]) != o["label"])
-        tail = f" [{codes}]" if codes else ""
-        if t in ("matrix", "semantic"):
+        qid, qt, opts = q.get("id"), txt(q.get("text") or q.get("task")), q.get("options")
+        tail = codes_of(opts)
+        if t in ("matrix", "semantic") or (t in ("scale", "slider") and q.get("items")):
             for it in q["items"]:
                 stem = f"{it['left']} – {it['right']}" if t == "semantic" else txt(it.get("text"))
-                cols[it["id"]] = f"{txt(q.get('text'))} {stem}".strip() + (" (reverse scored)" if it.get("reverse") else "") + tail
+                cols[it["id"]] = f"{qt} {stem}".strip() + (" (reverse scored)" if it.get("reverse") else "") + \
+                    (" (all selected, ; separated)" if q.get("multi") else "") + tail
+                if q.get("multi"):
+                    for o in opts:
+                        cols[f"{it['id']}_{slug(o['value'])}"] = f"{qt} {stem} – {o['label']}: 1 if selected"
+        elif t == "side_by_side":
+            for it in q["items"]:
+                for c in q["columns"]:
+                    cols[f"{it['id']}_{c['id']}"] = f"{qt} – {txt(it.get('text'))} – {txt(c.get('label'))}" + \
+                        codes_of(c.get("options"))
+        elif t == "form":
+            for f in q["fields"]:
+                cols[f["id"]] = f"{qt} – {txt(f.get('label'))}".strip(" –")
         elif t in ("multiple", "rank", "constant_sum"):
             if t != "constant_sum":
-                cols[q["id"]] = txt(q.get("text")) + (" (all selected, ; separated)" if t == "multiple" else " (order, first = top)")
-            for o in q["options"]:
+                cols[qid] = qt + (" (all selected, ; separated)" if t == "multiple" else " (order, first = top)")
+            for o in opts:
                 what = {"multiple": "1 if selected", "rank": "rank position (1 = top)", "constant_sum": "amount given"}[t]
-                cols[f"{q['id']}_{slug(o['value'])}"] = f"{txt(q.get('text'))} – {o['label']}: {what}"
+                cols[f"{qid}_{slug(o['value'])}"] = f"{qt} – {o['label']}: {what}"
+        elif t == "group":
+            for it in q["items"]:
+                cols[f"{qid}_{slug(it['value'])}"] = f"{qt} – group chosen for '{it['label']}'"
+                if q.get("rank_within"):
+                    cols[f"{qid}_{slug(it['value'])}_rank"] = f"{qt} – rank of '{it['label']}' within its group (1 = top)"
+            for g in q["groups"]:
+                cols[f"{qid}_{g['id']}"] = f"{qt} – items put in '{txt(g['label'])}' (in order)"
+        elif t == "hot_spot":
+            for r in q["regions"]:
+                cols[f"{qid}_{r['id']}"] = f"{qt} – region '{r.get('label', r['id'])}': " + (
+                    "1 like, -1 dislike, 0 not rated" if q.get("mode") == "rate" else "1 if selected")
+            cols[f"{qid}_n"] = f"{qt} – number of regions selected"
+        elif t == "heat_map":
+            cols[qid] = f"{qt} – all clicks as [[x, y], …], 0-1 from the image's top-left corner"
+            cols[f"{qid}_x"], cols[f"{qid}_y"] = f"{qt} – x of the first click (0-1)", f"{qt} – y of the first click (0-1)"
+            cols[f"{qid}_clicks"] = f"{qt} – number of clicks"
+            for r in q.get("regions") or []:
+                cols[f"{qid}_{r['id']}"] = f"{qt} – clicks inside region '{r.get('label', r['id'])}'"
+        elif t == "location":
+            if q.get("image"):
+                cols[f"{qid}_x"], cols[f"{qid}_y"] = f"{qt} – x on the map (0-1)", f"{qt} – y on the map (0-1)"
+            if q.get("bounds") or q.get("allow_geolocation"):
+                cols[f"{qid}_lat"], cols[f"{qid}_lon"] = f"{qt} – latitude", f"{qt} – longitude"
+            if q.get("allow_geolocation"):
+                cols[f"{qid}_accuracy"] = f"{qt} – device location accuracy (m)"
+            cols[f"{qid}_source"] = f"{qt} – map (clicked) or gps (device location)"
+        elif t == "drill_down":
+            cols[qid] = f"{qt} (full path)"
+            for lev in q.get("levels") or []:
+                cols[f"{qid}_{slug(lev)}"] = f"{qt} – {lev}"
+        elif t == "highlight":
+            for c in q["categories"]:
+                cols[f"{qid}_{c['id']}"] = f"{qt} – words highlighted as '{c['label']}' (| separated)"
+                cols[f"{qid}_{c['id']}_n"] = f"{qt} – number of words highlighted as '{c['label']}'"
+        elif t in FILE_TYPES:
+            cols[qid] = f"{qt} – saved file (path in the session folder)"
+            extra = {"signature": [("signed", "1 if signed")],
+                     "file_upload": [("name", "original file name"), ("size", "size (bytes)")],
+                     "video_response": [("duration", "length of the recording (s)")],
+                     "screen_capture": [("blackouts", "number of blacked-out areas")]}[t]
+            for k, d in extra:
+                cols[f"{qid}_{k}"] = f"{qt} – {d}"
+        elif t == "captcha":
+            cols[f"{qid}_passed"] = "1 if the typed code was correct"
+            cols[f"{qid}_attempts"] = "number of attempts at the code"
+        elif t == "tree_test":
+            cols[qid] = f"Tree test '{qid}': path chosen"
+            if q.get("correct"):
+                cols[f"{qid}_correct"] = f"Tree test '{qid}': 1 if a correct destination was chosen"
+            cols[f"{qid}_direct"] = f"Tree test '{qid}': 1 if no wrong branch was opened first (directness)"
+            cols[f"{qid}_clicks"] = f"Tree test '{qid}': number of clicks in the tree"
+            cols[f"{qid}_time"] = f"Tree test '{qid}': seconds until the answer was chosen"
+        elif t == "timing":
+            for k, d in (("first_click", "first click"), ("last_click", "last click"), ("submit", "pressing Next / Submit")):
+                cols[f"{qid}_{k}"] = f"Timing '{qid}': seconds from showing the page to the {d}"
+            cols[f"{qid}_clicks"] = f"Timing '{qid}': number of clicks on the page"
+        elif t == "meta_info":
+            for k in META_KEYS:
+                cols[f"{qid}_{k}"] = f"Meta info: {k.replace('_', ' ')}"
         else:
-            cols[q["id"]] = txt(q.get("text")) + tail
+            cols[qid] = qt + tail
             if q.get("other_option"):
-                cols[q["id"] + "_other"] = f"{txt(q.get('text'))} – text typed for '{q['other_option']}'"
+                cols[qid + "_other"] = f"{qt} – text typed for '{q['other_option']}'"
+            if t == "nps":
+                cols[qid + "_group"] = f"{qt} – promoter (9-10), passive (7-8) or detractor (0-6)"
         if q.get("randomize"):
-            cols[q["id"] + "_order"] = f"Order in which the options/items of '{q['id']}' were shown"
+            cols[qid + "_order"] = f"Order in which the options/items of '{qid}' were shown"
     for name, sc in {**lib_scores, **(scores or {})}.items():
         cols[name] = (sc or {}).get("description") or f"Score '{name}'"
         if (sc or {}).get("bands"):
@@ -550,218 +1138,50 @@ def columns(questions: list[Any], scores: dict[str, Any] | None = None) -> dict[
 
 
 # =========================================================================================== page
-SURVEY_CSS = """
-:root{--accent:#2f6fde;--line:#d9dee5;--muted:#667085;--err:#c62828;--bg:#f7f8fa}
-*{box-sizing:border-box}body{font:17px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:var(--bg);color:#1d2228}
-.wrap{max-width:860px;margin:0 auto;padding:28px 20px 60px}
-h1.title{font-size:26px;margin:0 0 6px}.intro{color:#333;margin:0 0 18px}
-.progress{height:6px;background:#e6e9ee;border-radius:3px;margin:0 0 22px;overflow:hidden}.progress div{height:100%;background:var(--accent);transition:width .3s}
-.q{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:0 0 14px}
-.q.err{border-color:var(--err);box-shadow:0 0 0 2px rgba(198,40,40,.12)}
-.qt{font-weight:600;margin:0 0 10px}.req{color:var(--err);margin-left:3px}.help{color:var(--muted);font-size:14px;margin:-6px 0 10px}
-.msg{color:var(--err);font-size:14px;margin-top:8px;display:none}.q.err .msg{display:block}
-label.opt{display:flex;align-items:flex-start;gap:9px;padding:7px 9px;border-radius:7px;cursor:pointer}
-label.opt:hover{background:#f1f4f9}label.opt input{margin-top:5px;width:18px;height:18px;flex:none}
-.horizontal{display:flex;flex-wrap:wrap;gap:6px}.horizontal label.opt{flex:1;min-width:110px;flex-direction:column;align-items:center;text-align:center;border:1px solid var(--line)}
-.likert{display:grid;grid-auto-columns:1fr;grid-auto-flow:column;gap:6px}
-.likert label.opt{flex-direction:column;align-items:center;text-align:center;border:1px solid var(--line);font-size:14px}
-.likert label.opt input{margin:0 0 4px}
-.ends{display:flex;justify-content:space-between;color:var(--muted);font-size:14px;margin-top:4px}
-table.matrix{border-collapse:collapse;width:100%;font-size:15px}table.matrix th{font-weight:500;font-size:13px;color:#444;padding:4px;vertical-align:bottom}
-table.matrix td{border-top:1px solid #eef0f3;padding:8px 4px;text-align:center}table.matrix td.stem{text-align:left;padding-right:10px}
-table.matrix tr.miss td.stem{color:var(--err)}table.matrix input{width:19px;height:19px;cursor:pointer}
-table.matrix tbody tr:nth-child(odd){background:#fafbfc}
-input[type=text],input[type=email],input[type=number],input[type=date],textarea,select{font:inherit;padding:8px 10px;border:1px solid #c5ccd6;border-radius:7px;width:100%;max-width:520px;background:#fff}
-textarea{max-width:100%}input[type=number]{max-width:200px}
-.other{margin:4px 0 0 36px;max-width:360px}
-input[type=range]{width:100%}.sval{font-weight:600;color:var(--accent);margin-left:6px}.untouched .sval{color:var(--muted);font-weight:400}
-ol.rank{list-style:none;padding:0;margin:0;counter-reset:r}ol.rank li{counter-increment:r;display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:7px;padding:8px 10px;margin:0 0 6px;background:#fff;cursor:grab}
-ol.rank li::before{content:counter(r);font-weight:700;color:var(--accent);width:20px}ol.rank li span{flex:1}ol.rank li button{border:1px solid var(--line);background:#fff;border-radius:5px;cursor:pointer;padding:0 8px}
-ol.rank li.drag{opacity:.4}
-.csum{display:grid;grid-template-columns:1fr 110px;gap:6px 10px;align-items:center;max-width:520px}.csum input{max-width:110px}.ctotal{font-weight:600}.ctotal.bad{color:var(--err)}
-.sem{display:grid;grid-template-columns:minmax(80px,1fr) auto minmax(80px,1fr);gap:8px;align-items:center;margin:6px 0}.sem .l{text-align:right}.sem .pts{display:flex;gap:12px}.sem input{width:19px;height:19px}
-.nav{display:flex;gap:10px;justify-content:space-between;margin-top:22px}
-.nav button{font:inherit;font-size:17px;padding:10px 26px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
-.nav button.primary{background:var(--accent);border-color:var(--accent);color:#fff;margin-left:auto}
-.pageerr{color:var(--err);text-align:right;margin-top:8px;min-height:1em}
-@media (max-width:640px){table.matrix thead{display:none}table.matrix tr{display:block;padding:8px 0}table.matrix td{display:inline-block;border:0}
-table.matrix td.stem{display:block}table.matrix td.cell::after{content:attr(data-label);font-size:12px;color:var(--muted);display:block}
-.likert{grid-auto-flow:row;gap:4px}.likert label.opt,.horizontal label.opt{flex-direction:row;align-items:center;text-align:left;font-size:15px}
-.likert label.opt input{margin:0}.horizontal{flex-direction:column}}
-"""
-
-SURVEY_JS = r"""
-(function(){
-var S = JSON.parse(document.getElementById('edge-survey').textContent);
-var T = S.text, root = document.getElementById('survey'), ans = {}, page = 0, t0 = Date.now(), times = {};
-function el(tag, attrs, kids){ var e=document.createElement(tag); attrs=attrs||{};
-  for (var k in attrs){ if(k==='html') e.innerHTML=attrs[k]; else if(k==='text') e.textContent=attrs[k];
-    else if(k.slice(0,2)==='on') e.addEventListener(k.slice(2), attrs[k]); else if(attrs[k]!==null&&attrs[k]!==undefined&&attrs[k]!==false) e.setAttribute(k, attrs[k]===true?'':attrs[k]); }
-  (kids||[]).forEach(function(c){ if(c!==null&&c!==undefined) e.appendChild(typeof c==='string'?document.createTextNode(c):c); }); return e; }
-function empty(a){ return a===undefined||a===null||a===''||(Array.isArray(a)&&!a.length); }
-function cmp(a, op, ref){
-  if(op==='answered') return (!empty(a))===!!ref;
-  if(empty(a)) return op==='!='||op==='not_in';
-  var vals=Array.isArray(a)?a:[a], s=vals.map(String), refs=Array.isArray(ref)?ref.map(String):[String(ref)];
-  if(op==='='||op==='=='||op==='contains') return s.indexOf(String(ref))>=0;
-  if(op==='!=') return s.indexOf(String(ref))<0;
-  if(op==='in') return refs.some(function(r){return s.indexOf(r)>=0;});
-  if(op==='not_in') return !refs.some(function(r){return s.indexOf(r)>=0;});
-  var x=parseFloat(vals[0]), y=parseFloat(ref); if(isNaN(x)||isNaN(y)) return false;
-  return {'>':x>y,'>=':x>=y,'<':x<y,'<=':x<=y}[op]; }
-function holds(c){ if(!c) return true;
-  for(var k in c){ var v=c[k];
-    if(k==='any'){ if(!v.some(holds)) return false; continue; }
-    if(k==='all'){ if(!v.every(holds)) return false; continue; }
-    var tests = (v!==null&&typeof v==='object'&&!Array.isArray(v)) ? v : (Array.isArray(v)?{'in':v}:{'=':v});
-    for(var op in tests) if(!cmp(ans[k], op, tests[op])) return false; }
-  return true; }
-function labelOf(id){ var v=ans[id]; if(empty(v)) return '…'; var out=[];
-  S.flat.forEach(function(q){ (q.options||[]).forEach(function(o){ if(q.id===id && (Array.isArray(v)?v.map(String).indexOf(String(o.value))>=0:String(o.value)===String(v))) out.push(o.label); }); });
-  return out.length?out.join(', '):(Array.isArray(v)?v.join(', '):String(v)); }
-function pipe(s){ return String(s||'').replace(/\{\{\s*answer\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g, function(_, id){ return labelOf(id).replace(/</g,'&lt;'); }); }
-function setv(id, v){ ans[id]=v; refreshVisibility(); }
-var cards = [];
-function radioGroup(q, cls){
-  var box=el('div',{'class':cls||''});
-  q.options.forEach(function(o){
-    var inp=el('input',{type:'radio',name:q.id,value:String(o.value),onchange:function(){ setv(q.id,o.value); if(q.other_option){ other.style.display=(o.label===q.other_option)?'':'none'; } }});
-    if(String(ans[q.id])===String(o.value)) inp.checked=true;
-    box.appendChild(el('label',{'class':'opt'},[inp, el('span',{html:o.label})]));
-  });
-  var other=null;
-  if(q.other_option){ other=el('input',{type:'text','class':'other',placeholder:T.other,oninput:function(){ ans[q.id+'_other']=other.value; }}); other.style.display='none'; box.appendChild(other); }
-  return box; }
-function ends(q){ var l=q.labels||[]; return l.length? el('div',{'class':'ends'},[el('span',{text:l[0]||''}), el('span',{text:l[l.length-1]||''})]):null; }
-function build(q){
-  var t=q.type, body=[];
-  if(t==='text_block') return el('div',{'class':'q block',html:pipe(q.text)});
-  if(t==='single') body.push(radioGroup(q, q.layout==='horizontal'?'horizontal':''));
-  else if(t==='likert'||t==='scale'||t==='nps'){ body.push(radioGroup(q,'likert')); if(t!=='likert') body.push(ends(q)); }
-  else if(t==='dropdown'){ var sel=el('select',{onchange:function(){ var o=q.options[sel.selectedIndex-1]; setv(q.id, o?o.value:''); }},[el('option',{value:'',text:T.choose})]);
-    q.options.forEach(function(o){ sel.appendChild(el('option',{value:String(o.value),text:o.label})); }); if(!empty(ans[q.id])) sel.value=String(ans[q.id]); body.push(sel); }
-  else if(t==='multiple'){ var box=el('div',{'class':q.layout==='horizontal'?'horizontal':''}), excl=(q.exclusive||[]).map(String); ans[q.id]=ans[q.id]||[];
-    q.options.forEach(function(o){ var inp=el('input',{type:'checkbox',value:String(o.value),onchange:function(){
-        var cur=(ans[q.id]||[]).filter(function(x){return String(x)!==String(o.value);});
-        if(inp.checked){ if(excl.indexOf(String(o.value))>=0){ cur=[]; box.querySelectorAll('input[type=checkbox]').forEach(function(c){ if(c!==inp) c.checked=false; }); }
-          else { cur=cur.filter(function(x){ return excl.indexOf(String(x))<0; }); box.querySelectorAll('input[type=checkbox]').forEach(function(c){ if(excl.indexOf(c.value)>=0) c.checked=false; }); }
-          cur.push(o.value); }
-        setv(q.id, cur); }});
-      if(ans[q.id].map(String).indexOf(String(o.value))>=0) inp.checked=true;
-      box.appendChild(el('label',{'class':'opt'},[inp, el('span',{html:o.label})])); });
-    body.push(box); }
-  else if(t==='matrix'){ var tb=el('tbody'), head=el('tr',{},[el('th')]);
-    q.options.forEach(function(o){ head.appendChild(el('th',{html:o.label})); });
-    q.items.forEach(function(it){ var tr=el('tr',{'data-item':it.id},[el('td',{'class':'stem',html:pipe(it.text)})]);
-      q.options.forEach(function(o){ var inp=el('input',{type:'radio',name:it.id,value:String(o.value),'aria-label':o.label,onchange:function(){ tr.classList.remove('miss'); setv(it.id,o.value); }});
-        if(String(ans[it.id])===String(o.value)) inp.checked=true;
-        tr.appendChild(el('td',{'class':'cell','data-label':o.label},[inp])); });
-      tb.appendChild(tr); });
-    body.push(el('table',{'class':'matrix'},[el('thead',{},[head]), tb])); }
-  else if(t==='semantic'){ q.items.forEach(function(it){ var pts=el('div',{'class':'pts'});
-      q.options.forEach(function(o){ var r=el('input',{type:'radio',name:it.id,value:String(o.value),'aria-label':it.left+' '+o.label+' '+it.right,onchange:function(){ setv(it.id,o.value); }});
-        if(String(ans[it.id])===String(o.value)) r.checked=true; pts.appendChild(r); });
-      body.push(el('div',{'class':'sem','data-item':it.id},[el('span',{'class':'l',text:it.left}), pts, el('span',{text:it.right})])); }); }
-  else if(t==='slider'){ var lo=+(q.min||0), hi=+(q.max===undefined?100:q.max), st=+(q.step||1), wrap=el('div',{'class':'untouched'});
-    var val=el('span',{'class':'sval',text:T.move}), rng=el('input',{type:'range',min:lo,max:hi,step:st,value:q.start!==undefined?q.start:(lo+hi)/2,
-      oninput:function(){ wrap.classList.remove('untouched'); val.textContent=rng.value; setv(q.id, +rng.value); }});
-    if(!empty(ans[q.id])){ rng.value=ans[q.id]; wrap.classList.remove('untouched'); val.textContent=ans[q.id]; }
-    wrap.appendChild(rng); wrap.appendChild(ends(q)); body.push(el('div',{},[wrap, el('div',{},[T.value, val])])); }
-  else if(t==='text'||t==='number'||t==='date'){ var ty=t==='text'?(q.validate==='email'?'email':'text'):t;
-    var inp=el('input',{type:ty,min:q.min,max:q.max,step:q.step||(t==='number'?'any':null),maxlength:q.max_length,placeholder:q.placeholder,
-      oninput:function(){ ans[q.id]=inp.value; },onchange:function(){ setv(q.id, inp.value); }}); if(!empty(ans[q.id])) inp.value=ans[q.id]; body.push(inp); }
-  else if(t==='essay'){ var ta=el('textarea',{rows:q.rows||5,maxlength:q.max_length,placeholder:q.placeholder,oninput:function(){ ans[q.id]=ta.value; cnt.textContent=ta.value.length+(q.max_length?' / '+q.max_length:''); },onchange:function(){ setv(q.id, ta.value); }});
-    var cnt=el('div',{'class':'help',style:'margin:4px 0 0;text-align:right'}); if(!empty(ans[q.id])) ta.value=ans[q.id]; body.push(ta, cnt); }
-  else if(t==='rank'){ var ol=el('ol',{'class':'rank'}), drag=null;
-    function save(){ ans[q.id]=[].map.call(ol.children,function(li){ return q.options[+li.dataset.i].value; }); }
-    var prev=(ans[q.id]||[]).map(String), idx=q.options.map(function(o,i){return i;});
-    if(prev.length) idx.sort(function(a,b){ return prev.indexOf(String(q.options[a].value))-prev.indexOf(String(q.options[b].value)); });
-    idx.forEach(function(i){ var o=q.options[i]; var li=el('li',{draggable:'true','data-i':i},[el('span',{html:o.label}),
-        el('button',{type:'button','aria-label':T.up,onclick:function(){ if(li.previousElementSibling) ol.insertBefore(li, li.previousElementSibling); save(); }},['↑']),
-        el('button',{type:'button','aria-label':T.down,onclick:function(){ if(li.nextElementSibling) ol.insertBefore(li.nextElementSibling, li); save(); }},['↓'])]);
-      li.addEventListener('dragstart',function(){ drag=li; li.classList.add('drag'); }); li.addEventListener('dragend',function(){ li.classList.remove('drag'); save(); });
-      li.addEventListener('dragover',function(e){ e.preventDefault(); if(drag&&drag!==li){ var r=li.getBoundingClientRect(); ol.insertBefore(drag, (e.clientY-r.top)>r.height/2?li.nextSibling:li); } });
-      ol.appendChild(li); });
-    save(); body.push(ol, el('div',{'class':'help',style:'margin:6px 0 0',text:T.rank})); }
-  else if(t==='constant_sum'){ var total=+(q.total||100), grid=el('div',{'class':'csum'}), tot=el('span',{'class':'ctotal'}); ans[q.id]=ans[q.id]||{};
-    function upd(){ var s=0; for(var k in ans[q.id]) s+=(+ans[q.id][k]||0); tot.textContent=s+' / '+total; tot.classList.toggle('bad', s!==total); }
-    q.options.forEach(function(o){ var inp=el('input',{type:'number',min:0,max:total,step:q.step||1,value:ans[q.id][String(o.value)]===undefined?'':ans[q.id][String(o.value)],oninput:function(){ ans[q.id][String(o.value)]=inp.value===''?'':+inp.value; upd(); }});
-      grid.appendChild(el('span',{html:o.label})); grid.appendChild(inp); });
-    grid.appendChild(el('span',{'class':'help',style:'margin:0',text:T.total})); grid.appendChild(tot); upd(); body.push(grid); }
-  var card=el('div',{'class':'q','data-q':q.id||''},[el('div',{'class':'qt',html:pipe(q.text)},[q.required?el('span',{'class':'req',text:'*'}):null]),
-    q.help?el('div',{'class':'help',html:q.help}):null].concat(body).concat([el('div',{'class':'msg'})]));
-  return card; }
-function refreshVisibility(){ cards.forEach(function(c){ var show=holds(c.q.show_if); c.el.style.display=show?'':'none';
-  if(c.el.querySelector('.qt') && c.q.text && c.q.text.indexOf('{{answer.')>=0){ var qt=c.el.querySelector('.qt'); var req=qt.querySelector('.req'); qt.innerHTML=pipe(c.q.text); if(req) qt.appendChild(req); } }); }
-function problem(q){ var t=q.type, a=ans[q.id];
-  if(t==='matrix'||t==='semantic'){ var miss=q.items.filter(function(it){ return empty(ans[it.id]); });
-    cardOf(q).querySelectorAll('tr[data-item],div[data-item]').forEach(function(r){ r.classList.toggle('miss', q.required && empty(ans[r.dataset.item])); });
-    return q.required&&miss.length? (miss.length===q.items.length?T.required:T.rows.replace('{n}',miss.length)) : ''; }
-  if(t==='constant_sum'){ var s=0, any=false; for(var k in a){ if(a[k]!==''){ any=true; s+=+a[k]; } }
-    if(!any) return q.required?T.required:''; return s!==+(q.total||100)?T.sum.replace('{total}',q.total||100):''; }
-  if(t==='rank') return '';
-  if(empty(a)) return q.required?(t==='slider'?T.slider:T.required):'';
-  if(t==='multiple'){ if(q.min_choices&&a.length<q.min_choices) return T.min.replace('{n}',q.min_choices); if(q.max_choices&&a.length>q.max_choices) return T.max.replace('{n}',q.max_choices); }
-  if(t==='number'||(t==='text'&&(q.validate==='number'||q.validate==='integer'))){ var x=Number(a); if(isNaN(x)||(q.validate==='integer'&&Math.round(x)!==x)) return T.number;
-    if(q.min!==undefined&&x<q.min) return T.low.replace('{n}',q.min); if(q.max!==undefined&&x>q.max) return T.high.replace('{n}',q.max); }
-  if(t==='text'&&q.validate==='email'&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a)) return T.email;
-  if(t==='text'&&q.pattern&&!(new RegExp('^(?:'+q.pattern+')$')).test(a)) return q.pattern_message||T.format;
-  if(t==='essay'&&q.min_length&&String(a).length<q.min_length) return T.short.replace('{n}',q.min_length);
-  if(q.other_option&&labelOf(q.id)===q.other_option&&empty(ans[q.id+'_other'])) return T.other_missing;
-  return ''; }
-function cardOf(q){ return cards.filter(function(c){ return c.q===q; })[0].el; }
-function show(p){ page=p; root.innerHTML=''; cards=[];
-  if(S.title&&p===0) root.appendChild(el('h1',{'class':'title',html:S.title}));
-  if(S.intro&&p===0) root.appendChild(el('p',{'class':'intro',html:pipe(S.intro)}));
-  if(S.progress&&S.pages.length>1){ var pr=el('div',{'class':'progress'},[el('div',{style:'width:'+Math.round(100*p/S.pages.length)+'%'})]); root.appendChild(pr); }
-  S.pages[p].forEach(function(q){ var c=build(q); cards.push({q:q, el:c}); root.appendChild(c); });
-  refreshVisibility();
-  var last=p===S.pages.length-1, err=el('div',{'class':'pageerr'});
-  var nav=el('div',{'class':'nav'},[ (p>0&&S.back)?el('button',{type:'button',onclick:function(){ leave(); show(p-1); }},[T.back]):null,
-    el('button',{type:'button','class':'primary',onclick:function(){ if(!check(err)) return; leave(); if(last) finish(); else show(p+1); }},[last?T.submit:T.next]) ]);
-  root.appendChild(nav); root.appendChild(err); window.scrollTo(0,0); t0=Date.now(); }
-function leave(){ var k='page'+(page+1)+'_time'; times[k]=(times[k]||0)+(Date.now()-t0)/1000; }
-function check(err){ var bad=null;
-  cards.forEach(function(c){ if(!c.q.id&&c.q.type!=='matrix'&&c.q.type!=='semantic') return; var visible=c.el.style.display!=='none';
-    var m=visible?problem(c.q):''; c.el.classList.toggle('err', !!m); var box=c.el.querySelector('.msg'); if(box) box.textContent=m; if(m&&!bad) bad=c.el; });
-  err.textContent=bad?T.fix:''; if(bad) bad.scrollIntoView({behavior:'smooth',block:'center'}); return !bad; }
-function finish(){ var out={};
-  S.flat.forEach(function(q){ if(!holds(q.show_if)) return; var ids=(q.type==='matrix'||q.type==='semantic')?q.items.map(function(i){return i.id;}):(q.id?[q.id]:[]);
-    ids.forEach(function(id){ if(id in ans) out[id]=ans[id]; }); if(q.other_option&&ans[q.id+'_other']) out[q.id+'_other']=ans[q.id+'_other']; });
-  for(var k in times) out[k]=Math.round(times[k]*100)/100;
-  window.edge.submit(out); }
-show(0);
-})();
-"""
-
-DEFAULT_TEXT = {"next": "Next", "back": "Back", "submit": "Submit", "required": "Please answer this question.",
-                "rows": "Please answer all statements ({n} missing).", "fix": "Some answers are missing or need a fix.",
-                "choose": "Choose …", "other": "Please specify", "other_missing": "Please write your answer in the box.",
-                "min": "Please choose at least {n}.", "max": "Please choose at most {n}.",
-                "number": "Please enter a number.", "low": "The number must be at least {n}.",
-                "high": "The number must be at most {n}.", "email": "Please enter a valid e-mail address.",
-                "format": "Please check the format of your answer.", "short": "Please write at least {n} characters.",
-                "sum": "The amounts must add up to {total}.", "total": "Total", "slider": "Please move the slider.",
-                "move": "(move the slider)", "value": "Your answer: ", "rank": "Drag the options, or use ↑ ↓, to put "
-                                                                            "them in order (top = first).",
-                "up": "Move up", "down": "Move down"}
+ASSETS = Path(__file__).parent / "survey_page"
 
 
-def render_html(spec: dict[str, Any], rng: random.Random | None = None) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
+def page_direction(spec: dict[str, Any], flat: list[dict[str, Any]]) -> str:
+    """ltr or rtl: explicit ``direction``, else the language, else the first strong letters of the text."""
+    from .bidi import first_strong_rtl, is_rtl_language
+    d = str(spec.get("direction") or "auto").lower()
+    if d in ("ltr", "rtl"):
+        return d
+    if spec.get("language"):
+        return "rtl" if is_rtl_language(spec["language"]) else "ltr"
+    sample = " ".join([re.sub(r"<[^>]+>", " ", str(spec.get("title") or ""))] +
+                      [re.sub(r"<[^>]+>", " ", str(q.get("text") or q.get("task") or "")) for q in flat[:3]])
+    return "rtl" if first_strong_rtl(sample) else "ltr"
+
+
+def render_html(spec: dict[str, Any], rng: random.Random | None = None, asset_prefix: str = "") \
+        -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
     """The participant-facing page. Returns (html, flat questions as shown, scores)."""
+    from .survey_i18n import messages
     flat, lib_scores = expand(spec.get("questions") or [], rng)
     scores = {**lib_scores, **(spec.get("scores") or {})}
-    pg = pages(flat)
-    text = {**DEFAULT_TEXT, **(spec.get("labels") or {})}
+    direction = page_direction(spec, flat)
+    language = spec.get("language")
+    if not language and direction == "rtl":      # Hebrew / Arabic text without a language: messages to match
+        from .bidi import guess_language
+        language = guess_language(" ".join([str(spec.get("title") or "")] + [str(q.get("text") or "") for q in flat[:5]]))
+    text = messages(language)
+    text.update(spec.get("labels") or {})
     for k in ("next", "back", "submit"):
         if spec.get(f"{k}_label"):
             text[k] = spec[f"{k}_label"]
-    data = {"title": spec.get("title") or "", "intro": spec.get("intro") or "", "pages": pg, "flat": flat,
-            "progress": spec.get("progress_bar", True), "back": spec.get("allow_back", True), "text": text}
-    blob = json.dumps(data, default=str).replace("<", "\\u003c")     # no '<' can end or confuse the script block
-    page = ("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,"
-            f"initial-scale=1'><title>{htmllib.escape(re.sub(r'<[^>]+>', '', str(spec.get('title') or 'Survey')))}</title>"
-            f"<style>{SURVEY_CSS}{spec.get('css') or ''}</style></head><body><div class='wrap'><div id='survey'></div></div>"
+    data = {"title": spec.get("title") or "", "intro": spec.get("intro") or "", "pages": pages(flat), "flat": flat,
+            "progress": spec.get("progress_bar", True), "back": spec.get("allow_back", True), "text": text,
+            "dir": direction, "asset": asset_prefix}
+    blob = json.dumps(data, default=str, ensure_ascii=False).replace("<", "\\u003c")     # no '<' can end or confuse the script block
+    css = (ASSETS / "survey.css").read_text(encoding="utf-8")
+    js = (ASSETS / "survey.js").read_text(encoding="utf-8")
+    title = htmllib.escape(re.sub(r"<[^>]+>", "", str(spec.get("title") or "Survey")))
+    lang = f" lang='{htmllib.escape(str(language))}'" if language else ""
+    page = (f"<!doctype html><html{lang} dir='{direction}'><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            f"<title>{title}</title><style>{css}{spec.get('css') or ''}</style></head>"
+            "<body><div class='wrap'><div id='survey'></div></div>"
             f"<script type='application/json' id='edge-survey'>{blob}</script>"
-            f"<script>window.addEventListener('load',function(){{{SURVEY_JS}}});</script></body></html>")
+            f"<script>window.addEventListener('load',function(){{{js}}});</script></body></html>")
     return page, flat, scores

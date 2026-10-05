@@ -64,8 +64,8 @@ Age, gender, education, handedness, first language, country and vision. Inclusiv
   Answers: No formal qualification; Secondary school; Vocational qualification; Bachelor's degree; Master's degree; Doctorate; Prefer not to say
 * `handedness` (single choice): Which hand do you write with?
   Answers: Right; Left; Both / ambidextrous
-* `first_language` (short text): What is your first language?
-* `country` (short text): In which country do you currently live?
+* `first_language` (text entry (single line)): What is your first language?
+* `country` (text entry (single line)): In which country do you currently live?
 * `vision` (single choice): Do you have normal or corrected-to-normal vision?
   Answers: Yes, normal; Yes, corrected (glasses or contact lenses); No
 
@@ -77,9 +77,9 @@ Open questions asked from general to specific to probe for suspicion and demand 
 **Cite:** Bargh, J. A., & Chartrand, T. L. (2000). The mind in the middle: A practical guide to priming and automaticity research. In Reis & Judd (Eds.), Handbook of research methods in social and personality psychology (pp. 253-285). Cambridge University Press.  
 **Licence:** Free to use (question wording adapted).
 
-* `purpose` (long text (essay)): What do you think this study was about?
-* `noticed` (long text (essay)): Did you notice anything unusual or anything that seemed connected between the different parts of the study?
-* `strategy` (long text (essay)): Did you use any particular strategy during the task?
+* `purpose` (text entry (essay)): What do you think this study was about?
+* `noticed` (text entry (essay)): Did you notice anything unusual or anything that seemed connected between the different parts of the study?
+* `strategy` (text entry (essay)): Did you use any particular strategy during the task?
 * `serious` (single choice): Honestly, should we use your data? (Your answer does not affect your payment.)
   Answers: 1 = Yes, I took part seriously; 0 = No, I was distracted or answered at random
 
@@ -104,7 +104,7 @@ Seven items on generalized anxiety over the last two weeks. Total 0-21 with seve
 **Cite:** Spitzer, R. L., Kroenke, K., Williams, J. B. W., & Löwe, B. (2006). A brief measure for assessing generalized anxiety disorder: The GAD-7. Archives of Internal Medicine, 166(10), 1092-1097.  
 **Licence:** No permission required to reproduce, translate, display or distribute (phqscreeners.com).
 
-* `gad7` (matrix / likert table): Over the last 2 weeks, how often have you been bothered by the following problems?
+* `gad7` (matrix table): Over the last 2 weeks, how often have you been bothered by the following problems?
   Answers: 0 = Not at all; 1 = Several days; 2 = More than half the days; 3 = Nearly every day
   * `gad7_1` Feeling nervous, anxious, or on edge
   * `gad7_2` Not being able to stop or control worrying
@@ -126,7 +126,7 @@ Six items on non-specific distress in the past 30 days. Total 0-24; 13 or more i
 **Cite:** Kessler, R. C., et al. (2002). Short screening scales to monitor population prevalences and trends in non-specific psychological distress. Psychological Medicine, 32(6), 959-976.  
 **Licence:** Public domain (developed for the US National Health Interview Survey).
 
-* `k6` (matrix / likert table): During the past 30 days, about how often did you feel …
+* `k6` (matrix table): During the past 30 days, about how often did you feel …
   Answers: 0 = None of the time; 1 = A little of the time; 2 = Some of the time; 3 = Most of the time; 4 = All of the time
   * `k6_1` … nervous?
   * `k6_2` … hopeless?
@@ -147,7 +147,7 @@ Nine DSM-IV depression criteria over the last two weeks, plus a functional item.
 **Cite:** Kroenke, K., Spitzer, R. L., & Williams, J. B. W. (2001). The PHQ-9: Validity of a brief depression severity measure. Journal of General Internal Medicine, 16(9), 606-613.  
 **Licence:** Developed with an educational grant from Pfizer; no permission required to reproduce, translate, display or distribute (phqscreeners.com).
 
-* `phq9` (matrix / likert table): Over the last 2 weeks, how often have you been bothered by any of the following problems?
+* `phq9` (matrix table): Over the last 2 weeks, how often have you been bothered by any of the following problems?
   Answers: 0 = Not at all; 1 = Several days; 2 = More than half the days; 3 = Nearly every day
   * `phq9_1` Little interest or pleasure in doing things
   * `phq9_2` Feeling down, depressed, or hopeless
@@ -174,7 +174,7 @@ How unpredictable, uncontrollable and overloaded life felt in the last month. To
 **Cite:** Cohen, S., Kamarck, T., & Mermelstein, R. (1983). A global measure of perceived stress. Journal of Health and Social Behavior, 24(4), 385-396. (10-item version: Cohen & Williamson, 1988.)  
 **Licence:** Free for non-profit academic research; permission needed for commercial use.
 
-* `pss10` (matrix / likert table): The questions in this scale ask you about your feelings and thoughts during the last month. In each case, please indicate how often you felt or thought a certain way. In the last month, how often have you …
+* `pss10` (matrix table): The questions in this scale ask you about your feelings and thoughts during the last month. In each case, please indicate how often you felt or thought a certain way. In the last month, how often have you …
   Answers: 0 = Never; 1 = Almost never; 2 = Sometimes; 3 = Fairly often; 4 = Very often
   * `pss10_1` … been upset because of something that happened unexpectedly?
   * `pss10_2` … felt that you were unable to control the important things in your life?
@@ -201,7 +201,7 @@ Ten items on global self-worth, 4-point agreement scored 0-3. Total 0-30; items 
 **Cite:** Rosenberg, M. (1965). Society and the adolescent self-image. Princeton University Press.  
 **Licence:** Free to use for research; the Rosenberg family asks for the original to be cited.
 
-* `rses` (matrix / likert table): Below is a list of statements dealing with your general feelings about yourself. Please indicate how strongly you agree or disagree with each statement.
+* `rses` (matrix table): Below is a list of statements dealing with your general feelings about yourself. Please indicate how strongly you agree or disagree with each statement.
   Answers: 0 = Strongly disagree; 1 = Disagree; 2 = Agree; 3 = Strongly agree
   * `rses_1` On the whole, I am satisfied with myself.
   * `rses_2` At times I think I am no good at all. **(R)**
@@ -226,7 +226,7 @@ Five items on global life satisfaction, 7-point agreement. Total 5-35 with inter
 **Cite:** Diener, E., Emmons, R. A., Larsen, R. J., & Griffin, S. (1985). The Satisfaction With Life Scale. Journal of Personality Assessment, 49(1), 71-75.  
 **Licence:** Copyrighted by the authors; free to use without permission with credit to the authors.
 
-* `swls` (matrix / likert table): Below are five statements that you may agree or disagree with. Please indicate your agreement with each item.
+* `swls` (matrix table): Below are five statements that you may agree or disagree with. Please indicate your agreement with each item.
   Answers: 1 = Strongly disagree; 2 = Disagree; 3 = Slightly disagree; 4 = Neither agree nor disagree; 5 = Slightly agree; 6 = Agree; 7 = Strongly agree
   * `swls_1` In most ways my life is close to my ideal.
   * `swls_2` The conditions of my life are excellent.
@@ -246,7 +246,7 @@ Five positively worded items about the last two weeks. Percentage score 0-100 (r
 **Cite:** World Health Organization Regional Office for Europe (1998). Wellbeing measures in primary health care: The DepCare project. Topp, C. W., et al. (2015). The WHO-5 Well-Being Index: A systematic review of the literature. Psychotherapy and Psychosomatics, 84(3), 167-176.  
 **Licence:** Free to use, no permission required (Psychiatric Research Unit, Mental Health Centre North Zealand).
 
-* `who5` (matrix / likert table): Please indicate for each of the five statements which is closest to how you have been feeling over the last two weeks. Over the last two weeks …
+* `who5` (matrix table): Please indicate for each of the five statements which is closest to how you have been feeling over the last two weeks. Over the last two weeks …
   Answers: 5 = All of the time; 4 = Most of the time; 3 = More than half of the time; 2 = Less than half of the time; 1 = Some of the time; 0 = At no time
   * `who5_1` I have felt cheerful and in good spirits
   * `who5_2` I have felt calm and relaxed
@@ -268,7 +268,7 @@ Four everyday actions. Laterality quotient from -100 (fully left) to +100 (fully
 **Cite:** Veale, J. F. (2014). Edinburgh Handedness Inventory – Short Form: A revised version based on confirmatory factor analysis. Laterality, 19(2), 164-177. (After Oldfield, 1971.)  
 **Licence:** Free to use for research.
 
-* `ehi` (matrix / likert table): Please indicate which hand you prefer for each of these activities.
+* `ehi` (matrix table): Please indicate which hand you prefer for each of these activities.
   Answers: -100 = Always left; -50 = Usually left; 0 = Both equally; 50 = Usually right; 100 = Always right
   * `ehi_1` Writing
   * `ehi_2` Throwing
@@ -287,7 +287,7 @@ Four items per Big Five trait from the International Personality Item Pool, 5-po
 **Cite:** Donnellan, M. B., Oswald, F. L., Baird, B. M., & Lucas, R. E. (2006). The Mini-IPIP scales: Tiny-yet-effective measures of the Big Five factors of personality. Psychological Assessment, 18(2), 192-203.  
 **Licence:** Public domain (IPIP items, ipip.ori.org).
 
-* `mini_ipip` (matrix / likert table): Describe yourself as you generally are now, not as you wish to be in the future. Describe yourself as you honestly see yourself, in relation to other people you know of the same sex as you are, and roughly your same age.
+* `mini_ipip` (matrix table): Describe yourself as you generally are now, not as you wish to be in the future. Describe yourself as you honestly see yourself, in relation to other people you know of the same sex as you are, and roughly your same age.
   Answers: 1 = Very inaccurate; 2 = Moderately inaccurate; 3 = Neither accurate nor inaccurate; 4 = Moderately accurate; 5 = Very accurate
   * `ipip_1` Am the life of the party.
   * `ipip_2` Sympathize with others' feelings.
@@ -326,7 +326,7 @@ Two items per Big Five trait, 7-point agreement. Trait scores are the mean of th
 **Cite:** Gosling, S. D., Rentfrow, P. J., & Swann, W. B., Jr. (2003). A very brief measure of the Big-Five personality domains. Journal of Research in Personality, 37(6), 504-528.  
 **Licence:** Free for non-commercial research (the authors' website).
 
-* `tipi` (matrix / likert table): Here are a number of personality traits that may or may not apply to you. Please indicate the extent to which you agree or disagree with each statement. You should rate the extent to which the pair of traits applies to you, even if one characteristic applies more strongly than the other. I see myself as:
+* `tipi` (matrix table): Here are a number of personality traits that may or may not apply to you. Please indicate the extent to which you agree or disagree with each statement. You should rate the extent to which the pair of traits applies to you, even if one characteristic applies more strongly than the other. I see myself as:
   Answers: 1 = Disagree strongly; 2 = Disagree moderately; 3 = Disagree a little; 4 = Neither agree nor disagree; 5 = Agree a little; 6 = Agree moderately; 7 = Agree strongly
   * `tipi_1` Extraverted, enthusiastic.
   * `tipi_2` Critical, quarrelsome. **(R)**
@@ -368,17 +368,17 @@ Six workload dimensions rated on 0-100 sliders after a task. Raw TLX is their me
 **Cite:** Hart, S. G., & Staveland, L. E. (1988). Development of NASA-TLX (Task Load Index): Results of empirical and theoretical research. Advances in Psychology, 52, 139-183. Raw TLX: Hart (2006).  
 **Licence:** Public domain (NASA Ames Research Center).
 
-* `tlx_mental` (slider / visual analogue scale): Mental demand: How mentally demanding was the task?
+* `tlx_mental` (slider): Mental demand: How mentally demanding was the task?
   0-100, labels: Very low / Very high
-* `tlx_physical` (slider / visual analogue scale): Physical demand: How physically demanding was the task?
+* `tlx_physical` (slider): Physical demand: How physically demanding was the task?
   0-100, labels: Very low / Very high
-* `tlx_temporal` (slider / visual analogue scale): Temporal demand: How hurried or rushed was the pace of the task?
+* `tlx_temporal` (slider): Temporal demand: How hurried or rushed was the pace of the task?
   0-100, labels: Very low / Very high
-* `tlx_performance` (slider / visual analogue scale): Performance: How successful were you in accomplishing what you were asked to do?
+* `tlx_performance` (slider): Performance: How successful were you in accomplishing what you were asked to do?
   0-100, labels: Perfect / Failure
-* `tlx_effort` (slider / visual analogue scale): Effort: How hard did you have to work to accomplish your level of performance?
+* `tlx_effort` (slider): Effort: How hard did you have to work to accomplish your level of performance?
   0-100, labels: Very low / Very high
-* `tlx_frustration` (slider / visual analogue scale): Frustration: How insecure, discouraged, irritated, stressed, and annoyed were you?
+* `tlx_frustration` (slider): Frustration: How insecure, discouraged, irritated, stressed, and annoyed were you?
   0-100, labels: Very low / Very high
 
 Scores:
@@ -393,9 +393,9 @@ The 0-10 'how likely are you to recommend' question with a follow-up reason.
 **Cite:** Reichheld, F. F. (2003). The one number you need to grow. Harvard Business Review, 81(12), 46-54.  
 **Licence:** Free to use (Net Promoter is a trademark of Bain & Company, Satmetrix and Fred Reichheld).
 
-* `nps` (net promoter (0-10)): How likely are you to recommend this study to a friend or colleague?
+* `nps` (net promoter score): How likely are you to recommend this study to a friend or colleague?
   Answers: 0; 1; 2; 3; 4; 5; 6; 7; 8; 9; 10
-* `nps_reason` (long text (essay)): What is the main reason for your score?
+* `nps_reason` (text entry (essay)): What is the main reason for your score?
 
 ### System Usability Scale (SUS)
 
@@ -405,7 +405,7 @@ Ten alternating positive and negative items on usability. Score 0-100 (68 is abo
 **Cite:** Brooke, J. (1996). SUS: A 'quick and dirty' usability scale. In Jordan et al. (Eds.), Usability Evaluation in Industry (pp. 189-194). Taylor & Francis.  
 **Licence:** Free to use with acknowledgement of the source.
 
-* `sus` (matrix / likert table): Please rate your agreement with each statement about the system you just used.
+* `sus` (matrix table): Please rate your agreement with each statement about the system you just used.
   Answers: 0 = Strongly disagree; 1 = Disagree; 2 = Neutral; 3 = Agree; 4 = Strongly agree
   * `sus_1` I think that I would like to use this system frequently.
   * `sus_2` I found the system unnecessarily complex. **(R)**
@@ -430,9 +430,9 @@ Two 9-point ratings of how pleasant and how activated the participant feels, as 
 **Cite:** Bradley, M. M., & Lang, P. J. (1994). Measuring emotion: The Self-Assessment Manikin and the semantic differential. Journal of Behavior Therapy and Experimental Psychiatry, 25(1), 49-59.  
 **Licence:** Text-anchored ratings, free to use. (The SAM pictures themselves are distributed by the authors.)
 
-* `valence` (numbered scale (1-n)): How do you feel right now?
+* `valence` (number scale): How do you feel right now?
   Answers: 1; 2; 3; 4; 5; 6; 7; 8; 9
-* `arousal` (numbered scale (1-n)): How calm or excited do you feel right now?
+* `arousal` (number scale): How calm or excited do you feel right now?
   Answers: 1; 2; 3; 4; 5; 6; 7; 8; 9
 
 ## Health behaviour

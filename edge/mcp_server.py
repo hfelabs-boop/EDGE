@@ -323,11 +323,16 @@ def create_server(root: str | Path = ".") -> FastMCP:
 
     @tool
     def add_survey(path: str, questions: list[dict[str, Any]], routine: str = "questionnaire", title: str = "",
-                   intro: str = "", position: str = "end", scores: dict[str, Any] | None = None) -> dict[str, Any]:
+                   intro: str = "", position: str = "end", scores: dict[str, Any] | None = None,
+                   language: str = "") -> dict[str, Any]:
         """Add a questionnaire screen. `questions` mixes library questionnaires ({"instrument": "phq9"}), your own
         questions ({"id": "age", "type": "number", "text": "Age?", "min": 18, "max": 99, "required": true};
-        types: text_block, single, dropdown, multiple, likert, matrix, semantic, scale, nps, slider, text, essay,
-        number, date, rank, constant_sum, page_break) and display logic ("show_if": {"age": {">=": 18}}).
+        types: text_block, single, dropdown, multiple, likert, matrix, semantic, scale, nps, slider, graphic_slider,
+        text, essay, number, date, form, rank, side_by_side, constant_sum, group, hot_spot, heat_map, drill_down,
+        highlight, signature, timing, meta_info, file_upload, captcha, autocomplete, tree_test, video_response,
+        screen_capture, location, page_break) and display logic ("show_if": {"age": {">=": 18}}).
+        `language` (en, de, es, fr, he, ar, fa …) translates buttons and messages; right-to-left languages, or
+        questions written in Hebrew / Arabic, lay the page out right to left.
         `position`: "end", "start" or "after:<routine>". Creates the routine if it doesn't exist. Answers and
         scores (e.g. phq9_total, phq9_total_band) become data columns."""
         def op(d: ExperimentDoc) -> None:
@@ -350,6 +355,8 @@ def create_server(root: str | Path = ".") -> FastMCP:
                 props["intro"] = intro
             if scores:
                 props["scores"] = scores
+            if language:
+                props["language"] = language
             taken = {c.get("id") for c in d.routine(routine)["components"]}
             d.add_component(routine, "survey", props, routine if routine not in taken else None)   # columns: <routine>.<answer>
         return edit(path, op, f"add survey to {routine}")

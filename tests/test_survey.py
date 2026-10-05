@@ -321,3 +321,180 @@ def test_mcp_add_survey(tmp_path):
     assert [n.routine for n in exp.flow] == ["consent", "hello", "questionnaire"]
     dry = call(server, "dry_run", path="study.yaml")
     assert dry["ok"] and "questionnaire.gad7_total" in dry["columns"]
+
+
+# ------------------------------------------------------------------ the full question catalogue
+ALL_TYPES = [
+    {"type": "text_block", "text": "<b>Hello</b>", "media": "shelf.png", "caption": "a shelf"},
+    {"id": "lb", "type": "multiple", "text": "Listbox", "options": ["p", "q"], "layout": "listbox"},
+    {"id": "mx", "type": "matrix", "multi": True, "text": "Days", "options": ["Mon", "Tue"], "items": ["Gym", "Run"]},
+    {"id": "md", "type": "matrix", "display": "dropdown", "scale": "agree5", "text": "Dropdown matrix", "items": ["One"]},
+    {"id": "ns", "type": "scale", "points": 5, "text": "Rate", "items": ["Price", "Taste"]},
+    {"id": "nps", "type": "nps", "text": "Recommend?"},
+    {"id": "sl", "type": "slider", "items": ["Fun", "Hard"], "min": 0, "max": 10, "text": "Sliders"},
+    {"id": "gs", "type": "graphic_slider", "style": "stars", "points": 5, "text": "Stars"},
+    {"id": "pw", "type": "text", "secret": True, "text": "Password"},
+    {"id": "ac", "type": "autocomplete", "list": "countries", "text": "Country"},
+    {"id": "dt", "type": "calendar", "min": "2020-01-01", "text": "Date"},
+    {"id": "ff", "type": "form", "text": "Contact", "fields": [{"id": "name", "label": "Name"}, {"id": "mail", "type": "email"}]},
+    {"id": "rk", "type": "rank", "method": "select", "options": ["a", "b"], "text": "Rank"},
+    {"id": "sbs", "type": "side_by_side", "text": "Brands", "items": [{"id": "b1", "text": "Brand 1"}],
+     "columns": [{"id": "aware", "label": "Aware?", "options": ["Yes", "No"]}, {"id": "q", "label": "Quality", "type": "dropdown", "scale": "quality5"},
+                 {"id": "note", "label": "Note", "type": "text"}]},
+    {"id": "cs", "type": "constant_sum", "options": ["x", "y"], "total": 100, "must_total": "at_most", "unit": "%", "text": "Split"},
+    {"id": "grp", "type": "group", "items": ["apple", "carrot"], "groups": ["Fruit", "Vegetable"], "rank_within": True, "text": "Sort"},
+    {"id": "hs", "type": "hot_spot", "image": "shelf.png", "mode": "rate", "text": "Spots",
+     "regions": [{"id": "left", "x": 0, "y": 0, "w": 50, "h": 100}, {"id": "right", "x": 50, "y": 0, "w": 50, "h": 100}]},
+    {"id": "hm", "type": "heat_map", "image": "shelf.png", "max_clicks": 2, "regions": [{"id": "top", "x": 0, "y": 0, "w": 100, "h": 50}], "text": "Heat"},
+    {"id": "loc", "type": "location", "image": "shelf.png", "bounds": {"north": 60, "south": 40, "west": -10, "east": 30}, "text": "Where"},
+    {"id": "dr", "type": "drill_down", "levels": ["Country", "City"], "rows": [["France", "Paris"], ["France", "Lyon"], ["Japan", "Tokyo"]], "text": "Place"},
+    {"id": "hl", "type": "highlight", "passage": "The food was great but the service was slow", "text": "Highlight"},
+    {"id": "sig", "type": "signature", "required": True, "text": "Sign"},
+    {"id": "fu", "type": "file_upload", "required": True, "text": "Upload"},
+    {"id": "cap", "type": "captcha", "text": "Code"},
+    {"id": "tt", "type": "tree_test", "task": "Find returns", "text": "Tree",
+     "rows": [["Shop", "Phones"], ["Help", "Returns"], ["Help", "Shipping"]], "correct": "Help > Returns"},
+    {"id": "tm", "type": "timing", "min_seconds": 1},
+    {"id": "mi", "type": "meta_info"},
+    {"id": "vr", "type": "video_response", "audio_only": True, "required": True, "text": "Video"},
+    {"id": "sc", "type": "screen_capture", "required": True, "text": "Screen"},
+]
+
+
+def _png(path):
+    import struct
+    import zlib
+    raw = b"\x00\xff\xff\xff" * 1
+
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)) +
+                     chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+def test_every_question_type_validates_and_round_trips(tmp_path):
+    assert sv.validate(ALL_TYPES) == []
+    assert set(sv.QUESTION_TYPES) >= {"form", "side_by_side", "group", "hot_spot", "heat_map", "graphic_slider", "drill_down",
+                                       "highlight", "signature", "timing", "meta_info", "file_upload", "captcha", "autocomplete",
+                                       "tree_test", "video_response", "screen_capture", "location"}
+    _png(tmp_path / "shelf.png")
+    s, rows = _run(_survey([dict(q, required=True) if "id" in q else q for q in ALL_TYPES]), tmp_path)
+    r = {k[3:]: v for k, v in rows[0].items() if k.startswith("sv.")}
+    assert r["lb_p"] in (0, 1) and r["mx_1_mon"] in (0, 1) and isinstance(r["md_1"], int)
+    assert r["nps_group"] in ("promoter", "passive", "detractor") and 0 <= r["sl_2"] <= 10 and 1 <= r["gs"] <= 5
+    assert r["ac"] in __import__("edge.survey_lists", fromlist=["x"]).COUNTRIES and r["dt"] == "2020-01-01"
+    assert r["mail"] == "virtual.participant@example.org"
+    assert r["b1_aware"] in ("Yes", "No") and 1 <= r["b1_q"] <= 5 and r["b1_note"]
+    assert r["grp_apple"] in ("fruit", "vegetable", None) and r["hs_left"] in (-1, 0, 1)
+    assert r["hm_clicks"] == 2 and 40 <= r["loc_lat"] <= 60 and r["dr_country"] in ("France", "Japan")
+    assert r["sig_signed"] == 1 and r["sig"].startswith("survey_files/") and (Path(s["data_dir"]) / r["sig"]).exists()
+    assert r["fu_name"] == "test_run.txt" and (Path(s["data_dir"]) / r["fu"]).read_text().startswith("Test run")
+    assert r["cap_passed"] == 1 and r["tt"] and r["tt_correct"] in (0, 1) and r["tm_clicks"] >= 1
+    assert r["mi_browser"] == "virtual participant" and r["vr_duration"] == 5 and r["sc"].endswith(".png")
+    cols = sv.columns(ALL_TYPES)
+    for c in ("hm_top", "loc_lat", "dr_city", "hl_like", "tt_direct", "tm_first_click", "mi_timezone", "grp_apple_rank", "b1_q"):
+        assert c in cols, c
+
+
+def test_new_type_validation_messages():
+    cases = [
+        ([{"id": "a", "type": "hot_spot", "image": "x.png", "regions": [{"x": 0, "y": 0, "w": 150, "h": 10}]}], "between 0 and 100"),
+        ([{"id": "a", "type": "heat_map"}], "needs an image"),
+        ([{"id": "a", "type": "tree_test", "tree": {"A": ["B"]}, "correct": "A > C"}], "not in the tree"),
+        ([{"id": "a", "type": "form", "fields": [{"id": "x", "type": "colour"}]}], "type must be one of"),
+        ([{"id": "a", "type": "side_by_side", "items": ["r"], "columns": [{"id": "c", "type": "single"}]}], "needs options"),
+        ([{"id": "a", "type": "group", "items": ["x"]}], "needs items (to sort) and groups"),
+        ([{"id": "a", "type": "location"}], "map image or allow_geolocation"),
+        ([{"id": "a", "type": "highlight"}], "needs a passage"),
+        ([{"id": "a", "type": "autocomplete", "list": "planets"}], "unknown list"),
+        ([{"id": "a", "type": "rank", "options": ["x"], "method": "dice"}], "method must be"),
+    ]
+    for qs, needle in cases:
+        assert any(needle in p for p in sv.validate(qs)), (needle, sv.validate(qs))
+
+
+def test_missing_images_are_reported(tmp_path):
+    exp = Experiment.from_dict(_survey([{"id": "h", "type": "heat_map", "image": "nope.png"}]), base_dir=tmp_path)
+    assert any("file not found: nope.png" in i.message for i in exp.validate())
+
+
+def test_tree_test_directness_and_success():
+    flat, _ = sv.expand([{"id": "t", "type": "tree_test", "tree": {"Shop": {"Phones": [], "Help": {"Returns": []}}},
+                          "correct": "Shop > Help > Returns"}])
+    direct = sv.process(flat, {}, {"t": {"path": ["Shop", "Help", "Returns"], "visited": ["Shop", "Shop > Help", "Shop > Help > Returns"],
+                                         "clicks": 3, "time": 4.2}})
+    assert direct["t_correct"] == 1 and direct["t_direct"] == 1
+    lost = sv.process(flat, {}, {"t": {"path": ["Shop", "Help", "Returns"], "visited": ["Shop", "Shop > Phones", "Shop > Help", "Shop > Help > Returns"]}})
+    assert lost["t_correct"] == 1 and lost["t_direct"] == 0
+
+
+def test_drill_down_rows_and_files(tmp_path):
+    assert sv.rows_to_tree([["A", "x", "1"], ["A", "x", "2"], ["B", "y", "3"]]) == {"A": {"x": ["1", "2"]}, "B": {"y": ["3"]}}
+    (tmp_path / "places.csv").write_text("Country,City\nFrance,Paris\nJapan,Tokyo\n")
+    from edge.components.survey import load_drill_files
+    qs = load_drill_files([{"id": "d", "type": "drill_down", "file": "places.csv"}], tmp_path)
+    flat, _ = sv.expand(qs)
+    assert flat[0]["levels"] == ["Country", "City"] and flat[0]["tree"] == {"France": ["Paris"], "Japan": ["Tokyo"]}
+
+
+def test_extract_files_writes_and_replaces(tmp_path):
+    import base64
+    flat, _ = sv.expand([{"id": "up", "type": "file_upload"}, {"id": "sig", "type": "signature"}])
+    data = "data:application/pdf;base64," + base64.b64encode(b"%PDF-1.4 test").decode()
+    raw = sv.extract_files(flat, {"up": {"name": "cv.pdf", "size": 13, "data": data}, "sig": sv.PNG_1PX}, tmp_path / "survey_files", "p1_")
+    assert raw["up"]["path"] == "survey_files/p1_up.pdf" and (tmp_path / "survey_files" / "p1_up.pdf").read_bytes().startswith(b"%PDF")
+    assert raw["sig"]["path"] == "survey_files/p1_sig.png" and "data" not in raw["sig"]
+    out = sv.process(flat, {}, raw)
+    assert out["up_name"] == "cv.pdf" and out["sig_signed"] == 1
+
+
+# ------------------------------------------------------------------ right to left
+def test_rtl_direction_language_and_messages():
+    he, _, _ = sv.render_html({"title": "שאלון", "questions": [{"id": "a", "type": "text", "text": "מה שמך?"}]})
+    assert "dir='rtl'" in he and "lang='he'" in he and "נא לענות על שאלה זו." in he
+    ar, _, _ = sv.render_html({"language": "ar", "questions": [{"id": "a", "type": "text", "text": "Name?"}]})
+    assert "dir='rtl'" in ar and "يرجى الإجابة" in ar
+    forced, _, _ = sv.render_html({"direction": "rtl", "language": "en", "questions": [{"id": "a", "type": "text", "text": "x"}]})
+    assert "dir='rtl'" in forced and "Please answer" in forced
+    de, _, _ = sv.render_html({"language": "de", "labels": {"submit": "Fertig"}, "questions": [{"id": "a", "type": "text", "text": "x"}]})
+    assert "dir='ltr'" in de and "Bitte beantworten" in de and "Fertig" in de
+    en, _, _ = sv.render_html({"questions": [{"id": "a", "type": "text", "text": "Hello"}]})
+    assert "dir='ltr'" in en
+
+
+def test_translations_cover_every_message():
+    from edge import survey_i18n as i18n
+    for lang, table in i18n.MESSAGES.items():
+        missing = set(i18n.EN) - set(table)
+        assert not missing, (lang, missing)
+        for k, v in table.items():   # placeholders survive translation
+            for ph in ("{n}", "{total}", "{mb}", "{name}", "{s}", "{d}", "{lat}", "{lon}"):
+                assert (ph in v) == (ph in i18n.EN[k]), (lang, k, ph)
+    import re
+    js = (Path(sv.__file__).parent / "survey_page" / "survey.js").read_text()
+    used = set(re.findall(r"\bT\.([a-z_]+)", js))
+    assert used <= set(i18n.EN), used - set(i18n.EN)
+
+
+def test_bidi_helpers():
+    from edge import bidi
+    assert bidi.has_rtl("שלום") and not bidi.has_rtl("hello")
+    assert bidi.is_rtl_language("he-IL") and not bidi.is_rtl_language("de")
+    assert bidi.guess_language("مرحبا") == "ar" and bidi.guess_language("سلام، چطوری؟") == "fa" and bidi.guess_language("שלום") == "he"
+    assert bidi.visual("plain text") == "plain text"
+    if bidi.available():
+        assert bidi.visual("שלום world") == "world םולש"
+        assert bidi.visual("مرحبا") != "مرحبا"          # letters joined into contextual forms
+
+
+def test_text_component_has_a_direction():
+    from edge.components import component_registry
+    assert component_registry()["text"].props_schema["direction"]["choices"] == ["auto", "ltr", "rtl"]
+
+
+def test_bundles_include_survey_media():
+    from edge.storage import referenced_files
+    doc = _survey([{"id": "h", "type": "heat_map", "image": "images/a.png"}, {"type": "text_block", "media": "clip.mp4"},
+                   {"id": "d", "type": "drill_down", "levels": ["Country"], "file": "places.csv"},
+                   {"id": "w", "type": "hot_spot", "image": "https://example.org/x.png", "regions": [{"x": 0, "y": 0, "w": 1, "h": 1}]}])
+    assert referenced_files(doc) >= {"images/a.png", "clip.mp4", "places.csv"} and not any("example.org" in f for f in referenced_files(doc))

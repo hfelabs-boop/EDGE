@@ -35,7 +35,7 @@ edge report data/012_1_study_…     # timing, data-integrity and sync report
 | Natural language | — | — | **MCP server**: Claude or VS Code builds, edits, dry-runs and analyzes experiments, and edits appear live in the builder |
 | Workflow logic | E-Basic scripting | code components | **visual state machines** (repeat until criterion, adaptive paths, screening), "when → do" routine rules, per-component `if`, live loop accuracy/RT |
 | HTML | — | Forms component | **HTML pages as experiment steps**: consent, questionnaires, custom JS tasks, with every field saved |
-| Questionnaires | — | Forms component | **survey component**: 16 question types (single/multiple choice, Likert items and matrices, semantic differential, sliders, NPS, rank order, constant sum, validated text …), display logic, piped text, randomization, and a library of 20 validated, self-scoring instruments (PHQ-9, GAD-7, PSS-10, WHO-5, SWLS, Rosenberg, TIPI, Mini-IPIP, NASA-TLX, SUS, AUDIT-C …) |
+| Questionnaires | — | Forms component | **survey component**: 35 question types covering the professional catalogue (choice, matrix, side by side, form fields, sliders, NPS, rank, constant sum, pick-group-rank, hot spot, heat map, drill down, highlight, signature, file upload, timing, meta info, tree testing, video response, screen capture, location …), display logic, piped text, randomization, **full right-to-left support** (Hebrew, Arabic, Persian …) with translated messages, and a library of 20 validated, self-scoring instruments (PHQ-9, GAD-7, PSS-10, WHO-5, SWLS, Rosenberg, TIPI, Mini-IPIP, NASA-TLX, SUS, AUDIT-C …) |
 | Import | — | — | **PsychoPy, E-Prime, OpenSesame and jsPsych** experiments, with a conversion report |
 | Extending | E-Basic | Python | Python plugins for devices and components (entry points) |
 | License | commercial | GPL | MIT |
@@ -169,7 +169,8 @@ with forms, and every expression field suggests the variables available there.
 ```
 
 The builder's survey editor shows the real page live next to the questions; **+ From library** adds a
-validated questionnaire with its citation and scoring. See [docs/SURVEYS.md](docs/SURVEYS.md).
+validated questionnaire with its citation and scoring. Write the questions in Hebrew or Arabic and the
+page lays itself out right to left. See [docs/SURVEYS.md](docs/SURVEYS.md).
 
 ![Survey editor](docs/survey_editor.png)
 

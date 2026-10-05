@@ -276,8 +276,12 @@ and `trials.total`. Accuracy uses every `*.corr` result recorded inside the loop
 ```
 
 Question types: `text_block`, `single`, `dropdown`, `multiple`, `likert`, `matrix`, `semantic`, `scale`,
-`nps`, `slider`, `text`, `essay`, `number`, `date`, `rank`, `constant_sum`, `page_break`. Common keys:
-`id`, `text`, `required`, `help`, `show_if`, `randomize`, `correct`, `test_answer`. Each answer becomes
+`nps`, `slider`, `graphic_slider`, `text`, `essay`, `number`, `date`, `form`, `rank`, `side_by_side`,
+`constant_sum`, `group`, `hot_spot`, `heat_map`, `drill_down`, `highlight`, `signature`, `timing`,
+`meta_info`, `file_upload`, `captcha`, `autocomplete`, `tree_test`, `video_response`, `screen_capture`,
+`location`, `page_break`. Common keys: `id`, `text`, `required`, `help`, `show_if`, `randomize`,
+`correct`, `test_answer`. Survey keys `language` and `direction` set the page language and right-to-left
+layout. Files (signatures, uploads, recordings, screenshots) are saved in the session's `survey_files/`. Each answer becomes
 a column `<survey id>.<question id>` (matrix items by item id); library questionnaires add their scores.
 Question text is used as written: a leading `$` is not an expression there. The full guide:
 [Surveys](SURVEYS.md).

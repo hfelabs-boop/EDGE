@@ -522,6 +522,10 @@ function menu(e, items) {
   const m = h("div", {class: "menu", style: `left:${e.clientX}px;top:${e.clientY}px`});
   for (const it of items) m.append(it === "-" ? h("hr") : h("div", {onclick: () => { m.remove(); it[1](); }}, it[0]));
   document.body.append(m);
+  // keep long menus inside the window: shift up / left and scroll
+  const r = m.getBoundingClientRect();
+  if (r.bottom > innerHeight - 8) m.style.top = Math.max(8, innerHeight - 8 - r.height) + "px";
+  if (r.right > innerWidth - 8) m.style.left = Math.max(8, innerWidth - 8 - r.width) + "px";
   setTimeout(() => document.addEventListener("click", () => m.remove(), {once: true}), 0);
 }
 
@@ -773,7 +777,7 @@ function field(name, p, value, onChange, opts = {}) {
     input = h("select", {onchange: (e) => onChange(e.target.value === "" ? null : e.target.value)},
       (p.choices || []).map((c) => { const o = h("option", {value: c}, c === "" ? "(default)" : c); if ((value ?? p.default) === c) o.selected = true; return o; }));
   } else if (type === "text" || type === "code" || type === "dict" || type === "json") {
-    input = h("textarea", {rows: type === "code" ? 6 : 3, onchange: commitText}, showVal(type, value));
+    input = h("textarea", {rows: type === "code" ? 6 : 3, dir: type === "code" ? null : "auto", onchange: commitText}, showVal(type, value));
   } else if (type === "color") {
     const txt = h("input", {value: showVal(type, value), placeholder: String(p.default ?? ""), onchange: commitText});
     const col = h("input", {type: "color", style: "width:36px;padding:0", onchange: (e) => onChange(e.target.value)});
@@ -787,7 +791,7 @@ function field(name, p, value, onChange, opts = {}) {
   } else if (opts.readonlyClick) {
     input = h("input", {value: value ?? "", readonly: true, onclick: opts.readonlyClick});
   } else {
-    input = h("input", {value: showVal(type, value), placeholder: p.default != null ? showVal(type, p.default) : "", onchange: commitText});
+    input = h("input", {value: showVal(type, value), dir: "auto", placeholder: p.default != null ? showVal(type, p.default) : "", onchange: commitText});
   }
   wrap.append(input);
   if (p.help) wrap.append(h("div", {class: "help"}, p.help));
@@ -1067,6 +1071,7 @@ function drawScreen(cv, rid, t, row) {
       ctx.scale(1, -1); ctx.fillStyle = color(c.color, "#fff");
       const hgt = conv(numOr(c.height, 40), "y"); ctx.font = `${c.bold ? "bold " : ""}${hgt}px sans-serif`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.direction = c.direction === "rtl" || (c.direction !== "ltr" && /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc]/.test(String(c.text ?? ""))) ? "rtl" : "ltr";
       const lines = String(c.text ?? "").split("\n"); lines.forEach((ln, i) => ctx.fillText(ln, 0, (i - (lines.length - 1) / 2) * hgt * 1.25));
     } else if (c.type === "shape" || c.type === "fixation") {
       const shape = c.shape || (c.type === "fixation" ? "cross" : "rect");

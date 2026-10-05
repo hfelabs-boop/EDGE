@@ -50,6 +50,8 @@ Surveys add one column per answer (`about.age`, `about.phq9_3`), one 0/1 column 
 checkbox questions, rank and constant-sum columns per option, `<id>_other` texts, `pageN_time`, the
 scores of library questionnaires (`about.phq9_total`, `about.phq9_total_band`) and `<id>_order` for
 shuffled questions. The data dictionary describes each with the question's wording and answer codes.
+Signatures, uploaded files, video/audio recordings and screenshots are saved in the session's
+`survey_files/` folder; their columns hold the path.
 
 ### How the trial table is built (`trials_wide.csv`)
 

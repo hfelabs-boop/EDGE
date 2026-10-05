@@ -58,6 +58,8 @@ class Text(VisualComponent):
         "bold": {"type": "bool", "default": False, "help": "bold text"},
         "italic": {"type": "bool", "default": False, "help": "italic text"},
         "wrap_width": {"type": "float", "default": None, "help": "maximum line width before wrapping (window units)"},
+        "direction": {"type": "choice", "choices": ["auto", "ltr", "rtl"], "default": "auto",
+                      "help": "text direction; auto detects Hebrew, Arabic, Persian … (right-to-left)"},
         **_VISUAL_COMMON,
     }
 
@@ -66,6 +68,7 @@ class Text(VisualComponent):
         return {"text": str(p["text"]), "color": p["color"], "height": self.px(p["height"], "y"),
                 "font": p["font"], "bold": p["bold"], "italic": p["italic"],
                 "wrap_width": self.px(p["wrap_width"], "x") if p["wrap_width"] else None,
+                "direction": p.get("direction") or "auto",
                 "pos": self.px(p["pos"]), "opacity": p["opacity"], "ori": p["ori"]}
 
     def make_stim(self):

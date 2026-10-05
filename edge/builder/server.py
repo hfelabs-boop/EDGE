@@ -413,7 +413,9 @@ def make_handler(app: BuilderApp):
                     problems = validate(spec.get("questions") or [], spec.get("scores") or {})
                     if problems:
                         return self._json({"problems": problems})
-                    page, flat, _ = render_html(spec)
+                    rel = body.get("path")
+                    folder = (str(Path(rel).parent).replace("\\", "/") + "/") if rel and str(Path(rel).parent) != "." else ""
+                    page, flat, _ = render_html(spec, asset_prefix=f"/api/file?path={folder}")
                     # preview: answers go nowhere, the last button just says so
                     page = page.replace("</body>", "<script>window.edge={vars:{},marker:function(){},submit:function(d){"
                                         "document.body.innerHTML='<pre style=\"padding:20px;font:13px monospace\">'+"

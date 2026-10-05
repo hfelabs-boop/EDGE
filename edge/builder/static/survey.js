@@ -41,6 +41,26 @@ function defaultQuestion(type, qs) {
     date: {id, type, text: "Date:"},
     rank: {id, type, text: "Put these in order of preference.", options: ["Option A", "Option B", "Option C"]},
     constant_sum: {id, type, text: "Divide 100 points across these options.", options: ["Option A", "Option B"], total: 100, required: true},
+    form: {id, type, text: "Your contact details", fields: [{id: id + "_name", label: "Name", required: true}, {id: id + "_email", label: "E-mail", type: "email"}]},
+    side_by_side: {id, type, text: "About each brand", items: [{id: id + "_a", text: "Brand A"}, {id: id + "_b", text: "Brand B"}],
+                   columns: [{id: "aware", label: "Heard of it?", type: "single", options: ["Yes", "No"]}, {id: "quality", label: "Quality", type: "dropdown", scale: "quality5"}]},
+    group: {id, type, text: "Sort these into groups.", items: ["Item 1", "Item 2", "Item 3"], groups: ["Group A", "Group B"]},
+    hot_spot: {id, type, text: "Click the parts you notice first.", image: "", regions: [], mode: "select"},
+    heat_map: {id, type, text: "Click where you would look first.", image: "", max_clicks: 1},
+    graphic_slider: {id, type, text: "How do you feel?", style: "faces", points: 7, labels: ["Very bad", "Very good"]},
+    drill_down: {id, type, text: "Where do you live?", levels: ["Country", "City"], rows: [["France", "Paris"], ["France", "Lyon"], ["Japan", "Tokyo"]]},
+    highlight: {id, type, text: "Highlight what you like and dislike.", passage: "The food was great but the service was slow."},
+    signature: {id, type, text: "Please sign to confirm.", required: true},
+    timing: {id: newQuestionId(qs, "timing"), type},
+    meta_info: {id: newQuestionId(qs, "meta"), type},
+    file_upload: {id, type, text: "Attach a file.", max_mb: 10},
+    captcha: {id: newQuestionId(qs, "captcha"), type, text: "Please type the code."},
+    autocomplete: {id, type, text: "In which country do you live?", list: "countries"},
+    tree_test: {id, type, text: "Where would you find it?", task: "Where would you go to return a product?",
+                rows: [["Shop", "Phones"], ["Shop", "Laptops"], ["Help", "Returns"], ["Help", "Shipping"]], correct: "Help > Returns"},
+    video_response: {id, type, text: "Please tell us about your experience.", max_seconds: 60},
+    screen_capture: {id, type, text: "Show us the problem on your screen."},
+    location: {id, type, text: "Where were you born?", allow_geolocation: false, image: ""},
   }[type];
   return clone(base);
 }
@@ -126,7 +146,12 @@ function renderSurveyEditor() {
 
   const settings = h("div", {class: "sv-settings"},
     svField("Title", c.title || "", (v) => { if (v) c.title = v; else delete c.title; svCommit(false); }),
-    svField("Instructions on the first page", c.intro || "", (v) => { if (v) c.intro = v; else delete c.intro; svCommit(false); }, {area: true}));
+    svField("Instructions on the first page", c.intro || "", (v) => { if (v) c.intro = v; else delete c.intro; svCommit(false); }, {area: true}),
+    h("div", {class: "row2"},
+      svSelect("Language (buttons & messages)", c.language || "", [["", "automatic"], ["en", "English"], ["de", "Deutsch"], ["es", "Español"], ["fr", "Français"], ["he", "עברית (RTL)"], ["ar", "العربية (RTL)"], ["fa", "فارسی (RTL)"], ["ur", "اردو (RTL)"]],
+        (v) => { if (v) c.language = v; else delete c.language; svCommit(false); }),
+      svSelect("Direction", c.direction || "auto", [["auto", "automatic"], ["ltr", "left to right"], ["rtl", "right to left"]],
+        (v) => { if (v === "auto") delete c.direction; else c.direction = v; svCommit(false); })));
   SV.frame = h("iframe", {class: "sv-frame", title: "Survey preview", sandbox: "allow-scripts"});
   const probs = h("div", {class: "sv-problems"});
   SV.problems = probs;
@@ -137,8 +162,8 @@ function renderSurveyEditor() {
 }
 
 function svField(label, value, onChange, opts = {}) {
-  const inp = opts.area ? h("textarea", {rows: opts.rows || 2, onchange: (e) => onChange(e.target.value)}, value ?? "")
-    : h("input", {value: value ?? "", type: opts.type || "text", placeholder: opts.placeholder || "", onchange: (e) => onChange(e.target.value)});
+  const inp = opts.area ? h("textarea", {rows: opts.rows || 2, dir: "auto", onchange: (e) => onChange(e.target.value)}, value ?? "")
+    : h("input", {value: value ?? "", dir: opts.type ? null : "auto", type: opts.type || "text", placeholder: opts.placeholder || "", onchange: (e) => onChange(e.target.value)});
   return h("div", {class: "field"}, h("label", {}, h("span", {}, label)), inp, opts.help ? h("div", {class: "help"}, opts.help) : null);
 }
 function svCheck(label, value, onChange, help) {
@@ -195,7 +220,7 @@ function renderQuestionForm(form, q, qs, comp) {
         {area: true, rows: 5, help: "Write “1 = Strongly disagree” to save a number code instead of the text."}));
     else put(opt, h("div", {class: "help"}, SCALES()[q.scale].options.map((o) => `${o.value} = ${o.label}`).join(" · ")));
   }
-  if (["single", "multiple"].includes(t)) put(opt, svSelect("Layout", q.layout || "vertical", [["vertical", "one per line"], ["horizontal", "side by side"]], (v) => set("layout", v === "vertical" ? undefined : v)));
+  if (["single", "multiple"].includes(t)) put(opt, svSelect("Layout", q.layout || "vertical", [["vertical", "one per line"], ["horizontal", "side by side"], ...(t === "multiple" ? [["listbox", "multi-select box"]] : [])], (v) => set("layout", v === "vertical" ? undefined : v)));
   if (["single", "dropdown", "multiple", "rank", "constant_sum", "matrix"].includes(t)) put(opt, svCheck(t === "matrix" ? "Shuffle the statements" : "Shuffle the options", q.randomize, (v) => set("randomize", v || undefined),
     "the order each participant saw is saved"));
   if (t === "single") put(opt, svSelect("“Other, please specify” text box for", q.other_option || "", [["", "(none)"], ...optionLabels(q).map((l) => [l, l])], (v) => set("other_option", v || undefined)));
@@ -231,6 +256,7 @@ function renderQuestionForm(form, q, qs, comp) {
   if (t === "constant_sum") put(opt, svField("Total", q.total ?? 100, (v) => set("total", numOrBlank(v)), {type: "number"}));
   if (["single", "likert", "dropdown", "text", "number"].includes(t)) put(opt, svField("Correct answer (knowledge or attention check, optional)", q.correct ?? "", (v) => set("correct", numOrBlank(v)),
     {help: "add a score with method “correct” to count right answers"}));
+  renderExtraFields(opt, q, t, set, comp);
   put(form, opt);
   put(form, renderShowIf(q, qs));
   put(form, svField("Help text under the question", q.help || "", (v) => set("help", v || undefined, true)));
@@ -296,9 +322,10 @@ function svPreview() {
   SV.timer = setTimeout(async () => {
     const c = surveyComp(); if (!c || !SV.frame) return;
     const spec = {questions: c.questions, title: c.title, intro: c.intro, scores: c.scores, progress_bar: c.progress_bar, allow_back: c.allow_back,
+      language: c.language, direction: c.direction,
       submit_label: c.submit_label, next_label: c.next_label, back_label: c.back_label, labels: c.labels, css: c.css};
     try {
-      const r = await api("/api/survey/render", {spec});
+      const r = await api("/api/survey/render", {spec, path: S.path});
       SV.problems.innerHTML = "";
       if (r.problems.length) put(SV.problems, r.problems.map((p) => h("div", {class: "issue error"}, cap(p))));
       else SV.frame.srcdoc = r.html;
@@ -308,11 +335,11 @@ function svPreview() {
 
 /* the survey page shown in the screen preview (and its cache) */
 function surveyPreviewHtml(c, done) {
-  const spec = {questions: c.questions || [], title: c.title, intro: c.intro, scores: c.scores};
+  const spec = {questions: c.questions || [], title: c.title, intro: c.intro, scores: c.scores, language: c.language, direction: c.direction};
   const key = JSON.stringify(spec);
   if (_svCache.key === key) return _svCache.html;
   _svCache = {key, html: null};
-  api("/api/survey/render", {spec}).then((r) => { if (_svCache.key === key) { _svCache.html = r.html || `<pre style="padding:20px;color:#c00">${(r.problems || []).join("\n")}</pre>`; done(); } }).catch(() => {});
+  api("/api/survey/render", {spec, path: S.path}).then((r) => { if (_svCache.key === key) { _svCache.html = r.html || `<pre style="padding:20px;color:#c00">${(r.problems || []).join("\n")}</pre>`; done(); } }).catch(() => {});
   return null;
 }
 
@@ -340,4 +367,127 @@ function openLibrary(onPick, returnToEditor = false) {
     returnToEditor ? h("button", {class: "mini sv-close", onclick: () => renderSurveyEditor()}, "← Back to the editor") : h("button", {class: "mini sv-close", onclick: closeModal}, "Close")),
     filter, grid);
   draw(); openModal(); filter.focus();
+}
+
+
+/* ---------------- fields of the specialised question types */
+const lines = (v) => String(v || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+const cells = (l) => l.split("|").map((x) => x.trim());
+const pathsToRows = (v) => lines(v).map((l) => l.split(/\s*(?:>|›)\s*/).filter(Boolean));
+const rowsToText = (rows) => (rows || []).map((r) => r.join(" > ")).join("\n");
+function treeToRows(tree, prefix = []) {
+  if (!tree) return [];
+  const keys = Array.isArray(tree) ? tree : Object.keys(tree);
+  return keys.flatMap((k) => { const child = Array.isArray(tree) ? null : tree[k]; const p = [...prefix, String(k)];
+    return child && (Array.isArray(child) ? child.length : Object.keys(child).length) ? treeToRows(child, p) : [p]; });
+}
+function rowsToTreeJS(rows) {
+  const tree = {};
+  for (const r of rows) { let node = tree; r.forEach((part, i) => { if (i === r.length - 1) { node[part] ||= {}; } else node = node[part] ||= {}; }); }
+  const clean = (n) => { const ks = Object.keys(n); return ks.length ? Object.fromEntries(ks.map((k) => [k, clean(n[k])])) : []; };
+  return clean(tree);
+}
+
+function imageField(q, set, label = "Image") {
+  const up = h("input", {type: "file", accept: "image/*", style: "display:none", onchange: async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    if (!S.path) { toast("Save the experiment first, so the image can be stored next to it"); return; }
+    const dir = S.path.replace(/[^/]*$/, ""), rel = "images/" + f.name.replace(/[^\w.\-]+/g, "_");
+    await fetch(`/api/upload?path=${encodeURIComponent(dir + rel)}`, {method: "POST", body: await f.arrayBuffer()});
+    set("image", rel, true); toast(`Saved ${rel} next to the experiment`); }});
+  return h("div", {class: "field"}, h("label", {}, h("span", {}, label)),
+    h("div", {class: "row2"}, h("input", {value: q.image || "", placeholder: "images/picture.png", onchange: (e) => set("image", e.target.value.trim(), true)}),
+      h("button", {class: "mini", onclick: () => up.click()}, "Upload…")), up,
+    h("div", {class: "help"}, "a file next to the experiment (e.g. images/shelf.png), or a web address"));
+}
+
+/* draw hot-spot regions by dragging on the image */
+function regionEditor(q, set) {
+  const box = h("div", {class: "sv-regions"});
+  if (!q.image) return h("div", {class: "help"}, "Choose an image first, then drag on it to draw the regions.");
+  const src = /^(https?:|data:|\/)/.test(q.image) ? q.image : `/api/file?path=${encodeURIComponent((S.path || "").replace(/[^/]*$/, "") + q.image)}`;
+  const img = h("img", {src, draggable: "false"});
+  const stage = h("div", {class: "sv-regstage"}, img);
+  const draw = () => {
+    stage.querySelectorAll(".sv-reg").forEach((x) => x.remove());
+    (q.regions || []).forEach((r) => put(stage, h("div", {class: "sv-reg", style: `left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%`}, r.label || r.id)));
+  };
+  let start = null, ghost = null;
+  const pct = (e) => { const b = img.getBoundingClientRect(); return [Math.max(0, Math.min(100, (e.clientX - b.left) / b.width * 100)), Math.max(0, Math.min(100, (e.clientY - b.top) / b.height * 100))]; };
+  stage.addEventListener("mousedown", (e) => { e.preventDefault(); start = pct(e); ghost = h("div", {class: "sv-reg ghost"}); stage.append(ghost); });
+  stage.addEventListener("mousemove", (e) => { if (!start) return; const p = pct(e);
+    ghost.style.cssText = `left:${Math.min(start[0], p[0])}%;top:${Math.min(start[1], p[1])}%;width:${Math.abs(p[0] - start[0])}%;height:${Math.abs(p[1] - start[1])}%`; });
+  stage.addEventListener("mouseup", (e) => { if (!start) return; const p = pct(e); ghost.remove();
+    const r = {x: +Math.min(start[0], p[0]).toFixed(1), y: +Math.min(start[1], p[1]).toFixed(1), w: +Math.abs(p[0] - start[0]).toFixed(1), h: +Math.abs(p[1] - start[1]).toFixed(1)};
+    start = null; if (r.w < 2 || r.h < 2) return;
+    const label = prompt("Name of this region (e.g. Logo, Price):", `Region ${(q.regions || []).length + 1}`); if (label === null) return;
+    const taken = new Set((q.regions || []).map((x) => x.id));
+    q.regions = [...(q.regions || []), {id: uniqueId(label.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "region", taken), label, ...r}];
+    set("regions", q.regions, true); });
+  img.onload = draw; draw();
+  put(box, stage, h("div", {class: "help"}, "Drag on the image to add a region."),
+    ...(q.regions || []).map((r, i) => h("div", {class: "row2 sv-regrow"}, h("input", {value: r.label || r.id, onchange: (e) => { r.label = e.target.value; set("regions", q.regions, true); }}),
+      h("small", {}, `${r.id}: ${r.x}, ${r.y}, ${r.w}×${r.h}%`), h("button", {class: "mini danger", onclick: () => { q.regions.splice(i, 1); set("regions", q.regions, true); }}, "×"))));
+  return box;
+}
+
+function renderExtraFields(opt, q, t, set, comp) {
+  const num = (label, key, help) => svField(label, q[key] ?? "", (v) => set(key, numOrBlank(v)), {type: "number", help});
+  const check = (label, key, help) => svCheck(label, q[key], (v) => set(key, v || undefined, true), help);
+  const itemLines = (label, help) => svField(label, (q.items || []).map((it) => (typeof it === "object" ? (it.text ?? it.label) : it)).join("\n"), (v) => {
+    q.items = lines(v).map((l, k) => { const old = (q.items || [])[k]; return {id: (old && old.id) || `${q.id}_${k + 1}`, text: l}; }); set("items", q.items, true); }, {area: true, rows: 4, help});
+  if (t === "text_block") put(opt, svField("Image, video or audio (optional)", q.media || "", (v) => set("media", v.trim(), true), {placeholder: "images/intro.png or sounds/tone.mp3"}),
+    svField("Caption", q.caption || "", (v) => set("caption", v, true)));
+  if (t === "text") put(opt, check("Hide what is typed (password)", "secret"), num("Min characters", "min_length"));
+  if (t === "date") put(opt, h("div", {class: "row2"}, svField("Earliest", q.min || "", (v) => set("min", v), {type: "date"}), svField("Latest", q.max || "", (v) => set("max", v), {type: "date"})));
+  if (t === "number") put(opt, svField("Unit shown after the box", q.unit || "", (v) => set("unit", v)));
+  if (t === "matrix") put(opt, check("Several answers per row (checkboxes)", "multi"),
+    svSelect("Display", q.display || "table", [["table", "table"], ["dropdown", "a drop-down per row"]], (v) => set("display", v === "table" ? undefined : v, true)));
+  if (t === "scale" || t === "slider") put(opt, itemLines("Several statements, one per line (optional)", "each gets its own row and data column"));
+  if (t === "slider") put(opt, svField("Unit", q.unit || "", (v) => set("unit", v)));
+  if (t === "rank") put(opt, svSelect("How participants rank", q.method || "drag", [["drag", "drag and drop"], ["select", "a drop-down per option"], ["text", "type the numbers"]], (v) => set("method", v === "drag" ? undefined : v, true)));
+  if (t === "constant_sum") put(opt, svSelect("The amounts must", q.must_total || "exact", [["exact", "add up exactly to the total"], ["at_most", "not exceed the total"], ["at_least", "reach at least the total"]], (v) => set("must_total", v === "exact" ? undefined : v)),
+    svField("Unit (e.g. % or €)", q.unit || "", (v) => set("unit", v)));
+  if (t === "graphic_slider") put(opt, svSelect("Style", q.style || "faces", [["faces", "faces"], ["stars", "stars"], ["hearts", "hearts"]], (v) => set("style", v, true)), num("Points", "points"),
+    h("div", {class: "row2"}, svField("Left label", (q.labels || [])[0] || "", (v) => set("labels", [v, (q.labels || [])[1] || ""])), svField("Right label", (q.labels || [])[1] || "", (v) => set("labels", [(q.labels || [])[0] || "", v]))));
+  if (t === "form") put(opt, svField("Fields, one per line: name | label | type | required", (q.fields || []).map((f) => [f.id, f.label, f.type || "text", f.required ? "required" : ""].join(" | ").replace(/ \| $/, "")).join("\n"),
+    (v) => set("fields", lines(v).map((l) => { const [id, label, type, req] = cells(l); return {id, label: label || id, ...(type && type !== "text" ? {type} : {}), ...(req ? {required: true} : {})}; }), true),
+    {area: true, rows: 5, help: "types: text, email, number, tel, date, password, url"}));
+  if (t === "side_by_side") put(opt, itemLines("Rows (one per line)"),
+    svField("Columns, one per line: name | heading | type | options separated by ;", (q.columns || []).map((c) => [c.id, c.label, c.type || "single", c.scale ? "scale:" + c.scale : (c.options || []).map((o) => typeof o === "object" ? o.label : o).join("; ")].join(" | ")).join("\n"),
+      (v) => set("columns", lines(v).map((l) => { const [id, label, type, op] = cells(l); const c = {id, label: label || id, type: type || "single"};
+        if (op && op.startsWith("scale:")) c.scale = op.slice(6).trim(); else if (op) c.options = op.split(";").map((x) => x.trim()).filter(Boolean); return c; }), true),
+      {area: true, rows: 4, help: "types: single, multiple, dropdown, text, number · options can be scale:agree5"}));
+  if (t === "group") put(opt, svField("Items to sort (one per line)", (q.items || []).map((x) => typeof x === "object" ? x.label : x).join("\n"), (v) => set("items", lines(v), true), {area: true, rows: 4}),
+    svField("Groups (one per line)", (q.groups || []).map((x) => typeof x === "object" ? x.label : x).join("\n"), (v) => set("groups", lines(v), true), {area: true, rows: 3}),
+    check("Rank the items inside each group", "rank_within"), check("Every item must be placed", "require_all"), check("Shuffle the items", "randomize"));
+  if (t === "hot_spot") put(opt, imageField(q, set), svSelect("Clicking a region", q.mode || "select", [["select", "selects it"], ["rate", "likes it / dislikes it"]], (v) => set("mode", v, true)),
+    num("At most this many selected", "max_select"), check("Show region names", "show_labels"), regionEditor(q, set));
+  if (t === "heat_map") put(opt, imageField(q, set), num("Clicks allowed", "max_clicks"));
+  if (t === "location") put(opt, imageField(q, set, "Map image (optional)"), check("Offer “use my current location”", "allow_geolocation", "uses the device's location service; the browser asks for permission"),
+    svField("Map edges for latitude/longitude: north, south, west, east (optional)", q.bounds ? [q.bounds.north, q.bounds.south, q.bounds.west, q.bounds.east].join(", ") : "",
+      (v) => { const n = v.split(",").map((x) => Number(x.trim())); set("bounds", n.length === 4 && n.every((x) => !isNaN(x)) ? {north: n[0], south: n[1], west: n[2], east: n[3]} : undefined); },
+      {help: "for a north-up map in a simple (equirectangular) projection"}));
+  if (t === "drill_down") put(opt, svField("List names (comma separated)", (q.levels || []).join(", "), (v) => set("levels", v.split(",").map((x) => x.trim()).filter(Boolean), true)),
+    svField("Choices, one path per line (France > Paris)", rowsToText(q.rows || treeToRows(q.tree)), (v) => { delete q.tree; set("rows", pathsToRows(v), true); }, {area: true, rows: 6, help: "or give a CSV file with one column per list as file:"}),
+    svField("…or a CSV / Excel file", q.file || "", (v) => set("file", v.trim())));
+  if (t === "highlight") put(opt, svField("Passage to highlight", q.passage || "", (v) => set("passage", v, true), {area: true, rows: 4}),
+    svField("Categories, one per line: name | label | colour", (q.categories || []).map((c) => [c.id, c.label, c.color].join(" | ")).join("\n"),
+      (v) => set("categories", lines(v).map((l) => { const [id, label, color] = cells(l); return {id, label: label || id, color: color || "#ffe58a"}; }), true), {area: true, rows: 3, help: "empty = like / dislike"}));
+  if (t === "file_upload") put(opt, svField("Allowed files", q.accept || "", (v) => set("accept", v), {placeholder: ".pdf,.png,image/*"}), num("Maximum size (MB)", "max_mb"));
+  if (t === "video_response") put(opt, check("Audio only (no camera)", "audio_only"), h("div", {class: "row2"}, num("Minimum seconds", "min_seconds"), num("Maximum seconds", "max_seconds")),
+    h("div", {class: "help"}, "The browser asks for camera/microphone permission. The recording is saved as a file in the session folder."));
+  if (t === "screen_capture") put(opt, h("div", {class: "help"}, "Participants capture their screen (the browser asks which screen or window), can black out private parts, and the image is saved in the session folder."));
+  if (t === "captcha") put(opt, num("Characters", "length"), h("div", {class: "help"}, "An offline typed-code check. It slows down simple bots; it is not a substitute for an online service such as reCAPTCHA."));
+  if (t === "timing") put(opt, h("div", {class: "row2"}, num("Minimum seconds before Next", "min_seconds"), num("Advance automatically after (s)", "max_seconds")),
+    check("Show the countdown on the Next button", "show_countdown"), h("div", {class: "help"}, "Invisible to participants. Records first click, last click, submit time and clicks on this page."));
+  if (t === "meta_info") put(opt, h("div", {class: "help"}, "Invisible. Saves browser, operating system, screen and window size, pixel ratio, language, time zone and touch support."));
+  if (t === "autocomplete") put(opt, svSelect("Suggestions from", q.list || "", [["", "my own options"], ["countries", "countries of the world"], ["languages", "languages"]], (v) => { if (v) { q.list = v; delete q.options; } else { delete q.list; q.options = q.options || ["Option 1"]; } svCommit(true); }),
+    !q.list ? svField("Options (one per line)", optionsToText(q.options), (v) => set("options", textToOptions(v), true), {area: true, rows: 5}) : null,
+    check("Accept answers that are not in the list", "free_text"));
+  if (t === "tree_test") put(opt, svField("Task", q.task || "", (v) => set("task", v, true), {area: true}),
+    svField("Menu, one path per line (Help > Returns)", rowsToText(q.rows || treeToRows(q.tree)), (v) => { q.tree = rowsToTreeJS(pathsToRows(v)); delete q.rows; set("tree", q.tree, true); }, {area: true, rows: 6}),
+    svField("Correct destination(s), one per line", Array.isArray(q.correct) ? q.correct.map((c) => Array.isArray(c) ? c.join(" > ") : c).join("\n") : (q.correct || ""),
+      (v) => { const c = lines(v); set("correct", c.length > 1 ? c : c[0]); }), check("Branches can be chosen too (not only end points)", "select_any"));
+  void comp;
 }

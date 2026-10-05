@@ -89,6 +89,8 @@ A questionnaire page: single and multiple choice, Likert items and matrices, sli
 |---|---|---|---|
 | `questions` | survey |  | the questions, in order; {instrument: phq9} adds a library questionnaire **(required)** |
 | `title` | str |  | heading on the first page |
+| `language` | str |  | page language, e.g. en, de, es, fr, he, ar: translates buttons and messages; he / ar / fa / ur … switch to right-to-left |
+| `direction` | choice: auto / ltr / rtl | `auto` | auto follows the language, or the first letters of the title and questions |
 | `intro` | text |  | instructions under the title (HTML allowed) |
 | `progress_bar` | bool | `True` | show progress across pages |
 | `allow_back` | bool | `True` | participants may go back to earlier pages |
@@ -114,6 +116,7 @@ Text: instructions, words, feedback. Supports expressions, e.g. "$f'Score: {scor
 | `bold` | bool | `False` | bold text |
 | `italic` | bool | `False` | italic text |
 | `wrap_width` | float |  | maximum line width before wrapping (window units) |
+| `direction` | choice: auto / ltr / rtl | `auto` | text direction; auto detects Hebrew, Arabic, Persian … (right-to-left) |
 | `pos` | vec2 | `[0, 0]` | position (window units, origin centre) |
 | `opacity` | float | `1.0` | 0 (invisible) to 1 (opaque) |
 | `ori` | float | `0.0` | rotation, degrees clockwise |

@@ -20,8 +20,9 @@ gtec = []  # pygds ships with g.NEEDaccess; install it from g.tec's SDK
 mcp = ["mcp>=1.2"]
 html = ["pywebview>=4"]
 export = ["pyarrow>=12", "scipy>=1.10"]
-all = ["pyglet>=2.0", "pylsl>=1.16", "pyserial>=3.5", "numpy>=1.24", "mcp>=1.2"]
-dev = ["pytest>=7", "mcp>=1.2", "openpyxl>=3"]
+rtl = ["python-bidi>=0.4", "arabic-reshaper>=3"]
+all = ["pyglet>=2.0", "pylsl>=1.16", "pyserial>=3.5", "numpy>=1.24", "mcp>=1.2", "python-bidi>=0.4", "arabic-reshaper>=3"]
+dev = ["pytest>=7", "mcp>=1.2", "openpyxl>=3", "python-bidi>=0.4", "arabic-reshaper>=3"]
 
 [project.scripts]
 edge = "edge.cli:main"
@@ -35,7 +36,7 @@ include = ["edge*"]
 
 [tool.setuptools.package-data]
 "edge.builder" = ["static/*"]
-"edge" = ["tutorials/*.yaml"]
+"edge" = ["tutorials/*.yaml", "survey_page/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

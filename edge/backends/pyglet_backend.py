@@ -56,7 +56,8 @@ class PygletStim(Stim):
                 self.obj = pyglet.text.Label("", anchor_x="center", anchor_y="center", multiline=True,
                                              align="center", width=int(p.get("wrap_width") or self.b.size[0] * 0.8))
             o = self.obj
-            o.text = str(p.get("text", ""))
+            from ..bidi import visual
+            o.text = visual(str(p.get("text", "")), str(p.get("direction") or "auto"))   # right-to-left scripts
             o.font_name = p.get("font") or None
             o.font_size = float(p.get("height", 32)) * 0.75  # px -> pt
             o.bold = bool(p.get("bold", False))

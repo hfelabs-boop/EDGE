@@ -289,6 +289,13 @@ def referenced_files(doc: dict[str, Any], base_dir: Path | None = None) -> set[s
             for k, meta in cls.all_props().items():
                 if meta.get("type") in FILE_PROP_TYPES and literal(c.get(k)) and not _is_number(c.get(k)):
                     out.add(c[k])
+            if c.get("type") == "survey":       # images / media / drill-down files used by survey questions
+                try:
+                    from .survey import media_files
+                    out |= {f for f in media_files(c.get("questions") or []) if literal(f)}
+                except Exception:
+                    pass
+                out |= {q["file"] for q in c.get("questions") or [] if isinstance(q, dict) and literal(q.get("file"))}
 
     def walk(nodes: Any) -> Iterator[dict]:
         for n in nodes or []:

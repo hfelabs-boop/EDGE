@@ -33,25 +33,95 @@ consent and demographics before the task, the others after it.
 
 ## Question types
 
+The 35 types follow the catalogue of professional survey platforms (Qualtrics groups them as standard,
+advanced and specialty questions). Every answer type is saved as tidy data columns; files go to the
+session folder.
+
+### Standard
+
 | type | what participants see | saved as |
 |---|---|---|
-| `text_block` | text or HTML (instructions, a section heading, an image) | nothing |
+| `text_block` | text or HTML, plus an image, video or audio file (`media`, `caption`) | nothing |
 | `single` | radio buttons, one answer; `layout: horizontal`; `other_option` adds a text box | the option's value (`<id>_other` for the typed text) |
 | `dropdown` | a drop-down list | the option's value |
-| `multiple` | checkboxes; `min_choices`, `max_choices`, `exclusive: [None of these]` | `a; b` plus one 0/1 column per option (`<id>_<option>`) |
+| `multiple` | checkboxes, or a multi-select box (`layout: listbox`); `min_choices`, `max_choices`, `exclusive: [None of these]` | `a; b` plus one 0/1 column per option (`<id>_<option>`) |
 | `likert` | one statement on a scale (`scale: agree5` …) | the value (e.g. 1-5) |
-| `matrix` | several statements (`items`) on the same scale, as a table; items can be `reverse: true` | one column per item |
+| `matrix` | statements (`items`) on a shared scale, as a table; items can be `reverse: true`; `multi: true` = checkboxes per row; `display: dropdown` = a drop-down per row | one column per item (multi: `a; b` plus 0/1 per option) |
 | `semantic` | bipolar items (`left`/`right` words) on an N-point scale | one column per item |
-| `scale` | numbers 1..N (`points`) with end `labels` | the number |
-| `nps` | 0-10 recommend scale | the number |
-| `slider` | a visual analogue scale (`min`, `max`, `step`, end `labels`); must be moved to count as answered | the number |
-| `text` | one line; `validate: email \| number \| integer`, `pattern` (regular expression), `max_length` | the text |
-| `essay` | a text area; `rows`, `min_length`, `max_length` (with a live character count) | the text |
-| `number` | a number; `min`, `max`, `step` | the number |
-| `date` | a date picker | `YYYY-MM-DD` |
-| `rank` | put options in order by dragging or with ↑/↓ | `a > b > c` plus the rank of each option (`<id>_<option>`) |
-| `constant_sum` | share a `total` (default 100) across options; must add up | one column per option |
+| `scale` | numbered buttons 1..N (`points`) with end `labels`, for one question or several `items` | the number (per item) |
+| `nps` | Net Promoter 0-10 | the number and `<id>_group`: promoter (9-10), passive (7-8), detractor (0-6) |
+| `slider` | slider(s) (`min`, `max`, `step`, end `labels`, `unit`, several `items`); must be moved to count as answered | the number (per item) |
+| `text` | one line; `validate: email \| number \| integer`, `pattern` (regular expression), `min_length`, `max_length`, `secret: true` (password field) | the text |
+| `essay` | a text area (`rows: 2` gives a multi-line short answer); `min_length`, `max_length`, live character count | the text |
+| `number` | a number; `min`, `max`, `step`, `unit` | the number |
+| `date` (or `calendar`) | a calendar date picker; `min`, `max` | `YYYY-MM-DD` |
+| `form` | several labelled fields in one question (`fields`: id, label, type text/email/number/tel/date/password/url, required, pattern) | one column per field |
+| `rank` | put options in order: drag (or ↑/↓), a drop-down per option, or typed numbers (`method: drag \| select \| text`) | `a > b > c` plus the rank of each option |
+| `side_by_side` | several questions (`columns`: single, multiple, dropdown, text, number) asked for the same rows (`items`) in one table | one column per row × column (`<row>_<column>`) |
+
+### Advanced
+
+| type | what participants see | saved as |
+|---|---|---|
+| `constant_sum` | share a `total` across options with a running total; `must_total: exact \| at_most \| at_least`, `unit` | one column per option |
+| `group` | pick, group & rank: drag `items` into `groups` (or use each item's menu); `rank_within`, `require_all` | the group of each item, the items of each group, ranks within groups |
+| `hot_spot` | regions on an `image` to click: `mode: select` (on/off, `max_select`) or `mode: rate` (like / dislike) | one column per region (1 / 0, or 1 / -1 / 0) and the number selected |
+| `heat_map` | click anywhere on an `image` (`max_clicks`); optional `regions` count the clicks inside them | all clicks `[[x, y], …]` (0-1), first click x / y, clicks per region |
+| `graphic_slider` | a face that changes with the slider (`style: faces`), or clickable stars / hearts | the number |
+| `drill_down` | cascading drop-downs (`levels`), the choices from a `tree`, `rows` (`[France, Paris]`) or a CSV/Excel `file` with one column per level | each level, and the whole path |
+| `highlight` | highlight words of a `passage` in categories (default like / dislike; your own `categories` with colours) by clicking or dragging | the words per category, and their number |
+| `signature` | a drawing pad for a signature (mouse, pen or finger) | a PNG file in `survey_files/`, and `<id>_signed` |
+| `timing` | invisible; optional `min_seconds` before Next is enabled (with a countdown) and `max_seconds` to move on automatically | first click, last click, submit time, number of clicks on the page |
+| `meta_info` | invisible | browser, operating system, screen, window size, pixel ratio, language, time zone, touch, user agent |
+| `file_upload` | attach a file (`accept`, `max_mb`) | the file in `survey_files/`, its original name and size |
+| `captcha` | type a distorted code (works offline; a new code after a wrong answer) | passed, attempts |
+| `autocomplete` | a text box with suggestions from `options` or `list: countries \| languages`; `free_text` allows answers not in the list | the value |
+
+### Specialty
+
+| type | what participants see | saved as |
+|---|---|---|
+| `tree_test` | a navigation tree (`tree` or `rows` of paths) and a `task`; they open branches and choose where they'd find it; `correct` path(s) | the path, success, directness (no wrong branch opened), clicks, time |
+| `video_response` | record video, or audio only (`audio_only`), with the webcam / microphone; `min_seconds`, `max_seconds`; play back and re-record | the recording in `survey_files/` and its length |
+| `screen_capture` | capture the screen (the browser asks which), then drag to black out private parts | a PNG in `survey_files/` and the number of blacked-out areas |
+| `location` | mark a place on a map `image` (with `bounds` for latitude/longitude) and/or use the device location (`allow_geolocation`) | x / y on the map, latitude / longitude, source (map or gps) |
 | `page_break` | starts a new page | `pageN_time` per page |
+
+### Coverage of the professional question catalogue
+
+| Qualtrics question type | EDGE |
+|---|---|
+| Multiple choice (single, multiple, dropdown, multi-select box, horizontal) | `single`, `multiple`, `dropdown`, `layout: horizontal \| listbox` |
+| Text entry (single line, multi-line, essay, password, validation) | `text` (`secret`, `validate`, `pattern`, `min_length`), `essay` |
+| Text / graphic | `text_block` with `media` |
+| Matrix table (Likert, bipolar, multi-answer, dropdown) | `matrix` (`multi`, `display: dropdown`), `semantic` |
+| Number scale | `scale` (with `items`) |
+| Form field | `form` |
+| Net Promoter Score | `nps` (promoter / passive / detractor) |
+| Slider | `slider` (several `items`) |
+| Rank order (drag, select, text box) | `rank` (`method`) |
+| Side by side | `side_by_side` |
+| Calendar | `date` / `calendar` |
+| Constant sum | `constant_sum` |
+| Pick, group & rank | `group` |
+| Hot spot | `hot_spot` (regions drawn in the editor) |
+| Heat map | `heat_map` |
+| Graphic slider | `graphic_slider` |
+| Drill down | `drill_down` |
+| Highlight | `highlight` |
+| Signature | `signature` |
+| Timing | `timing` (and `pageN_time` on every survey) |
+| Meta info | `meta_info` |
+| File upload | `file_upload` |
+| Captcha verification | `captcha`: an offline typed code. It deters simple scripts; it is not reCAPTCHA, which needs an internet service and a key |
+| Autocomplete | `autocomplete` |
+| Tree testing | `tree_test` |
+| Video response | `video_response` |
+| Screen capture | `screen_capture` |
+| Location selector | `location` (a map image you provide, or the device location) |
+| ArcGIS map | not included: it needs an online ArcGIS account and map service. Use `location` with your own map image |
+| Unmoderated user testing | not included: it records sessions on external websites through a separate service. For prototypes, show them in an `html` page and record `video_response` / `screen_capture` |
+| Interview selector | not included: scheduling belongs to a recruitment system |
 
 Options can be plain text (saved as written) or `{value: 1, label: Strongly disagree}` (the value is
 saved). In the editor, write `1 = Strongly disagree` on a line to keep a number code.
@@ -111,6 +181,8 @@ Data from this page: `about.age`, `about.gender` … `about.sleep`, `about.caffe
 |---|---|---|
 | `questions` | | the questions in order (required) |
 | `title`, `intro` | | heading and instructions on the first page (HTML allowed) |
+| `language` | automatic | `en`, `de`, `es`, `fr`, `he`, `ar` …: translates the buttons and messages; right-to-left languages (Hebrew, Arabic, Persian, Urdu …) lay the page out right to left |
+| `direction` | `auto` | `ltr` or `rtl`; `auto` follows the language, or the first letters of the title and questions |
 | `progress_bar` | `true` | a progress bar across pages |
 | `allow_back` | `true` | a Back button (answers are kept when going back and forth) |
 | `next_label`, `back_label`, `submit_label` | Next / Back / Submit | button texts |
@@ -118,6 +190,24 @@ Data from this page: `about.age`, `about.gender` … `about.sleep`, `about.caffe
 | `scores` | | your own scores (below) |
 | `css` | | extra CSS for the page |
 | `display`, `fullscreen` | auto / true | as for HTML pages: a pywebview window if installed, otherwise the browser |
+
+### Right-to-left languages
+
+Surveys support Hebrew, Arabic, Persian, Urdu and other right-to-left languages completely: the page
+direction, text alignment, the order of answer options and scale points (first option on the right),
+matrix tables, sliders (minimum on the right), progress bar, buttons, rank lists, drill-downs and the
+tree test are all mirrored, and mixed right-to-left / left-to-right text is laid out by the browser's
+bidirectional algorithm.
+
+* Write the questions in Hebrew or Arabic and the page switches to right-to-left on its own, with the
+  buttons and messages in that language. Or set `language: he` / `ar` / `fa` / `ur`, or `direction: rtl`.
+* Buttons and messages are translated for English, German, Spanish, French, Hebrew and Arabic; for other
+  languages set `labels` (any message not given stays English).
+* In the builder, every text box follows the direction of what you type, and the survey editor has
+  *Language* and *Direction* settings. The live preview shows the page exactly as participants see it.
+* Text on experiment screens (the `text` component) has `direction: auto | ltr | rtl`. The browser
+  views (preview, Try it) handle it natively; the experiment window reorders and joins the letters with
+  `python-bidi` and `arabic-reshaper` (included in `pip install "edge-experiments[all]"`, or `[rtl]`).
 
 ### Display logic
 
