@@ -15,6 +15,7 @@ edge start [-h] [--port PORT] [--no-browser] [directory]
 | `directory` | experiments folder (default: ~/Documents/EDGE Experiments) |
 | `--port` | local port for the builder |
 | `--no-browser` | do not open a browser window |
+| `--from-shortcut` | ==SUPPRESS== |
 
 ## edge desktop-shortcut
 

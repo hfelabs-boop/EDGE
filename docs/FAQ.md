@@ -20,6 +20,17 @@ Every session also measures the real refresh rate and reports problems in its re
 Use the installer for your system (see [Getting started](GETTING_STARTED.md#1-install)); it puts an
 EDGE icon on the desktop. If you installed with pip, `edge desktop-shortcut` makes the icon.
 
+**The EDGE icon is on the desktop but nothing opens.**
+The icon starts EDGE quietly in the background (no black window), so problems used to be invisible. Now
+a failure shows a message box with the reason, and everything is written to `~/.edge/launch.log`
+(Windows: `C:\Users\<you>\.edge\launch.log`). Things to check, in this order:
+1. Wait 5 seconds, then open <http://127.0.0.1:8765/> in your browser: EDGE may be running without a
+   browser having opened (EDGE shows this address when it can't open a browser).
+2. Open `launch.log`: the last lines say what happened.
+3. In a terminal, run `edge doctor`, then `edge` (it prints what is going on).
+4. Make the icon again with `edge desktop-shortcut`, or run the installer again; it also checks that
+   EDGE really installed (a missing `git` or no internet connection are the usual causes).
+
 **What's the difference between Test run, Try it and Run with a participant?**
 **Test run**: a virtual participant does the whole experiment in seconds with simulated hardware, to
 catch mistakes and show the data you'll get. **Try it**: *you* do the experiment inside the builder, to

@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, urlparse
 from .. import storage
 
 STATIC = Path(__file__).parent / "static"
+ASSETS = Path(__file__).resolve().parent.parent / "assets"
 ASSET_KINDS = {
     "image": (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".tif", ".tiff"),
     "audio": (".wav", ".mp3", ".ogg", ".flac", ".aiff", ".aif", ".m4a"),
@@ -345,6 +346,12 @@ def make_handler(app: BuilderApp):
                     if STATIC.resolve() not in f.parents or not f.exists():
                         return self._json({"error": "not found"}, 404)
                     return self._send(200, f.read_bytes(), mimetypes.guess_type(str(f))[0] or "application/octet-stream")
+                if u.path == "/favicon.ico" or u.path.startswith("/assets/"):
+                    name = "edge-32.png" if u.path == "/favicon.ico" else Path(u.path).name
+                    f = (ASSETS / name).resolve()
+                    if ASSETS.resolve() not in f.parents or not f.is_file() or f.suffix not in (".png", ".svg", ".ico"):
+                        return self._json({"error": "not found"}, 404)
+                    return self._send(200, f.read_bytes(), mimetypes.guess_type(str(f))[0] or "application/octet-stream")
                 if u.path == "/api/schema":
                     return self._json(schema())
                 if u.path == "/api/files":
@@ -571,8 +578,22 @@ def _is_builder(host: str, port: int, root: Path) -> bool:
         return False
 
 
+def open_in_browser(url: str, notify: Any = None) -> bool:
+    """Open the builder in the default browser; if that is impossible say where to go instead."""
+    try:
+        ok = bool(webbrowser.open(url))
+    except Exception:
+        ok = False
+    if not ok:
+        msg = f"EDGE is running, but no web browser could be opened.\nOpen this address in your browser:\n{url}"
+        print(msg)
+        if notify:
+            notify("EDGE is running", msg)
+    return ok
+
+
 def serve(root: Path, host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True,
-          path_query: str = "") -> None:
+          path_query: str = "", notify: Any = None) -> None:
     app = BuilderApp(root)
     httpd = None
     for p in range(port, port + 20):
@@ -585,14 +606,14 @@ def serve(root: Path, host: str = "127.0.0.1", port: int = 8765, open_browser: b
                 url = f"http://{host}:{p}/{path_query}"
                 print(f"EDGE builder is already running at {url}")
                 if open_browser:
-                    webbrowser.open(url)
+                    open_in_browser(url, notify)
                 return
     if httpd is None:
         raise OSError(f"no free port between {port} and {port + 19}")
     url = f"http://{host}:{port}/{path_query}"
     print(f"EDGE builder running at {url}  (directory: {app.root})  Ctrl+C to stop")
     if open_browser:
-        threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+        threading.Timer(0.5, lambda: open_in_browser(url, notify)).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

@@ -39,6 +39,8 @@ say "2/4  Installing EDGE (a minute or two)"
 "$VPY" -m pip install --quiet --upgrade "edge-experiments[all] @ $EDGE_SOURCE" 2>/dev/null \
   || "$VPY" -m pip install --quiet --upgrade "$EDGE_SOURCE[all]"
 
+"$VPY" -c "import edge" 2>/dev/null || { say "Installing EDGE did not work (see the messages above): no internet connection, or git missing?"; exit 1; }
+
 say "3/4  Adding the 'edge' command"
 mkdir -p "$HOME/.local/bin"
 ln -sf "$HOME/.edge/venv/bin/edge" "$HOME/.local/bin/edge"
@@ -50,3 +52,4 @@ say "4/4  Creating the desktop icon"
 "$VPY" -m edge desktop-shortcut || true
 
 say "Done. Double-click the EDGE icon, or type:  edge"
+echo "If the icon does not open, look at ~/.edge/launch.log or run:  edge doctor"

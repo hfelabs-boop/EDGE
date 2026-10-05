@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2b2f77"/>
+      <stop offset="0.55" stop-color="#4a2f9e"/>
+      <stop offset="1" stop-color="#0f8fb3"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.55">
+      <stop offset="0" stop-color="#9ff3ff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#9ff3ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="brain" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cfe9ff"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7cf5ff"/>
+      <stop offset="0.5" stop-color="#ffe27a"/>
+      <stop offset="1" stop-color="#ff9ad5"/>
+    </linearGradient>
+    <clipPath id="tile"><rect x="16" y="16" width="480" height="480" rx="112"/></clipPath>
+  </defs>
+
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bg)"/>
+  <g clip-path="url(#tile)">
+    <circle cx="256" cy="215" r="250" fill="url(#glow)"/>
+    <!-- faint lab grid -->
+    <g stroke="#ffffff" stroke-opacity="0.07" stroke-width="2">
+      <path d="M16 96H496M16 176H496M16 256H496M16 336H496M16 416H496"/>
+      <path d="M96 16V496M176 16V496M256 16V496M336 16V496M416 16V496"/>
+    </g>
+  </g>
+
+  <!-- brain silhouette: outline pass (stroke) then fill pass, so only the outer edge shows -->
+  <g id="silhouette">
+    <g fill="#bfe4ff" stroke="#bfe4ff" stroke-width="10" stroke-linejoin="round">
+      <circle cx="170" cy="190" r="62"/><circle cx="238" cy="148" r="64"/><circle cx="318" cy="150" r="62"/>
+      <circle cx="372" cy="196" r="58"/><circle cx="388" cy="256" r="50"/><circle cx="150" cy="252" r="56"/>
+      <circle cx="205" cy="262" r="64"/><circle cx="290" cy="252" r="72"/><circle cx="345" cy="270" r="52"/>
+      <ellipse cx="365" cy="332" rx="62" ry="40"/>
+      <path d="M232 296 L292 296 L282 378 Q262 392 246 378 Z"/>
+    </g>
+    <g fill="url(#brain)">
+      <circle cx="170" cy="190" r="62"/><circle cx="238" cy="148" r="64"/><circle cx="318" cy="150" r="62"/>
+      <circle cx="372" cy="196" r="58"/><circle cx="388" cy="256" r="50"/><circle cx="150" cy="252" r="56"/>
+      <circle cx="205" cy="262" r="64"/><circle cx="290" cy="252" r="72"/><circle cx="345" cy="270" r="52"/>
+      <ellipse cx="365" cy="332" rx="62" ry="40"/>
+      <path d="M232 296 L292 296 L282 378 Q262 392 246 378 Z"/>
+    </g>
+  </g>
+
+  <!-- gyri: folds -->
+  <g fill="none" stroke="#6b5fd6" stroke-opacity="0.55" stroke-width="7" stroke-linecap="round">
+    <path d="M214 120C196 150 232 168 214 198C200 222 236 238 220 268"/>
+    <path d="M290 112C276 142 312 160 296 190C284 212 318 230 304 262"/>
+    <path d="M358 150C342 176 372 192 356 220"/>
+    <path d="M128 232C156 224 160 250 188 242"/>
+    <path d="M250 300C276 292 292 312 318 300"/>
+    <path d="M340 338C358 326 376 340 392 328"/>
+    <path d="M168 168C186 158 198 172 214 164"/>
+  </g>
+
+  <!-- neural network over the brain -->
+  <g stroke="#13b6d6" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.95">
+    <path d="M168 226L220 196L274 232L330 190L372 232"/>
+    <path d="M220 196L238 148M274 232L290 292M330 190L318 150M168 226L150 262M372 232L360 290"/>
+    <path d="M220 196L290 292L360 290"/>
+  </g>
+  <g fill="#ffffff" stroke="#13b6d6" stroke-width="5">
+    <circle cx="168" cy="226" r="11"/><circle cx="220" cy="196" r="13"/><circle cx="274" cy="232" r="11"/>
+    <circle cx="330" cy="190" r="13"/><circle cx="372" cy="232" r="11"/><circle cx="238" cy="148" r="9"/>
+    <circle cx="318" cy="150" r="9"/><circle cx="290" cy="292" r="10"/><circle cx="360" cy="290" r="9"/><circle cx="150" cy="262" r="8"/>
+  </g>
+
+  <!-- EEG / signal trace: the experiment is measuring it -->
+  <path d="M40 432H116L136 400L158 462L184 372L208 450L228 420H262L284 396L302 440L320 416H356L376 380L398 452L420 432H472"
+        fill="none" stroke="url(#wave)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M40 432H116L136 400L158 462L184 372L208 450L228 420H262L284 396L302 440L320 416H356L376 380L398 452L420 432H472"
+        fill="none" stroke="#ffffff" stroke-opacity="0.45" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- tile highlight -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="3"/>
+</svg>

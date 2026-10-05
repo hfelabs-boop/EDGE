@@ -35,10 +35,22 @@ $vpy = Join-Path $venv "Scripts\python.exe"
 & $vpy -m pip install --quiet --upgrade pip
 
 Say "2/3  Installing EDGE (a minute or two)"
+if ($source -like "git+*" -and -not (Get-Command git -ErrorAction SilentlyContinue)) {
+  Write-Host "EDGE is downloaded with git, which is not installed. Install it from https://git-scm.com/download/win"
+  Write-Host "(or download the EDGE folder from GitHub as a zip, unpack it and run this script from inside it), then run this again."
+  exit 1
+}
 & $vpy -m pip install --quiet --upgrade "edge-experiments[all] @ $source"
 if ($LASTEXITCODE -ne 0) { & $vpy -m pip install --quiet --upgrade "$source[all]" }
+& $vpy -c "import edge" 2>$null
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "Installing EDGE did not work (see the messages above). Common causes: no internet connection, or git missing."
+  exit 1
+}
 
 Say "3/3  Creating the desktop icon"
 & $vpy -m edge desktop-shortcut
+if ($LASTEXITCODE -ne 0) { Write-Host "The icon could not be created. You can still start EDGE with:  $vpy -m edge"; exit 1 }
 
-Say "Done. Double-click EDGE on your desktop."
+Say "Done. Double-click EDGE on your desktop (or find it in the Start menu)."
+Write-Host "If it does not open, look at $env:USERPROFILE\.edge\launch.log or run:  $vpy -m edge doctor"

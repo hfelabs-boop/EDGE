@@ -38,7 +38,7 @@ include = ["edge*"]
 
 [tool.setuptools.package-data]
 "edge.builder" = ["static/*"]
-"edge" = ["tutorials/*.yaml", "survey_page/*"]
+"edge" = ["tutorials/*.yaml", "survey_page/*", "assets/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

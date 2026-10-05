@@ -270,13 +270,19 @@ def test_launcher_workspace_and_shortcuts(tmp_path, monkeypatch):
     monkeypatch.setenv("EDGE_HOME", str(tmp_path / "EDGE Experiments"))
     ws = launcher.ensure_workspace()
     assert ws == tmp_path / "EDGE Experiments" and (ws / "README.md").exists()
+    monkeypatch.setenv("EDGE_STATE", str(tmp_path / "state"))
     linux = launcher.desktop_shortcut("linux", desktop=tmp_path / "Desktop")
     text = linux[0].read_text()
     assert "Exec=" in text and "start" in text and '"' in text and "EDGE Experiments" in text
+    assert "--from-shortcut" in text and "Icon=" + str(tmp_path / "state" / "icons" / "edge-256.png") in text
     mac = launcher.desktop_shortcut("darwin", desktop=tmp_path / "mac")
-    assert mac[0].name == "EDGE.command" and mac[0].read_text().startswith("#!/bin/sh")
-    win = launcher.desktop_shortcut("win32", desktop=tmp_path / "win")
-    assert win[0].name == "EDGE.bat" and "-m edge start" in win[0].read_text()
+    assert mac[0].name == "EDGE.app" and (mac[0] / "Contents" / "Resources" / "edge.icns").exists()
+    assert (mac[0] / "Contents" / "MacOS" / "EDGE").read_text().startswith("#!/bin/sh")
+    # no PowerShell here: the plain launcher is the fallback
+    def no_powershell(cmd, **kw):
+        raise FileNotFoundError("powershell")
+    win = launcher.desktop_shortcut("win32", desktop=tmp_path / "win", run=no_powershell)
+    assert win[0].name == "EDGE.bat" and "-m edge start --from-shortcut" in win[0].read_text()
 
 
 def test_terminal_wizard_questions(tmp_path):

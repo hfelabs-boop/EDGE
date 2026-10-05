@@ -425,7 +425,9 @@ def cmd_builder(a: argparse.Namespace) -> int:
 
 
 def cmd_start(a: argparse.Namespace) -> int:
-    from .launcher import launch
+    from .launcher import launch, launch_from_shortcut
+    if a.from_shortcut:
+        return launch_from_shortcut(a.directory, port=a.port)
     return launch(a.directory, port=a.port, open_browser=not a.no_browser)
 
 
@@ -468,6 +470,7 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("directory", nargs="?", help="experiments folder (default: ~/Documents/EDGE Experiments)")
     st.add_argument("--port", type=int, default=8765, help="local port for the builder")
     st.add_argument("--no-browser", action="store_true", help="do not open a browser window")
+    st.add_argument("--from-shortcut", action="store_true", help=argparse.SUPPRESS)
     st.set_defaults(fn=cmd_start)
 
     sc = sub.add_parser("desktop-shortcut", help="put an EDGE icon on the desktop / in the app menu")
