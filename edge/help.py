@@ -50,7 +50,7 @@ def slug(s: str) -> str:
 
 def topics() -> list[dict[str, str]]:
     """All guides: {"id", "title", "summary", "group"}."""
-    order = ["README", "GETTING_STARTED", "TUTORIALS", "BUILDER_GUIDE", "EXPERIMENT_FORMAT", "COOKBOOK", "DATA",
+    order = ["README", "GETTING_STARTED", "TUTORIALS", "BUILDER_GUIDE", "EXPERIMENT_FORMAT", "SURVEYS", "COOKBOOK", "DATA",
              "DEVICES", "IMPORT", "MCP", "FAQ", "ARCHITECTURE"]
     out = []
     base = docs_dir()
@@ -316,7 +316,68 @@ def build_cli_reference() -> str:
     return "\n".join(out) + "\n"
 
 
+def build_questionnaire_reference() -> str:
+    from .survey import QUESTION_TYPES, count_items, expand
+    from .survey_library import CATEGORY_ORDER, INSTRUMENTS, SCALE_TITLES, SCALES
+    out = ["# Questionnaire library", "",
+           "Generated from the code by `edge docs build`. Add any of these to a survey with",
+           "`{instrument: <id>}` (or **+ Questionnaire** in the builder). Scores are computed when the participant",
+           "submits and saved as data columns. See [Surveys](../SURVEYS.md) for how to build your own questions.", "",
+           "> All instruments listed are free to use for research. Check the wording and licence against the",
+           "> original publication before collecting data, especially for translations, clinical or commercial use.", "",
+           "| id | questionnaire | items | minutes | scores |", "|---|---|---|---|---|"]
+    order = sorted(INSTRUMENTS.values(), key=lambda i: (CATEGORY_ORDER.index(i["category"]), i["title"]))
+    for ins in order:
+        out.append(f"| `{ins['id']}` | [{ins['title']}](#{slug(ins['title'])}) | {count_items(ins['questions'])} | "
+                   f"{ins['minutes']} | {', '.join('`' + k + '`' for k in (ins.get('scores') or {})) or '—'} |")
+    cat = None
+    for ins in order:
+        if ins["category"] != cat:
+            cat = ins["category"]
+            out += ["", f"## {cat}"]
+        out += ["", f"### {ins['title']}", "", ins["description"], "", f"**Use:** `{{instrument: {ins['id']}}}`  ",
+                f"**Cite:** {ins['citation']}  ", f"**Licence:** {ins['licence']}", ""]
+        flat, _ = expand(ins["questions"])
+        for q in flat:
+            t = q["type"]
+            if t == "text_block":
+                continue
+            opts = "; ".join(f"{o['value']} = {o['label']}" if str(o["value"]) != o["label"] else o["label"]
+                             for o in q.get("options") or [])
+            head = f"* `{q.get('id')}` ({QUESTION_TYPES[t]['label'].lower()}): {q.get('text', '')}"
+            if q.get("show_if"):
+                head += f" *(shown if {q['show_if']})*"
+            out.append(head)
+            if t in ("slider",):
+                out.append(f"  {q.get('min', 0)}-{q.get('max', 100)}, labels: {' / '.join(q.get('labels') or [])}")
+            elif opts:
+                out.append(f"  Answers: {opts}")
+            for it in q.get("items") or []:
+                out.append(f"  * `{it['id']}` {it.get('text', '')}{' **(R)**' if it.get('reverse') else ''}")
+        if ins.get("scores"):
+            out += ["", "Scores:", ""]
+            for name, sc in ins["scores"].items():
+                rule = sc.get("method", "sum" if "items" in sc else "correct")
+                if rule in ("sum", "mean"):
+                    rule = f"{rule} of {', '.join(sc['items'])}" + (" (R) items reversed" if any(
+                        it.get("reverse") for q in flat for it in q.get("items") or []) else "")
+                    if sc.get("multiply"):
+                        rule += f", × {sc['multiply']}"
+                elif rule == "flag":
+                    rule = f"1 if any of {', '.join(sc['items'])} ≥ {sc.get('threshold', 1)}"
+                elif rule == "correct":
+                    rule = f"number answered as instructed among {', '.join(sc.get('correct', []))}"
+                bands = (" Bands: " + ", ".join(f"≤{m} {lab}" for m, lab in sc["bands"])) if sc.get("bands") else ""
+                out.append(f"* `{name}`: {sc.get('description', '')}. Rule: {rule}.{bands}")
+    out += ["", "## Answer scales", "", "Use `scale: <name>` on single, likert and matrix questions.", "",
+            "| name | scale | answers (saved value = label) |", "|---|---|---|"]
+    for k, opts in SCALES.items():
+        out.append(f"| `{k}` | {SCALE_TITLES.get(k, '')} | {'; '.join(f'{v} = {lab}' for v, lab in opts)} |")
+    return "\n".join(out) + "\n"
+
+
 GENERATED = {
+    "reference/questionnaires.md": build_questionnaire_reference,
     "reference/components.md": build_component_reference,
     "reference/devices.md": build_device_reference,
     "reference/cli.md": build_cli_reference,

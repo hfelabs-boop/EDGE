@@ -60,10 +60,17 @@ class SessionTables:
             if exp_file.exists() else {}
         self.comp_types: dict[str, str] = {}
         self.comp_routine: dict[str, str] = {}
+        self.survey_columns: dict[str, dict[str, str]] = {}   # survey component -> column -> description
         for rid, r in (self.experiment.get("routines") or {}).items():
             for c in (r or {}).get("components", []) or []:
                 self.comp_types.setdefault(c.get("id"), c.get("type"))
                 self.comp_routine.setdefault(c.get("id"), rid)
+                if c.get("type") == "survey" and c.get("id") not in self.survey_columns:
+                    try:
+                        from .survey import columns
+                        self.survey_columns[c["id"]] = columns(c.get("questions") or [], c.get("scores") or {})
+                    except Exception:
+                        self.survey_columns[c["id"]] = {}
         self.loops: dict[str, dict[str, Any]] = self.meta.get("loops", {}) or {}
         self.condition_cols: dict[str, str] = {}   # column -> loop id
         for lid, info in self.loops.items():
@@ -189,7 +196,7 @@ def classify(col: str, st: SessionTables) -> str:
     comp = col.rpartition(".")[0]
     if comp in (st.experiment.get("routines") or {}) and suffix in ("start", "duration"):
         return "timing"
-    if st.comp_types.get(comp) == "html" and suffix not in ("onset", "duration"):
+    if st.comp_types.get(comp) in ("html", "survey") and suffix not in ("onset", "duration"):
         return "response"
     if "." in col and suffix.rstrip("_0123456789") in RESPONSE_SUFFIXES:
         return "response"
@@ -237,7 +244,8 @@ def _num(v: Any) -> float | None:
 def detect_measures(st: SessionTables, rows: list[dict[str, Any]]) -> tuple[str | None, str | None]:
     """Pick the main response component: the one with the most non-missing RTs (corr preferred)."""
     best, best_score = None, -1
-    comps = {c.rpartition(".")[0] for r in rows for c in r if c.endswith(".rt")}
+    comps = {c.rpartition(".")[0] for r in rows for c in r if c.endswith(".rt")
+             and st.comp_types.get(c.rpartition(".")[0]) not in ("survey", "html")}   # page times aren't RTs
     for comp in comps:
         n_rt = sum(_num(r.get(f"{comp}.rt")) is not None for r in rows)
         n_corr = sum(r.get(f"{comp}.corr") is not None for r in rows)
@@ -364,6 +372,15 @@ def describe_column(col: str, st: SessionTables) -> str:
                 "duration": f"Duration (s) of routine '{comp}'"}[attr]
     ctype = st.comp_types.get(comp.split(".")[-1], "")
     who = f"'{comp}'" + (f" ({ctype})" if ctype else "")
+    if ctype == "survey":
+        cid = comp.split(".")[-1]
+        known = st.survey_columns.get(cid, {})
+        if attr in known:
+            return f"{known[attr]} (survey {who})"
+        if attr == "submitted":
+            return f"1 if the survey {who} was completed"
+        if attr == "rt":
+            return f"Time (s) from showing the survey {who} to its submission"
     if ctype == "html" and attr not in ("onset", "duration", "rt", "submitted"):
         return f"Answer to form field '{attr}' on HTML page {who}"
     if ctype == "html" and attr == "submitted":

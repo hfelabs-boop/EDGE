@@ -46,6 +46,11 @@ Test runs (`edge run --dry-run`, the builder's **▶ Test run**) write the same 
 and of the participant-ID suggestion unless you ask for them (*include test runs* in the Data tab,
 `--include-dry-runs` on the command line).
 
+Surveys add one column per answer (`about.age`, `about.phq9_3`), one 0/1 column per option of
+checkbox questions, rank and constant-sum columns per option, `<id>_other` texts, `pageN_time`, the
+scores of library questionnaires (`about.phq9_total`, `about.phq9_total_band`) and `<id>_order` for
+shuffled questions. The data dictionary describes each with the question's wording and answer codes.
+
 ### How the trial table is built (`trials_wide.csv`)
 
 * All routines of one loop iteration (for example `trial` and `feedback`) are merged into

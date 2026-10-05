@@ -125,7 +125,13 @@ In the file that's `$column` in the property and the column in the loop's `condi
 **… send triggers to my EEG?** Add a `ttl_serial` or `parallel_port` device and set `marker:` on the
 stimulus. See [Cookbook](COOKBOOK.md#fixed-trigger-codes-for-an-eeg-amplifier).
 
-**… add a consent form or questionnaire?** An `html` component; see the HTML tutorial.
+**… add a consent form or questionnaire?** The **Survey / questionnaire** component: its editor has every
+common question type and a library of validated questionnaires (consent, demographics, PHQ-9, GAD-7, Big Five,
+NASA-TLX, SUS …) that score themselves. See [Surveys](SURVEYS.md) and the interactive survey tutorial. For a
+page you designed yourself, use an `html` component.
+
+**… score a questionnaire?** Library questionnaires score themselves. For your own, add `scores` (sum, mean,
+reverse items, bands); see [Surveys](SURVEYS.md#scores).
 
 **… undo a change from yesterday?** **Versions** in the builder (Expert mode), or `edge backups study.yaml`.
 
@@ -154,6 +160,9 @@ everything it needs.
 | **test run / dry run** | a fast simulated run with simulated devices and a virtual participant (`edge run --dry-run`) |
 | **Try it** | doing the experiment yourself inside the builder |
 | **virtual participant** | the simulated person who responds during test runs |
+| **survey** | a questionnaire page built from questions (choice, Likert, matrix, slider, text, rank …), with scoring |
+| **instrument** | a validated questionnaire from the library, added with `{instrument: phq9}` |
+| **display logic** | `show_if`: show a question only for certain earlier answers |
 | **design wizard** | **New → answer a few questions**, or `edge wizard`: a finished experiment from plain answers |
 | **Simple / Expert mode** | how much of the builder is shown |
 | **session** | one run of the experiment for one participant; one data folder |

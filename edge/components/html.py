@@ -300,7 +300,7 @@ class Html(Component):
         vp = self.session.virtual_participant
         if vp is not None and hasattr(self.backend, "press"):
             rng = getattr(vp, "rng", random.Random(0))
-            answers = auto_answer(self.page, rng)
+            answers = self.auto_answers(rng)
             delay = 2.0 + rng.random() * 3.0 + 0.8 * len(answers)   # time to read and answer
             self._scheduled = (t + delay, answers)
             return
@@ -314,6 +314,10 @@ class Html(Component):
             self.viewer = subprocess.Popen(args)
         else:
             webbrowser.open(self.server.url, new=1)
+
+    def auto_answers(self, rng: random.Random) -> dict[str, Any]:
+        """Answers the virtual participant submits in test runs."""
+        return auto_answer(self.page, rng)
 
     def on_frame(self, t: float) -> None:
         if self.finished:

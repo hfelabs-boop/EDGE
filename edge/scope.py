@@ -197,6 +197,8 @@ def scope_issues(exp) -> list:
             if c.type == "code":
                 continue
             for k, v in c.props.items():
+                if c.type == "survey" and k in ("questions", "scores", "labels", "css"):
+                    continue
                 for src in _expr_sources(v):
                     report(src, f"{where}.{k}", scope, unknown, enclosing)
         if isinstance(routine.end_if, str):

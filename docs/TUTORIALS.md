@@ -14,6 +14,7 @@ the step, then moves on. Tutorials start from a fresh copy, so you can't break a
 | [Rules, hints and conditional components](#rules-hints-and-conditional-components) | intermediate | 7 min | when → do rules, component if, variables |
 | [Your data: tables, summaries and exports](#your-data-tables-summaries-and-exports) | beginner | 6 min | Data tab, trial tables, summaries, data dictionary, Excel/BIDS exports |
 | [Bring an experiment from PsychoPy, E-Prime, OpenSesame or jsPsych](#bring-an-experiment-from-psychopy-e-prime-opensesame-or-jspsych) | beginner | 5 min | importing, import reports, checking a converted experiment |
+| [Questionnaires like a pro (surveys)](#questionnaires-like-a-pro-surveys) | beginner | 8 min | survey component, question types, validated questionnaires, display logic, scores |
 
 ## Your first experiment (a Stroop task)
 
@@ -435,4 +436,70 @@ Compare the test run with the original: number of trials, timing per screen (rea
 summary above each timeline), response keys and correct answers. Fix anything flagged, then save.
 
 Command-line alternative: `edge import my_task.psyexp`.
+
+
+---
+
+## Questionnaires like a pro (surveys)
+
+*Beginner · about 8 minutes* · interactive version: `edge tutorial survey_builder`
+
+Add a questionnaire after a task: a validated scale from the library that scores itself, your own multiple-choice question, and a follow-up that only appears for some answers.
+
+**1. The plan**
+
+This experiment has a placeholder **task** screen. After it you'll add a questionnaire with:
+
+* a validated scale from the library (it scores itself),
+* a multiple-choice question of your own,
+* a follow-up question that appears only for some answers.
+
+Press **Next**.
+
+**2. Add a survey**
+
+Click **Survey / questionnaire** on the left. Because the task screen already has something on
+it, EDGE gives the survey its own screen, **questionnaire**, right after the task in the flow.
+
+**3. Open the survey editor**
+
+In **Properties**, click **✎ Edit questions**. The editor has three columns: the questions on the
+left, the selected question in the middle, and on the right the **real page** participants will
+see. You can click through it.
+
+Press **Next** when you've had a look.
+
+**4. Add a validated questionnaire**
+
+Click **+ From library**, search for `life` and **Add** the *Satisfaction With Life Scale (SWLS)*.
+Its five items, the 7-point scale and the scoring (`swls_total`, with interpretive bands) come with it.
+
+**5. Your own multiple-choice question**
+
+Click **+ Question → Multiple choice (checkboxes)**. In the middle column set the question to
+*Which of these do you do at least once a week?* and the options (one per line) to
+`Sport`, `Music`, `Reading`, `None of these`. Set **Exclusive option** to *None of these* and
+the **Data name** to `weekly`.
+
+**6. A follow-up with display logic**
+
+Add **+ Question → Number**, data name `sport_hours`, question *How many hours of sport per week?*.
+Under **Display logic** choose *only if weekly* and **includes** *Sport*.
+
+In the preview, tick *Sport* in the earlier question and watch the follow-up appear.
+
+**7. Test it**
+
+Click **Done**, then **▶ Test run**. The virtual participant fills in the survey; in the data
+preview you'll find `survey.weekly`, one 0/1 column per option (`weekly_sport` …),
+`sport_hours` (empty when Sport wasn't ticked), the five SWLS items, `swls_total` and
+`swls_total_band`.
+
+**8. Try it yourself**
+
+Press **▶ Try it** to fill in the survey yourself. Leave a required question empty and press
+**Next** to see the plain-language check.
+
+The [Surveys guide](SURVEYS.md) lists every question type, display logic, scores and the
+whole questionnaire library.
 

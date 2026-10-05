@@ -22,13 +22,15 @@ edge/
   participant.py    virtual participant for dry runs
   scan.py           hardware discovery
   templates.py      starter experiments (and hidden starting points for tutorials)
+  survey.py         survey questions: model, validation, display logic, page renderer, auto-answers, data, scoring
+  survey_library.py validated questionnaires and answer scales (citations, licences, scoring rules)
   wizard.py         design wizard: answers -> finished experiment; trial/duration estimates
   play.py           "Try it": BrowserBackend (real engine, frames published to the builder), single-screen runs
   launcher.py       `edge` with no arguments, default workspace, desktop shortcuts, terminal wizard
   help.py           docs topics, search, tutorials, generated reference pages (`edge help`, `edge docs build`)
   tutorials/        interactive tutorial definitions (YAML; also rendered into docs/TUTORIALS.md)
   builder/          local web server + single-page builder (no build step): app.js (editor), simple.js
-                    (storyboard, wizard, Try it, run dialog)
+                    (storyboard, wizard, Try it, run dialog), survey.js (survey editor, questionnaire library)
   cli.py            `edge` command
 install/            installer scripts (sh, PowerShell), experimental PyInstaller recipe
 ```

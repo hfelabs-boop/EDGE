@@ -94,6 +94,48 @@ TEMPLATES: dict[str, dict[str, Any]] = {
                   "children": ["trial"]}],
         "variables": {"side": 1},
     },
+    "online_questionnaire": {
+        "name": "wellbeing_survey",
+        "description": "A complete questionnaire study: consent (declining ends the study), demographics, "
+                       "SWLS + WHO-5 + TIPI with attention checks, a custom block with display logic, debriefing.",
+        "settings": {"window": {"size": [1280, 720], "background": "#f7f8fa"}},
+        "routines": {
+            "consent": {"components": [{"id": "consent_form", "type": "survey", "end_routine": True,
+                                        "questions": [{"instrument": "consent"}]}]},
+            "survey": {"components": [{"id": "survey", "type": "survey", "end_routine": True,
+                                       "title": "Well-being and personality",
+                                       "intro": "There are no right or wrong answers. Please answer honestly.",
+                                       "questions": [
+                                           {"instrument": "demographics"}, {"type": "page_break"},
+                                           {"instrument": "swls"}, {"instrument": "attention_checks"},
+                                           {"type": "page_break"}, {"instrument": "who5"}, {"instrument": "tipi"},
+                                           {"type": "page_break"},
+                                           {"id": "exercise", "type": "single", "required": True, "layout": "horizontal",
+                                            "text": "Do you exercise regularly?", "options": ["Yes", "No"]},
+                                           {"id": "exercise_types", "type": "multiple", "min_choices": 1,
+                                            "text": "Which kinds of exercise? Select all that apply.",
+                                            "options": ["Running", "Cycling", "Swimming", "Team sports", "Gym", "Yoga",
+                                                        "Other"],
+                                            "show_if": {"exercise": "Yes"}, "randomize": True},
+                                           {"id": "exercise_minutes", "type": "slider", "min": 0, "max": 600,
+                                            "step": 10, "labels": ["0 min", "10 h"],
+                                            "text": "About how many minutes per week do you spend on {{answer.exercise_types}}?",
+                                            "show_if": {"exercise": "Yes"}},
+                                           {"id": "priorities", "type": "rank",
+                                            "text": "Rank what matters most for your well-being.",
+                                            "options": ["Health", "Relationships", "Work", "Money", "Free time"]},
+                                           {"instrument": "debrief"}]}]},
+            "goodbye": {"duration": 4, "components": [{"id": "bye", "type": "text", "color": "#222222",
+                                                       "text": "Thank you! Your answers have been saved."}]},
+            "declined": {"duration": 4, "components": [{"id": "msg", "type": "text", "color": "#222222",
+                                                        "text": "You chose not to take part. Thank you for your time."}]},
+        },
+        "flow": [{"statemachine": "study", "start": "consent", "states": {
+            "consent": {"run": ["consent"], "next": [{"if": "$consent_form.consent == 'yes'", "goto": "questions"},
+                                                     {"goto": "declined"}]},
+            "questions": {"run": ["survey", "goodbye"]},
+            "declined": {"run": ["declined"]}}}],
+    },
 }
 
 
@@ -134,6 +176,11 @@ TEMPLATES.update({
             {"id": "left_box", "type": "shape", "pos": [-300, 0], "size": [300, 300], "fill": "#c04040"},
             {"id": "right_box", "type": "shape", "pos": [300, 0], "size": [300, 300], "fill": "#4040c0"}]}},
         "flow": [{"loop": "trials", "repeats": 6, "children": ["look"]}]},
+    "tutorial_survey": {
+        "name": "my_survey", "settings": {"window": {"size": [1280, 720], "background": "#111111"}},
+        "routines": {"task": {"duration": 2, "components": [
+            {"id": "msg", "type": "text", "text": "(imagine a task here)\n\nThe questionnaire comes next."}]}},
+        "flow": ["task"]},
     "tutorial_stroop": {
         "name": "stroop_data", "settings": {"window": {"size": [1280, 720], "background": "#111111"}},
         "routines": {"trial": _TRIAL},

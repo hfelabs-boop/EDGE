@@ -308,6 +308,53 @@ def create_server(root: str | Path = ".") -> FastMCP:
                     f"add {type} to {routine}")
 
     @tool
+    def survey_library() -> dict[str, Any]:
+        """Survey building blocks: question types (single, multiple, likert, matrix, slider, rank, constant_sum …),
+        named answer scales (agree5, agree7, frequency5 …) and validated questionnaires with scoring
+        (consent, demographics, attention_checks, phq9, gad7, k6, pss10, who5, swls, rses, tipi, mini_ipip,
+        ehi_sf, nasa_tlx, kss, affect_grid, sus, audit_c, nps, debrief). Use with add_survey."""
+        from .survey import QUESTION_TYPES
+        from .survey_library import SCALE_TITLES, SCALES, catalogue
+        return {"question_types": {k: v["label"] for k, v in QUESTION_TYPES.items()},
+                "scales": {k: [f"{v} = {lab}" for v, lab in opts] + [SCALE_TITLES.get(k, "")] for k, opts in SCALES.items()},
+                "questionnaires": catalogue(),
+                "question_example": {"id": "mood", "type": "likert", "scale": "agree7", "required": True,
+                                     "text": "I feel good right now.", "show_if": {"consent": "yes"}}}
+
+    @tool
+    def add_survey(path: str, questions: list[dict[str, Any]], routine: str = "questionnaire", title: str = "",
+                   intro: str = "", position: str = "end", scores: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Add a questionnaire screen. `questions` mixes library questionnaires ({"instrument": "phq9"}), your own
+        questions ({"id": "age", "type": "number", "text": "Age?", "min": 18, "max": 99, "required": true};
+        types: text_block, single, dropdown, multiple, likert, matrix, semantic, scale, nps, slider, text, essay,
+        number, date, rank, constant_sum, page_break) and display logic ("show_if": {"age": {">=": 18}}).
+        `position`: "end", "start" or "after:<routine>". Creates the routine if it doesn't exist. Answers and
+        scores (e.g. phq9_total, phq9_total_band) become data columns."""
+        def op(d: ExperimentDoc) -> None:
+            if routine not in d.routines:
+                d.add_routine(routine, description="questionnaire")
+                if position == "start":
+                    d.insert_flow(routine, position=0)
+                elif position.startswith("after:"):
+                    target = position.split(":", 1)[1]
+                    idx = next((i for i, n in enumerate(d.doc["flow"]) if d._node_name(n) == target), None)
+                    if idx is None:
+                        raise EditError(f"no top-level flow item '{target}'")
+                    d.insert_flow(routine, position=idx + 1)
+                else:
+                    d.insert_flow(routine)
+            props: dict[str, Any] = {"questions": questions, "end_routine": True}
+            if title:
+                props["title"] = title
+            if intro:
+                props["intro"] = intro
+            if scores:
+                props["scores"] = scores
+            taken = {c.get("id") for c in d.routine(routine)["components"]}
+            d.add_component(routine, "survey", props, routine if routine not in taken else None)   # columns: <routine>.<answer>
+        return edit(path, op, f"add survey to {routine}")
+
+    @tool
     def update_component(path: str, routine: str, id: str, properties: dict[str, Any] | None = None,
                          remove: list[str] | None = None, rename_to: str = "") -> dict[str, Any]:
         """Change component properties/timing (null value = remove), remove properties, or rename it."""

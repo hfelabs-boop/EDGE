@@ -282,10 +282,12 @@ def test_launcher_workspace_and_shortcuts(tmp_path, monkeypatch):
 def test_terminal_wizard_questions(tmp_path):
     from edge import launcher
     replies = iter(["stroopish", "word", "keys", "RED, r, congruent", "GREEN, g, incongruent", "", "", "0.5", "", "2",
-                    "y", "once", "2", "1"])
+                    "y", "once", "2", "1", "demographics swls"])
     answers = launcher.ask_wizard(lambda q, d: next(replies))
     path, est = launcher.write_wizard_experiment(answers, tmp_path)
     assert path.name == "stroopish.yaml" and est["trials"] == 2 + 2 * 2
+    flow = Experiment.load(path).flow
+    assert flow[0].routine == "about_you" and flow[-2].routine == "questionnaires"
     doc = Experiment.load(path)
     assert not [i for i in doc.validate() if i.level == "error"]
 

@@ -53,7 +53,9 @@ On the welcome screen, click **✨ Make a new experiment: answer a few questions
 4. **Practice and feedback**: no practice, practice once, or *practice until good enough* (e.g. 80%
    correct, at most 3 rounds), and whether to show "Correct!" / "Wrong".
 5. **Blocks and texts**: number of blocks, repeats, order, break text, instructions, goodbye.
-6. **Devices** (optional): eye tracker, EEG, LSL markers, trigger box. Simulated until you connect real ones.
+6. **Questionnaires and devices** (optional): consent, demographics and validated questionnaires
+   (PHQ-9, Big Five, NASA-TLX …, see [Surveys](SURVEYS.md)); eye tracker, EEG, LSL markers, trigger box
+   (simulated until you connect real ones).
 
 ![The design wizard](wizard.png)
 

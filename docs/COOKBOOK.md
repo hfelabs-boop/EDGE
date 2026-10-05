@@ -204,6 +204,29 @@ routines:
 - {id: rating, type: slider, ticks: [1, 2, 3, 4, 5, 6, 7], labels: [not at all, very much], end_routine: true}
 ```
 
+### A validated questionnaire after the task
+
+```yaml
+- {id: post, type: survey, end_routine: true, questions: [{instrument: nasa_tlx}, {instrument: sus}]}
+```
+
+Scores arrive as columns (`post.tlx_raw`, `post.sus_score`). The [questionnaire reference](reference/questionnaires.md)
+lists all 20 instruments.
+
+### Rate every stimulus with a short survey
+
+```yaml
+- id: rate
+  type: survey
+  end_routine: true
+  questions:
+    - {id: valence, type: scale, points: 9, labels: [Very unpleasant, Very pleasant], required: true,
+       text: "How did the picture make you feel?"}
+    - {id: familiar, type: single, layout: horizontal, options: [Yes, No], text: "Had you seen it before?"}
+```
+
+Put the screen inside the trial loop: one row per stimulus, with `rate.valence` next to the trial's columns.
+
 ### Questionnaire as an HTML page
 
 ```yaml

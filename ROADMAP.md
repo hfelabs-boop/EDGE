@@ -27,6 +27,9 @@
   (next participant ID, hardware, full screen), plain-language errors with "did you mean", a static check for names
   that aren't defined where they're used, one-command installers, desktop shortcut, `edge` with no arguments
 
+- Surveys: survey component with 16 question types, display logic, piped text, randomization, scores; library of
+  20 validated free-to-use questionnaires with citations; survey editor with live preview; wizard, MCP and tutorial
+
 ## Next: hardware validation (highest priority)
 - [ ] Run every driver against physical devices; photodiode + TTL loopback timing benchmarks
       published per OS/GPU (Windows 11, macOS, Ubuntu)
@@ -55,6 +58,8 @@
 - [ ] Inline expression checking as you type (the Check tab already reports unknown names with suggestions)
 - [ ] Wizard: picture upload from the dialog, more designs (go/no-go, n-back, visual search, questionnaires only)
 - [ ] Try it: render text with the same font metrics as the experiment window; slider dragging feedback
+- [ ] Surveys: per-question timing, loop & merge (repeat a block per selected option), carry-forward choices,
+      side-by-side and heat-map questions, image choice, validated translations of the library
 - [ ] Signed stand-alone apps (PyInstaller recipe exists; needs testing and code signing on macOS/Windows)
 - [ ] Live device dashboards (gaze overlay, signal quality, impedance) during sessions
 - [ ] Experimenter console: participant queue, session notes, run log, abort and resume

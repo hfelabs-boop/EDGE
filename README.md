@@ -35,6 +35,7 @@ edge report data/012_1_study_…     # timing, data-integrity and sync report
 | Natural language | — | — | **MCP server**: Claude or VS Code builds, edits, dry-runs and analyzes experiments, and edits appear live in the builder |
 | Workflow logic | E-Basic scripting | code components | **visual state machines** (repeat until criterion, adaptive paths, screening), "when → do" routine rules, per-component `if`, live loop accuracy/RT |
 | HTML | — | Forms component | **HTML pages as experiment steps**: consent, questionnaires, custom JS tasks, with every field saved |
+| Questionnaires | — | Forms component | **survey component**: 16 question types (single/multiple choice, Likert items and matrices, semantic differential, sliders, NPS, rank order, constant sum, validated text …), display logic, piped text, randomization, and a library of 20 validated, self-scoring instruments (PHQ-9, GAD-7, PSS-10, WHO-5, SWLS, Rosenberg, TIPI, Mini-IPIP, NASA-TLX, SUS, AUDIT-C …) |
 | Import | — | — | **PsychoPy, E-Prime, OpenSesame and jsPsych** experiments, with a conversion report |
 | Extending | E-Basic | Python | Python plugins for devices and components (entry points) |
 | License | commercial | GPL | MIT |
@@ -155,6 +156,23 @@ routines:
 In the builder, selecting a workflow shows its live diagram. States, routes and rules are edited
 with forms, and every expression field suggests the variables available there.
 
+### Questionnaires
+
+```yaml
+- id: after_task
+  type: survey
+  questions:
+    - {instrument: nasa_tlx}                       # validated, scores itself: after_task.tlx_raw
+    - {id: strategy, type: single, text: "Did you use a strategy?", options: [Yes, No], required: true}
+    - {id: which, type: essay, text: "Which one?", show_if: {strategy: "Yes"}}
+    - {instrument: phq9}                           # phq9_total, phq9_total_band, phq9_item9_flag
+```
+
+The builder's survey editor shows the real page live next to the questions; **+ From library** adds a
+validated questionnaire with its citation and scoring. See [docs/SURVEYS.md](docs/SURVEYS.md).
+
+![Survey editor](docs/survey_editor.png)
+
 ### Bring your existing experiments
 
 ```bash
@@ -212,7 +230,7 @@ claude mcp add edge -- edge mcp --root .          # Claude Code (VS Code: .vscod
 > "Build a 2-back task with letters, 3 blocks of 30 trials, g.tec EEG over LSL and TTL triggers,
 > dry-run it and give me the expected session length."
 
-The 49 tools cover building experiments (including the design wizard) and editing them (with all-or-nothing batch edits), devices,
+The 51 tools cover building experiments (including the design wizard and questionnaires) and editing them (with all-or-nothing batch edits), devices,
 validation, dry runs, real runs, session analysis, exports, undo and version history, and
 opening the visual builder. Edits are validated, backed up and show up live in an open builder.
 See [docs/MCP.md](docs/MCP.md).

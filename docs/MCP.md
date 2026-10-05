@@ -57,6 +57,7 @@ If `edge` isn't on the PATH Claude Desktop uses, give the full path to the execu
 | Documents | `create_experiment`, `create_from_wizard` (a finished task from plain design answers), `describe_experiment`, `get_experiment_source`, `replace_experiment_source`, `estimate_duration` |
 | Batch edit | `edit_experiment`: many operations, applied all-or-nothing |
 | Routines | `add_routine`, `update_routine`, `remove_routine` |
+| Questionnaires | `survey_library` (question types, scales, 20 validated questionnaires), `add_survey` (a questionnaire screen at the start, the end or after a screen) |
 | Components | `add_component`, `update_component`, `remove_component`, `move_component` |
 | Flow | `add_loop`, `update_loop`, `set_conditions`, `add_branch`, `modify_flow` |
 | Workflow logic | `add_workflow` (state machines), `update_workflow_state`, `add_routine_rule` |

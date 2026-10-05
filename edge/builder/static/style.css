@@ -363,3 +363,52 @@ body.mode-simple .expert-only { display: none !important; }
 .run-status { margin: 8px 0; font-size: 14px; }
 .run-log { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font-size: 11px; max-height: 220px; overflow: auto; white-space: pre-wrap; }
 #center.story-view { grid-template-rows: minmax(300px, 2.4fr) auto minmax(120px, .6fr); }
+
+/* ================================================================== survey editor */
+.sv-summary { border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: var(--panel2); }
+.sv-row { display: flex; gap: 6px; align-items: baseline; padding: 4px 6px; border-radius: 5px; cursor: pointer; font-size: 12px; }
+.sv-row:hover { background: var(--panel); }
+.sv-type { font-size: 10px; color: var(--accent); white-space: nowrap; flex: none; }
+.sv-pb { text-align: center; color: var(--muted); font-size: 10px; margin: 2px 0; }
+#modal-body.sveditor { width: min(1400px, 96vw); height: 88vh; display: flex; flex-direction: column; }
+.modal-box:has(> .sveditor), .modal-box:has(> .svlib) { overflow: hidden; max-width: 98vw; }
+.sv-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.sv-head h3 { margin: 0; font-size: 14px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.sv-head .help { flex: 1; color: var(--muted); font-size: 12px; }
+.sv-cols { flex: 1; display: grid; grid-template-columns: 300px minmax(300px, 1fr) minmax(360px, 1.1fr); gap: 12px; min-height: 0; }
+.sv-left, .sv-form, .sv-right { overflow: auto; min-height: 0; }
+.sv-left { border-right: 1px solid var(--line); padding-right: 10px; }
+.sv-settings { border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.sv-page { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 4px 0; }
+.sv-item { display: flex; gap: 6px; align-items: flex-start; padding: 6px; border: 1px solid var(--line); border-radius: 7px; margin-bottom: 5px; cursor: pointer; background: var(--panel); }
+.sv-item:hover { border-color: var(--accent); }
+.sv-item.sel { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
+.sv-item.pb { background: var(--panel2); border-style: dashed; }
+.sv-pbl { flex: 1; font-size: 11px; color: var(--muted); text-align: center; }
+.sv-n { font-weight: 700; color: var(--accent); width: 18px; flex: none; }
+.sv-t { flex: 1; min-width: 0; font-size: 12px; }
+.sv-t small { color: var(--muted); display: block; }
+.sv-acts { display: flex; gap: 2px; flex: none; }
+.sv-add { display: flex; gap: 6px; margin-top: 8px; position: sticky; bottom: 0; background: var(--panel); padding: 6px 0; }
+.sv-form .field { margin-bottom: 9px; }
+.sv-form label { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.sv-form .help { font-size: 11px; color: var(--muted); }
+.sv-form label.sv-cb { justify-content: flex-start; gap: 6px; font-size: 13px; color: var(--text); }
+.sv-formhead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.sv-formhead b { font-size: 15px; }
+.sv-formhead .field { margin: 0; flex: 1; }
+.sv-sub { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+.sv-subhead { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 4px; }
+.sv-cond { display: flex; gap: 4px; }
+.sv-meta { color: var(--accent2); font-size: 12px; margin-bottom: 6px; }
+.sv-frame { width: 100%; height: calc(100% - 4px); border: 1px solid var(--line); border-radius: 8px; background: #fff; min-height: 400px; }
+.sv-problems .issue { font-size: 12px; }
+#modal-body.svlib { width: min(1100px, 94vw); height: 84vh; display: flex; flex-direction: column; }
+.svlib-grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; align-content: start; }
+.svlib-cat { grid-column: 1 / -1; margin: 10px 0 0; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.svlib-card { cursor: default; }
+.svlib-card p { margin: 6px 0; font-size: 12px; }
+.svlib-cite { font-size: 10px !important; }
+.wiz-qs { columns: 2; column-gap: 18px; margin-bottom: 8px; }
+.wiz-qs .wiz-check { margin: 3px 0; break-inside: avoid; font-size: 13px; }
+.wiz-qcat { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 6px; break-after: avoid; }

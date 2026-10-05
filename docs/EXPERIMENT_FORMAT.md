@@ -260,6 +260,28 @@ While a loop runs (and after it ends), its results are available to expressions:
 and `trials.total`. Accuracy uses every `*.corr` result recorded inside the loop; RT uses every
 `*.rt`. These values are what makes adaptive rules like `$prac.accuracy >= 0.8` work.
 
+## Surveys
+
+```yaml
+- id: about
+  type: survey
+  end_routine: true
+  title: About you
+  questions:
+    - {instrument: demographics}                 # library questionnaire, see reference/questionnaires.md
+    - {id: mood, type: likert, scale: agree7, text: "I feel good right now.", required: true}
+    - {id: why, type: essay, text: "Why?", show_if: {mood: {"<=": 3}}}
+    - type: page_break
+    - {instrument: gad7}
+```
+
+Question types: `text_block`, `single`, `dropdown`, `multiple`, `likert`, `matrix`, `semantic`, `scale`,
+`nps`, `slider`, `text`, `essay`, `number`, `date`, `rank`, `constant_sum`, `page_break`. Common keys:
+`id`, `text`, `required`, `help`, `show_if`, `randomize`, `correct`, `test_answer`. Each answer becomes
+a column `<survey id>.<question id>` (matrix items by item id); library questionnaires add their scores.
+Question text is used as written: a leading `$` is not an expression there. The full guide:
+[Surveys](SURVEYS.md).
+
 ## HTML pages
 
 ```yaml

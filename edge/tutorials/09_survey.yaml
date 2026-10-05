@@ -1,0 +1,69 @@
+id: survey_builder
+order: 9
+title: Questionnaires like a pro (surveys)
+level: beginner
+minutes: 8
+learn: survey component, question types, validated questionnaires, display logic, scores
+description: >
+  Add a questionnaire after a task: a validated scale from the library that scores itself, your own
+  multiple-choice question, and a follow-up that only appears for some answers.
+start: tutorial_survey
+mode: simple
+steps:
+  - title: The plan
+    body: |
+      This experiment has a placeholder **task** screen. After it you'll add a questionnaire with:
+
+      * a validated scale from the library (it scores itself),
+      * a multiple-choice question of your own,
+      * a follow-up question that appears only for some answers.
+
+      Press **Next**.
+  - title: Add a survey
+    body: |
+      Click **Survey / questionnaire** on the left. Because the task screen already has something on
+      it, EDGE gives the survey its own screen, **questionnaire**, right after the task in the flow.
+    target: ".pal-item[data-type=survey]"
+    check: {component: {type: survey}}
+  - title: Open the survey editor
+    body: |
+      In **Properties**, click **✎ Edit questions**. The editor has three columns: the questions on the
+      left, the selected question in the middle, and on the right the **real page** participants will
+      see. You can click through it.
+
+      Press **Next** when you've had a look.
+    target: "#props"
+  - title: Add a validated questionnaire
+    body: |
+      Click **+ From library**, search for `life` and **Add** the *Satisfaction With Life Scale (SWLS)*.
+      Its five items, the 7-point scale and the scoring (`swls_total`, with interpretive bands) come with it.
+    check: {component: {type: survey, prop: questions, contains: "swls"}}
+  - title: Your own multiple-choice question
+    body: |
+      Click **+ Question → Multiple choice (checkboxes)**. In the middle column set the question to
+      *Which of these do you do at least once a week?* and the options (one per line) to
+      `Sport`, `Music`, `Reading`, `None of these`. Set **Exclusive option** to *None of these* and
+      the **Data name** to `weekly`.
+    check: {component: {type: survey, prop: questions, contains: "\"weekly\""}}
+  - title: A follow-up with display logic
+    body: |
+      Add **+ Question → Number**, data name `sport_hours`, question *How many hours of sport per week?*.
+      Under **Display logic** choose *only if weekly* and **includes** *Sport*.
+
+      In the preview, tick *Sport* in the earlier question and watch the follow-up appear.
+    check: {component: {type: survey, prop: questions, contains: "show_if"}}
+  - title: Test it
+    body: |
+      Click **Done**, then **▶ Test run**. The virtual participant fills in the survey; in the data
+      preview you'll find `survey.weekly`, one 0/1 column per option (`weekly_sport` …),
+      `sport_hours` (empty when Sport wasn't ticked), the five SWLS items, `swls_total` and
+      `swls_total_band`.
+    target: "#btn-dryrun"
+    check: {dry_run: true}
+  - title: Try it yourself
+    body: |
+      Press **▶ Try it** to fill in the survey yourself. Leave a required question empty and press
+      **Next** to see the plain-language check.
+
+      The [Surveys guide](SURVEYS.md) lists every question type, display logic, scores and the
+      whole questionnaire library.

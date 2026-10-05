@@ -37,7 +37,7 @@ function screenSummary(rid) {
   const bits = [];
   if (resp) {
     const what = {keyboard: `waits for ${Array.isArray(resp.keys) ? resp.keys.join(" / ") : "a key"}`, mouse: "waits for a click",
-      slider: "waits for a rating", html: "waits for the form", gaze_roi: "waits for a look"}[resp.type] || `ends with ${resp.id}`;
+      slider: "waits for a rating", html: "waits for the form", survey: "waits for the answers", gaze_roi: "waits for a look"}[resp.type] || `ends with ${resp.id}`;
     bits.push(resp.duration != null ? `${what} (max ${resp.duration}s)` : what);
   }
   if (typeof r.duration === "number") bits.push(`${r.duration}s`);
@@ -110,14 +110,14 @@ function storyCard(rid, cond) {
 
 /* ================================================================== design wizard */
 const W = {step: 0, a: null, preview: null};
-const WIZ_STEPS = ["What they see", "How they respond", "Timing", "Practice & feedback", "Blocks & texts", "Devices"];
+const WIZ_STEPS = ["What they see", "How they respond", "Timing", "Practice & feedback", "Blocks & texts", "Questionnaires & devices"];
 
 function wizardDefaults() {
   return {name: "my_experiment", stimulus: {kind: "word", items: [
     {stimulus: "LEFT", correct: "f", condition: "left"}, {stimulus: "RIGHT", correct: "j", condition: "right"}]},
     response: {kind: "keys", keys: ["f", "j"]}, timing: {fixation: 0.5, stimulus_duration: "", response_deadline: 2, iti: 0.5},
     feedback: true, practice: {mode: "until", criterion: 0.8, max_rounds: 3}, blocks: {count: 2, repeats: 2, order: "random"},
-    instructions: "", thanks: "", devices: []};
+    instructions: "", thanks: "", devices: [], questionnaires: []};
 }
 
 function openWizard() {
@@ -208,6 +208,16 @@ function renderWizard() {
     const opts = [["sim_eyetracker", "Eye tracker", "simulated for now; switch to Tobii or Gazepoint in the device settings"],
       ["sim_eeg", "EEG", "simulated for now; switch to g.tec or an LSL stream"], ["lsl_markers", "LSL markers", "send every event to LabRecorder"],
       ["ttl_loopback", "Trigger box (TTL)", "simulated for now; switch to serial TTL or parallel port"]];
+    put(page, h("h4", {}, "Questionnaires"), h("div", {class: "help"}, "Consent and demographics come before the task, the others after it. Each is a validated, scored instrument; edit them later in the survey editor."));
+    const qbox = h("div", {class: "wiz-qs"});
+    let cat = null;
+    for (const ins of S.schema.survey.library) {
+      if (ins.category !== cat) { cat = ins.category; put(qbox, h("div", {class: "wiz-qcat"}, cat)); }
+      const cb = h("input", {type: "checkbox", onchange: (e) => { a.questionnaires = e.target.checked ? [...a.questionnaires, ins.id] : a.questionnaires.filter((x) => x !== ins.id); wizPreview(); }});
+      cb.checked = a.questionnaires.includes(ins.id);
+      put(qbox, h("label", {class: "wiz-check", title: ins.description}, cb, " ", h("b", {}, ins.title), h("small", {}, `  ${ins.items} items · ~${ins.minutes} min`)));
+    }
+    put(page, qbox, h("h4", {}, "Devices"));
     put(page, h("div", {class: "help"}, "Optional. Everything works without hardware; devices can be added or changed later."));
     for (const [type, label, sub] of opts) {
       const cb = h("input", {type: "checkbox", onchange: (e) => { a.devices = e.target.checked ? [...a.devices, type] : a.devices.filter((x) => x !== type); wizPreview(); }});

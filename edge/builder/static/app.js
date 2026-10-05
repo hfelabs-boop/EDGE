@@ -16,7 +16,7 @@ const S = {
 /* Human names for component types, the groups they appear in, and the properties shown before "More options". */
 const FRIENDLY = {
   text: ["Text", "Show"], image: ["Picture", "Show"], shape: ["Shape", "Show"], fixation: ["Fixation cross", "Show"],
-  sound: ["Sound", "Show"], html: ["Web page / form", "Show"],
+  sound: ["Sound", "Show"], html: ["Web page / form", "Show"], survey: ["Survey / questionnaire", "Show"],
   keyboard: ["Key press", "Responses"], mouse: ["Mouse click", "Responses"], slider: ["Rating scale", "Responses"],
   gaze_roi: ["Where they look", "Eye tracking"], gaze_follow: ["Follow the gaze", "Eye tracking"], calibrate: ["Calibrate eye tracker", "Eye tracking"],
   marker: ["Event marker", "Hardware"], variable: ["Set a variable", "Logic"], code: ["Python code", "Logic"], wait: ["Pause / blank", "Logic"],
@@ -25,7 +25,7 @@ const GROUP_ORDER = ["Show", "Responses", "Eye tracking", "Hardware", "Logic", "
 const SIMPLE_HIDDEN = new Set(["code", "marker", "gaze_follow", "calibrate"]);
 const BASIC_PROPS = {
   text: ["text", "color", "height", "pos"], image: ["image", "size", "pos"], shape: ["shape", "size", "fill", "pos"],
-  fixation: ["size", "fill"], sound: ["sound", "volume"], html: ["file", "html"], keyboard: ["keys", "correct"],
+  fixation: ["size", "fill"], sound: ["sound", "volume"], html: ["file", "html"], survey: ["questions", "title"], keyboard: ["keys", "correct"],
   mouse: ["clickable", "correct"], slider: ["ticks", "labels"], gaze_roi: ["target", "pos", "radius", "dwell"],
   gaze_follow: ["target"], calibrate: ["device"], marker: ["label"], variable: ["set", "when"], wait: [],
 };
@@ -556,7 +556,17 @@ function nodeMenu(e, path) {
 /* ---------------- components & routines */
 function addComponent(type, at) {
   if (!S.routine) newRoutine(false);
-  const rid = S.routine;
+  let rid = S.routine;
+  if ((type === "survey" || type === "html") && comps(rid).length) {
+    // a page needs the whole screen: give it its own, right after this one in the flow
+    const nid = uniqueId(type === "survey" ? "questionnaire" : "page", new Set(Object.keys(S.exp.routines)));
+    S.exp.routines[nid] = {components: []};
+    let placed = false;
+    walkFlow((n, path) => { if (placed || routineOfNode(n) !== rid) return; const {list, index} = parentOf(path); list.splice(index + 1, 0, nid); placed = true; });
+    if (!placed) S.exp.flow.push(nid);
+    S.routine = rid = nid; at = undefined;
+    setTimeout(() => toast(`Pages fill the whole screen, so this one got its own screen “${nid}” in the flow`, 4500), 50);
+  }
   const d = S.schema.components[type];
   const base = {keyboard: "resp", mouse: "click", slider: "rating", image: "picture", fixation: "fixation", html: "page"}[type] || type;
   const c = {id: uniqueId(base, new Set(comps(rid).map((x) => x.id))), type};
@@ -564,6 +574,8 @@ function addComponent(type, at) {
   if (type === "text") c.text = "Hello";
   if (type === "keyboard") { c.keys = ["space"]; c.end_routine = true; }
   if (type === "marker") c.label = "event";
+  if (type === "survey") { c.title = "A few questions"; c.questions = [{id: "q1", type: "likert", scale: "agree5", required: true, text: "I enjoyed the task."}]; c.end_routine = true; }
+  if (type === "html") c.end_routine = true;
   S.autoDur ||= new Set();
   if (d.visual && !["slider"].includes(type) && !comps(rid).some((x) => x.end_routine) && S.exp.routines[rid].duration == null) {
     c.duration = 1.0; S.autoDur.add(rid + "." + c.id);   // a placeholder so the screen can end; see below
@@ -718,7 +730,7 @@ const showVal = (type, v) => {
 function field(name, p, value, onChange, opts = {}) {
   const type = p.type || "str";
   const wrap = h("div", {class: "field"});
-  const picker = !(opts.noExpr || type === "expr" || type === "code" || type === "bool");
+  const picker = !(opts.noExpr || type === "expr" || type === "code" || type === "bool" || type === "survey");
   const cols = picker ? columnsForScreen(S.routine) : [];
   const colOf = (v) => (isExpr(v) && /^\$[A-Za-z_]\w*$/.test(v.trim()) && cols.includes(v.trim().slice(1))) ? v.trim().slice(1) : null;
   let source = !isExpr(value) ? "fixed" : colOf(value) ? "column" : "formula";
@@ -746,7 +758,9 @@ function field(name, p, value, onChange, opts = {}) {
     const v = source === "formula" && type !== "expr" ? (raw.startsWith("$") ? raw : "$" + raw) : parseVal(type, raw);
     if (JSON.stringify(v) !== JSON.stringify(value ?? null)) onChange(v);
   };
-  if (source === "column") {
+  if (type === "survey") {
+    input = surveySummary(value, onChange);
+  } else if (source === "column") {
     const col = colOf(value), ex = sampleRowFor(S.routine)[col];
     input = h("div", {class: "colchip", title: "Each trial uses this column's value. Edit the values in the trial list (click the loop in the Flow).",
       onclick: () => selectLoopWithColumn(col)}, "⟳ ", h("b", {}, col), ex !== undefined && ex !== "" ? h("span", {}, ` e.g. ${short(showVal("", ex), 24)}`) : null);
@@ -1007,8 +1021,13 @@ function renderPreview() {
   const t = S.previewT; $("#preview-label").textContent = `t = ${t.toFixed(2)} s`;
   // HTML pages are previewed live in an iframe on top of the canvas
   const frame = $("#preview-html");
-  const page = comps(S.routine).find((c) => c.type === "html" && numOr(c.start, 0) <= t && (c.duration == null || t < numOr(c.start, 0) + c.duration));
-  if (page && (page.file || page.html)) {
+  const page = comps(S.routine).find((c) => (c.type === "html" || c.type === "survey") && numOr(c.start, 0) <= t && (c.duration == null || t < numOr(c.start, 0) + c.duration));
+  if (page && page.type === "survey") {
+    const html = typeof surveyPreviewHtml === "function" ? surveyPreviewHtml(page, renderPreview) : null;
+    if (html && frame.dataset.survey !== html.length + ":" + html.slice(-200)) { frame.removeAttribute("src"); frame.dataset.src = ""; frame.srcdoc = html; frame.dataset.survey = html.length + ":" + html.slice(-200); }
+    frame.classList.remove("hidden");
+  } else if (page && (page.file || page.html)) {
+    frame.dataset.survey = "";
     if (page.file && !isExpr(page.file)) {
       const src = `/api/file?path=${encodeURIComponent((S.path ? S.path.replace(/[^/]*$/, "") : "") + page.file)}`;
       if (frame.dataset.src !== src) { frame.removeAttribute("srcdoc"); frame.src = src; frame.dataset.src = src; }
@@ -1067,6 +1086,13 @@ function drawScreen(cv, rid, t, row) {
     } else if (c.type === "slider") {
       const sz = Array.isArray(c.size) ? c.size : [800, 30]; ctx.fillStyle = color(c.color, "#fff");
       ctx.fillRect(-sz[0] / 2, -2, sz[0], 4);
+    } else if (c.type === "survey" && cv.id !== "preview") {
+      ctx.scale(1, -1); ctx.fillStyle = "#f7f8fa"; ctx.fillRect(-W * 0.32, -H * 0.4, W * 0.64, H * 0.8);
+      ctx.fillStyle = "#2f6fde"; ctx.fillRect(-W * 0.28, -H * 0.33, W * 0.3, H * 0.025);
+      for (let k = 0; k < 4; k++) { ctx.fillStyle = "#fff"; ctx.fillRect(-W * 0.28, -H * 0.27 + k * H * 0.15, W * 0.56, H * 0.12);
+        ctx.fillStyle = "#c5ccd6"; for (let j = 0; j < 5; j++) { ctx.beginPath(); ctx.arc(-W * 0.12 + j * W * 0.08, -H * 0.2 + k * H * 0.15, H * 0.018, 0, 7); ctx.fill(); } }
+      ctx.fillStyle = "#333"; ctx.font = `bold ${H * 0.05}px sans-serif`; ctx.textAlign = "center";
+      ctx.fillText(`survey · ${(c0.questions || []).filter((q) => q.type !== "page_break").length} question block(s)`, 0, H * 0.36);
     } else if (c.type === "html" && cv.id !== "preview") {
       ctx.scale(1, -1); ctx.fillStyle = "#fff"; ctx.fillRect(-W * 0.3, -H * 0.35, W * 0.6, H * 0.7);
       ctx.fillStyle = "#555"; ctx.font = `${H * 0.06}px sans-serif`; ctx.textAlign = "center"; ctx.fillText("web page", 0, 0);
@@ -1540,13 +1566,14 @@ function describeRoutine(rid) {
       keyboard: () => `waits for ${c.keys ? (Array.isArray(c.keys) ? c.keys.join("/") : c.keys) : "any key"}${c.correct ? ` (correct: ${c.correct})` : ""}`,
       mouse: () => `waits for a click${c.clickable?.length ? " on " + c.clickable.join("/") : ""}`,
       slider: () => "shows a rating scale", html: () => `shows the page ${c.file || "(inline HTML)"}`,
+      survey: () => `shows a survey (${(c.questions || []).map((q) => q.instrument || q.id).filter(Boolean).join(", ") || "no questions"})`,
       gaze_roi: () => `watches gaze in an area${c.dwell ? ` (dwell ${c.dwell} s)` : ""}`, gaze_follow: () => `moves ${c.target} with the gaze`,
       calibrate: () => "calibrates the eye tracker", marker: () => `sends marker “${c.label}”`,
       variable: () => `sets ${Object.keys(c.set || {}).join(", ")}${c.when === "end" ? " at the end" : ""}`,
       code: () => "runs Python code", wait: () => "waits",
     }[c.type];
     let s2 = `${c.id} ${what ? what() : c.type}`;
-    if (!["code", "variable", "marker"].includes(c.type)) s2 += ` ${when}, ${["keyboard", "mouse", "slider", "html", "gaze_roi"].includes(c.type) && c.duration == null ? "until answered" : dur}`;
+    if (!["code", "variable", "marker"].includes(c.type)) s2 += ` ${when}, ${["keyboard", "mouse", "slider", "html", "survey", "gaze_roi"].includes(c.type) && c.duration == null ? "until answered" : dur}`;
     if (c.end_routine) s2 += "; this ends the screen";
     if (c.if) s2 += ` (only when ${c.if})`;
     if (c.marker) s2 += `; marks “${typeof c.marker === "object" ? c.marker.onset : c.marker}”`;

@@ -14,6 +14,7 @@ The builder's "New experiment → Guided" dialog, ``edge wizard`` and the MCP se
         "blocks": {"count": 2, "repeats": 1, "order": "random", "break_text": "..."},
         "instructions": "...", "thanks": "...",
         "devices": ["sim_eyetracker"],
+        "questionnaires": ["consent", "demographics", "tipi"],   # from edge/survey_library.py
     }
 """
 
@@ -232,6 +233,33 @@ def build_experiment(answers: dict[str, Any] | None = None) -> dict[str, Any]:
         if pmode in ("once", "until"):
             flow += [practice_loop, "ready"]
         flow += main_children
+    # questionnaires: consent and demographics before the task, everything else after it
+    chosen = [str(x) for x in a.get("questionnaires") or []]
+    from .survey_library import INSTRUMENTS
+    unknown = [x for x in chosen if x not in INSTRUMENTS]
+    if unknown:
+        raise WizardError(f"unknown questionnaire(s) {', '.join(unknown)} (available: {', '.join(INSTRUMENTS)})")
+    before = [x for x in chosen if x in ("consent", "demographics")]
+    after = [x for x in chosen if x not in before]
+    if "consent" in before:
+        routines["consent"] = {"description": "information and consent", "components": [
+            {"id": "consent_form", "type": "survey", "end_routine": True, "questions": [{"instrument": "consent"}]}]}
+        flow.insert(0, "consent")
+    if "demographics" in before:
+        routines["about_you"] = {"description": "demographics", "components": [
+            {"id": "about_you", "type": "survey", "end_routine": True, "title": "About you",
+             "questions": [{"instrument": "demographics"}]}]}
+        flow.insert(1 if "consent" in before else 0, "about_you")
+    if after:
+        qs: list[Any] = []
+        for i, x in enumerate(after):
+            if i:
+                qs.append({"type": "page_break"})
+            qs.append({"instrument": x})
+        routines["questionnaires"] = {"description": "questionnaires after the task", "components": [
+            {"id": "questionnaires", "type": "survey", "end_routine": True, "title": "A few more questions",
+             "questions": qs}]}
+        flow.append("questionnaires")
     routines["thanks"] = {"duration": 3, "components": [
         {"id": "message", "type": "text", "text": a.get("thanks") or "Thank you! You're done.", "height": 32}]}
     flow.append("thanks")
@@ -332,6 +360,10 @@ def estimate_experiment(exp) -> dict[str, Any]:
         end = 0.0
         waits_for_response = False
         for c in r.components:
+            if c.type == "survey":
+                end = max(end, survey_seconds(c.props.get("questions") or []))
+                waits_for_response = True
+                continue
             start = c.start if isinstance(c.start, (int, float)) else 0.0
             dur = c.duration if isinstance(c.duration, (int, float)) else None
             if c.end_routine:
@@ -379,6 +411,23 @@ def estimate_experiment(exp) -> dict[str, Any]:
     return {"trials": int(round(trials)), "seconds": round(secs, 1), "minutes": round(secs / 60, 1),
             "text": (f"{int(round(trials))} trials, about {_minutes(secs)}" if round(trials)
                      else f"about {_minutes(secs)}")}
+
+
+def survey_seconds(questions: list[Any]) -> float:
+    """Typical time to answer: published minutes for library questionnaires, ~4 s per own item."""
+    from .survey import answer_ids, expand
+    from .survey_library import INSTRUMENTS
+    secs = 0.0
+    for q in questions:
+        if isinstance(q, dict) and q.get("instrument") in INSTRUMENTS:
+            secs += float(INSTRUMENTS[q["instrument"]]["minutes"]) * 60
+        elif isinstance(q, dict):
+            try:
+                flat, _ = expand([q])
+                secs += 4.0 * sum(max(len(answer_ids(x)), 0) for x in flat) + (3.0 if q.get("type") == "text_block" else 0)
+            except Exception:
+                secs += 4.0
+    return max(secs, 3.0)
 
 
 def _row_count(loop, base_dir) -> int:

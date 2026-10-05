@@ -37,7 +37,17 @@ def schema() -> dict[str, Any]:
         "templates": {k: {"name": v["name"], "description": v.get("description", "")} for k, v in public_templates().items()},
         "import_extensions": [".psyexp", ".ebs3", ".ebs2", ".ebs", ".osexp", ".opensesame", ".html", ".htm", ".js"],
         "default_settings": DEFAULT_SETTINGS,
+        "survey": survey_schema(),
     }
+
+
+def survey_schema() -> dict[str, Any]:
+    from ..survey import QUESTION_TYPES
+    from ..survey_library import SCALE_TITLES, SCALES, catalogue
+    return {"question_types": QUESTION_TYPES,
+            "scales": {k: {"title": SCALE_TITLES.get(k, k), "options": [{"value": v, "label": lab} for v, lab in opts]}
+                       for k, opts in SCALES.items()},
+            "library": catalogue()}
 
 
 class BuilderApp:
@@ -397,6 +407,21 @@ def make_handler(app: BuilderApp):
                                                          int(body.get("max_trials") or 5)))
                     except (ValueError, KeyError) as e:
                         return self._json({"ok": False, "error": str(e).strip("'\"")})
+                if u.path == "/api/survey/render":
+                    from ..survey import render_html, validate
+                    spec = body.get("spec") or {}
+                    problems = validate(spec.get("questions") or [], spec.get("scores") or {})
+                    if problems:
+                        return self._json({"problems": problems})
+                    page, flat, _ = render_html(spec)
+                    # preview: answers go nowhere, the last button just says so
+                    page = page.replace("</body>", "<script>window.edge={vars:{},marker:function(){},submit:function(d){"
+                                        "document.body.innerHTML='<pre style=\"padding:20px;font:13px monospace\">'+"
+                                        "JSON.stringify(d,null,1).replace(/</g,'&lt;')+'</pre>';}};</script></body>")
+                    return self._json({"html": page, "problems": []})
+                if u.path == "/api/survey/instrument":
+                    from ..survey_library import instrument
+                    return self._json(instrument(body["id"]))
                 if u.path == "/api/play/input":
                     return self._json(app.play.input(body))
                 if u.path == "/api/play/stop":

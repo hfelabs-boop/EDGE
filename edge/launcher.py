@@ -143,6 +143,9 @@ def ask_wizard(ask: Callable[[str, str], str] | None = None) -> dict[str, Any]:
         a["practice"]["max_rounds"] = int(ask("At most how many practice rounds", "3"))
     a["blocks"] = {"count": int(ask("Number of blocks", "1")),
                    "repeats": int(ask("How many times each stimulus appears per block", "1"))}
+    from .survey_library import INSTRUMENTS
+    qs = ask("Questionnaires, separated by spaces (" + " ".join(INSTRUMENTS) + "; empty = none)", "")
+    a["questionnaires"] = qs.split()
     return a
 
 

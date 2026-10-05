@@ -129,6 +129,16 @@ In a screen's properties (Simple mode: under *Rules: react while the screen runs
 (when → do)** react while the screen runs: *when* a condition becomes true, *do* actions (end the
 screen, start/stop something, set a variable, send a marker, go to a workflow state).
 
+## Surveys and questionnaires
+
+**Survey / questionnaire** (under *Show*) adds a questionnaire page; if the screen already has something
+on it, the survey gets its own screen after it. **✎ Edit questions** opens the survey editor: questions on
+the left (drag to reorder, duplicate, delete, page breaks), the selected question in the middle (text,
+data name, options or a standard scale, required, shuffle, "other, please specify", limits, validation,
+display logic), and the real participant page live on the right. **+ From library** adds validated
+questionnaires with their citation, licence and scoring; **Customize** copies a library questionnaire's
+items in for editing. See [Surveys](SURVEYS.md).
+
 ## Checking, testing and trying
 
 * **Check** runs automatically while you edit; the tab shows a ✓ or the number of problems. Messages

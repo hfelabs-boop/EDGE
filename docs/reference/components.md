@@ -81,6 +81,26 @@ Play a sound file or a pure tone (number = frequency in Hz).
 | `volume` | float | `1.0` | 0 to 1 |
 | `tone_duration` | float | `0.2` | length of a pure tone in seconds (for numeric sounds) |
 
+### survey
+
+A questionnaire page: single and multiple choice, Likert items and matrices, sliders, text, rank order, constant sum and more, plus validated scales (PHQ-9, GAD-7, Big Five, SUS …) with automatic scoring. Every answer and score becomes a data column.
+
+| property | type | default | description |
+|---|---|---|---|
+| `questions` | survey |  | the questions, in order; {instrument: phq9} adds a library questionnaire **(required)** |
+| `title` | str |  | heading on the first page |
+| `intro` | text |  | instructions under the title (HTML allowed) |
+| `progress_bar` | bool | `True` | show progress across pages |
+| `allow_back` | bool | `True` | participants may go back to earlier pages |
+| `submit_label` | str |  | text of the last button (default: Submit) |
+| `next_label` | str |  | text of the Next button |
+| `back_label` | str |  | text of the Back button |
+| `scores` | dict |  | extra scores: {name: {items: [...], method: sum|mean, reverse: [...], bands: [[max, label]]}} |
+| `labels` | dict |  | translate messages, e.g. {required: 'Bitte beantworten Sie diese Frage.'} |
+| `css` | text |  | extra CSS for the page |
+| `display` | choice: auto / webview / browser | `auto` | auto = pywebview window if installed, otherwise the system browser |
+| `fullscreen` | bool | `True` | show the page full screen |
+
 ### text
 
 Text: instructions, words, feedback. Supports expressions, e.g. "$f'Score: {score}'".
