@@ -101,7 +101,7 @@ TEMPLATES: dict[str, dict[str, Any]] = {
 # (hidden from template lists: names start with "tutorial_")
 _TRIAL = {"components": [
     {"id": "fix", "type": "fixation", "duration": 0.5},
-    {"id": "word", "type": "text", "text": "$word", "color": "$ink", "start": 0.5, "height": 60},
+    {"id": "stimulus", "type": "text", "text": "$word", "color": "$ink", "start": 0.5, "height": 60},
     {"id": "resp", "type": "keyboard", "keys": ["r", "g", "b"], "start": 0.5, "duration": 2, "correct": "$key",
      "end_routine": True}]}
 _STROOP_ROWS = [{"word": "RED", "ink": "red", "key": "r"}, {"word": "RED", "ink": "green", "key": "g"},

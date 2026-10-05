@@ -307,7 +307,9 @@ class Html(Component):
         self._scheduled = None
         self.server = PageServer(self.page, self.root)
         mode = self.p.get("display") or "auto"
-        if mode == "webview" or (mode == "auto" and have_webview()):
+        if hasattr(self.backend, "show_url"):      # "Try it" in the builder shows the page in place
+            self.backend.show_url(self.server.url)
+        elif mode == "webview" or (mode == "auto" and have_webview()):
             args = [sys.executable, "-m", "edge.htmlview", self.server.url, "1" if self.p.get("fullscreen") else "0"]
             self.viewer = subprocess.Popen(args)
         else:
@@ -343,6 +345,8 @@ class Html(Component):
         self.release()
 
     def release(self) -> None:
+        if hasattr(self.backend, "show_url"):
+            self.backend.show_url(None)
         if getattr(self, "viewer", None) is not None and self.viewer.poll() is None:
             self.viewer.terminate()
         if getattr(self, "server", None) is not None:

@@ -173,6 +173,33 @@ def create_server(root: str | Path = ".") -> FastMCP:
         return {"ok": True, "path": ws.rel(p), "changes": doc.changes, "outline": doc.outline(), **_issues(doc)}
 
     @tool
+    def create_from_wizard(path: str, answers: dict[str, Any]) -> dict[str, Any]:
+        """Build a complete, runnable experiment from plain design answers (the builder's guided wizard).
+        answers keys (all optional): name; stimulus {kind: word|picture|sound|shape, items: [{stimulus,
+        correct, condition}]}; response {kind: keys|mouse|rating|none, keys: [..]}; timing {fixation,
+        stimulus_duration, response_deadline, iti} in seconds; feedback (bool); practice {mode:
+        none|once|until, criterion, max_rounds}; blocks {count, repeats, order, break_text}; instructions;
+        thanks; devices [device types]. Fastest way to a standard trial-based task; refine with other tools."""
+        from .wizard import WizardError, build_experiment, estimate
+        p = ws.path(path, must_exist=False)
+        if p.exists():
+            raise EditError(f"{path} already exists")
+        try:
+            data = build_experiment(answers)
+        except WizardError as e:
+            raise EditError(str(e)) from None
+        save_document(p, data, label="wizard")
+        doc = ExperimentDoc.open(p)
+        return {"ok": True, "path": ws.rel(p), "estimate": estimate(data, p.parent), "outline": doc.outline(),
+                **_issues(doc)}
+
+    @tool
+    def estimate_duration(path: str) -> dict[str, Any]:
+        """Expected number of trials and session length in minutes (no run needed)."""
+        from .wizard import estimate_experiment
+        return estimate_experiment(ExperimentDoc.open(ws.path(path)).experiment())
+
+    @tool
     def describe_experiment(path: str) -> dict[str, Any]:
         """Readable outline of an experiment (devices, flow tree, routines with component timing) plus
         validation issues. Call this before editing."""

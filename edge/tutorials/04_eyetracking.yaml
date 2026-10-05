@@ -8,6 +8,7 @@ description: >
   Add an eye tracker, measure where people look with gaze areas of interest, mark stimulus onsets
   for every device, and read the synchronization report.
 start: tutorial_gaze
+mode: expert
 steps:
   - title: Add an eye tracker
     body: |
@@ -18,18 +19,18 @@ steps:
     check: {device: sim_eyetracker}
   - title: Open the trial
     body: |
-      Click the **look** routine in the Flow strip. It shows a red and a blue square for 4 seconds.
+      Click the **look** screen in the Flow strip. It shows a red and a blue square for 4 seconds.
     target: "#flow"
     check: {selected: routine}
   - title: Add a gaze area of interest
     body: |
-      Click **gaze_roi** in the palette (under *eyetracking*). In Properties, set **target** to
+      Click **Where they look** on the left (under *Eye tracking*). In Properties, set **target** to
       `left_box`. EDGE now records whether, when and how long the participant looked at the left square.
     target: ".pal-item[data-type=gaze_roi]"
     check: {component: {routine: look, type: gaze_roi, prop: target, value: left_box}}
   - title: A second area
     body: |
-      Add another **gaze_roi** with **target** `right_box`.
+      Add another **Where they look** with **target** `right_box`.
     target: ".pal-item[data-type=gaze_roi]"
     check: {component: {routine: look, type: gaze_roi, prop: target, value: right_box}}
   - title: Mark the stimulus onset
@@ -45,9 +46,9 @@ steps:
       system) then receives the same markers with matching timestamps.
     target: "#btn-add-device"
     check: {device: lsl_markers}
-  - title: Dry run and read the sync report
+  - title: Test run and read the sync report
     body: |
-      Run a **dry run** and look at **Streams & synchronization** in the results. The simulated tracker
+      Click **▶ Test run** and look at **Streams & synchronization** in the results. The simulated tracker
       runs on its own drifting clock, and EDGE recovers the drift. The *triggers* column shows that
       every marker arrived, and *alignment* shows how precisely.
     target: "#btn-dryrun"

@@ -21,6 +21,11 @@
 - Importers: PsychoPy, E-Prime (generated script), OpenSesame, jsPsych; builder start screen and import dialog
 - Learning: 8 interactive in-builder tutorials, Help Center with search and contextual links, getting-started,
   builder guide, tested cookbook, FAQ; component/device/CLI references generated from the code; `edge help`
+- For new users: design wizard (builder, `edge wizard`, MCP), storyboard view, Simple/Expert modes with "More options",
+  human names for components and terms (screen, trial list, Test run), value-source menu (fixed / trial-list column /
+  new column / formula), Try it inside the builder (real engine, browser display, sounds, web pages), run dialog
+  (next participant ID, hardware, full screen), plain-language errors with "did you mean", a static check for names
+  that aren't defined where they're used, one-command installers, desktop shortcut, `edge` with no arguments
 
 ## Next: hardware validation (highest priority)
 - [ ] Run every driver against physical devices; photodiode + TTL loopback timing benchmarks
@@ -47,7 +52,10 @@
 ## Builder
 - [ ] Multi-select, copy/paste between experiments, drag positions in the stimulus preview
 - [ ] Conditions spreadsheet editor with xlsx round trip
-- [ ] Inline expression checking and autocompletion of variables in scope
+- [ ] Inline expression checking as you type (the Check tab already reports unknown names with suggestions)
+- [ ] Wizard: picture upload from the dialog, more designs (go/no-go, n-back, visual search, questionnaires only)
+- [ ] Try it: render text with the same font metrics as the experiment window; slider dragging feedback
+- [ ] Signed stand-alone apps (PyInstaller recipe exists; needs testing and code signing on macOS/Windows)
 - [ ] Live device dashboards (gaze overlay, signal quality, impedance) during sessions
 - [ ] Experimenter console: participant queue, session notes, run log, abort and resume
 

@@ -171,6 +171,8 @@ def validate_tutorial(t: dict[str, Any]) -> list[str]:
     for key in ("id", "title", "steps"):
         if key not in t:
             problems.append(f"missing '{key}'")
+    if t.get("mode") not in (None, "simple", "expert"):
+        problems.append(f"mode must be 'simple' or 'expert', not '{t.get('mode')}'")
     start = t.get("start")
     if start and start not in TEMPLATES and start != "keep" and not str(start).endswith((".yaml", ".yml")):
         problems.append(f"unknown start template '{start}'")

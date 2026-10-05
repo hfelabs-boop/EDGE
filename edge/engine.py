@@ -68,6 +68,10 @@ class RoutineRun:
         ns.update(self.runner.results)
         for cid, c in self.components.items():
             ns[cid] = c.out
+        # trial-list values win over component results with the same name ("text: $word" in a
+        # component called "word" must show the word, not the component's results)
+        for frame in self.runner.stack:
+            ns.update(frame["row"])
         ns["t"] = 0.0 if self.t0 is None or self.session.last_flip is None else self.session.last_flip - self.t0
         ns["frame"] = self.frame
         ns["vars"] = self.session.vars
@@ -332,6 +336,8 @@ class Runner:
             ns.update(f["row"])
             ns[f["loop"]] = f["state"]
         ns.update(self.results)
+        for f in self.stack:
+            ns.update(f["row"])
         ns["vars"] = self.session.vars
         return expressions.evaluate(src[1:] if src.startswith("$") else src, ns)
 

@@ -8,6 +8,7 @@ description: >
   Turn two loops into a workflow: participants repeat the practice block until they reach 80%
   correct (at most three times), then continue to the main task.
 start: tutorial_practice
+mode: simple
 steps:
   - title: The plan
     body: |
@@ -17,7 +18,7 @@ steps:
       That's a **workflow** (a state machine). Press **Next**.
   - title: Add a workflow
     body: |
-      In the **Flow** strip, click the first round **+** (far left) and choose **State machine (workflow)**.
+      In the **Flow** strip, click the first round **+** (far left) and choose **Workflow (state machine)**.
       A purple box appears with one state called `start`.
     target: "#flow"
     check: {statemachine: {}}
@@ -60,9 +61,9 @@ steps:
       states and routes. Solid arrows have conditions; dashed ones are the defaults.
     target: ".fl-box.sm > .fl-head"
     check: {selected: machine}
-  - title: Dry run
+  - title: Test run
     body: |
-      Run a **dry run**. The virtual participant answers 90% correctly, so they usually pass first time.
+      Click **▶ Test run**. The virtual participant answers 90% correctly, so they usually pass first time.
       In the session data, the `workflow.state` and `workflow.visit` columns show the path taken.
     target: "#btn-dryrun"
     check: {dry_run: true}

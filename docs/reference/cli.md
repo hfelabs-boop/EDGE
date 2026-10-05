@@ -2,6 +2,45 @@
 
 Generated from the code by `edge docs build`.
 
+## edge start
+
+open the builder on your experiments folder (what `edge` alone does)
+
+```
+edge start [-h] [--port PORT] [--no-browser] [directory]
+```
+
+| argument | description |
+|---|---|
+| `directory` | experiments folder (default: ~/Documents/EDGE Experiments) |
+| `--port` | local port for the builder |
+| `--no-browser` | do not open a browser window |
+
+## edge desktop-shortcut
+
+put an EDGE icon on the desktop / in the app menu
+
+```
+edge desktop-shortcut [-h] [--workspace WORKSPACE]
+```
+
+| argument | description |
+|---|---|
+| `--workspace` | folder the icon opens (default: ~/Documents/EDGE Experiments) |
+
+## edge wizard
+
+answer a few questions and get a finished experiment
+
+```
+edge wizard [-h] [--answers ANSWERS] [directory]
+```
+
+| argument | description |
+|---|---|
+| `directory` | where to create it |
+| `--answers` | JSON file with the answers instead of asking |
+
 ## edge run
 
 run an experiment
@@ -10,7 +49,7 @@ run an experiment
 edge run [-h] [-p PARTICIPANT] [-s SESSION] [-f FIELD] [--dry-run]
                 [--simulate-devices]
                 [--backend {pyglet,headless,headless-realtime}]
-                [--data-dir DATA_DIR] [--report]
+                [--data-dir DATA_DIR] [--report] [--fullscreen | --windowed]
                 experiment
 ```
 
@@ -25,6 +64,8 @@ edge run [-h] [-p PARTICIPANT] [-s SESSION] [-f FIELD] [--dry-run]
 | `--backend` | headless-realtime: no window, real clock (screenless tasks with real hardware) |
 | `--data-dir` | where to write data (default: data/ next to the experiment) |
 | `--report` | print the quality report afterwards |
+| `--fullscreen` | full screen (overrides the experiment setting) |
+| `--windowed` | in a window |
 
 ## edge validate
 

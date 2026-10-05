@@ -448,6 +448,12 @@ class Experiment:
                         walk(st.run, f"{w}.{n.id}.{sname}")
 
         walk(self.flow, "flow")
+        if not any(i.level == "error" and "expression" in i.message for i in issues):
+            from .scope import scope_issues
+            try:
+                issues.extend(scope_issues(self))
+            except Exception:  # the scope check is advisory; never let it break validation
+                pass
         for rid in self.routines:
             if rid not in used:
                 issues.append(Issue("info", f"routines.{rid}", "routine is defined but never used in the flow"))

@@ -54,7 +54,7 @@ If `edge` isn't on the PATH Claude Desktop uses, give the full path to the execu
 | Area | Tools |
 |---|---|
 | Discover | `list_experiments`, `list_component_types`, `list_device_types`, `list_templates`, `scan_hardware` |
-| Documents | `create_experiment`, `describe_experiment`, `get_experiment_source`, `replace_experiment_source` |
+| Documents | `create_experiment`, `create_from_wizard` (a finished task from plain design answers), `describe_experiment`, `get_experiment_source`, `replace_experiment_source`, `estimate_duration` |
 | Batch edit | `edit_experiment`: many operations, applied all-or-nothing |
 | Routines | `add_routine`, `update_routine`, `remove_routine` |
 | Components | `add_component`, `update_component`, `remove_component`, `move_component` |
@@ -62,7 +62,7 @@ If `edge` isn't on the PATH Claude Desktop uses, give the full path to the execu
 | Workflow logic | `add_workflow` (state machines), `update_workflow_state`, `add_routine_rule` |
 | Import | `import_experiment`: PsychoPy, E-Prime, OpenSesame, jsPsych |
 | Devices & settings | `add_device`, `update_device`, `remove_device`, `update_settings` |
-| Test & run | `validate_experiment`, `dry_run`, `run_experiment`, `run_status` |
+| Test & run | `validate_experiment` (plain-language issues, incl. names not defined where they're used), `dry_run`, `run_experiment`, `run_status` |
 | Data | `list_sessions`, `analyze_session`, `export_data` |
 | History & files | `undo`, `list_versions`, `restore_version`, `bundle_experiment`, `import_experiment_bundle`, `write_file` |
 | Builder | `open_builder`: starts the visual builder and returns its URL |

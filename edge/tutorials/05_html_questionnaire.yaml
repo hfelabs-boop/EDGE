@@ -5,18 +5,19 @@ level: beginner
 minutes: 7
 learn: html component, forms, saved answers, placeholders
 description: >
-  Put a real HTML form inside your experiment: every answer is saved as a data column, and dry runs
+  Put a real HTML form inside your experiment: every answer is saved as a data column, and test runs
   fill the form in automatically.
 start: tutorial_empty
+mode: simple
 steps:
-  - title: Create a routine for the questionnaire
+  - title: Create a screen for the questionnaire
     body: |
-      Click **+ routine** and name it `survey`.
+      Click **+ screen** and name it `survey`.
     target: ".rtab.add"
     check: {routine_exists: survey}
   - title: Add an HTML page
     body: |
-      Click **html** in the palette. HTML pages can show consent forms, questionnaires, rich
+      Click **Web page / form** on the left. HTML pages can show consent forms, questionnaires, rich
       instructions, or even complete JavaScript tasks.
     target: ".pal-item[data-type=html]"
     check: {component: {routine: survey, type: html}}
@@ -38,19 +39,19 @@ steps:
       The preview shows the real page.
     target: "#props"
     check: {component: {routine: survey, type: html, prop: html, contains: "<form"}}
-  - title: End the routine when the form is sent
+  - title: Move on when the form is sent
     body: |
-      Tick **end_routine** in the component's Timing section.
+      Tick **ends the screen** in the **When** section.
     target: "#props"
     check: {component: {routine: survey, type: html, prop: end_routine, value: true}}
   - title: Put it in the flow
     body: |
-      In the **Flow** strip click **+** and choose **Routine: survey**.
+      In the **Flow** strip click **+** and choose **Screen: survey**.
     target: "#flow"
     check: {flow_has: survey}
-  - title: Dry run and see the answers
+  - title: Test run and see the answers
     body: |
-      Run a **dry run**. The virtual participant fills in the form, and the data preview has the columns
+      Click **▶ Test run**. The virtual participant fills in the form, and the data preview has the columns
       `html.mood` and `html.age`. In real sessions, answers land in exactly the same place.
 
       Tip: write `{{participant}}` or any trial variable in the HTML to show it on the page.

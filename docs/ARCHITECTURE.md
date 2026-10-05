@@ -3,7 +3,8 @@
 ```
 edge/
   model.py          Experiment document: parse, validate, save (YAML/JSON)
-  expressions.py    sandboxed $expressions
+  expressions.py    sandboxed $expressions, plain-language error messages
+  scope.py          static check: is every name an expression reads defined where it's used?
   conditions.py     trial lists: files, factorial, ordering, constraints, Latin squares, staircases
   engine.py         Runner (flow, loops, branches) + RoutineRun (frame loop)
   runtime.py        Session: backend + devices + data + markers + guaranteed cleanup
@@ -21,10 +22,15 @@ edge/
   participant.py    virtual participant for dry runs
   scan.py           hardware discovery
   templates.py      starter experiments (and hidden starting points for tutorials)
+  wizard.py         design wizard: answers -> finished experiment; trial/duration estimates
+  play.py           "Try it": BrowserBackend (real engine, frames published to the builder), single-screen runs
+  launcher.py       `edge` with no arguments, default workspace, desktop shortcuts, terminal wizard
   help.py           docs topics, search, tutorials, generated reference pages (`edge help`, `edge docs build`)
   tutorials/        interactive tutorial definitions (YAML; also rendered into docs/TUTORIALS.md)
-  builder/          local web server + single-page builder (no build step)
+  builder/          local web server + single-page builder (no build step): app.js (editor), simple.js
+                    (storyboard, wizard, Try it, run dialog)
   cli.py            `edge` command
+install/            installer scripts (sh, PowerShell), experimental PyInstaller recipe
 ```
 
 ## Frame loop (RoutineRun.run)
@@ -53,5 +59,7 @@ loop:
   tested on a laptop and in CI.
 * **Data you can trust without EDGE.** Plain CSV/JSON, raw and aligned times side by side, the exact
   experiment and seed saved with every session.
-* **Fail loudly before participants arrive.** Validation, dry runs (a routine that can never end is
-  an error) and the quality report.
+* **Fail loudly before participants arrive.** Validation (including names used where they don't exist),
+  dry runs (a routine that can never end is an error) and the quality report.
+* **Explain, don't just reject.** Every error says what is wrong, where, and what to try, in the words
+  the builder uses (screen, trial list), with the closest match for misspellings.

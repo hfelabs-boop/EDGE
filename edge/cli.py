@@ -29,13 +29,20 @@ def cmd_run(a: argparse.Namespace) -> int:
     if errors:
         print(f"\n{len(errors)} error(s): fix them before running (edge validate {a.experiment})")
         return 2
+    if getattr(a, "fullscreen", None) is not None:
+        exp.settings["window"]["fullscreen"] = a.fullscreen
     participant = _kv(a.field)
     if a.participant:
         participant["participant"] = a.participant
     if a.session:
         participant["session"] = a.session
-    summary = run_experiment(exp, backend=a.backend, participant=participant, dry_run=a.dry_run,
-                             data_dir=a.data_dir, simulate_devices=a.simulate_devices or None)
+    try:
+        summary = run_experiment(exp, backend=a.backend, participant=participant, dry_run=a.dry_run,
+                                 data_dir=a.data_dir, simulate_devices=a.simulate_devices or None)
+    except Exception as e:
+        print(f"\nEDGE could not run the experiment: {friendly_run_error(e)}")
+        print(f"(details: {type(e).__name__}: {e})")
+        return 3
     t = summary.get("timing", {})
     print(f"\nSaved to {summary.get('data_dir')}")
     if t.get("mean_interval_ms"):
@@ -46,6 +53,19 @@ def cmd_run(a: argparse.Namespace) -> int:
         from .report import analyze_session, format_report
         print("\n" + format_report(analyze_session(summary["data_dir"])))
     return 1 if summary.get("aborted") else 0
+
+
+def friendly_run_error(e: Exception) -> str:
+    text = f"{type(e).__name__}: {e}".lower()
+    if "display" in text or "xlib" in text or "nosuchdisplay" in text:
+        return ("no screen is available to open the experiment window on (for example over SSH or in a "
+                "container). Run it on the computer with the monitor, or use 'edge run --dry-run' to test.")
+    if "pyglet" in text and ("no module" in text or "import" in text):
+        return "the window library is missing. Install it with:  pip install \"edge-experiments[display]\""
+    if "connect" in text or "device" in text or "timeout" in text:
+        return ("a device could not be reached. Check that it is switched on and connected, or start with "
+                "simulated hardware (--simulate-devices / 'Simulated' in the builder).")
+    return "see the details below. 'edge validate' and the FAQ explain most problems."
 
 
 def cmd_validate(a: argparse.Namespace) -> int:
@@ -292,11 +312,60 @@ def cmd_builder(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_start(a: argparse.Namespace) -> int:
+    from .launcher import launch
+    return launch(a.directory, port=a.port, open_browser=not a.no_browser)
+
+
+def cmd_shortcut(a: argparse.Namespace) -> int:
+    from .launcher import default_workspace, desktop_shortcut
+    files = desktop_shortcut(workspace=Path(a.workspace) if a.workspace else None)
+    for f in files:
+        print(f"created {f}")
+    print(f"The icon opens the builder on {a.workspace or default_workspace()}")
+    return 0 if files else 1
+
+
+def cmd_wizard(a: argparse.Namespace) -> int:
+    from .launcher import ask_wizard, load_answers, write_wizard_experiment
+    from .wizard import WizardError
+    answers = load_answers(a.answers) if a.answers else ask_wizard()
+    try:
+        path, est = write_wizard_experiment(answers, Path(a.directory))
+    except WizardError as e:
+        print(f"Can't build that: {e}")
+        return 2
+    print(f"\nCreated {path}: {est['text']}")
+    print(f"Try it:   edge run {shlex_quote(str(path))} --dry-run")
+    print(f"Edit it:  edge builder {shlex_quote(str(path.parent))}")
+    return 0
+
+
+def shlex_quote(s: str) -> str:
+    import shlex
+    return shlex.quote(s)
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="edge", description="EDGE experiment builder and runtime")
     from . import __version__
     p.add_argument("--version", action="version", version=f"edge {__version__}")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    sub = p.add_subparsers(dest="cmd")
+
+    st = sub.add_parser("start", help="open the builder on your experiments folder (what `edge` alone does)")
+    st.add_argument("directory", nargs="?", help="experiments folder (default: ~/Documents/EDGE Experiments)")
+    st.add_argument("--port", type=int, default=8765, help="local port for the builder")
+    st.add_argument("--no-browser", action="store_true", help="do not open a browser window")
+    st.set_defaults(fn=cmd_start)
+
+    sc = sub.add_parser("desktop-shortcut", help="put an EDGE icon on the desktop / in the app menu")
+    sc.add_argument("--workspace", help="folder the icon opens (default: ~/Documents/EDGE Experiments)")
+    sc.set_defaults(fn=cmd_shortcut)
+
+    wz = sub.add_parser("wizard", help="answer a few questions and get a finished experiment")
+    wz.add_argument("directory", nargs="?", default=".", help="where to create it")
+    wz.add_argument("--answers", help="JSON file with the answers instead of asking")
+    wz.set_defaults(fn=cmd_wizard)
 
     r = sub.add_parser("run", help="run an experiment")
     r.add_argument("experiment", help="experiment file (.yaml or .json)")
@@ -309,6 +378,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="headless-realtime: no window, real clock (screenless tasks with real hardware)")
     r.add_argument("--data-dir", help="where to write data (default: data/ next to the experiment)")
     r.add_argument("--report", action="store_true", help="print the quality report afterwards")
+    fs = r.add_mutually_exclusive_group()
+    fs.add_argument("--fullscreen", dest="fullscreen", action="store_true", default=None,
+                    help="full screen (overrides the experiment setting)")
+    fs.add_argument("--windowed", dest="fullscreen", action="store_false", help="in a window")
     r.set_defaults(fn=cmd_run)
 
     v = sub.add_parser("validate", help="check an experiment for errors")
@@ -409,6 +482,9 @@ def main(argv: list[str] | None = None) -> int:
     m.set_defaults(fn=cmd_mcp)
 
     a = p.parse_args(argv)
+    if a.cmd is None:          # plain `edge`, e.g. from the desktop icon
+        from .launcher import launch
+        return launch()
     return a.fn(a)
 
 

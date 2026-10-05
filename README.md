@@ -7,7 +7,8 @@ every device as part of the experiment, not something bolted on afterwards.
 ![EDGE builder](docs/builder.png)
 
 ```
-edge builder                       # visual builder in your browser
+edge                               # open the builder on your experiments folder (or double-click the EDGE icon)
+edge wizard                        # answer a few questions, get a finished, tested experiment
 edge mcp                           # let Claude / VS Code build experiments from plain-language requests
 edge run study.yaml --dry-run      # simulated devices + virtual participant, takes seconds
 edge run study.yaml -p 012         # the real thing
@@ -18,7 +19,8 @@ edge report data/012_1_study_…     # timing, data-integrity and sync report
 
 | | E-Prime 3 | PsychoPy | **EDGE** |
 |---|---|---|---|
-| Visual builder | ✓ (Windows only) | ✓ | ✓ in the browser, live stimulus preview, undo, YAML view |
+| Visual builder | ✓ (Windows only) | ✓ | ✓ in the browser: storyboard of every screen, live preview, undo, Simple and Expert modes, YAML view |
+| New users | tutorials | tutorials | **design wizard** (a finished experiment from a few questions), **Try it** (do the experiment inside the builder), plain-language checks with "did you mean", interactive tutorials, one-command installer with a desktop icon |
 | Experiment file | binary `.es3` | `.psyexp` XML → generated script | plain YAML or JSON: diffable, reviewable, scriptable |
 | Eye trackers | Tobii/EyeLink via add-ons | ioHub | Tobii Pro, Gazepoint (no SDK), any LSL gaze stream, mouse stand-in |
 | EEG / physiology | via TTL | via TTL / plugins | g.tec (LSL, Unicorn, g.NEEDaccess), MindWare, any LSL stream, TTL |
@@ -37,6 +39,21 @@ edge report data/012_1_study_…     # timing, data-integrity and sync report
 | Extending | E-Basic | Python | Python plugins for devices and components (entry points) |
 | License | commercial | GPL | MIT |
 
+## New to experiment building?
+
+1. Install with one command (it adds an **EDGE** icon to your desktop):
+   macOS/Linux `curl -fsSL https://raw.githubusercontent.com/hfelabs-boop/edge/main/install/install_edge.sh | sh`,
+   Windows (PowerShell) `irm https://raw.githubusercontent.com/hfelabs-boop/edge/main/install/install_edge.ps1 | iex`.
+2. Open EDGE and click **✨ Make a new experiment: answer a few questions**: what participants see,
+   how they respond, timing, practice ("until 80% correct"), blocks. You get a finished experiment,
+   already checked by a virtual participant: *"64 trials, about 6 minutes"*.
+3. Look at the **storyboard**, press **▶ Try it** to do the task yourself, change what you like (the
+   value menu next to each property turns any value into a trial-list column), and press **Run with a
+   participant**.
+
+The builder starts in **Simple** mode with only the essentials; **Expert** shows everything.
+[Getting started](docs/GETTING_STARTED.md) walks through it in 15 minutes.
+
 ## Learn EDGE
 
 * **Interactive tutorials** run inside the builder: a coach highlights what to click and moves on when
@@ -48,10 +65,11 @@ edge report data/012_1_study_…     # timing, data-integrity and sync report
   [Tutorials](docs/TUTORIALS.md), the [Builder guide](docs/BUILDER_GUIDE.md), a [Cookbook](docs/COOKBOOK.md)
   of tested recipes, an [FAQ](docs/FAQ.md), and component/device/CLI references generated from the code.
 
-## Quick start
+## Quick start (with pip)
 
 ```bash
 pip install -e ".[all]"            # pyglet window, LSL, serial; add [tobii] for the Tobii Pro SDK
+edge desktop-shortcut              # optional: the EDGE icon
 edge new freeview_eyetracking .     # or: blank, eeg_oddball, staircase
 edge run freeview.yaml --dry-run --report
 edge builder .                      # open it in the visual builder
@@ -93,7 +111,7 @@ routines:
   trial:
     components:
       - {id: fix, type: fixation, duration: 0.5}
-      - {id: word, type: text, text: $word, color: $ink, start: 0.5,
+      - {id: stimulus, type: text, text: $word, color: $ink, start: 0.5,
          marker: "$f'word_{congruent}'"}                 # sent to every device, on the flip
       - {id: resp, type: keyboard, keys: [r, g, b], start: 0.5, duration: 2,
          correct: $correct_key, end_routine: true}
@@ -194,18 +212,20 @@ claude mcp add edge -- edge mcp --root .          # Claude Code (VS Code: .vscod
 > "Build a 2-back task with letters, 3 blocks of 30 trials, g.tec EEG over LSL and TTL triggers,
 > dry-run it and give me the expected session length."
 
-The 47 tools cover building and editing experiments (with all-or-nothing batch edits), devices,
+The 49 tools cover building experiments (including the design wizard) and editing them (with all-or-nothing batch edits), devices,
 validation, dry runs, real runs, session analysis, exports, undo and version history, and
 opening the visual builder. Edits are validated, backed up and show up live in an open builder.
 See [docs/MCP.md](docs/MCP.md).
 
 ## Status
 
-This is an early release (0.1). The runtime, builder, data pipeline, exports, MCP server, simulators and the LSL and
+This is an early release (0.1). The runtime, builder (checked end to end in a real browser), design wizard, Try it, data pipeline, exports, MCP server, simulators and the LSL and
 Gazepoint protocol paths are covered by the test suite (`pytest`; LSL against real liblsl,
 Gazepoint against a protocol-level mock server). The Tobii, g.tec, MindWare, serial and parallel
 drivers follow the vendors' documented APIs but have **not yet been run against physical devices**.
-Validate them on your hardware (photodiode + trigger loopback) before collecting data.
+Validate them on your hardware (photodiode + trigger loopback) before collecting data. The installer
+scripts are tested on Linux; the stand-alone app recipe (`install/edge.spec`, built by the release
+workflow) is experimental.
 [ROADMAP.md](ROADMAP.md) lists what comes next.
 
 ## Development

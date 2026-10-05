@@ -8,6 +8,7 @@ description: >
   Control which trials participants see and in what order: random vs full random, limits on
   repetitions in a row, factorial designs and counterbalancing by participant.
 start: tutorial_loops
+mode: simple
 steps:
   - title: Select the loop
     body: |
@@ -52,7 +53,7 @@ steps:
       Press **Next** when you've had a look.
   - title: Check what participants will see
     body: |
-      Run a **dry run**, then open the **Data** tab and tick *include dry runs*. The trial table shows
+      Click **▶ Test run**, then open the **Data** tab and tick *include test runs*. The trial table shows
       the order this virtual participant got, and the `trials.row` column tells you which row of the
       list each trial used.
     target: "#btn-dryrun"

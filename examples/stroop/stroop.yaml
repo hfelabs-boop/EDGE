@@ -33,7 +33,7 @@ routines:
   trial:
     components:
       - {id: fix, type: fixation, duration: 0.5}
-      - id: word
+      - id: stimulus
         type: text
         text: $word
         color: $ink

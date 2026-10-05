@@ -50,7 +50,8 @@ class VirtualParticipant:
                 key = self.rng.choice(wrong) if correct is not None else self.rng.choice(keys)
             backend.press(key, at)
         elif kind == "mouse":
-            targets = [c for c in (component.p.get("clickable") or []) if c in component.run.components]
+            targets = [c for c in (component.p.get("clickable") or [])
+                       if c in component.run.components and hasattr(component.run.components[c], "stim")]
             if targets:
                 if correct in targets and self.rng.random() < self.accuracy:
                     tgt = correct

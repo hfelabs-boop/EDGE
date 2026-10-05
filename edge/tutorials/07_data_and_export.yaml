@@ -8,15 +8,16 @@ description: >
   See what EDGE saves, read the automatic per-condition summary, and export to Excel, CSV or BIDS,
   for one participant or everyone at once.
 start: tutorial_stroop
+mode: expert
 steps:
   - title: Collect some data
     body: |
-      Run a **dry run**. It writes a session folder exactly like a real participant would.
+      Click **▶ Test run**. It writes a session folder exactly like a real participant would.
     target: "#btn-dryrun"
     check: {dry_run: true}
   - title: Open the Data tab
     body: |
-      Open the **Data** tab in the console and tick *include dry runs*. Every session in this folder is
+      Open the **Data** tab in the console and tick *include test runs*. Every session in this folder is
       listed. Click the newest one.
     target: "[data-tab=data]"
     check: {tab_open: data}

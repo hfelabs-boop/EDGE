@@ -30,6 +30,19 @@ participant fields (`participant`, `session`, …), experiment `variables`, loop
 loop state (`trials.n`, `trials.total`, `trials.remaining`, `trials.first`, `trials.last`, `trials.repeat`),
 earlier components' results (`resp.rt`, `resp.corr`, …), the current routine's components, `t`
 (routine time) and `frame`. `math`, `random`, `statistics`, `mean` and common builtins are available.
+Trial-list columns always win over a component with the same name: in a component called `word`,
+`text: $word` shows the column's value. (Check notes the clash, since that component's own results
+can't then be used by name.)
+
+**Checked before running.** `edge validate`, the builder's Check tab and every test run look at each
+expression where it is used: a name that no trial list, variable, component, loop or workflow
+provides at that point is reported in plain words, with the closest match and the names that do
+exist (*"the trial list has no column called 'ink'. Did you mean 'colour'?"*). A routine used both
+inside and outside a loop gets a warning if it reads that loop's columns. Names assigned in `code`
+components count as defined, and conditions given as an expression (`conditions: $block_file`) make
+the check lenient for that loop, since its columns are only known at run time. Errors while running
+are explained the same way, with a hint for common slips (`=` instead of `==`, missing quotes,
+using a response before there is one).
 
 Expressions run in a sandbox: no imports, no attribute names starting with `_`, no lambdas, so an
 experiment file shared between labs can't run arbitrary code. Use a `code` component when you need

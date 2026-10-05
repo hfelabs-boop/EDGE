@@ -2,9 +2,21 @@
 
 ## General
 
-**Do I need to know Python?**
-No. The builder, the YAML file and the expressions (`$word`, `$resp.rt < 0.5`) cover nearly everything.
-Python is there when you want it: `code` components run full Python.
+**Do I need to know Python or any programming?**
+No. **New → Make a new experiment: answer a few questions** builds a complete, tested task, and the
+builder covers nearly everything else with menus: the value menu next to each property picks a trial-list
+column, or makes one, so you rarely type a formula. Formulas (`$resp.rt < 0.5`) are there when you want
+them, and Python `code` components (Expert mode) for anything beyond that.
+
+**How do I install it without a terminal?**
+Use the installer for your system (see [Getting started](GETTING_STARTED.md#1-install)); it puts an
+EDGE icon on the desktop. If you installed with pip, `edge desktop-shortcut` makes the icon.
+
+**What's the difference between Test run, Try it and Run with a participant?**
+**Test run**: a virtual participant does the whole experiment in seconds with simulated hardware, to
+catch mistakes and show the data you'll get. **Try it**: *you* do the experiment inside the builder, to
+see and feel it. **Run with a participant**: the real session in the experiment window, with real
+hardware and precise timing.
 
 **Can I open my PsychoPy / E-Prime experiments?**
 Yes, see [Importing](IMPORT.md). PsychoPy converts most completely. For E-Prime, import the
@@ -27,18 +39,45 @@ Start with `trials_wide.csv`, `summary.csv` and `data_dictionary.csv`. See [Data
 
 ## Error messages
 
-**"dry run: routine 'X' did not end after 600 s"**
+Check messages are written to be read: they say what's wrong, where (*screen “trial” › word › color*),
+and usually what to do. The most common ones:
+
+**"The trial list has no column called 'ink'. Did you mean 'colour'?"**
+A property uses `$ink`, but the trial list around this screen has no such column. Fix the spelling,
+pick the column from the value menu (⟳), or add it with **+ New trial-list column…**.
+
+**"'word' comes from the trial list of loop 'trials', but this screen also runs outside that loop"**
+The same screen is in the flow twice, once outside the trial list, where `$word` has no value. Use a
+separate screen there, or give the value with a *Set a variable* step.
+
+**"'x' isn't defined anywhere in this experiment"**
+Nothing defines that name: no trial-list column, variable or component. Often it's plain text that
+starts with `$` by accident: remove the `$` (or write `$$` for a literal dollar sign).
+
+**"this component has the same name as the trial-list column 'word'"** (note)
+`$word` gives the column's value, so the component's own results (`word.onset`) can't be used by
+name. Rename the component (e.g. `word_text`) if you need them.
+
+**"Could not start: no screen is available to open the experiment window on"**
+The experiment window needs a monitor, so it can't open over SSH or in a container. Run on the lab
+computer, or use Test run / Try it, which need no window.
+
+**"test run: routine 'X' did not end after 600 s"** (also "dry run: …")
 Nothing ends that routine. Give it a `duration`, tick `end_routine` on a response, or add `end_if`.
 A component without a duration runs until the routine ends, so a routine made only of such components
-never ends.
+never ends. (In the builder: tick **ends the screen** on the response, or set **lasts at most** on the screen.)
 
-**"error evaluating '…': NameError: name 'x' is not defined"**
-The expression uses a variable that doesn't exist at that point. Check the spelling, and check that
-the routine really is inside the loop whose trial list has that column. Type `$` in the field to see
-the names available there.
+**"'x' isn't defined here (in '…'). Did you mean 'y'? Names available: …"** (while running)
+The formula uses a name that doesn't exist at that moment. The message lists what does exist and
+the closest match. Usually Check has already warned about it.
 
-**"syntax error in expression"**
-Expressions are Python. Quote strings (`$ink == 'red'`, not `$ink == red`) and use `==` to compare.
+**"'…' isn't a valid expression (syntax error …)"**
+Formulas are Python. Quote text (`$ink == 'red'`, not `$ink == red`) and use `==` to compare; the
+message adds a hint for the common slips (a single `=`, a missing quote or bracket, plain text after `$`).
+
+**"a value is still empty, e.g. no response yet"**
+A formula used a response before there was one (`resp.rt * 1000` when nobody pressed). Check for it
+first: `$resp.rt is not None and resp.rt < 1`.
 
 **"'…' is not allowed in expression"**
 Expressions are sandboxed (no imports, no `_private` attributes, no lambdas), so shared experiment files
@@ -73,8 +112,9 @@ In E-Studio press *Generate* (Ctrl+F7) and import the `.ebs3` it writes. Also sa
 
 ## How do I …
 
-**… make a value change from trial to trial?** Put it in the loop's trial list and write `$column` in
-the property.
+**… make a value change from trial to trial?** In the value menu next to the property choose
+**+ New trial-list column…** (or an existing **⟳ column**), then fill in the trial list: one row per trial.
+In the file that's `$column` in the property and the column in the loop's `conditions`.
 
 **… show something only sometimes?** Component `if: "$condition"`; for a whole routine, a flow entry
 `{routine: name, if: "$condition"}`.
@@ -87,7 +127,9 @@ stimulus. See [Cookbook](COOKBOOK.md#fixed-trigger-codes-for-an-eeg-amplifier).
 
 **… add a consent form or questionnaire?** An `html` component; see the HTML tutorial.
 
-**… undo a change from yesterday?** **Versions** in the builder, or `edge backups study.yaml`.
+**… undo a change from yesterday?** **Versions** in the builder (Expert mode), or `edge backups study.yaml`.
+
+**… see every option?** Switch to **Expert** (top right). Simple mode folds rare options under **More options**.
 
 **… share an experiment?** **Bundle** (or `edge bundle study.yaml`) makes one `.edgez` file with
 everything it needs.
@@ -98,18 +140,21 @@ everything it needs.
 
 | term | meaning |
 |---|---|
-| **routine** | one screen or event sequence (a trial, instructions, feedback) |
-| **component** | an element of a routine: stimulus, response, eye-tracking area, marker, logic step |
+| **screen** / **routine** | one step: a trial, instructions, feedback. The builder says *screen*; the file says `routines` |
+| **component** / **thing on a screen** | an element of a screen: stimulus, response, eye-tracking area, marker, logic step |
 | **flow** | the order in which routines run, with loops, branches and workflows |
 | **loop** | repeats routines once per row of a trial list |
-| **trial list / conditions** | the table a loop iterates over; columns become variables |
+| **trial list / conditions** | the table a loop iterates over; each column can be used as a value (⟳ in the value menu, `$column` in a formula) |
 | **workflow / state machine** | states (blocks) with conditional routes between them |
 | **route** | a rule saying which state comes next ("if accuracy ≥ 0.8 go to main") |
 | **rule** | inside a routine: "when this becomes true, do that" |
-| **expression** | a value starting with `$`, computed while the experiment runs |
+| **formula / expression** | a value starting with `$`, computed while the experiment runs |
 | **marker** | an event sent to every device (TTL code, LSL sample, eye-tracker message) at a stimulus onset |
 | **flip** | the moment a new frame appears on screen; all onsets are stamped with flip times |
-| **dry run** | a fast simulated run with simulated devices and a virtual participant |
-| **virtual participant** | the simulated person who responds during dry runs |
+| **test run / dry run** | a fast simulated run with simulated devices and a virtual participant (`edge run --dry-run`) |
+| **Try it** | doing the experiment yourself inside the builder |
+| **virtual participant** | the simulated person who responds during test runs |
+| **design wizard** | **New → answer a few questions**, or `edge wizard`: a finished experiment from plain answers |
+| **Simple / Expert mode** | how much of the builder is shown |
 | **session** | one run of the experiment for one participant; one data folder |
 | **bundle** | a `.edgez` file containing an experiment and all its files |

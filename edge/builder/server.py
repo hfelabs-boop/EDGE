@@ -42,8 +42,10 @@ def schema() -> dict[str, Any]:
 
 class BuilderApp:
     def __init__(self, root: Path):
+        from ..play import PlayManager
         self.root = root.resolve()
         self.runs: dict[str, Any] = {}
+        self.play = PlayManager(self.root)
 
     def safe_path(self, rel: str) -> Path:
         p = (self.root / rel).resolve()
@@ -134,14 +136,77 @@ class BuilderApp:
         rep = analyze_session(summary["data_dir"])
         trials_path = Path(summary["data_dir"]) / "trials.jsonl"
         rows = [json.loads(l) for l in trials_path.read_text().splitlines()[:200] if l.strip()]
-        return {"ok": True, "summary": summary, "report": rep, "trials": rows, "log": logs}
+        try:
+            from ..export import SessionTables, wide_trials
+            n_trials = sum(1 for r in wide_trials(SessionTables(summary["data_dir"]))[1] if r.get("loop"))
+        except Exception:
+            n_trials = None
+        return {"ok": True, "summary": summary, "report": rep, "trials": rows, "n_trials": n_trials, "log": logs}
 
-    def run_real(self, rel: str, participant: dict[str, Any], simulate: bool) -> dict[str, Any]:
-        cmd = [sys.executable, "-m", "edge.cli", "run", str(self.safe_path(rel)), "--report"]
+    # --------------------------------------------------------------- guided design
+    def wizard(self, answers: dict[str, Any], save_as: str | None) -> dict[str, Any]:
+        from ..wizard import WizardError, build_experiment, estimate
+        try:
+            doc = build_experiment(answers)
+        except WizardError as e:
+            return {"ok": False, "error": str(e)}
+        out: dict[str, Any] = {"ok": True, "experiment": doc}
+        base = self.root
+        if save_as:
+            p = self.safe_path(save_as)
+            if p.exists():
+                return {"ok": False, "error": f"{save_as} already exists: choose another name"}
+            storage.save_document(p, doc, label="wizard")
+            out["path"] = str(p.relative_to(self.root))
+            out["fingerprint"] = storage.fingerprint(p)
+            base = p.parent
+            if (answers.get("stimulus") or {}).get("kind") == "picture":
+                (p.parent / "images").mkdir(exist_ok=True)
+        out["estimate"] = estimate(doc, base)
+        out["issues"] = self.validate(doc, out.get("path"))
+        return out
+
+    def estimate(self, data: dict[str, Any], rel: str | None) -> dict[str, Any]:
+        from ..wizard import estimate_experiment
+        try:
+            return estimate_experiment(self.experiment(data, rel))
+        except Exception as e:
+            return {"error": str(e)}
+
+    def next_participant(self, rel: str) -> dict[str, Any]:
+        """Suggest the next unused participant id from the experiment's data folder."""
+        from ..model import Experiment
+        p = self.safe_path(rel)
+        exp = Experiment.load(p)
+        data_dir = (p.parent / exp.settings["data"].get("dir", "data")).resolve()
+        used: list[str] = []
+        if data_dir.exists():
+            for sj in data_dir.rglob("session.json"):
+                if "dry_runs" in sj.parts:
+                    continue
+                try:
+                    info = json.loads(sj.read_text())
+                    pid = (info.get("participant") or {}).get("participant")
+                    if pid is not None:
+                        used.append(str(pid))
+                except Exception:
+                    continue
+        nums = [int(u) for u in used if u.isdigit()]
+        width = max([len(u) for u in used if u.isdigit()] + [3])
+        suggestion = str((max(nums) + 1) if nums else 1).zfill(width)
+        return {"suggestion": suggestion, "used": sorted(set(used)), "data_dir": str(data_dir.relative_to(self.root))
+                if self.root in data_dir.parents or data_dir == self.root else str(data_dir)}
+
+    def run_real(self, rel: str, participant: dict[str, Any], simulate: bool,
+                 fullscreen: bool | None = None) -> dict[str, Any]:
+        from ..launcher import edge_command
+        cmd = edge_command() + ["run", str(self.safe_path(rel)), "--report"]
         for k, v in (participant or {}).items():
             cmd += ["-f", f"{k}={v}"]
         if simulate:
             cmd.append("--simulate-devices")
+        if fullscreen is not None:
+            cmd.append("--fullscreen" if fullscreen else "--windowed")
         proc = subprocess.Popen(cmd, cwd=str(self.root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         rid = str(proc.pid)
         state = {"proc": proc, "output": []}
@@ -275,6 +340,10 @@ def make_handler(app: BuilderApp):
                     return self._json(scan_all(timeout=float(q.get("timeout", 1.5))))
                 if u.path == "/api/run_status":
                     return self._json(app.run_status(q["id"]))
+                if u.path == "/api/next_participant":
+                    return self._json(app.next_participant(q["path"]))
+                if u.path == "/api/play/frame":
+                    return self._json(app.play.frame(int(q.get("sound", 0))))
                 return self._json({"error": "not found"}, 404)
             except Exception as e:
                 return self._json({"error": str(e), "trace": traceback.format_exc()}, 500)
@@ -314,7 +383,24 @@ def make_handler(app: BuilderApp):
                 if u.path == "/api/dryrun":
                     return self._json(app.dry_run(body["experiment"], body.get("path"), body.get("participant") or {}))
                 if u.path == "/api/run":
-                    return self._json(app.run_real(body["path"], body.get("participant") or {}, bool(body.get("simulate"))))
+                    return self._json(app.run_real(body["path"], body.get("participant") or {}, bool(body.get("simulate")),
+                                                   body.get("fullscreen")))
+                if u.path == "/api/wizard":
+                    return self._json(app.wizard(body.get("answers") or {}, body.get("save_as")))
+                if u.path == "/api/estimate":
+                    return self._json(app.estimate(body["experiment"], body.get("path")))
+                if u.path == "/api/play/start":
+                    rel = body.get("path")
+                    base = app.safe_path(rel).parent if rel else app.root
+                    try:
+                        return self._json(app.play.start(body["experiment"], base, body.get("routine"),
+                                                         int(body.get("max_trials") or 5)))
+                    except (ValueError, KeyError) as e:
+                        return self._json({"ok": False, "error": str(e).strip("'\"")})
+                if u.path == "/api/play/input":
+                    return self._json(app.play.input(body))
+                if u.path == "/api/play/stop":
+                    return self._json(app.play.stop())
                 if u.path == "/api/to_yaml":
                     return self._json({"yaml": storage.dumps(body)})
                 if u.path == "/api/from_yaml":
@@ -329,10 +415,33 @@ def make_handler(app: BuilderApp):
     return Handler
 
 
+def _is_builder(host: str, port: int, root: Path) -> bool:
+    from urllib.request import urlopen
+    try:
+        with urlopen(f"http://{host}:{port}/api/files", timeout=1) as r:
+            return Path(json.loads(r.read()).get("root", "")).resolve() == root.resolve()
+    except Exception:
+        return False
+
+
 def serve(root: Path, host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True,
           path_query: str = "") -> None:
     app = BuilderApp(root)
-    httpd = ThreadingHTTPServer((host, port), make_handler(app))
+    httpd = None
+    for p in range(port, port + 20):
+        try:
+            httpd = ThreadingHTTPServer((host, p), make_handler(app))
+            port = p
+            break
+        except OSError:
+            if _is_builder(host, p, app.root):      # already open on this folder: just show it
+                url = f"http://{host}:{p}/{path_query}"
+                print(f"EDGE builder is already running at {url}")
+                if open_browser:
+                    webbrowser.open(url)
+                return
+    if httpd is None:
+        raise OSError(f"no free port between {port} and {port + 19}")
     url = f"http://{host}:{port}/{path_query}"
     print(f"EDGE builder running at {url}  (directory: {app.root})  Ctrl+C to stop")
     if open_browser:

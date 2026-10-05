@@ -5,8 +5,9 @@ level: beginner
 minutes: 5
 learn: importing, import reports, checking a converted experiment
 description: >
-  Convert an existing experiment, read the import report, and verify the result with a dry run.
+  Convert an existing experiment, read the import report, and verify the result with a test run.
 start: keep
+mode: expert
 steps:
   - title: What can be imported
     body: |
@@ -29,7 +30,7 @@ steps:
       Click **Open and dry-run** to load the converted experiment and test it straight away.
   - title: Verify
     body: |
-      Compare the dry run with the original: number of trials, timing per routine (read the plain-language
+      Compare the test run with the original: number of trials, timing per screen (read the plain-language
       summary above each timeline), response keys and correct answers. Fix anything flagged, then save.
 
       Command-line alternative: `edge import my_task.psyexp`.

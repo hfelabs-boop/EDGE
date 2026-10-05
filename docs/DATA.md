@@ -41,6 +41,11 @@ data/<participant>_<session>_<experiment>_<date>/
   exports/             extra formats from settings.data.exports (e.g. xlsx, bids)
 ```
 
+Test runs (`edge run --dry-run`, the builder's **▶ Test run**) write the same folders under
+`data/dry_runs/`, and **▶ Try it** under `data/dry_runs/try/`. They are left out of merged exports
+and of the participant-ID suggestion unless you ask for them (*include test runs* in the Data tab,
+`--include-dry-runs` on the command line).
+
 ### How the trial table is built (`trials_wide.csv`)
 
 * All routines of one loop iteration (for example `trial` and `feedback`) are merged into

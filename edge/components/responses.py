@@ -111,7 +111,7 @@ class Mouse(Component):
         if self.p["clickable"]:
             for cid in self.p["clickable"]:
                 comp = self.run.components.get(cid)
-                if comp is not None and comp.status == 1 and hasattr(comp, "contains") and comp.contains(*ev.pos):
+                if comp is not None and comp.status == 1 and hasattr(comp, "stim") and comp.contains(*ev.pos):
                     hit = cid
             if hit is None:
                 return

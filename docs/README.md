@@ -7,7 +7,7 @@ are also built into the app: press **?** in the builder, or run `edge help` in a
 
 | | |
 |---|---|
-| [Getting started](GETTING_STARTED.md) | install EDGE, open the builder, run your first experiment (15 minutes) |
+| [Getting started](GETTING_STARTED.md) | install EDGE (one command, desktop icon), answer a few questions to get a finished experiment, try it, run it (15 minutes) |
 | [Tutorials](TUTORIALS.md) | eight hands-on lessons, also available as **interactive tutorials** in the builder |
 | [Builder guide](BUILDER_GUIDE.md) | a tour of every part of the visual builder |
 | [FAQ & troubleshooting](FAQ.md) | common questions, error messages, glossary |
@@ -36,5 +36,6 @@ are also built into the app: press **?** in the builder, or run `edge help` in a
 
 * **?** (top right of the builder, or the `?` key) opens the Help Center: guides, search and tutorials.
 * **📖 docs** links next to components, devices, loops, workflows and rules open the matching reference.
-* The grey **summary** above each routine's timeline describes in plain words what the routine does.
+* The grey **summary** above each screen's timeline describes in plain words what the screen does.
+* **Check** explains problems in plain words and jumps to them; **▶ Try it** lets you do the experiment yourself.
 * `edge help <words>` searches the docs from a terminal; `edge tutorial` lists the tutorials.

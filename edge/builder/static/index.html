@@ -13,35 +13,38 @@
     <span id="filename">untitled</span><span id="dirty" title="unsaved changes"></span>
   </div>
   <nav class="actions">
-    <button id="btn-new" title="New from template">New</button>
+    <button id="btn-new" title="Start a new experiment: guided questions, templates, or import">New</button>
     <button id="btn-open" title="Open experiment">Open</button>
-    <button id="btn-import" title="Import a PsychoPy, E-Prime, OpenSesame or jsPsych experiment">Import</button>
+    <button id="btn-import" class="expert-only" title="Import a PsychoPy, E-Prime, OpenSesame or jsPsych experiment">Import</button>
     <button id="btn-save" title="Save (Ctrl+S)">Save</button>
-    <button id="btn-versions" title="Saved versions (automatic backups)">Versions</button>
-    <button id="btn-bundle" title="Download the experiment with all its files (.edgez)">Bundle</button>
+    <button id="btn-versions" class="expert-only" title="Saved versions (automatic backups)">Versions</button>
+    <button id="btn-bundle" class="expert-only" title="Download the experiment with all its files (.edgez)">Bundle</button>
     <span class="sep"></span>
     <button id="btn-undo" title="Undo (Ctrl+Z)">↶</button>
     <button id="btn-redo" title="Redo (Ctrl+Shift+Z)">↷</button>
     <span class="sep"></span>
-    <button id="btn-settings" title="Experiment settings">Settings</button>
-    <button id="btn-validate" title="Check for errors">Validate</button>
-    <button id="btn-dryrun" class="accent" title="Run headless with simulated devices and a virtual participant">▶ Dry run</button>
-    <button id="btn-run" class="primary" title="Run for real (opens the experiment window)">▶ Run</button>
-    <button id="btn-help" title="How EDGE works (?)">?</button>
+    <button id="btn-settings" title="Experiment settings: window, colours, data">Settings</button>
+    <button id="btn-validate" title="Check the experiment for mistakes">Check</button>
+    <button id="btn-dryrun" title="Test run: a virtual participant does the whole experiment in seconds (simulated hardware)">▶ Test run</button>
+    <button id="btn-try" class="accent" title="Try it yourself, right here: press the keys and click like a participant">▶ Try it</button>
+    <button id="btn-run" class="primary" title="Run with a participant: opens the experiment window and records data">Run with a participant</button>
+    <span class="sep"></span>
+    <button id="btn-mode" title="Simple shows the essentials; Expert shows every option">Simple</button>
+    <button id="btn-help" title="Help, tutorials and documentation (?)">?</button>
   </nav>
 </header>
 
 <main id="layout">
   <aside id="left">
     <section>
-      <h3>Components</h3>
-      <input id="palette-filter" placeholder="filter…">
+      <h3>Add to this screen</h3>
+      <input id="palette-filter" placeholder="search…">
       <div id="palette"></div>
     </section>
     <section>
-      <h3>Devices <button class="mini" id="btn-add-device" title="Add device">+</button></h3>
+      <h3>Devices <button class="mini" id="btn-add-device" title="Add an eye tracker, EEG, physiology, LSL or trigger device">+</button></h3>
       <div id="devices"></div>
-      <button class="wide" id="btn-scan">Scan for hardware</button>
+      <button class="wide expert-only" id="btn-scan">Scan for hardware</button>
     </section>
   </aside>
 
@@ -56,6 +59,7 @@
             <iframe id="preview-html" class="hidden" title="HTML page preview" sandbox="allow-scripts allow-forms"></iframe>
           </div>
           <div class="preview-ctl">
+            <button id="preview-play" class="mini" title="Play this screen at real speed">▶</button>
             <input type="range" id="preview-t" min="0" max="5" step="0.01" value="0">
             <span id="preview-label">t = 0.00 s</span>
           </div>
@@ -63,15 +67,15 @@
       </div>
     </div>
     <div id="flow-area">
-      <h3>Flow</h3>
+      <h3>Flow <span class="flow-hint">the order of screens: + inserts, drag to move</span></h3>
       <div id="flow"></div>
     </div>
     <div id="console">
       <div class="tabs">
-        <button data-tab="issues" class="active">Issues <span id="issue-count"></span></button>
-        <button data-tab="results">Dry-run results</button>
-        <button data-tab="source">Source (YAML)</button>
-        <button data-tab="hardware">Hardware</button>
+        <button data-tab="issues" class="active">Check <span id="issue-count"></span></button>
+        <button data-tab="results">Test results</button>
+        <button data-tab="source" class="expert-only">Source (YAML)</button>
+        <button data-tab="hardware" class="expert-only">Hardware</button>
         <button data-tab="data">Data</button>
       </div>
       <div id="tab-issues" class="tab active"></div>
@@ -94,6 +98,8 @@
 <div id="modal" class="hidden"><div class="modal-box"><div id="modal-body"></div></div></div>
 <div id="toast"></div>
 <div id="banner" class="hidden"></div>
+<div id="play" class="hidden"></div>
 <script src="/static/app.js"></script>
+<script src="/static/simple.js"></script>
 </body>
 </html>

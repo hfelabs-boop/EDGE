@@ -9,18 +9,42 @@ const S = {
   sel: null,                     // {kind: component|routine|loop|branch|device|settings, ...}
   history: [], future: [],
   previewT: 0, issues: [], sampleRow: {},
+  mode: (() => { try { return localStorage.getItem("edge.mode") || "simple"; } catch { return "simple"; } })(),
+  view: "story",                 // story (storyboard of all screens) | screen (one screen's timeline)
 };
 
+/* Human names for component types, the groups they appear in, and the properties shown before "More options". */
+const FRIENDLY = {
+  text: ["Text", "Show"], image: ["Picture", "Show"], shape: ["Shape", "Show"], fixation: ["Fixation cross", "Show"],
+  sound: ["Sound", "Show"], html: ["Web page / form", "Show"],
+  keyboard: ["Key press", "Responses"], mouse: ["Mouse click", "Responses"], slider: ["Rating scale", "Responses"],
+  gaze_roi: ["Where they look", "Eye tracking"], gaze_follow: ["Follow the gaze", "Eye tracking"], calibrate: ["Calibrate eye tracker", "Eye tracking"],
+  marker: ["Event marker", "Hardware"], variable: ["Set a variable", "Logic"], code: ["Python code", "Logic"], wait: ["Pause / blank", "Logic"],
+};
+const GROUP_ORDER = ["Show", "Responses", "Eye tracking", "Hardware", "Logic", "Other"];
+const SIMPLE_HIDDEN = new Set(["code", "marker", "gaze_follow", "calibrate"]);
+const BASIC_PROPS = {
+  text: ["text", "color", "height", "pos"], image: ["image", "size", "pos"], shape: ["shape", "size", "fill", "pos"],
+  fixation: ["size", "fill"], sound: ["sound", "volume"], html: ["file", "html"], keyboard: ["keys", "correct"],
+  mouse: ["clickable", "correct"], slider: ["ticks", "labels"], gaze_roi: ["target", "pos", "radius", "dwell"],
+  gaze_follow: ["target"], calibrate: ["device"], marker: ["label"], variable: ["set", "when"], wait: [],
+};
+const BASIC_TIMING = ["start", "duration", "end_routine"];
+const FIELD_LABELS = {start: "starts at (s)", duration: "lasts (s)", end_routine: "ends the screen", if: "only if",
+  start_after: "starts after", start_if: "starts when", stop_if: "stops when"};
+const friendlyName = (type) => (FRIENDLY[type] || [type])[0];
+const isSimple = () => S.mode === "simple";
+
 const SCHED_FIELDS = {
-  start: {type: "float", default: 0, help: "seconds from routine start (or expression)"},
-  duration: {type: "float", default: null, help: "seconds; empty = until the routine ends"},
+  start: {type: "float", default: 0, help: "seconds after the screen appears"},
+  duration: {type: "float", default: null, help: "seconds; empty = until the screen ends"},
   start_after: {type: "component", default: null, help: "start when this component stops"},
   start_if: {type: "expr", default: null, help: "start when this expression becomes true"},
   stop_if: {type: "expr", default: null, help: "stop when this expression becomes true"},
   start_frame: {type: "int", default: null, help: "start on frame N (overrides start)"},
   duration_frames: {type: "int", default: null, help: "duration in frames (overrides duration)"},
-  end_routine: {type: "bool", default: false, help: "end the routine when this responds or times out"},
-  if: {type: "expr", default: null, help: "include this component only when true, e.g. $practice or $trials.n < 5"},
+  end_routine: {type: "bool", default: false, help: "move on to the next screen when this gets a response (or times out)"},
+  if: {type: "expr", default: null, help: "include it only when true, e.g. $trials.n < 5"},
   disabled: {type: "bool", default: false},
   save: {type: "bool", default: true, help: "save results in the data file"},
 };
@@ -153,6 +177,7 @@ function loadDoc(exp, path, fp = null, opts = {}) {
   S.exp = normalize(exp); S.history = []; S.future = []; S._snapshot = JSON.stringify(S.exp);
   if (opts.keepSelection && S.exp.routines[S.routine]) fixSelection();
   else {
+    S.view = S.mode === "simple" ? "story" : "screen";
     S.routine = routineInFlowOrder()[0] || Object.keys(S.exp.routines)[0] || null;
     S.sel = S.routine ? {kind: "routine", routine: S.routine} : {kind: "settings"};
   }
@@ -239,11 +264,11 @@ async function renderData() {
   el.innerHTML = "";
   const left = h("div", {});
   const dry = h("input", {type: "checkbox", onchange: (e) => { D.dry = e.target.checked; renderData(); }}); dry.checked = D.dry;
-  left.append(h("label", {style: "display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:12px"}, dry, "include dry runs"));
+  left.append(h("label", {style: "display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:12px"}, dry, "include test runs"));
   left.append(h("div", {class: "subtabs"},
     h("button", {onclick: () => exportData(".", ["csv", "xlsx"])}, "Export all → CSV + Excel"),
     h("button", {onclick: () => exportData(".", ["bids"])}, "All → BIDS")));
-  if (!D.sessions.length) left.append(h("div", {class: "help", style: "color:var(--muted)"}, "No sessions yet. Run the experiment (or a dry run with “include dry runs”)."));
+  if (!D.sessions.length) left.append(h("div", {class: "help", style: "color:var(--muted)"}, "No sessions yet. Run the experiment (or a ▶ Test run, with “include test runs” ticked)."));
   for (const ss of D.sessions) left.append(h("div", {class: "sess" + (D.sel === ss.path ? " sel" : ""), onclick: () => { D.sel = ss.path; renderData(); }},
     h("b", {}, `${ss.participant ?? "?"} · ${ss.experiment ?? ""}`), h("small", {}, `${(ss.started || "").replace("T", " ")}${ss.dry_run ? " · dry run" : ""}${ss.aborted ? " · aborted" : ""}`)));
   const right = h("div", {style: "overflow:auto"});
@@ -271,6 +296,15 @@ async function exportData(path, formats) {
 }
 
 /* ------------------------------------------------------------------ render */
+function setMode(m) {
+  S.mode = m; try { localStorage.setItem("edge.mode", m); } catch {}
+  applyMode(); renderAll(); renderIssues(); toast(m === "simple" ? "Simple mode: just the essentials" : "Expert mode: every option is visible");
+}
+function applyMode() {
+  document.body.classList.toggle("mode-simple", S.mode === "simple");
+  const b = $("#btn-mode"); if (b) { b.textContent = S.mode === "simple" ? "Simple" : "Expert"; b.classList.toggle("on", S.mode === "expert"); }
+  if (S.mode === "simple" && ["source", "hardware"].includes(S.tab)) showTab("issues");
+}
 function renderAll() {
   renderPalette(); renderDevices(); renderRoutineTabs(); renderTimeline(); renderFlow(); renderProps(); renderPreview();
   if ($("#tab-source").classList.contains("active")) renderSource();
@@ -280,21 +314,25 @@ function renderAll() {
 function renderPalette() {
   const f = $("#palette-filter").value.toLowerCase();
   const el = $("#palette"); el.innerHTML = "";
-  const cats = {};
+  const hasGaze = S.exp.devices.some((d) => (S.schema.devices[d.type]?.capabilities || []).includes("gaze"));
+  const groups = {};
   for (const [type, d] of Object.entries(S.schema.components)) {
-    if (f && !(type + d.description).toLowerCase().includes(f)) continue;
-    (cats[d.category] ||= []).push([type, d]);
+    if (f && !(type + friendlyName(type) + d.description).toLowerCase().includes(f)) continue;
+    if (isSimple() && !f && (SIMPLE_HIDDEN.has(type) || (type === "gaze_roi" && !hasGaze))) continue;
+    (groups[(FRIENDLY[type] || [])[1] || "Other"] ||= []).push([type, d]);
   }
-  const order = ["stimulus", "response", "eyetracking", "hardware", "logic", "other"];
-  for (const cat of order) {
-    if (!cats[cat]) continue;
-    el.append(h("div", {class: "pal-cat"}, cat));
-    for (const [type, d] of cats[cat].sort()) {
+  for (const g of GROUP_ORDER) {
+    if (!groups[g]) continue;
+    el.append(h("div", {class: "pal-cat"}, g));
+    for (const [type, d] of groups[g]) {
       el.append(h("div", {class: "pal-item", "data-type": type, title: d.description, draggable: "true",
         ondragstart: (e) => e.dataTransfer.setData("edge/component", type),
-        onclick: () => addComponent(type)}, h("span", {class: `dot cat-${cat}`}), type));
+        onclick: () => addComponent(type)}, h("span", {class: `dot cat-${d.category}`}), friendlyName(type),
+        S.mode === "expert" ? h("span", {class: "pal-type"}, type) : null));
     }
   }
+  if (isSimple() && !f) el.append(h("div", {class: "help pal-more"}, "More (code, markers, eye tracking): switch to ",
+    h("a", {href: "#", onclick: (e) => { e.preventDefault(); setMode("expert"); }}, "Expert"), " or search."));
 }
 
 function renderDevices() {
@@ -311,13 +349,15 @@ function renderDevices() {
 
 function renderRoutineTabs() {
   const el = $("#routine-tabs"); el.innerHTML = "";
+  el.append(h("div", {class: "rtab story" + (S.view === "story" ? " active" : ""), title: "See all screens in order",
+    onclick: () => { S.view = "story"; if (S.sel && ["machine", "state"].includes(S.sel.kind)) S.sel = null; renderAll(); }}, "▦ Storyboard"));
   for (const rid of Object.keys(S.exp.routines)) {
-    el.append(h("div", {class: "rtab" + (rid === S.routine ? " active" : ""),
-      onclick: () => { S.routine = rid; S.sel = {kind: "routine", routine: rid}; S.previewT = 0; renderAll(); },
-      ondblclick: () => renameRoutine(rid)}, rid));
+    el.append(h("div", {class: "rtab" + (rid === S.routine && S.view === "screen" ? " active" : ""), title: "Screen (routine) · double-click to rename",
+      onclick: () => openScreen(rid), ondblclick: () => renameRoutine(rid)}, rid));
   }
-  el.append(h("div", {class: "rtab add", title: "New routine", onclick: () => newRoutine()}, "+ routine"));
+  el.append(h("div", {class: "rtab add", title: "New screen (a routine: one trial, an instruction page, feedback …)", onclick: () => newRoutine()}, "+ screen"));
 }
+function openScreen(rid) { S.routine = rid; S.view = "screen"; S.sel = {kind: "routine", routine: rid}; S.previewT = 0; renderAll(); }
 
 function numOr(v, d) { return typeof v === "number" ? v : d; }
 
@@ -333,21 +373,29 @@ function renderTimeline() {
   const wf = S.sel && (S.sel.kind === "machine" || S.sel.kind === "state");
   $("#preview-wrap").style.display = wf ? "none" : "";
   $("#routine-body").classList.toggle("wide", !!wf);
+  $("#center").classList.remove("story-view");
   if (wf) return renderDiagram(el);
+  const story = S.view === "story" && typeof renderStoryboard === "function";
+  $("#preview-wrap").style.display = story ? "none" : "";
+  $("#routine-body").classList.toggle("wide", story);
+  $("#center").classList.toggle("story-view", story);
+  if (story) return renderStoryboard(el);
   const rid = S.routine;
-  if (!rid) { el.append(h("div", {class: "tl-empty"}, "No routines yet. Click “+ routine”.")); return; }
+  if (!rid) { el.append(h("div", {class: "tl-empty"}, "No screens yet. Click “+ screen”.")); return; }
   const r = S.exp.routines[rid];
   const span = routineSpan(rid);
   $("#preview-t").max = span;
-  el.append(h("div", {class: "tl-routine-info", onclick: () => { S.sel = {kind: "routine", routine: rid}; renderProps(); }},
-    `Routine “${rid}”`, r.duration != null ? ` · duration ${r.duration}s` : "", r.end_if ? ` · ends if ${r.end_if}` : "",
-    " · drag bars to move, drag right edge to resize, drop components here"));
+  el.append(h("div", {class: "tl-routine-info"},
+    h("button", {class: "mini back", title: "Back to the storyboard", onclick: () => { S.view = "story"; renderAll(); }}, "← Storyboard"), " ",
+    h("span", {onclick: () => { S.sel = {kind: "routine", routine: rid}; renderProps(); }}, `Screen “${rid}”`),
+    r.duration != null ? ` · lasts ${r.duration}s` : "", r.end_if ? ` · ends if ${r.end_if}` : "",
+    " · drag bars to move, drag the right edge to resize"));
   el.append(h("div", {class: "tl-summary"}, describeRoutine(rid)));
   const ruler = h("div", {class: "tl-ruler"});
   const step = span > 10 ? 2 : span > 4 ? 1 : 0.5;
   for (let t = 0; t <= span + 1e-9; t += step) ruler.append(h("span", {style: `left:${(t / span) * 100}%`}, t + "s"));
   el.append(ruler);
-  if (!comps(rid).length) el.append(h("div", {class: "tl-empty"}, "Empty routine — click a component in the palette or drag it here."));
+  if (!comps(rid).length) el.append(h("div", {class: "tl-empty"}, "Empty screen: click something on the left (Text, Picture, Key press …) to add it."));
   comps(rid).forEach((c, idx) => {
     const cat = catOf(c.type);
     const sel = S.sel?.kind === "component" && S.sel.routine === rid && S.sel.id === c.id;
@@ -365,7 +413,7 @@ function renderTimeline() {
     track.append(bar);
     const row = h("div", {class: "tl-row" + (sel ? " sel" : ""), "data-idx": idx},
       h("div", {class: "tl-label", onclick: () => selectComp(rid, c.id)},
-        h("span", {class: `dot cat-${cat}`}), h("b", {}, c.id), h("span", {class: "ty"}, c.type)), track);
+        h("span", {class: `dot cat-${cat}`}), h("b", {}, c.id), h("span", {class: "ty"}, friendlyName(c.type))), track);
     el.append(row);
   });
   const cursor = h("div", {class: "tl-cursor", style: `left:calc(170px + 10px + (100% - 190px) * ${S.previewT / span})`});
@@ -447,13 +495,13 @@ function renderNodeInner(n, path) {
     const rid = routineOfNode(n);
     return h("div", {class: "fl-routine" + (rid === S.routine && S.sel?.kind !== "machine" && S.sel?.kind !== "state" ? " active" : "") + (selected ? " sel" : ""),
       title: (n.if ? `runs only if ${n.if} · ` : "") + "click: edit · drag: move · right-click: options",
-      onclick: (e) => { e.stopPropagation(); S.routine = rid; S.sel = {kind: "routine", routine: rid, path}; S.previewT = 0; renderAll(); },
+      onclick: (e) => { e.stopPropagation(); S.routine = rid; S.view = "screen"; S.sel = {kind: "routine", routine: rid, path}; S.previewT = 0; renderAll(); },
       oncontextmenu: (e) => { e.preventDefault(); e.stopPropagation(); nodeMenu(e, path); }}, rid, n.if ? h("span", {class: "cond-badge", title: n.if}, "if") : "");
   }
   if (n.statemachine !== undefined) return renderMachine(n, path, selected);
   if (n.loop !== undefined) {
     const desc = n.staircase ? `staircase on ${n.staircase.variable || "level"}` :
-      `${n.order || "sequential"}${n.repeats && n.repeats !== 1 ? " × " + n.repeats : ""}`;
+      `${loopRowsLabel(n)}${n.repeats && n.repeats !== 1 ? " × " + n.repeats : ""}, ${n.order || "sequential"}`;
     return h("div", {class: "fl-box" + (selected ? " sel" : "")},
       h("div", {class: "fl-head", onclick: () => { S.sel = {kind: "loop", path}; renderAll(); },
         oncontextmenu: (e) => { e.preventDefault(); nodeMenu(e, path); }}, `⟳ ${n.loop} · ${desc}`),
@@ -479,13 +527,13 @@ function menu(e, items) {
 
 function flowInsertMenu(e, listPath, index) {
   const list = getNode(listPath);
-  const items = Object.keys(S.exp.routines).map((rid) => [`Routine: ${rid}`, () => { list.splice(index, 0, rid); commit(); }]);
+  const items = Object.keys(S.exp.routines).map((rid) => [`Screen: ${rid}`, () => { list.splice(index, 0, rid); commit(); }]);
   items.push("-",
-    ["New routine…", () => { const rid = newRoutine(false); if (rid) { list.splice(index, 0, rid); commit(); } }],
-    ["Loop", () => { const id = uniqueId("trials", loopIds()); list.splice(index, 0, {loop: id, order: "random", repeats: 1, conditions: [{condition: "A"}, {condition: "B"}], children: []});
+    ["New screen…", () => { const rid = newRoutine(false); if (rid) { list.splice(index, 0, rid); commit(); } }],
+    ["Repeat with a trial list (loop)", () => { const id = uniqueId("trials", loopIds()); list.splice(index, 0, {loop: id, order: "random", repeats: 1, conditions: [{condition: "A"}, {condition: "B"}], children: []});
       S.sel = {kind: "loop", path: [...listPath, index]}; commit(); }],
-    ["Branch (if / else)", () => { list.splice(index, 0, {if: "$True", then: [], else: []}); S.sel = {kind: "branch", path: [...listPath, index]}; commit(); }],
-    ["State machine (workflow)", () => { const id = uniqueId("workflow", loopIds());
+    ["If / else (branch)", () => { list.splice(index, 0, {if: "$True", then: [], else: []}); S.sel = {kind: "branch", path: [...listPath, index]}; commit(); }],
+    ["Workflow (state machine): practice until …, screening", () => { const id = uniqueId("workflow", loopIds());
       list.splice(index, 0, {statemachine: id, start: "start", states: {start: {run: [], next: [{goto: "end"}]}}});
       S.sel = {kind: "machine", path: [...listPath, index]}; commit(); }]);
   menu(e, items);
@@ -496,7 +544,7 @@ function nodeMenu(e, path) {
   menu(e, [
     ["Move left", () => { if (index > 0) { [list[index - 1], list[index]] = [list[index], list[index - 1]]; commit(); } }],
     ["Move right", () => { if (index < list.length - 1) { [list[index + 1], list[index]] = [list[index], list[index + 1]]; commit(); } }],
-    ["Wrap in loop", () => { list[index] = {loop: uniqueId("block", loopIds()), order: "sequential", repeats: 2, children: [list[index]]}; commit(); }],
+    ["Repeat it (wrap in a loop)", () => { list[index] = {loop: uniqueId("block", loopIds()), order: "sequential", repeats: 2, children: [list[index]]}; commit(); }],
     ["Run only if…", () => { const c = prompt("Expression (e.g. $score > 5):", "$True"); if (!c) return;
       const n = list[index]; if (typeof n === "string" || n.routine) list[index] = {routine: routineOfNode(n), if: c};
       else list[index] = {if: c, then: [n], else: []}; commit(); }],
@@ -510,32 +558,42 @@ function addComponent(type, at) {
   if (!S.routine) newRoutine(false);
   const rid = S.routine;
   const d = S.schema.components[type];
-  const c = {id: uniqueId(type === "keyboard" ? "resp" : type, new Set(comps(rid).map((x) => x.id))), type};
+  const base = {keyboard: "resp", mouse: "click", slider: "rating", image: "picture", fixation: "fixation", html: "page"}[type] || type;
+  const c = {id: uniqueId(base, new Set(comps(rid).map((x) => x.id))), type};
   for (const [k, p] of Object.entries(d.props)) if (p.required) c[k] = p.default ?? (p.type === "text" || p.type === "str" ? "" : null);
   if (type === "text") c.text = "Hello";
   if (type === "keyboard") { c.keys = ["space"]; c.end_routine = true; }
   if (type === "marker") c.label = "event";
-  if (d.visual && !["slider"].includes(type) && !comps(rid).some((x) => x.end_routine) && S.exp.routines[rid].duration == null) c.duration = 1.0;
+  S.autoDur ||= new Set();
+  if (d.visual && !["slider"].includes(type) && !comps(rid).some((x) => x.end_routine) && S.exp.routines[rid].duration == null) {
+    c.duration = 1.0; S.autoDur.add(rid + "." + c.id);   // a placeholder so the screen can end; see below
+  }
+  if (c.end_routine) {   // a response now ends the screen: placeholder durations would hide stimuli too early
+    const freed = comps(rid).filter((x) => x.duration === 1 && S.autoDur.has(rid + "." + x.id));
+    freed.forEach((x) => { delete x.duration; S.autoDur.delete(rid + "." + x.id); });
+    if (freed.length) setTimeout(() => toast(`${freed.map((x) => x.id).join(", ")} now stay${freed.length === 1 ? "s" : ""} on screen until the response`, 3500), 50);
+  }
   if (at != null) comps(rid).splice(at, 0, c); else comps(rid).push(c);
-  S.sel = {kind: "component", routine: rid, id: c.id};
+  S.sel = {kind: "component", routine: rid, id: c.id}; S.view = "screen";
   commit();
 }
 
 function selectComp(rid, id, render = true) { S.routine = rid; S.sel = {kind: "component", routine: rid, id}; if (render) renderAll(); }
 
 function newRoutine(render = true) {
-  const rid = prompt("Routine name:", uniqueId("routine", new Set(Object.keys(S.exp.routines))));
+  const rid = prompt("Name of the new screen (e.g. trial, instructions, feedback):", uniqueId(Object.keys(S.exp.routines).length ? "screen" : "trial", new Set(Object.keys(S.exp.routines))));
   if (!rid) return null;
   const id = uniqueId(rid, new Set(Object.keys(S.exp.routines)));
   S.exp.routines[id] = {components: []};
-  S.routine = id; S.sel = {kind: "routine", routine: id};
+  S.routine = id; S.view = "screen"; S.sel = {kind: "routine", routine: id};
   if (render) commit(); return id;
 }
 
 function renameRoutine(rid) {
-  const nid = prompt("Rename routine:", rid);
+  const nid = prompt("Rename screen:", rid);
   if (!nid || nid === rid) return;
-  if (S.exp.routines[nid]) return toast("A routine with that name exists");
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(nid)) return toast("Use letters, digits and _ only (no spaces)");
+  if (S.exp.routines[nid]) return toast("A screen with that name exists");
   const r = {}; for (const [k, v] of Object.entries(S.exp.routines)) r[k === rid ? nid : k] = v;
   S.exp.routines = r;
   walkFlow((n, path) => {
@@ -554,15 +612,25 @@ function renderProps() {
   if (sel.kind === "component") {
     const c = findComp(sel.routine, sel.id); if (!c) return;
     const d = S.schema.components[c.type];
-    title.textContent = `${c.id} · ${c.type}`;
+    title.textContent = `${friendlyName(c.type)} · ${c.id}`;
     el.append(h("div", {class: "desc"}, d?.description || "Unknown component type", " ", helpLink("reference/components", c.type)));
-    el.append(field("id", {type: "str"}, c.id, (v) => renameComp(c, v), {noExpr: true}));
-    el.append(h("div", {class: "group"}, "Properties"));
-    for (const [k, p] of Object.entries(d?.props || {})) el.append(field(k, p, c[k], (v) => setProp(c, k, v)));
-    el.append(h("div", {class: "group"}, "Timing"));
-    for (const [k, p] of Object.entries(SCHED_FIELDS)) el.append(field(k, p, c[k], (v) => setProp(c, k, v)));
+    el.append(field("name", {type: "str", help: "used to refer to it, e.g. $" + c.id + (S.schema.components[c.type]?.category === "response" ? ".rt" : "")}, c.id, (v) => renameComp(c, v), {noExpr: true}));
+    const basic = new Set(BASIC_PROPS[c.type] || Object.keys(d?.props || {}));
+    const isSet = (k, p) => c[k] !== undefined && c[k] !== null && JSON.stringify(c[k]) !== JSON.stringify(p?.default ?? null);
+    const more = [];
+    el.append(h("div", {class: "group"}, "What"));
+    for (const [k, p] of Object.entries(d?.props || {})) {
+      const f = field(k, p, c[k], (v) => setProp(c, k, v));
+      if (S.mode === "expert" || basic.has(k) || p.required) el.append(f); else more.push([f, isSet(k, p)]);
+    }
+    el.append(h("div", {class: "group"}, "When"));
+    for (const [k, p] of Object.entries(SCHED_FIELDS)) {
+      const f = field(k, p, c[k], (v) => setProp(c, k, v), {label: FIELD_LABELS[k]});
+      if (S.mode === "expert" || BASIC_TIMING.includes(k)) el.append(f); else more.push([f, isSet(k, p)]);
+    }
     const custom = Object.keys(c).filter((k) => !SCHED_KEYS.has(k) && !(d?.props || {})[k]);
-    if (custom.length) { el.append(h("div", {class: "group"}, "Other")); for (const k of custom) el.append(field(k, {type: "json"}, c[k], (v) => setProp(c, k, v))); }
+    for (const k of custom) { const f = field(k, {type: "json"}, c[k], (v) => setProp(c, k, v)); if (S.mode === "expert") el.append(f); else more.push([f, true]); }
+    if (more.length) el.append(moreOptions(more, "comp"));
     const list = comps(sel.routine); const i = list.indexOf(c);
     el.append(h("div", {class: "btns"},
       h("button", {onclick: () => { if (i > 0) { [list[i - 1], list[i]] = [list[i], list[i - 1]]; commit(); } }, title: "Draw earlier (behind)"}, "↑"),
@@ -571,16 +639,19 @@ function renderProps() {
       h("button", {class: "danger", onclick: () => { list.splice(i, 1); S.sel = {kind: "routine", routine: sel.routine}; commit(); }}, "Delete")));
   } else if (sel.kind === "routine") {
     const r = S.exp.routines[sel.routine]; if (!r) return;
-    title.textContent = `Routine · ${sel.routine}`;
-    el.append(h("div", {class: "desc"}, "A routine is one screen/event sequence (a trial, instructions, feedback). Add components from the palette. ", helpLink("EXPERIMENT_FORMAT", "routines-and-components")));
+    title.textContent = `Screen · ${sel.routine}`;
+    el.append(h("div", {class: "desc"}, "A screen (a “routine” in the file) is one step: a trial, an instruction page, feedback. Add things to it from the left. ", helpLink("EXPERIMENT_FORMAT", "routines-and-components")));
     el.append(field("name", {type: "str"}, sel.routine, (v) => renameRoutine(sel.routine), {noExpr: true, readonlyClick: () => renameRoutine(sel.routine)}));
-    el.append(field("duration", {type: "float", help: "hard limit in seconds (empty = until components end)"}, r.duration, (v) => setProp(r, "duration", v)));
-    el.append(field("end_if", {type: "expr", help: "end when this expression becomes true"}, r.end_if, (v) => setProp(r, "end_if", v)));
-    el.append(field("description", {type: "text"}, r.description, (v) => setProp(r, "description", v), {noExpr: true}));
-    renderRulesEditor(el, r);
+    el.append(field("duration", {type: "float", help: "maximum length in seconds (empty = until a response or everything has finished)"}, r.duration, (v) => setProp(r, "duration", v), {label: "lasts at most (s)"}));
+    el.append(field("description", {type: "text"}, r.description, (v) => setProp(r, "description", v), {noExpr: true, label: "notes"}));
+    const ruleBox = h("div", {});
+    ruleBox.append(field("end_if", {type: "expr", help: "end when this expression becomes true"}, r.end_if, (v) => setProp(r, "end_if", v), {label: "ends when"}));
+    renderRulesEditor(ruleBox, r);
+    if (S.mode === "expert" || (r.rules || []).length || r.end_if) el.append(ruleBox);
+    else el.append(moreOptions([[ruleBox, false]], "screen", "Rules: react while the screen runs"));
     el.append(h("div", {class: "btns"},
       h("button", {onclick: () => { const nid = uniqueId(sel.routine, new Set(Object.keys(S.exp.routines))); S.exp.routines[nid] = clone(r); S.routine = nid; S.sel = {kind: "routine", routine: nid}; commit(); }}, "Duplicate"),
-      h("button", {class: "danger", onclick: () => deleteRoutine(sel.routine)}, "Delete routine")));
+      h("button", {class: "danger", onclick: () => deleteRoutine(sel.routine)}, "Delete screen")));
   } else if (sel.kind === "machine") {
     renderMachineProps(el, title);
   } else if (sel.kind === "state") {
@@ -612,7 +683,7 @@ function setProp(obj, k, v) {
 }
 
 function deleteRoutine(rid) {
-  if (!confirm(`Delete routine “${rid}” and remove it from the flow?`)) return;
+  if (!confirm(`Delete the screen “${rid}” and remove it from the flow?`)) return;
   delete S.exp.routines[rid];
   const prune = (list) => { for (let i = list.length - 1; i >= 0; i--) { const n = list[i];
     if (routineOfNode(n) === rid) list.splice(i, 1);
@@ -647,21 +718,39 @@ const showVal = (type, v) => {
 function field(name, p, value, onChange, opts = {}) {
   const type = p.type || "str";
   const wrap = h("div", {class: "field"});
-  let exprMode = isExpr(value) || type === "expr";
-  const fx = opts.noExpr || type === "expr" || type === "code" || type === "bool" ? null :
-    h("span", {class: "fx" + (exprMode ? " on" : ""), title: "Toggle expression ($...)",
-      onclick: () => { exprMode = !exprMode;
-        if (exprMode) onChange("$" + (value === null || value === undefined ? "" : showVal(type, value)));
-        else onChange(parseVal(type, String(value || "").replace(/^\$/, ""))); }}, "fx");
-  wrap.append(h("label", {}, h("span", {}, name + (p.required ? " *" : "")), fx));
+  const picker = !(opts.noExpr || type === "expr" || type === "code" || type === "bool");
+  const cols = picker ? columnsForScreen(S.routine) : [];
+  const colOf = (v) => (isExpr(v) && /^\$[A-Za-z_]\w*$/.test(v.trim()) && cols.includes(v.trim().slice(1))) ? v.trim().slice(1) : null;
+  let source = !isExpr(value) ? "fixed" : colOf(value) ? "column" : "formula";
+  if (type === "expr") source = "formula";
+  const label = opts.label || name;
+  let src = null;
+  if (picker) {
+    src = h("select", {class: "vsrc " + source, title: "Where the value comes from", onchange: (e) => {
+      const v = e.target.value;
+      if (v === "fixed") onChange(isExpr(value) ? (p.default ?? null) : value);
+      else if (v === "formula") onChange("$" + (value === null || value === undefined ? "" : showVal(type, value).replace(/^\$/, "")));
+      else if (v === "new") { const col = addTrialColumn(name, isExpr(value) ? "" : value); if (col) onChange("$" + col); else e.target.value = source; }
+      else if (v.startsWith("col:")) onChange("$" + v.slice(4));
+    }});
+    const opt = (val, text, sel) => { const o = h("option", {value: val}, text); if (sel) o.selected = true; return o; };
+    src.append(opt("fixed", "Fixed", source === "fixed"));
+    if (cols.length) src.append(h("optgroup", {label: "From the trial list"}, cols.map((c) => opt("col:" + c, "⟳ " + c, colOf(value) === c))));
+    src.append(opt("new", "+ New trial-list column…", false), opt("formula", "Formula ($…)", source === "formula"));
+  }
+  wrap.append(h("label", {}, h("span", {}, label + (p.required ? " *" : "")), src));
   let input;
   const commitText = (e) => {
     let raw = e.target.value;
     if (type === "expr" && raw && !raw.startsWith("$")) raw = "$" + raw;
-    const v = exprMode && type !== "expr" ? (raw.startsWith("$") ? raw : "$" + raw) : parseVal(type, raw);
+    const v = source === "formula" && type !== "expr" ? (raw.startsWith("$") ? raw : "$" + raw) : parseVal(type, raw);
     if (JSON.stringify(v) !== JSON.stringify(value ?? null)) onChange(v);
   };
-  if (exprMode && type !== "code") {
+  if (source === "column") {
+    const col = colOf(value), ex = sampleRowFor(S.routine)[col];
+    input = h("div", {class: "colchip", title: "Each trial uses this column's value. Edit the values in the trial list (click the loop in the Flow).",
+      onclick: () => selectLoopWithColumn(col)}, "⟳ ", h("b", {}, col), ex !== undefined && ex !== "" ? h("span", {}, ` e.g. ${short(showVal("", ex), 24)}`) : null);
+  } else if (source === "formula" && type !== "code") {
     input = h("input", {class: "expr", list: "expr-vars", value: value ?? "", placeholder: "$expression (type $ for suggestions)", onchange: commitText});
   } else if (type === "bool") {
     input = h("input", {type: "checkbox", onchange: (e) => onChange(e.target.checked)});
@@ -691,13 +780,88 @@ function field(name, p, value, onChange, opts = {}) {
   return wrap;
 }
 
+/* "More options": properties most people never need, folded away (remembered while the builder is open). */
+const _openMore = new Set();
+function moreOptions(items, key, label) {
+  const n = items.filter(([, set]) => set).length;
+  const box = h("div", {class: "more" + (_openMore.has(key) ? " open" : "")});
+  const head = h("div", {class: "more-head", onclick: () => { box.classList.toggle("open");
+    box.classList.contains("open") ? _openMore.add(key) : _openMore.delete(key); }},
+    h("span", {class: "chev"}, "▸"), " ", label || "More options", n ? h("span", {class: "more-n"}, ` (${n} set)`) : "");
+  box.append(head, h("div", {class: "more-body"}, items.map(([f]) => f)));
+  return box;
+}
+
+/* ---------------- trial-list columns available to a screen */
+function loopColumns(lp) {
+  if (!lp) return [];
+  if (lp.staircase) return [lp.staircase.variable || "level"];
+  const c = lp.conditions;
+  if (Array.isArray(c)) return [...new Set(c.flatMap((r) => Object.keys(r || {})))];
+  if (c && c.factorial) return Object.keys(c.factorial);
+  if (c) return Object.keys(firstRow(c) || {});
+  return [];
+}
+function columnsForScreen(rid) {
+  if (!rid) return [];
+  const out = [];
+  for (const lp of enclosing(rid).loops) for (const c of loopColumns(lp)) if (!out.includes(c)) out.push(c);
+  return out;
+}
+function loopRowsLabel(n) {
+  const c = n.conditions;
+  const rows = Array.isArray(c) ? c.length : c && c.factorial ? Object.values(c.factorial).reduce((a, v) => a * (Array.isArray(v) ? v.length : 1), 1) : null;
+  return rows == null ? (typeof c === "string" ? c : "repeat") : `${rows} row${rows === 1 ? "" : "s"}`;
+}
+function innermostLoopPath(rid) {
+  let best = null;
+  walkFlow((n, path) => {
+    if (routineOfNode(n) !== rid) return;
+    let cur = S.exp.flow, lpPath = null;
+    for (let i = 0; i < path.length; i++) { if (cur && cur.loop !== undefined) lpPath = path.slice(0, i); cur = cur[path[i]]; }
+    if (lpPath && (!best || lpPath.length > best.length)) best = lpPath;
+  });
+  return best;
+}
+function selectLoopWithColumn(col) {
+  const path = innermostLoopPath(S.routine);
+  if (path) { S.sel = {kind: "loop", path}; renderAll(); }
+}
+/* Add a column to the trial list around the current screen, creating the trial list if there is none. */
+function addTrialColumn(suggest, fill) {
+  const rid = S.routine;
+  const name = (prompt("Name of the new trial-list column (each trial can have a different value):",
+    uniqueId(suggest === "text" ? "word" : suggest === "image" ? "picture" : suggest, new Set(columnsForScreen(rid)))) || "").trim();
+  if (!name) return null;
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) { toast("Use letters, digits and _ only (no spaces)"); return null; }
+  const v = fill === null || fill === undefined ? "" : fill;
+  let path = innermostLoopPath(rid);
+  if (path) {
+    const lp = getNode(path);
+    if (typeof lp.conditions === "string") { toast(`The trial list comes from ${lp.conditions}: add the column in that file`, 5000); return null; }
+    if (lp.staircase) { toast("This loop is a staircase; add a column to an outer trial list instead"); return null; }
+    if (lp.conditions && lp.conditions.factorial) { lp.conditions.factorial[name] = [v]; }
+    else { lp.conditions = Array.isArray(lp.conditions) && lp.conditions.length ? lp.conditions : [{}]; lp.conditions.forEach((r) => { if (!(name in r)) r[name] = v; }); }
+    toast(`Added “${name}” to the trial list of “${lp.loop}”. Click the loop in the Flow to fill in each trial.`, 5000);
+  } else {
+    // no loop yet: wrap every top-level use of this screen in a new trial list
+    const id = uniqueId("trials", loopIds());
+    let wrapped = false;
+    walkFlow((n, p) => { if (wrapped || routineOfNode(n) !== rid) return; const {list, index} = parentOf(p);
+      list[index] = {loop: id, order: "random", repeats: 1, conditions: [{[name]: v}, {[name]: v}], children: [n]}; wrapped = true; });
+    if (!wrapped) S.exp.flow.push({loop: id, order: "random", repeats: 1, conditions: [{[name]: v}, {[name]: v}], children: [rid]});
+    toast(`Made a trial list “${id}” around this screen with a column “${name}”. Fill in one row per trial.`, 6000);
+  }
+  return name;
+}
+
 function renderLoopProps(el, n, title) {
-  title.textContent = `Loop · ${n.loop}`;
-  el.append(h("div", {class: "desc"}, "Repeats its children once per condition row. Rows become variables (use them as $column). ", helpLink("COOKBOOK", "trial-lists-and-randomization")));
-  el.append(field("id", {type: "str"}, n.loop, (v) => { if (v) { n.loop = v; commit(); } }, {noExpr: true}));
+  title.textContent = `Trial list · ${n.loop}`;
+  el.append(h("div", {class: "desc"}, "Repeats the screens inside it once per row. Each column can be picked as a value in any property (the ⟳ entries in its value menu). ", helpLink("COOKBOOK", "trial-lists-and-randomization")));
+  el.append(field("id", {type: "str", help: "used in formulas, e.g. $" + n.loop + ".accuracy"}, n.loop, (v) => { if (v) { n.loop = v; commit(); } }, {noExpr: true, label: "name"}));
   const mode = n.staircase ? "staircase" : typeof n.conditions === "string" ? "file" :
     (n.conditions && n.conditions.factorial) ? "factorial" : n.conditions ? "table" : "none";
-  el.append(field("conditions source", {type: "choice", choices: ["none", "table", "file", "factorial", "staircase"]}, mode, (v) => {
+  el.append(field("conditions source", {type: "choice", choices: ["none", "table", "file", "factorial", "staircase"], help: "table: type it here · file: a CSV/Excel file · factorial: all combinations · staircase: adaptive"}, mode, (v) => {
     delete n.staircase;
     if (v === "none") delete n.conditions;
     else if (v === "table") n.conditions = Array.isArray(n.conditions) ? n.conditions : [{condition: "A"}, {condition: "B"}];
@@ -705,7 +869,7 @@ function renderLoopProps(el, n, title) {
     else if (v === "factorial") n.conditions = {factorial: {factor_a: ["a1", "a2"], factor_b: ["b1", "b2"]}};
     else if (v === "staircase") { delete n.conditions; n.staircase = {variable: "level", start: 0.5, step: [0.1, 0.05], down: 3, up: 1, min: 0, max: 1, reversals: 8, max_trials: 60, correct: "resp.corr"}; }
     commit();
-  }, {noExpr: true}));
+  }, {noExpr: true, label: "trial list from"}));
   if (mode === "table") el.append(condTable(n));
   if (mode === "file") {
     el.append(field("file", {type: "str", help: "CSV / TSV / XLSX / JSON, relative to the experiment file"}, n.conditions, (v) => { n.conditions = v; commit(); }, {noExpr: true}));
@@ -715,13 +879,21 @@ function renderLoopProps(el, n, title) {
   }
   if (mode === "factorial") el.append(field("factors", {type: "dict", help: '{"color": ["red","green"], "size": [1,2]} → all combinations'}, n.conditions.factorial, (v) => { n.conditions.factorial = v; commit(); }, {noExpr: true}));
   if (mode === "staircase") el.append(field("staircase", {type: "dict", help: "variable, start, step, down, up, min, max, reversals, max_trials, correct (expression), log"}, n.staircase, (v) => { n.staircase = v; commit(); }, {noExpr: true}));
+  const more = [];
+  const put = (f, adv, set) => { if (adv && isSimple()) more.push([f, set]); else el.append(f); };
   if (mode !== "staircase") {
-    el.append(field("order", {type: "choice", choices: S.schema.loop_orders, help: "latin_square/counterbalance use the participant number"}, n.order || "sequential", (v) => setProp(n, "order", v), {noExpr: true}));
-    el.append(field("repeats", {type: "int"}, n.repeats ?? 1, (v) => setProp(n, "repeats", v)));
-    el.append(field("max_repeat", {type: "dict", help: '{"color": 2} or {"kind": {"deviant": 1}}: limit identical values in a row'}, n.max_repeat, (v) => setProp(n, "max_repeat", v), {noExpr: true}));
-    el.append(field("select", {type: "str", help: 'subset of rows: "0:10" or [0, 3, 5]'}, n.select, (v) => setProp(n, "select", parseVal("json", v)), {noExpr: true}));
+    put(field("order", {type: "choice", choices: S.schema.loop_orders, help: "random: shuffled each repeat · latin_square/counterbalance use the participant number"}, n.order || "sequential", (v) => setProp(n, "order", v), {noExpr: true}), false);
+    put(field("repeats", {type: "int", help: "how many times the whole list is run"}, n.repeats ?? 1, (v) => setProp(n, "repeats", v)), false);
+    put(field("max_repeat", {type: "dict", help: '{"color": 2} or {"kind": {"deviant": 1}}: limit identical values in a row'}, n.max_repeat, (v) => setProp(n, "max_repeat", v), {noExpr: true, label: "no more than N in a row"}), true, n.max_repeat != null);
+    put(field("select", {type: "str", help: 'subset of rows: "0:10" or [0, 3, 5]'}, n.select, (v) => setProp(n, "select", parseVal("json", v)), {noExpr: true, label: "use only rows"}), true, n.select != null);
   }
-  el.append(field("stop_if", {type: "expr", help: "checked after each iteration, e.g. $resp.corr == 0"}, n.stop_if, (v) => setProp(n, "stop_if", v)));
+  put(field("stop_if", {type: "expr", help: "checked after each iteration, e.g. $resp.corr == 0"}, n.stop_if, (v) => setProp(n, "stop_if", v), {label: "stop early when"}), true, !!n.stop_if);
+  if (more.length) el.append(moreOptions(more, "loop"));
+  const est = h("div", {class: "help loop-est"}); el.append(est);
+  if (Array.isArray(n.conditions) || (n.conditions && n.conditions.factorial)) {
+    const rows = Array.isArray(n.conditions) ? n.conditions.length : Object.values(n.conditions.factorial).reduce((a, v) => a * (Array.isArray(v) ? v.length : 1), 1);
+    est.textContent = `${rows} row${rows === 1 ? "" : "s"} × ${n.repeats ?? 1} = ${rows * (+n.repeats || 1)} runs of the screens inside.`;
+  }
   el.append(h("div", {class: "btns"}, h("button", {class: "danger", onclick: () => { const {list, index} = parentOf(S.sel.path);
     if (confirm("Remove the loop but keep its children?")) { list.splice(index, 1, ...(n.children || [])); S.sel = null; commit(); } }}, "Unwrap loop")));
 }
@@ -745,11 +917,11 @@ function condTable(n) {
       for (const [k, v] of Object.entries(r)) { if (k === c) { if (nc) out[nc] = v; } else out[k] = v; }
       rows[i] = out;
     });
-    commit(); }}))), h("th", {}, h("button", {class: "mini", title: "add column", onclick: () => { const nc = uniqueId("var", new Set(cols)); rows.forEach((r) => r[nc] = ""); if (!rows.length) rows.push({[nc]: ""}); commit(); }}, "+"))));
+    commit(); }}))), h("th", {}, h("button", {class: "mini", title: "add column", onclick: () => { const nc = uniqueId("column", new Set(cols)); rows.forEach((r) => r[nc] = ""); if (!rows.length) rows.push({[nc]: ""}); commit(); }}, "+"))));
   rows.forEach((r, i) => tbl.append(h("tr", {}, cols.map((c) => h("td", {}, h("input", {value: showVal("", r[c]), onchange: (e) => {
     const raw = e.target.value; r[c] = raw !== "" && !isNaN(Number(raw)) ? Number(raw) : raw; commit(); }}))),
     h("td", {}, h("button", {class: "mini danger", onclick: () => { rows.splice(i, 1); commit(); }}, "×")))));
-  return h("div", {class: "field"}, h("label", {}, "conditions (one row per trial; each column becomes a $variable)"),
+  return h("div", {class: "field"}, h("label", {}, "trial list: one row per trial, one column per thing that changes"),
     cols.length ? null : h("div", {class: "help"}, "Empty table: click + to add a column, then + row."),
     h("div", {style: "overflow:auto"}, tbl),
     h("button", {class: "mini", style: "margin-top:4px", onclick: () => { rows.push(Object.fromEntries(cols.map((c) => [c, ""]))); commit(); }}, "+ row"));
@@ -832,19 +1004,7 @@ function previewVal(v, row) {
 }
 
 function renderPreview() {
-  const cv = $("#preview"); const ctx = cv.getContext("2d");
-  const win = S.exp.settings.window || {};
-  const [W, H] = win.size || [1280, 720];
-  cv.height = Math.round(cv.width * H / W);
-  const k = cv.width / W;
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = win.background || "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
-  ctx.translate(cv.width / 2, cv.height / 2); ctx.scale(k, -k);
-  const units = win.units || "px";
-  const conv = (v, axis) => units === "norm" ? v * (axis === "x" ? W / 2 : H / 2) : units === "height" ? v * H : v;
-  const pos = (p) => Array.isArray(p) ? [conv(+p[0] || 0, "x"), conv(+p[1] || 0, "y")] : [0, 0];
   const t = S.previewT; $("#preview-label").textContent = `t = ${t.toFixed(2)} s`;
-  const row = sampleRowFor(S.routine);
   // HTML pages are previewed live in an iframe on top of the canvas
   const frame = $("#preview-html");
   const page = comps(S.routine).find((c) => c.type === "html" && numOr(c.start, 0) <= t && (c.duration == null || t < numOr(c.start, 0) + c.duration));
@@ -855,7 +1015,24 @@ function renderPreview() {
     } else if (page.html) { frame.dataset.src = ""; frame.srcdoc = page.html; }
     frame.classList.remove("hidden");
   } else frame.classList.add("hidden");
-  for (const c0 of comps(S.routine)) {
+  drawScreen($("#preview"), S.routine, t);
+}
+
+/* Draw one screen (routine) at time t onto a canvas, with values from its trial list's first row. */
+function drawScreen(cv, rid, t, row) {
+  const ctx = cv.getContext("2d");
+  const win = S.exp.settings.window || {};
+  const [W, H] = win.size || [1280, 720];
+  cv.height = Math.round(cv.width * H / W);
+  const k = cv.width / W;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = win.background || "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.translate(cv.width / 2, cv.height / 2); ctx.scale(k, -k);
+  const units = win.units || "px";
+  const conv = (v, axis) => units === "norm" ? v * (axis === "x" ? W / 2 : H / 2) : units === "height" ? v * H : v;
+  const pos = (p) => Array.isArray(p) ? [conv(+p[0] || 0, "x"), conv(+p[1] || 0, "y")] : [0, 0];
+  row = row || sampleRowFor(rid);
+  for (const c0 of comps(rid)) {
     const c = Object.fromEntries(Object.entries(c0).map(([kk, v]) => [kk, previewVal(v, row)]));
     const st = numOr(c.start, 0), du = numOr(c.duration, Infinity);
     if (c.start_after || c.start_if || t < st || t >= st + du || c.disabled === true) continue;
@@ -864,6 +1041,10 @@ function renderPreview() {
     ctx.rotate(-(numOr(c.ori, 0)) * Math.PI / 180);
     const color = (v, d) => (typeof v === "string" && !isExpr(v) ? v : d);
     if (c.type === "text") {
+      if (isExpr(c.text)) {   // computed while the experiment runs (e.g. feedback): show a readable stand-in
+        const m = c.text.match(/^\$\s*f?(['"])(.*)\1\s*$/) || c.text.match(/^\$\s*(['"])(.*?)\1\s+if\b/);
+        c.text = m ? m[2].replace(/\{[^}]*\}/g, "…") : (cv.id === "preview" ? c.text : "(depends on the trial)");
+      }
       ctx.scale(1, -1); ctx.fillStyle = color(c.color, "#fff");
       const hgt = conv(numOr(c.height, 40), "y"); ctx.font = `${c.bold ? "bold " : ""}${hgt}px sans-serif`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -886,6 +1067,11 @@ function renderPreview() {
     } else if (c.type === "slider") {
       const sz = Array.isArray(c.size) ? c.size : [800, 30]; ctx.fillStyle = color(c.color, "#fff");
       ctx.fillRect(-sz[0] / 2, -2, sz[0], 4);
+    } else if (c.type === "html" && cv.id !== "preview") {
+      ctx.scale(1, -1); ctx.fillStyle = "#fff"; ctx.fillRect(-W * 0.3, -H * 0.35, W * 0.6, H * 0.7);
+      ctx.fillStyle = "#555"; ctx.font = `${H * 0.06}px sans-serif`; ctx.textAlign = "center"; ctx.fillText("web page", 0, 0);
+    } else if (c.type === "sound") {
+      ctx.scale(1, -1); ctx.fillStyle = "#9ab"; ctx.font = `${H * 0.12}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("♪", 0, -H * 0.3);
     } else if (c.type === "gaze_roi" && !c.target) {
       ctx.strokeStyle = "#a070ff"; ctx.setLineDash([8, 6]); ctx.lineWidth = 2;
       if ((c.shape || "circle") === "circle") { ctx.beginPath(); ctx.arc(0, 0, conv(numOr(c.radius, 100), "y"), 0, 2 * Math.PI); ctx.stroke(); }
@@ -895,8 +1081,25 @@ function renderPreview() {
   }
 }
 const _imgs = {};
-function imgCache(src) { if (!_imgs[src]) { const im = new Image(); im.onload = renderPreview;
+function imgCache(src) { if (!_imgs[src]) { const im = new Image(); im.onload = () => { renderPreview(); if (S.view === "story") renderTimeline(); };
   im.src = `/api/file?path=${encodeURIComponent((S.path ? S.path.replace(/[^/]*$/, "") : "") + src)}`; _imgs[src] = im; } return _imgs[src]; }
+
+/* ---------------- play the preview at real speed */
+let _play = null;
+function playPreview() {
+  const btn = $("#preview-play");
+  if (_play) { cancelAnimationFrame(_play.raf); _play = null; btn.textContent = "▶"; return; }
+  const span = routineSpan(S.routine);
+  const t0 = performance.now() - (S.previewT >= span - 0.02 ? 0 : S.previewT * 1000);
+  btn.textContent = "❚❚";
+  const step = () => {
+    S.previewT = Math.min(span, (performance.now() - t0) / 1000);
+    $("#preview-t").value = S.previewT; renderPreview(); renderTimeline();
+    if (S.previewT >= span) { _play = null; btn.textContent = "▶"; return; }
+    _play.raf = requestAnimationFrame(step);
+  };
+  _play = {raf: requestAnimationFrame(step)};
+}
 
 /* ---------------- console: issues, results, source, hardware */
 let _vt = null;
@@ -910,13 +1113,24 @@ function renderIssues() {
   const el = $("#tab-issues"); el.innerHTML = "";
   const n = S.issues.filter((i) => i.level === "error").length, w = S.issues.filter((i) => i.level === "warning").length;
   $("#issue-count").textContent = n || w ? `(${n}/${w})` : "✓";
-  if (!S.issues.length) { el.append(h("div", {class: "ok"}, "✓ No problems found. Try a dry run.")); return; }
-  for (const i of S.issues) el.append(h("div", {class: `issue ${i.level}`, onclick: () => gotoIssue(i)},
-    `${i.level.toUpperCase()}  ${i.where}: ${i.message}${i.hint ? "  (" + i.hint + ")" : ""}`));
+  const shown = S.issues.filter((i) => S.mode === "expert" || i.level !== "info");
+  if (!shown.length) { el.append(h("div", {class: "ok"}, "✓ No problems found. Press ▶ Try it to do it yourself, or ▶ Test run for a quick automatic check.")); return; }
+  const word = {error: "Must fix", warning: "Check", info: "Note"};
+  for (const i of shown) el.append(h("div", {class: `issue ${i.level}`, onclick: () => gotoIssue(i), title: "click to go there"},
+    h("span", {class: "lvl"}, word[i.level] || i.level), " ", h("span", {class: "msg"}, cap(i.message)),
+    i.hint ? h("span", {class: "hint"}, " · " + i.hint) : null, h("span", {class: "where"}, "  " + friendlyWhere(i.where))));
+}
+const cap = (t) => String(t).charAt(0).toUpperCase() + String(t).slice(1);
+function friendlyWhere(w) {
+  const m = String(w).match(/^routines\.([^.]+)(?:\.([^.\[]+))?(?:\.(\w+))?/);
+  if (m) return `screen “${m[1]}”` + (m[2] && m[2] !== "rules" ? ` › ${m[2]}` : "") + (m[3] ? ` › ${FIELD_LABELS[m[3]] || m[3]}` : "");
+  if (w.startsWith("devices.")) return `device “${w.slice(8)}”`;
+  if (w.startsWith("flow")) return "flow";
+  return w;
 }
 function gotoIssue(i) {
   const m = i.where.match(/^routines\.([^.]+)(?:\.([^.]+))?/);
-  if (m && S.exp.routines[m[1]]) { S.routine = m[1]; S.sel = m[2] && findComp(m[1], m[2]) ? {kind: "component", routine: m[1], id: m[2]} : {kind: "routine", routine: m[1]}; renderAll(); }
+  if (m && S.exp.routines[m[1]]) { S.routine = m[1]; S.view = "screen"; S.sel = m[2] && findComp(m[1], m[2]) ? {kind: "component", routine: m[1], id: m[2]} : {kind: "routine", routine: m[1]}; renderAll(); }
   const d = i.where.match(/^devices\.(.+)/);
   if (d) { const idx = S.exp.devices.findIndex((x) => x.id === d[1]); if (idx >= 0) { S.sel = {kind: "device", index: idx}; renderAll(); } }
 }
@@ -933,7 +1147,7 @@ async function renderSource() { $("#yaml").value = (await api("/api/to_yaml", S.
 
 async function dryRun() {
   showTab("results");
-  const el = $("#tab-results"); el.innerHTML = "Running a virtual participant through the whole experiment…";
+  const el = $("#tab-results"); el.innerHTML = "A virtual participant is doing the whole experiment (a few seconds)…";
   try {
     const r = await api("/api/dryrun", {experiment: S.exp, path: S.path});
     if (!r.ok) { el.innerHTML = ""; el.append(h("div", {class: "issue error"}, "Fix errors first:"), r.issues.map((i) => h("div", {class: "issue error"}, `${i.where}: ${i.message}`))); return; }
@@ -947,9 +1161,13 @@ function renderResults(r) {
   const t = r.summary.timing || {}, rep = r.report;
   const kpi = (v, l) => h("div", {class: "kpi"}, h("b", {}, v), h("span", {}, l));
   const mins = t.frames && t.refresh_rate_hz ? (t.frames / t.refresh_rate_hz / 60).toFixed(1) + " min" : "–";
-  el.append(h("div", {class: "kpis"}, kpi(mins, "session length"), kpi(r.trials.length, "routine runs"),
-    kpi(Object.keys(r.summary.devices).length, "devices (simulated)"), kpi(Object.keys(r.summary.marker_codebook).length, "marker labels"),
+  const corr = r.trials.flatMap((row) => Object.entries(row).filter(([k, v]) => k.endsWith(".corr") && typeof v === "number").map(([, v]) => v));
+  el.append(h("div", {class: "kpis"}, kpi(mins, "session length"), kpi(r.n_trials ?? r.trials.length, r.n_trials != null ? "trials" : "screens shown"),
+    corr.length ? kpi(Math.round(100 * corr.reduce((a, b) => a + b, 0) / corr.length) + "%", "correct (virtual participant)") : null,
+    S.mode === "expert" ? kpi(Object.keys(r.summary.devices).length, "devices (simulated)") : null,
+    S.mode === "expert" ? kpi(Object.keys(r.summary.marker_codebook).length, "marker labels") : null,
     kpi(r.summary.errors.length, "errors")));
+  el.append(h("div", {class: "help", style: "margin-bottom:6px"}, "A virtual participant just did the whole experiment with simulated hardware. Want to do it yourself? Press ▶ Try it."));
   el.append(h("div", {}, rep.verdict.map((v) => h("div", {class: v.startsWith("OK") ? "ok" : "issue warning"}, v))));
   const streams = Object.entries(rep.streams);
   if (streams.length) {
@@ -1046,7 +1264,11 @@ function wire() {
   $("#btn-settings").onclick = () => { S.sel = {kind: "settings"}; renderAll(); };
   $("#btn-validate").onclick = () => { validate(); showTab("issues"); };
   $("#btn-dryrun").onclick = dryRun;
-  $("#btn-run").onclick = runReal;
+  $("#btn-run").onclick = () => (typeof runDialog === "function" ? runDialog() : runReal());
+  $("#btn-try").onclick = () => tryIt();
+  $("#btn-mode").onclick = () => setMode(S.mode === "simple" ? "expert" : "simple");
+  $("#preview-play").onclick = () => playPreview();
+  applyMode();
   $("#btn-scan").onclick = scanHardware;
   $("#btn-add-device").onclick = deviceMenu;
   $("#palette-filter").oninput = renderPalette;
@@ -1072,7 +1294,8 @@ function wire() {
   window.addEventListener("beforeunload", (e) => { if (S.dirty) { e.preventDefault(); e.returnValue = ""; } });
 }
 
-boot().catch((e) => { document.body.innerHTML = `<pre style="padding:20px;color:#d33">Failed to start: ${e.message}</pre>`; });
+window.addEventListener("DOMContentLoaded", () => boot().catch((e) => {
+  document.body.innerHTML = `<pre style="padding:20px;color:#d33">Failed to start: ${e.message}</pre>`; }));
 
 
 /* ================================================================== workflow: state machines */
@@ -1256,7 +1479,7 @@ function renderStateProps(el, title) {
 
 /* ================================================================== routine rules ("when → do") */
 const RULE_ACTIONS = {
-  end_routine: {label: "end the routine", param: null},
+  end_routine: {label: "end the screen", param: null},
   start: {label: "start component", param: "component"},
   stop: {label: "stop component", param: "component"},
   set: {label: "set variable", param: "set"},
@@ -1302,14 +1525,14 @@ function renderRulesEditor(el, r) {
 /* ================================================================== plain-language descriptions */
 function describeRoutine(rid) {
   const r = S.exp.routines[rid];
-  if (!r || !(r.components || []).length) return "This routine is empty.";
+  if (!r || !(r.components || []).length) return "This screen is empty.";
   const fmt = (v) => isExpr(v) ? `“${v}”` : `${v} s`;
   const out = [];
   for (const c of r.components) {
     if (c.disabled === true) continue;
     let when = c.start_after ? `after ${c.start_after} ends` : c.start_if ? `when ${c.start_if}` : c.start_frame != null ? `from frame ${c.start_frame}` :
       (numOr(c.start, 0) === 0 && !isExpr(c.start) ? "from the start" : `at ${fmt(c.start)}`);
-    const dur = c.duration != null ? `for ${fmt(c.duration)}` : c.duration_frames != null ? `for ${c.duration_frames} frames` : "until the routine ends";
+    const dur = c.duration != null ? `for ${fmt(c.duration)}` : c.duration_frames != null ? `for ${c.duration_frames} frames` : "until the screen ends";
     const what = {
       text: () => `shows text ${isExpr(c.text) ? c.text : "“" + short(c.text || "", 30) + "”"}`,
       image: () => `shows image ${c.image || ""}`, shape: () => `draws a ${c.shape || "rect"}`, fixation: () => "shows a fixation cross",
@@ -1324,12 +1547,12 @@ function describeRoutine(rid) {
     }[c.type];
     let s2 = `${c.id} ${what ? what() : c.type}`;
     if (!["code", "variable", "marker"].includes(c.type)) s2 += ` ${when}, ${["keyboard", "mouse", "slider", "html", "gaze_roi"].includes(c.type) && c.duration == null ? "until answered" : dur}`;
-    if (c.end_routine) s2 += "; this ends the routine";
+    if (c.end_routine) s2 += "; this ends the screen";
     if (c.if) s2 += ` (only when ${c.if})`;
     if (c.marker) s2 += `; marks “${typeof c.marker === "object" ? c.marker.onset : c.marker}”`;
     out.push(s2 + ".");
   }
-  if (r.duration != null) out.push(`The routine lasts at most ${fmt(r.duration)}.`);
+  if (r.duration != null) out.push(`The screen lasts at most ${fmt(r.duration)}.`);
   if (r.end_if) out.push(`It ends early when ${r.end_if}.`);
   for (const rule of r.rules || []) out.push(`When ${rule.when}: ${(Array.isArray(rule.do) ? rule.do : [rule.do]).map((a) => typeof a === "string" ? a.replace("_", " ") : Object.entries(a).map(([k, v]) => k === "end_routine" ? "end the routine" : `${k} ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" ")).join(", ")}.`);
   return out.join(" ");
@@ -1377,13 +1600,16 @@ async function welcome(files) {
   drop.ondragleave = () => drop.classList.remove("drop");
   drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("drop"); importFiles([...e.dataTransfer.files]); };
   body.append(h("h2", {}, "Welcome to EDGE"),
-    h("p", {class: "lead"}, "Build an experiment visually: routines are screens made of components on a timeline; the flow puts routines in order, repeats them in loops, and branches with if/else or full workflows."),
+    h("p", {class: "lead"}, "An experiment is a series of screens (instructions, trials, feedback) shown in order; a trial list repeats screens with different words or pictures."),
+    h("div", {class: "card guided", onclick: () => { closeModal(); if (typeof openWizard === "function") openWizard(); }},
+      h("b", {}, "✨ Make a new experiment: answer a few questions"),
+      h("small", {}, "What participants see, how they respond, timing, practice, blocks. You get a finished, tested experiment to adjust.")),
     h("div", {class: "welcome-learn"}, h("h3", {}, "New to EDGE? Learn by doing"),
       h("div", {class: "learn-row"}, ...(S.tutorials || []).slice(0, 4).map((t) => h("div", {class: "card learn", onclick: () => { closeModal(); startTutorial(t.id); }},
         h("b", {}, (tutorialDone(t.id) ? "✓ " : "") + t.title), h("small", {}, `${t.minutes} min · ${t.level}`))),
         h("div", {class: "card learn more", onclick: () => { closeModal(); openHelp("TUTORIALS"); }}, h("b", {}, "All tutorials & docs →"), h("small", {}, "guides, cookbook, reference")))),
     h("div", {class: "welcome-grid"},
-      h("div", {}, h("h3", {}, "Start from a template"), ...tpl),
+      h("div", {}, h("h3", {}, "Or start from an example"), ...tpl),
       h("div", {}, h("h3", {}, "Open"), ...(recent.length ? recent : [h("div", {class: "help"}, "No experiments in this folder yet.")]),
         h("h3", {style: "margin-top:16px"}, "Import"), drop, input)),
     h("div", {class: "btns"}, h("button", {onclick: () => { closeModal(); }}, "Start with a blank experiment"),
@@ -1565,6 +1791,8 @@ async function startTutorial(id) {
     clearDraft(); loadDoc(clone(r.start_doc), null, null, {silent: true});
   }
   S.lastDryRun = null; S.savedAt = null; S.tab = null;
+  if (r.tutorial.mode && r.tutorial.mode !== S.mode) setMode(r.tutorial.mode);
+  if (r.start_doc) { S.view = "story"; renderAll(); }
   T.tut = r.tutorial; T.i = 0; T.passed = false; T.startedAt = Date.now();
   renderCoach();
 }
