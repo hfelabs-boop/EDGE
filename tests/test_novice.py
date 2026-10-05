@@ -316,7 +316,8 @@ def test_builder_static_files_reference_existing_functions():
     for fn in ("function renderStoryboard", "function openWizard", "function tryIt", "function runDialog",
                "function addTrialColumn", "function drawScreen", "function setMode", "function stageInput",
                "function openAssetPicker", "function drawStageOverlay", "function uploadAsset", "function toggleBigPreview",
-               "function openMeasures", "function monitorView", "function recordingSummary"):
+               "function openMeasures", "function monitorView", "function recordingSummary",
+               "function preflightBox", "function crashBox", "function computerCheckBox"):
         assert fn in js
 
 

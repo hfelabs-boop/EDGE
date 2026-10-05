@@ -18,6 +18,35 @@ SHORT = 0.25                      # s: rounding to a frame matters for presentat
 COMPRESSED_AUDIO = (".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wma")
 FILE_PROPS = {"image": "image", "sound": "sound", "html": "file"}
 VISUAL = {"text", "image", "shape", "fixation", "slider", "gaze_roi"}
+BIG_PIXELS = 4096
+BIG_FILE = 15_000_000
+
+
+def image_size(path: Path) -> tuple[int, int] | None:
+    """Width and height of a PNG, GIF, BMP or JPEG from its header (no image library needed)."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(32)
+            if head[:8] == b"\x89PNG\r\n\x1a\n":
+                return int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
+            if head[:6] in (b"GIF87a", b"GIF89a"):
+                return int.from_bytes(head[6:8], "little"), int.from_bytes(head[8:10], "little")
+            if head[:2] == b"BM":
+                return int.from_bytes(head[18:22], "little"), abs(int.from_bytes(head[22:26], "little", signed=True))
+            if head[:2] == b"\xff\xd8":
+                f.seek(2)
+                while True:
+                    m = f.read(4)
+                    if len(m) < 4 or m[0] != 0xFF:
+                        return None
+                    kind, length = m[1], int.from_bytes(m[2:4], "big")
+                    if kind in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                        d = f.read(5)
+                        return int.from_bytes(d[3:5], "big"), int.from_bytes(d[1:3], "big")
+                    f.seek(length - 2, 1)
+    except OSError:
+        return None
+    return None
 
 
 def pitfall_issues(exp) -> list:
@@ -160,6 +189,24 @@ def _file_list_issues(Issue, base: Path, where: str, files: Iterable[str], ctype
                f"{' …' if len(missing) > 3 else ''}") if column else f"{what} not found: {missing[0]}"
         out.append(Issue("error", where, msg, hint=f"did you mean {near}?" if near else
                          "file names are relative to the experiment's folder; check the spelling and the extension"))
+    if ctype == "image":
+        big = []
+        for f in files:
+            fp = (base / f) if not Path(f).is_absolute() else Path(f)
+            try:
+                size = fp.stat().st_size
+            except OSError:
+                continue
+            dims = image_size(fp)
+            if size > BIG_FILE or (dims and max(dims) > BIG_PIXELS):
+                big.append((f, dims, size))
+        if big:
+            f, dims, size = big[0]
+            what = f"{dims[0]}×{dims[1]} px" if dims else f"{size / 1e6:.0f} MB"
+            out.append(Issue("warning", where, f"very large picture{'s' if len(big) > 1 else ''} ({f}: {what}"
+                             f"{f', and {len(big) - 1} more' if len(big) > 1 else ''}): loading them takes time and memory "
+                             "and can drop frames when they appear",
+                             hint=f"shrink them to the size they are shown at (at most the screen size, e.g. 1920 px wide)"))
     if ctype == "sound":
         comp = [f for f in files if f.lower().endswith(COMPRESSED_AUDIO)]
         if comp:

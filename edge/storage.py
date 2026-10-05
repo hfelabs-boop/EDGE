@@ -304,6 +304,9 @@ def referenced_files(doc: dict[str, Any], base_dir: Path | None = None) -> set[s
                 yield from walk(n.get("children"))
                 yield from walk(n.get("then"))
                 yield from walk(n.get("else"))
+                for st in (n.get("states") or {}).values():
+                    if isinstance(st, dict):
+                        yield from walk(st.get("run"))
 
     html_pages = [f for f in out if f.lower().endswith((".html", ".htm"))]
     out |= {a for page in html_pages for a in _html_assets(page, base_dir)} if base_dir else set()
@@ -314,6 +317,23 @@ def referenced_files(doc: dict[str, Any], base_dir: Path | None = None) -> set[s
             cond = cond.get("file")
         if literal(cond):
             out.add(cond)
+        # pictures, sounds and pages named in a trial list ($column) are part of the experiment too
+        if base_dir is not None and n.get("conditions") is not None and not (isinstance(n.get("conditions"), str)
+                                                                              and n["conditions"].startswith("$")):
+            try:
+                from .conditions import load_conditions
+                rows = load_conditions(n["conditions"], Path(base_dir))
+            except Exception:
+                rows = []
+            for row in rows:
+                for v in row.values():
+                    if literal(v) and "." in v and len(v) < 260 and not _is_number(v):
+                        fp = Path(base_dir) / v
+                        try:
+                            if fp.is_file() and Path(base_dir).resolve() in fp.resolve().parents:
+                                out.add(v)
+                        except OSError:
+                            continue
     return out
 
 
@@ -344,6 +364,16 @@ def export_bundle(path: str | Path, out: str | Path | None = None) -> dict[str, 
             else:
                 missing.append(rel)
         manifest["files"] = included
+        try:   # versions and fingerprints, so the receiver can check they run the same thing
+            from .reproduce import environment, file_hashes, lock_path
+            manifest["environment"] = environment()
+            manifest["sha256"] = {k: v for k, v in file_hashes(loaded.doc, base).items() if v}
+            lp = lock_path(loaded.path)
+            if lp.exists():
+                z.write(lp, lp.name)
+                manifest["lock"] = lp.name
+        except Exception:
+            pass
         z.writestr("manifest.json", json.dumps(manifest, indent=2))
     return {"bundle": str(out), "files": included, "missing": missing}
 
@@ -367,6 +397,10 @@ def import_bundle(bundle: str | Path, dest_dir: str | Path) -> Path:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(z.read(info))
         doc = loads(z.read("experiment.yaml").decode("utf-8"), "yaml", str(bundle))
+        lock_data = z.read(manifest["lock"]) if manifest.get("lock") in z.namelist() else None
     exp_path = dest / name
     save_document(exp_path, doc, backup=exp_path.exists())
+    if lock_data is not None:      # keep the lock, so 'edge verify' works on the receiving computer
+        from .reproduce import lock_path
+        lock_path(exp_path).write_bytes(lock_data)
     return exp_path

@@ -477,7 +477,13 @@ async function runDialog() {
   const body = $("#modal-body"); body.innerHTML = ""; body.className = "rundlg";
   const recBox = h("div", {});
   if (typeof recordingSummary === "function") recordingSummary().then((b) => { if (b) recBox.append(b); });
-  if (typeof computerCheckBox === "function") computerCheckBox().then((b) => recBox.append(b));
+  const startBtn = h("button", {class: "primary", onclick: () => startRun(pid.value.trim(), ses.value.trim(), hasDevices && hw.value === "sim", fs.value === "1")}, "Start");
+  const anyway = h("a", {href: "#", class: "hidden", onclick: (e) => { e.preventDefault(); startBtn.disabled = false; anyway.classList.add("hidden"); }}, "start anyway (not recommended)");
+  if (typeof preflightBox === "function") {
+    startBtn.disabled = true; startBtn.textContent = "Checking…";
+    recBox.append(preflightBox((verdict) => { startBtn.textContent = "Start";
+      if (verdict === "no-go") { anyway.classList.remove("hidden"); } else startBtn.disabled = false; }));
+  }
   const pid = h("input", {value: info.suggestion});
   const warn = h("div", {class: "help"});
   const checkPid = () => { warn.textContent = info.used.includes(pid.value.trim()) ? `⚠ Participant ${pid.value} already has data. A new session folder will be made, nothing is overwritten.` : ""; warn.style.color = "var(--warn)"; };
@@ -493,8 +499,7 @@ async function runDialog() {
     h("div", {class: "field"}, h("label", {}, "Screen"), fs),
     recBox,
     h("p", {class: "help"}, `The experiment opens in its own window on this computer. Data is saved to ${info.data_dir}/ as it runs; you can follow it live here, and stop it with Stop or Esc in the experiment window (everything so far is kept).`),
-    h("div", {class: "btns"}, h("button", {onclick: closeModal}, "Cancel"),
-      h("button", {class: "primary", onclick: () => startRun(pid.value.trim(), ses.value.trim(), hasDevices && hw.value === "sim", fs.value === "1")}, "Start")));
+    h("div", {class: "btns"}, h("button", {onclick: closeModal}, "Cancel"), startBtn, anyway));
   openModal(); pid.focus(); pid.select();
 }
 
@@ -525,7 +530,9 @@ async function startRun(participant, session, simulate, fullscreen) {
       body.querySelector(".run-logbox").open = true;
       body.querySelector(".btns").replaceChildren(h("button", {onclick: () => runDialog()}, "Try again"), h("button", {onclick: closeModal}, "Close")); return; }
     status.innerHTML = "";
-    const stopped = st.monitor?.end?.aborted || st.returncode === 1;
+    const crash = st.monitor?.end?.crash;
+    if (crash && typeof crashBox === "function") { mon.el.prepend(crashBox(crash)); }
+    const stopped = !crash && (st.monitor?.end?.aborted || st.returncode === 1);
     put(status, st.returncode === 0 && !stopped ? h("b", {class: "ok"}, "✓ Finished.") : h("b", {style: "color:var(--warn)"}, stopped ? "Stopped early (data so far is saved)." : `Ended with a problem (code ${st.returncode}).`),
       saved ? h("div", {}, saved) : null);
     body.querySelector(".btns").replaceChildren(h("button", {class: "primary", onclick: () => { closeModal(); D.dry = false; D.sel = null; showTab("data"); }}, "See the data"),

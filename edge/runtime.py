@@ -72,6 +72,7 @@ class Session:
         self.errors: list[str] = []
         self.warnings: list[str] = []       # not failures, but things that affect timing or data quality
         self.system_checks: list[dict[str, Any]] = []
+        self.crash: dict[str, Any] | None = None     # structured report of the error that stopped the session
         self.aborted = False
         self.data_root = Path(data_dir) if data_dir else experiment.base_dir / self.settings["data"]["dir"]
         self.data: SessionData | None = None
@@ -144,9 +145,7 @@ class Session:
                 self.log(f"[edge] {spec.id}: simulating '{dtype}' with '{sim_map[dtype]}'")
                 keep = registry[sim_map[dtype]].options_schema   # e.g. input names, code maps
                 dtype, options = sim_map[dtype], {k: v for k, v in options.items() if k in keep}
-                if dtype == "sim_inputs" and any(n in (options.get("light_inputs") or ["light"])
-                                                 for n in (options.get("inputs") or {}).values()):
-                    options["simulate_light"] = True
+
             try:
                 dev = create_device(dtype, spec.id, options, clock=self.clock)
                 dev.session = self
@@ -216,6 +215,17 @@ class Session:
     def poll_devices(self) -> None:
         for dev in self.devices.values():
             dev.poll()
+
+    def live_devices(self) -> Any:
+        """``$devices.<id>.<channel>``: the latest sample of every device, for closed-loop experiments."""
+        from .components.base import Results
+        out = Results()
+        for did, dev in self.devices.items():
+            try:
+                out[did] = dev.live()
+            except Exception:
+                continue
+        return out
 
     def poll_inputs(self) -> list:
         """Response events from external input devices (button boxes, TTL lines, voice key)."""
@@ -299,6 +309,15 @@ class Session:
             pass
         return summary
 
+    def _preflight(self) -> dict[str, Any] | None:
+        if self.virtual_participant is not None or self.exp.path is None:
+            return None
+        try:
+            from .preflight import last_preflight
+            return last_preflight(self.exp.path, self.exp.source) or {"verdict": "not run"}
+        except Exception:
+            return None
+
     def timing_summary(self) -> dict[str, Any]:
         iv = self.frame_intervals
         if not iv:
@@ -346,6 +365,9 @@ class Session:
             "warnings": self.warnings,
             "display": _jsonable(getattr(self.backend, "diagnostics", {}) or {}),
             "system_checks": self.system_checks,
+            "crash": self.crash,
+            "environment": _environment(),
+            "preflight": self._preflight(),
         }
 
 
@@ -359,3 +381,11 @@ def _safe(fn) -> Any:
 
 def _jsonable(d: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in d.items() if isinstance(v, (str, int, float, bool, list, type(None)))}
+
+
+def _environment() -> dict[str, Any]:
+    try:
+        from .reproduce import environment
+        return environment()
+    except Exception:
+        return {}

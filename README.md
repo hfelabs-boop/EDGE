@@ -196,6 +196,7 @@ See [docs/IMPORT.md](docs/IMPORT.md) for what converts and how.
 | Parallel port | `parallel_port` | inpoutx64 (Windows), pyparallel (Linux) |
 | EEG / fNIRS / physiology triggers | `trigger_adapter` | pick the system (BioSemi, Brain Products, EGI, ANT Neuro, NIRx, Artinis, Bitbrain, BIOPAC, ADInstruments, MRI): connection, lines, pulse width and wiring are set for you |
 | Response boxes & inputs | `serial_inputs`, `parallel_inputs`, `labjack`, `voice_key` | Cedrus pads and light sensors, fMRI buttons and scanner triggers, Arduino/BBTK boxes, LabJack, microphone voice key; used with the **Button box / external input** component; a light sensor measures the real display latency |
+| Closed loop | `udp_messages`, `$devices.<id>.<channel>` | another program (a classifier, a tracker) steers the running experiment with UDP messages; any expression reads the latest sample of any device |
 | No hardware yet | `sim_eyetracker`, `sim_eeg`, `sim_physio`, `mouse_gaze`, `ttl_loopback`, `sim_inputs` | realistic simulators on drifting clocks; a virtual participant that presses box buttons and speaks |
 
 `edge scan` finds LSL streams, serial ports, Tobii trackers and Gazepoint Control, and suggests a

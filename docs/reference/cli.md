@@ -131,6 +131,90 @@ edge doctor [-h] [--fix] [--json] [experiment]
 | `--fix` | fix what can be fixed automatically |
 | `--json` | machine-readable output |
 
+## edge preflight
+
+go / no-go before collecting data: checks, test run, lock, computer
+
+```
+edge preflight [-h] [--no-golden] [--no-computer] [--json] experiment
+```
+
+| argument | description |
+|---|---|
+| `experiment` |  |
+| `--no-golden` | don't re-run the golden participant of the lock |
+| `--no-computer` | skip the computer check |
+| `--json` | machine-readable output |
+
+## edge test-device
+
+connect an experiment's device(s): data rate, inputs, a test marker
+
+```
+edge test-device [-h] [--seconds SECONDS] [--simulate]
+                        experiment [device]
+```
+
+| argument | description |
+|---|---|
+| `experiment` |  |
+| `device` | device id (default: all) |
+| `--seconds` |  |
+| `--simulate` | test with the device's simulator |
+
+## edge timing-test
+
+create a timing test: real display, audio and trigger latency on this computer
+
+```
+edge timing-test [-h] [directory]
+```
+
+| argument | description |
+|---|---|
+| `directory` |  |
+
+## edge lock
+
+record versions, file fingerprints and a golden participant after piloting
+
+```
+edge lock [-h] [--no-golden] experiment
+```
+
+| argument | description |
+|---|---|
+| `experiment` |  |
+| `--no-golden` | skip the golden-participant dry run |
+
+## edge verify
+
+check that the experiment, its files and this computer still match the lock
+
+```
+edge verify [-h] [--no-golden] [--json] experiment
+```
+
+| argument | description |
+|---|---|
+| `experiment` |  |
+| `--no-golden` | skip the golden-participant dry run |
+| `--json` | machine-readable output |
+
+## edge support-bundle
+
+pack everything needed to ask for help (no participant data)
+
+```
+edge support-bundle [-h] [--out OUT] [--include-data] path
+```
+
+| argument | description |
+|---|---|
+| `path` | an experiment file or a session folder |
+| `--out` | where to write the .zip |
+| `--include-data` | also include the trial data (participant fields removed) |
+
 ## edge report
 
 timing / data / sync quality report for a session

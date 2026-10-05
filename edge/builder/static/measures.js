@@ -344,3 +344,64 @@ async function computerCheckBox() {
   draw();
   return box;
 }
+
+/* ================================================================== error report (what / where / when / state) */
+function crashBox(rep) {
+  if (!rep) return null;
+  const row = (k, v) => (v ? h("div", {class: "crash-row"}, h("span", {}, k), h("div", {}, v)) : null);
+  const trial = Object.entries(rep.trial || {}).map(([k, v]) => `${k} #${typeof v === "number" ? v + 1 : v}`).join(", ");
+  const vars = Object.entries(rep.variables || {}).slice(0, 14).map(([k, v]) => `${k} = ${JSON.stringify(v)}`).join(" · ");
+  return h("div", {class: "crash"},
+    h("b", {}, "The experiment stopped because of an error"),
+    row("What", `${rep.type}: ${rep.message}`),
+    row("Where", [rep.component ? `component “${rep.component}” (${rep.component_type})` : "", rep.routine ? `screen “${rep.routine}”` : ""].filter(Boolean).join(" · ")),
+    row("When", rep.phase_text + (rep.routine_time ? `, ${rep.routine_time.toFixed(3)} s into the screen` : "")),
+    row("Trial", trial),
+    rep.user_code ? row("Code", h("code", {}, `line ${rep.user_code.line} of ${rep.user_code.where}: ${rep.user_code.code}`)) : null,
+    row("State", vars),
+    rep.hint ? h("div", {class: "crash-hint"}, "💡 ", rep.hint) : null,
+    h("div", {class: "help"}, "Everything recorded until then is saved."),
+    rep.routine && typeof openScreen === "function" ? h("button", {class: "mini", onclick: () => { closeModal(); openScreen(rep.routine);
+      if (rep.component && findComp(rep.routine, rep.component)) { S.sel = {kind: "component", routine: rep.routine, id: rep.component}; renderAll(); } }}, "Show me") : null);
+}
+
+/* ================================================================== preflight (go / no-go) in the run dialog */
+function preflightBox(onVerdict) {
+  const box = h("div", {class: "pf"}, h("div", {class: "pf-busy"}, "Preflight: checking the experiment, a test run with a virtual participant, the lock and this computer…"));
+  const MARK = {ok: "✓", info: "·", warning: "!", error: "✗"};
+  const draw = async () => {
+    let r;
+    try { r = await api("/api/preflight", {path: S.path}); }
+    catch (e) { box.innerHTML = ""; box.append(h("div", {class: "issue warning"}, "Preflight could not run: " + e.message)); onVerdict("go with warnings"); return; }
+    box.innerHTML = "";
+    const word = {"go": "GO: ready for participants", "go with warnings": "GO WITH WARNINGS: read the ! items", "no-go": "NO-GO: fix the ✗ items first"}[r.verdict];
+    box.append(h("div", {class: "pf-verdict v-" + r.verdict.replace(/ /g, "-")}, word, h("small", {}, ` · ${r.seconds} s`)));
+    for (const s of r.sections) {
+      const bad = s.items.filter((i) => i.level !== "ok");
+      const sec = h("details", {class: "pf-sec s-" + s.status, open: s.status === "error" || s.status === "warning"},
+        h("summary", {}, h("span", {class: "pf-mark"}, MARK[s.status]), " ", s.title,
+          !bad.length && s.items[0] ? h("small", {}, " · " + s.items[0].text) : null));
+      for (const it of bad) {
+        const row = h("div", {class: "pf-item l-" + it.level}, h("span", {class: "pf-mark"}, MARK[it.level]), h("div", {}, it.text,
+          it.detail ? h("div", {class: "help"}, it.detail) : null, it.hint ? h("div", {class: "pf-hint"}, "→ ", it.hint) : null,
+          it.crash && typeof crashBox === "function" ? crashBox(it.crash) : null));
+        if (it.fixable) row.append(h("button", {class: "mini", onclick: async (e) => { e.target.disabled = true; e.target.textContent = "Fixing…";
+          const res = await api("/api/system_fix", {id: it.check_id}).catch((err) => ({ok: false, error: err.message}));
+          toast(res.ok ? `Done: ${res.done}` : `Could not fix: ${res.error}`, 5000); draw(); }}, "Fix"));
+        sec.append(row);
+      }
+      box.append(sec);
+    }
+    const lockSec = r.sections.find((x) => x.id === "lock");
+    const unlocked = lockSec && lockSec.items.some((i) => i.text === "not locked yet");
+    const lockBtn = h("button", {class: "mini", title: "Record versions, file fingerprints and a golden participant, so any later change is caught",
+      onclick: async (e) => { e.target.disabled = true; e.target.textContent = "Locking…";
+        try { const l = await api("/api/lock", {path: S.path}); toast(`Locked: ${l.files} file(s), golden participant ${l.trials ?? "–"} trials`, 5000); } catch (err) { toast("Lock failed: " + err.message, 5000); }
+        draw(); }}, unlocked ? "🔒 Lock (after piloting)" : "🔒 Lock again");
+    box.append(h("div", {class: "pf-actions"}, lockBtn, h("a", {href: `/api/support_bundle?path=${encodeURIComponent(S.path)}`}, "Support bundle"),
+      h("span", {class: "help"}, " · everything needed to ask for help, without participant data")));
+    onVerdict(r.verdict);
+  };
+  draw();
+  return box;
+}

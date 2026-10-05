@@ -286,6 +286,13 @@ a column `<survey id>.<question id>` (matrix items by item id); library question
 Question text is used as written: a leading `$` is not an expression there. The full guide:
 [Surveys](SURVEYS.md).
 
+## Live device values
+
+Expressions can read the latest sample of every device: `$devices.<device>.<channel>` (or
+`$devices.<device>.<stream>.<channel>`), and `$devices.<device>.age`, the seconds since that sample.
+A `udp_messages` device exposes the fields of the messages another program sent. See
+[Devices](DEVICES.md#closed-loop-udpmessages).
+
 ## measures
 
 What the experiment measures: outcomes, factors, covariates and checks, each pointing at a recorded

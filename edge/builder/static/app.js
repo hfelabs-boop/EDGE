@@ -978,6 +978,22 @@ function renderDeviceProps(el, d, index, title) {
   el.append(h("div", {class: "group"}, "Options"));
   d.options ||= {};
   for (const [k, p] of Object.entries(info.options || {})) el.append(field(k, p, d.options[k], (v) => { if (v === null) delete d.options[k]; else d.options[k] = v; commit(); }, {noExpr: true}));
+  const testOut = h("div", {class: "dev-test"});
+  const runTest = async (simulate) => {
+    testOut.innerHTML = ""; testOut.append(h("div", {class: "help"}, (info.capabilities || []).includes("input")
+      ? "Testing for 5 s: press the buttons / speak now…" : "Connecting and listening for 3 s…"));
+    try {
+      const r = await api("/api/device_test", {experiment: S.exp, path: S.path, id: d.id, simulate,
+        seconds: (info.capabilities || []).includes("input") ? 5 : 3});
+      testOut.innerHTML = "";
+      if (!r.connected) testOut.append(h("div", {class: "issue error"}, "✗ Not connected: ", r.error || "unknown problem", r.hint ? h("div", {class: "help"}, r.hint) : null));
+      else testOut.append(...r.messages.map((m) => h("div", {class: /no data|only|did not|failed|no inputs/.test(m) ? "issue warning" : "ok"}, (/no data|only|did not|failed|no inputs/.test(m) ? "! " : "✓ ") + m)));
+      for (const [name, s] of Object.entries(r.streams || {})) if (s.first) testOut.append(h("div", {class: "help"}, `${name} first sample: ${s.first.join(", ")}`));
+    } catch (e) { testOut.innerHTML = ""; testOut.append(h("div", {class: "issue error"}, "Test failed: " + e.message)); }
+  };
+  el.append(h("div", {class: "group"}, "Test"),
+    h("div", {class: "btns"}, h("button", {onclick: () => runTest(false), title: "Connect to the real device, check its data rate, inputs and a test marker"}, "▶ Test this device"),
+      h("button", {class: "mini", onclick: () => runTest(true), title: "The same test with its simulator (no hardware needed)"}, "simulated")), testOut);
   el.append(h("div", {class: "btns"}, h("button", {class: "danger", onclick: () => { S.exp.devices.splice(index, 1); S.sel = null; commit(); }}, "Remove device")));
 }
 

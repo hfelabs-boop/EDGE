@@ -232,7 +232,9 @@ Also: its inputs can be responses (Button box / external input component).
 | `light_inputs` | list | `['light']` | inputs that are light sensors on the screen: the report measures display latency with them |
 | `record_releases` | bool | `True` | also record when a button is released / a line goes low |
 | `light_latency_ms` | float | `8.0` | simulated display latency |
-| `simulate_light` | bool | `False` |  |
+| `sound_latency_ms` | float | `22.0` | simulated audio latency |
+| `simulate_light` | bool |  | empty = when an input is a light sensor |
+| `simulate_sound` | bool |  | empty = when an input is named 'sound' |
 
 ## sim_physio
 
@@ -331,6 +333,25 @@ Also: sends event codes (TTL) to the acquisition system, where they are recorded
 | `pulse_ms` | float | `10.0` | pulse width; 0 = leave lines set |
 | `reset_code` | int | `0` |  |
 | `code_map` | dict |  | label -> code mapping for markers without a code |
+
+## udp_messages
+
+Messages from another program (a classifier, a tracker, a script on another computer) over UDP: their fields become variables and events that rules and responses react to, for closed-loop experiments. Can send the experiment's markers back.
+
+Capabilities: input, markers, stream
+
+Records: `streams/<id>.messages.csv`: every message received on UDP port 5005 (as JSON, with its arrival time) (1 channels)
+
+Also: its message fields become variables.
+
+| option | type | default | description |
+|---|---|---|---|
+| `port` | int | `5005` | UDP port to listen on |
+| `host` | str | `127.0.0.1` | 127.0.0.1 = this computer only; 0.0.0.0 = also other computers |
+| `variables` | list |  | fields the other program sends, e.g. [alpha, decision] (so Check knows them) |
+| `into_variables` | bool | `True` | set experiment variables from the message fields |
+| `event_key` | str | `event` | the field that is an input event (plain text is one too) |
+| `send_markers_to` | str |  | host:port to send every marker to as JSON (empty = don't) |
 
 ## voice_key
 

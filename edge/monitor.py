@@ -90,6 +90,7 @@ class Monitor:
     def end(self, summary: dict[str, Any]) -> None:
         self._stop.set()
         self.emit({"type": "end", "aborted": bool(summary.get("aborted")), "errors": summary.get("errors") or [],
+                   "crash": summary.get("crash"),
                    "trials": self.n_trials, "elapsed": round(time.monotonic() - self.t0, 1),
                    "running": self._running(), "data_dir": str(self.session.data.root) if self.session.data else None})
 

@@ -561,3 +561,29 @@ body.mode-simple .expert-only { display: none !important; }
 .pc-check .issue button { align-self: flex-start; }
 .pc-check .pc-info { opacity: .8; }
 .pc-fix { color: var(--text); }
+.crash { border: 1px solid var(--err); border-left: 4px solid var(--err); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.crash-row { display: grid; grid-template-columns: 56px 1fr; gap: 8px; }
+.crash-row > span { color: var(--muted); font-size: 12px; }
+.crash-hint { background: var(--panel2); border-radius: 6px; padding: 6px 8px; }
+.crash button { align-self: flex-start; }
+
+/* ---------- preflight */
+.pf { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; font-size: 13px; }
+.pf-busy { color: var(--muted); padding: 6px 0; }
+.pf-verdict { font-weight: 700; padding: 8px 10px; border-radius: 8px; }
+.pf-verdict small { font-weight: normal; color: var(--muted); }
+.pf-verdict.v-go { background: color-mix(in srgb, var(--accent2) 16%, transparent); color: var(--accent2); }
+.pf-verdict.v-go-with-warnings { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.pf-verdict.v-no-go { background: color-mix(in srgb, var(--err) 14%, transparent); color: var(--err); }
+.pf-sec { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+.pf-sec summary { cursor: pointer; }
+.pf-sec summary small { color: var(--muted); }
+.pf-sec.s-ok .pf-mark { color: var(--accent2); } .pf-sec.s-warning > summary .pf-mark { color: var(--warn); } .pf-sec.s-error > summary .pf-mark { color: var(--err); }
+.pf-item { display: flex; gap: 6px; padding: 3px 0 3px 4px; align-items: flex-start; }
+.pf-item.l-error .pf-mark { color: var(--err); } .pf-item.l-warning .pf-mark { color: var(--warn); } .pf-item.l-info .pf-mark { color: var(--muted); }
+.pf-item > div { flex: 1; }
+.pf-hint { color: var(--muted); font-size: 12px; }
+.pf-actions { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-size: 12px; }
+#modal-body.rundlg { width: min(760px, 94vw); }
+.pf-actions .hidden, a.hidden { display: none; }
+.dev-test { display: flex; flex-direction: column; gap: 3px; font-size: 12px; margin-top: 4px; }

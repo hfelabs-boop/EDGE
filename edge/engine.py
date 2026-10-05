@@ -72,6 +72,8 @@ class RoutineRun:
         # component called "word" must show the word, not the component's results)
         for frame in self.runner.stack:
             ns.update(frame["row"])
+        if self.session.devices:
+            ns.setdefault("devices", self.session.live_devices())
         ns["t"] = 0.0 if self.t0 is None or self.session.last_flip is None else self.session.last_flip - self.t0
         ns["frame"] = self.frame
         ns["vars"] = self.session.vars
@@ -122,6 +124,18 @@ class RoutineRun:
 
     # ----------------------------------------------------------- main loop
     def run(self) -> dict[str, Any]:
+        """Run the routine; any failure becomes an ExperimentError saying where, when and in what state."""
+        from .diagnostics import ExperimentError, build_report
+        self._where: tuple[str, Any] = ("prepare", None)
+        try:
+            return self._run()
+        except (ExperimentAborted, StateJump, ExperimentError):
+            raise
+        except Exception as e:
+            phase, comp = self._where
+            raise ExperimentError(build_report(e, phase=phase, routine=self.routine.id, component=comp, run=self)) from e
+
+    def _run(self) -> dict[str, Any]:
         session, backend = self.session, self.session.backend
         registry = component_registry()
         self._half = backend.frame_interval / 2
@@ -135,11 +149,10 @@ class RoutineRun:
             comp._started_called = False
             self.components[spec.id] = comp
         for comp in self.components.values():
-            try:
-                comp.prepare()
-            except Exception as e:
-                raise RuntimeError(f"routine '{self.routine.id}', component '{comp.id}': {e}") from e
+            self._where = ("prepare", comp)
+            comp.prepare()
         comps = list(self.components.values())
+        self._where = ("timing", None)
         self._rule_prev = [False] * len(self.routine.rules)
         self._rule_fired = [0] * len(self.routine.rules)
         max_dur = self._val(self.routine.duration) if self.routine.duration is not None else None
@@ -152,6 +165,7 @@ class RoutineRun:
             t_next = 0.0 if self.t0 is None else t_pred_abs - self.t0
             starting, stopping = [], []
             for c in comps:
+                self._where = ("timing", c)
                 if c.status == NOT_STARTED and self._should_start(c, t_next):
                     c.status = STARTED
                     c.frame_start = self.frame
@@ -167,21 +181,26 @@ class RoutineRun:
             # non-visual logic first (so e.g. gaze_follow moves a stimulus before it is drawn), then draw in order
             for c in comps:
                 if c.status == STARTED and not c.visual and c._started_called:
+                    self._where = ("frame", c)
                     c.on_frame(t_pred_abs)
             for c in comps:
                 if c.status == STARTED and c.visual:
+                    self._where = ("frame", c)
                     c.on_frame(t_pred_abs)
 
+            self._where = ("frame", None)
             t_flip = session.flip(self.routine.id)
             if self.t0 is None:
                 self.t0 = t_flip
 
             for c in starting:
+                self._where = ("start", c)
                 c.t_start = t_flip
                 c._started_called = True
                 c.on_start(t_flip)
                 self._component_marker(c, "onset", t_flip)
             for c in stopping:
+                self._where = ("stop", c)
                 c.t_stop = t_flip
                 c.on_stop(t_flip)
                 self._component_marker(c, "offset", t_flip)
@@ -189,10 +208,13 @@ class RoutineRun:
             for ev in backend.poll_events() + session.poll_inputs():
                 for c in comps:
                     if c.status == STARTED and c._started_called:
+                        self._where = ("event", c)
                         c.on_event(ev)
+            self._where = ("frame", None)
             session.poll_devices()
             session.check_abort()
             if self.routine.rules:
+                self._where = ("rule", None)
                 self._run_rules(t_flip)
             self.frame += 1
 
@@ -207,6 +229,7 @@ class RoutineRun:
                                    "add a duration, end_if, or an end_routine component")
             if max_dur is not None and t_now + interval >= float(max_dur) - self._half:
                 break
+            self._where = ("end_if", None)
             if self.routine.end_if and self._val(self.routine.end_if):
                 break
             # helpers (code/variable/marker) don't hold the routine open, unless they are still scheduled to start
@@ -218,6 +241,7 @@ class RoutineRun:
 
         t_end = session.last_flip + backend.frame_interval  # next flip replaces this routine's display
         for c in comps:
+            self._where = ("stop", c)
             if c.status == STARTED:
                 c.status = FINISHED
                 c.t_stop = t_end
@@ -309,8 +333,17 @@ class Runner:
         except StateJump as j:
             s.errors.append(f"goto '{j.target}' used outside a state machine that has that state")
         except BaseException as e:
+            from .diagnostics import ExperimentError, build_report
             s.aborted = True
-            s.errors.append(f"{type(e).__name__}: {e}")
+            if isinstance(e, Exception):
+                rep = build_report(e, phase="setup" if s.data is None or s.last_flip is None and not self.routine_count
+                                   else "flow", runner=self)
+                s.crash = rep
+                s.errors.append(rep["what"])
+                if not isinstance(e, ExperimentError):
+                    raise ExperimentError(rep) from e
+            else:
+                s.errors.append(f"{type(e).__name__}: {e}")
             raise
         finally:
             summary = s.close()

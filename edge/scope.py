@@ -16,7 +16,7 @@ from typing import Any, Iterable
 
 from . import expressions
 
-ALWAYS = {"t", "frame", "vars", "experiment", "routine_index"}
+ALWAYS = {"t", "frame", "vars", "experiment", "routine_index", "devices"}
 
 
 def _expr_sources(value: Any, *, bare: bool = False) -> Iterable[str]:
@@ -78,6 +78,8 @@ def global_names(exp) -> tuple[set[str], bool]:
     from .model import Loop, StateMachine, Branch
 
     names = set(ALWAYS) | set(exp.settings.get("participant", {}) or {}) | {"participant", "session"}
+    for d in exp.devices:       # variables an external program sends (udp_messages: variables)
+        names.update(str(v) for v in (d.options.get("variables") or []) if isinstance(d.options.get("variables"), list))
     has_code = False
     for routine in exp.routines.values():
         for c in routine.components:

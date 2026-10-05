@@ -154,6 +154,49 @@ TTL in and out); the amplifier ends of the Chronos adapters are covered by `trig
 *Status: decoding (Cedrus packets, character and line protocols, voice and light thresholds) is
 unit-tested; the drivers are untested on physical boxes.*
 
+### Closed loop — `udp_messages`
+Let another program steer a running experiment: a classifier reading EEG, a motion tracker, a robot,
+a script on another computer. It sends UDP packets (JSON objects, or plain text) to the
+`udp_messages` device; their fields become experiment variables, and a field called `event` (or plain
+text) is an input event:
+
+```yaml
+devices:
+  - {id: bci, type: udp_messages, options: {port: 5005, variables: [alpha], send_markers_to: "127.0.0.1:5006"}}
+routines:
+  feedback:
+    rules:
+      - {when: "$alpha > 0.5", do: [{set: {state: high}}, end_routine]}
+    components:
+      - {id: choice, type: device_response, device: bci, inputs: [left, right]}   # a decision as a response
+```
+
+```python
+import json, socket                      # the other program
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.sendto(json.dumps({"alpha": 0.73, "event": "left"}).encode(), ("127.0.0.1", 5005))
+```
+
+List the fields under `variables` so Check knows them. Every message is saved with its arrival time
+in `streams/bci.messages.csv`; with `send_markers_to`, EDGE sends every marker back as JSON so the
+other program knows when each stimulus appeared.
+
+Any expression can also read the **latest sample of any device**: `$devices.eeg.Cz`,
+`$devices.eye.x`, `$devices.eeg.age` (seconds since that sample), e.g. a rule
+`when: "$devices.physio.eda > 5"`.
+
+### Testing devices and timing
+
+* **Test this device** in the device panel (or `edge test-device study.yaml [id]`): connects with a
+  time limit and shows whether it's connected (and why not; a wrong serial port lists the existing
+  ones), samples per second against the nominal rate, the first values, the button presses during
+  the test, and a test marker (code 1, `edge_test`); when the device records a trigger channel, whether
+  the marker came back and after how many ms. **simulated** runs the same test with its simulator.
+* `edge timing-test` creates a timing experiment: a white patch flashes in the top-left corner and a
+  short tone plays, each with a marker. Tape a light sensor over the corner and put a microphone at
+  the speaker (inputs named `light` and `sound` on a response box, LabJack or voice key). The
+  session report gives the **display latency**, the **audio latency** and the **trigger alignment**.
+
 ### Simulators — `sim_eyetracker`, `sim_eeg`, `sim_physio`, `mouse_gaze`, `ttl_loopback`, `sim_inputs`
 Each simulator runs on its own clock with configurable offset, drift (ppm) and transport jitter,
 so dry runs exercise the full sync pipeline. `mouse_gaze` lets you build gaze-contingent tasks at

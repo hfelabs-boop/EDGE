@@ -216,6 +216,44 @@ def create_server(root: str | Path = ".") -> FastMCP:
                 **_issues(doc), "migrated": doc.changes}
 
     @tool
+    def test_device(path: str, device: str, seconds: float = 3.0, simulate: bool = False) -> dict[str, Any]:
+        """Connect one of the experiment's devices for a few seconds: connected or why not, samples per second per
+        stream vs nominal, inputs seen (button presses), and whether a test marker was sent / came back."""
+        from .devtest import test_experiment_device
+        from .model import Experiment
+        return test_experiment_device(Experiment.load(ws.path(path)), device, seconds, simulate)
+
+    @tool
+    def preflight(path: str) -> dict[str, Any]:
+        """Go / no-go before collecting data: all validation checks, installed packages for the devices, a full
+        virtual-participant test run, declared measures, the lock (versions, files, golden participant) and the
+        computer check. Returns verdict (go / go with warnings / no-go) and sections with items to fix."""
+        from .preflight import run_preflight
+        return run_preflight(ws.path(path))
+
+    @tool
+    def lock_experiment(path: str) -> dict[str, Any]:
+        """After piloting: record EDGE/Python/package versions, plugins, fingerprints of every file the experiment
+        uses, and a golden participant (a fixed-seed dry run). verify_experiment later catches any change."""
+        from .reproduce import lock
+        return lock(ws.path(path))
+
+    @tool
+    def verify_experiment(path: str) -> dict[str, Any]:
+        """Compare the experiment, its files and this computer with its lock: version updates, edited stimuli,
+        and whether the golden participant still goes through the same trials (behaviour changes)."""
+        from .reproduce import verify
+        return verify(ws.path(path))
+
+    @tool
+    def support_bundle(path: str, include_data: bool = False) -> dict[str, Any]:
+        """Pack what's needed to diagnose a problem (experiment, versions, computer check, devices, the last
+        session's report and error report) into a zip, with participant information removed."""
+        from .support import make_bundle
+        r = make_bundle(ws.path(path), include_data=include_data)
+        return {**r, "bundle": ws.rel(Path(r["bundle"]))}
+
+    @tool
     def check_system(path: str = "", fix: bool = False) -> dict[str, Any]:
         """Check this computer for the known causes of bad timing and lost responses: laptop on battery,
         power plan, USB selective suspend (response boxes stop answering), generic display driver (no valid

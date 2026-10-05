@@ -40,8 +40,14 @@ def cmd_run(a: argparse.Namespace) -> int:
         summary = run_experiment(exp, backend=a.backend, participant=participant, dry_run=a.dry_run,
                                  data_dir=a.data_dir, simulate_devices=a.simulate_devices or None)
     except Exception as e:
-        print(f"\nEDGE could not run the experiment: {friendly_run_error(e)}")
-        print(f"(details: {type(e).__name__}: {e})")
+        rep = getattr(e, "report", None)
+        if rep and rep.get("phase") != "setup":
+            from .diagnostics import format_report
+            print("\n" + format_report(rep))
+            return 3
+        cause = e.__cause__ or e
+        print(f"\nEDGE could not run the experiment: {friendly_run_error(cause)}")
+        print(f"(details: {type(cause).__name__}: {cause})")
         return 3
     t = summary.get("timing", {})
     print(f"\nSaved to {summary.get('data_dir')}")
@@ -146,6 +152,77 @@ def cmd_doctor(a: argparse.Namespace) -> int:
     else:
         print(format_checks(checks))
     return 1 if any(c.level == "error" for c in checks) else 0
+
+
+def cmd_preflight(a: argparse.Namespace) -> int:
+    from .preflight import format_preflight, run_preflight
+    res = run_preflight(a.experiment, golden=not a.no_golden, computer=not a.no_computer)
+    if a.json:
+        print(json.dumps(res, indent=2, default=str))
+    else:
+        print(format_preflight(res))
+    return {"go": 0, "go with warnings": 1, "no-go": 2}[res["verdict"]]
+
+
+def cmd_test_device(a: argparse.Namespace) -> int:
+    from .devtest import test_experiment_device
+    from .model import Experiment
+    exp = Experiment.load(a.experiment)
+    ids = [a.device] if a.device else [d.id for d in exp.devices]
+    if not ids:
+        print("This experiment has no devices.")
+        return 0
+    bad = 0
+    for did in ids:
+        print(f"{did}: testing for {a.seconds:g} s" + (" (press the buttons / speak now)" if a.seconds >= 3 else ""))
+        r = test_experiment_device(exp, did, a.seconds, a.simulate)
+        if not r["connected"]:
+            bad += 1
+            print(f"  ✗ not connected: {r.get('error')}" + (f"\n    {r['hint']}" if r.get("hint") else ""))
+            continue
+        for m in r["messages"]:
+            print(f"  · {m}")
+    return 1 if bad else 0
+
+
+def cmd_timing_test(a: argparse.Namespace) -> int:
+    from .templates import write_template
+    path = write_template("timing_test", Path(a.directory))
+    print(f"Created {path}.")
+    print("1. Tape a light sensor over the top-left corner of the screen and put a microphone at the speaker.")
+    print("2. Replace the 'sensors' device with your hardware (serial_inputs, labjack, voice_key …), naming its")
+    print("   inputs 'light' and 'sound' (and keep your trigger device).")
+    print(f"3. edge run {path} --report   → display latency, audio latency and trigger alignment.")
+    print(f"   (Try it first without hardware: edge run {path} --dry-run --report)")
+    return 0
+
+
+def cmd_lock(a: argparse.Namespace) -> int:
+    from .reproduce import lock
+    r = lock(a.experiment, golden=not a.no_golden)
+    print(f"Locked {r['experiment']}: {r['lock']} ({r['files']} file(s) fingerprinted"
+          + (f", golden participant: {r['trials']} trials" if r.get("trials") is not None else "") + ")")
+    print("Run 'edge verify' (the builder does it before every session) to catch any later change.")
+    return 0
+
+
+def cmd_verify(a: argparse.Namespace) -> int:
+    from .reproduce import format_verify, verify
+    r = verify(a.experiment, golden=not a.no_golden)
+    if a.json:
+        print(json.dumps(r, indent=2))
+    else:
+        print(format_verify(r))
+    return 1 if any(f["level"] in ("warning", "error") for f in r["findings"]) else 0
+
+
+def cmd_support(a: argparse.Namespace) -> int:
+    from .support import make_bundle
+    r = make_bundle(a.path, a.out, include_data=a.include_data)
+    print(f"Support bundle: {r['bundle']}")
+    print("It has the experiment, versions, computer check, devices, the last session's report and error "
+          "(participant information removed" + ("" if a.include_data else ", no trial data") + ").")
+    return 0
 
 
 def cmd_report(a: argparse.Namespace) -> int:
@@ -428,6 +505,41 @@ def main(argv: list[str] | None = None) -> int:
     dr.add_argument("--fix", action="store_true", help="fix what can be fixed automatically")
     dr.add_argument("--json", action="store_true", help="machine-readable output")
     dr.set_defaults(fn=cmd_doctor)
+
+    pf = sub.add_parser("preflight", help="go / no-go before collecting data: checks, test run, lock, computer")
+    pf.add_argument("experiment")
+    pf.add_argument("--no-golden", action="store_true", help="don't re-run the golden participant of the lock")
+    pf.add_argument("--no-computer", action="store_true", help="skip the computer check")
+    pf.add_argument("--json", action="store_true", help="machine-readable output")
+    pf.set_defaults(fn=cmd_preflight)
+
+    td = sub.add_parser("test-device", help="connect an experiment's device(s): data rate, inputs, a test marker")
+    td.add_argument("experiment")
+    td.add_argument("device", nargs="?", help="device id (default: all)")
+    td.add_argument("--seconds", type=float, default=3.0)
+    td.add_argument("--simulate", action="store_true", help="test with the device's simulator")
+    td.set_defaults(fn=cmd_test_device)
+
+    tt = sub.add_parser("timing-test", help="create a timing test: real display, audio and trigger latency on this computer")
+    tt.add_argument("directory", nargs="?", default=".")
+    tt.set_defaults(fn=cmd_timing_test)
+
+    lk = sub.add_parser("lock", help="record versions, file fingerprints and a golden participant after piloting")
+    lk.add_argument("experiment")
+    lk.add_argument("--no-golden", action="store_true", help="skip the golden-participant dry run")
+    lk.set_defaults(fn=cmd_lock)
+
+    vf = sub.add_parser("verify", help="check that the experiment, its files and this computer still match the lock")
+    vf.add_argument("experiment")
+    vf.add_argument("--no-golden", action="store_true", help="skip the golden-participant dry run")
+    vf.add_argument("--json", action="store_true", help="machine-readable output")
+    vf.set_defaults(fn=cmd_verify)
+
+    sb = sub.add_parser("support-bundle", help="pack everything needed to ask for help (no participant data)")
+    sb.add_argument("path", help="an experiment file or a session folder")
+    sb.add_argument("--out", help="where to write the .zip")
+    sb.add_argument("--include-data", action="store_true", help="also include the trial data (participant fields removed)")
+    sb.set_defaults(fn=cmd_support)
 
     rp = sub.add_parser("report", help="timing / data / sync quality report for a session")
     rp.add_argument("session_dir", help="a session folder in data/")

@@ -351,6 +351,22 @@ def make_handler(app: BuilderApp):
                     return self._json({"root": str(app.root), "files": app.list_files()})
                 if u.path == "/api/experiment":
                     return self._json(app.load(q["path"]))
+                if u.path == "/api/support_bundle":
+                    import tempfile
+                    from ..support import make_bundle
+                    with tempfile.TemporaryDirectory() as td:
+                        res = make_bundle(app.safe_path(q["path"]), Path(td) / "support.zip")
+                        data = Path(res["bundle"]).read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/zip")
+                    self.send_header("Content-Disposition", f'attachment; filename="support_{Path(q["path"]).stem}.zip"')
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return None
+                if u.path == "/api/verify":
+                    from ..reproduce import verify
+                    return self._json(verify(app.safe_path(q["path"]), golden=q.get("golden", "1") == "1"))
                 if u.path == "/api/system_check":
                     from ..syscheck import run_checks
                     exp = None
@@ -384,6 +400,8 @@ def make_handler(app: BuilderApp):
                     return self._json(app.session_tables(q["path"]))
                 if u.path == "/api/file":
                     p = app.safe_path(q["path"])
+                    if not p.is_file():
+                        return self._json({"error": f"file not found: {q['path']}"}, 404)
                     if q.get("download"):
                         self.send_response(200)
                         self.send_header("Content-Type", "application/octet-stream")
@@ -475,6 +493,17 @@ def make_handler(app: BuilderApp):
                     return self._json({"issues": app.validate(body["experiment"], body.get("path"))})
                 if u.path == "/api/dryrun":
                     return self._json(app.dry_run(body["experiment"], body.get("path"), body.get("participant") or {}))
+                if u.path == "/api/device_test":
+                    from ..devtest import test_experiment_device
+                    exp = app.experiment(body["experiment"], body.get("path"))
+                    return self._json(test_experiment_device(exp, body["id"], float(body.get("seconds", 3)),
+                                                             bool(body.get("simulate"))))
+                if u.path == "/api/preflight":
+                    from ..preflight import run_preflight
+                    return self._json(run_preflight(app.safe_path(body["path"]), golden=body.get("golden", True)))
+                if u.path == "/api/lock":
+                    from ..reproduce import lock
+                    return self._json(lock(app.safe_path(body["path"])))
                 if u.path == "/api/system_fix":
                     from ..syscheck import apply_fix
                     try:

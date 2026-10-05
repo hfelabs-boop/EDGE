@@ -170,7 +170,9 @@ class Player:
                               log=lambda *a: self.logs.append(" ".join(map(str, a))))
             self.summary = Runner(session).run()
         except Exception as e:  # shown in the builder
-            self.error = f"{type(e).__name__}: {e}"
+            from .diagnostics import format_report
+            rep = getattr(e, "report", None)
+            self.error = format_report(rep) if rep else f"{type(e).__name__}: {e}"
             self.logs.append(traceback.format_exc())
 
     def _watchdog(self) -> None:

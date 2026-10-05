@@ -75,6 +75,25 @@ TEMPLATES: dict[str, dict[str, Any]] = {
                                                  {"kind": "deviant", "freq": 1500, "target": "space", "isi": 1.1}],
                                   "children": ["tone"]}],
     },
+    "timing_test": {
+        "name": "timing_test",
+        "description": ("Measure this computer's real timing before a study: tape a light sensor over the "
+                        "top-left corner and put a microphone at the speaker. Each flash and tone sends a marker; "
+                        "the session report shows display latency, audio latency and trigger alignment."),
+        "settings": {"window": {"size": [1280, 720], "fullscreen": True, "background": "#000000", "units": "norm"},
+                     "markers": {"codes": {"flash": 10, "tone": 20}}},
+        "devices": [{"id": "sensors", "type": "sim_inputs",
+                     "options": {"inputs": {"1": "light", "2": "sound"}, "light_inputs": ["light"]}},
+                    {"id": "trig", "type": "ttl_loopback"}],
+        "routines": {
+            "flash": {"duration": 0.5, "components": [
+                {"id": "patch", "type": "shape", "shape": "rect", "pos": [-0.92, 0.88], "size": [0.16, 0.24],
+                 "fill": "white", "duration_frames": 6, "marker": "flash"}]},
+            "beep": {"duration": 0.5, "components": [
+                {"id": "tone", "type": "sound", "sound": 1000, "tone_duration": 0.05, "marker": "tone"}]},
+        },
+        "flow": [{"loop": "repeats", "repeats": 30, "children": ["flash", "beep"]}],
+    },
     "staircase": {
         "name": "contrast_staircase",
         "description": "3-down/1-up staircase on stimulus opacity (~79% correct threshold).",

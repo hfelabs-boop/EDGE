@@ -85,6 +85,7 @@ class Device:
         self._stop = threading.Event()
         self.errors: list[str] = []
         self.n_samples: dict[str, int] = {}
+        self.latest: dict[str, tuple[float, list[Any]]] = {}    # stream -> (arrival time, values) of the last sample
 
     # ----------------------------------------------------------- options
     @classmethod
@@ -170,6 +171,23 @@ class Device:
     def calibrate(self, session: "Session") -> dict[str, Any]:
         raise DeviceError(f"{self.type_name} does not support calibration")
 
+    def live(self) -> dict[str, Any]:
+        """The latest value of every channel, for expressions: ``$devices.<id>.<channel>`` (or
+        ``$devices.<id>.<stream>.<channel>``), plus ``age`` (seconds since that sample)."""
+        from ..components.base import Results
+        out = Results()
+        newest = None
+        for stream, (t, values) in list(self.latest.items()):
+            info = self.streams.get(stream)
+            names = info.channels if info else [f"ch{i + 1}" for i in range(len(values))]
+            per = Results({str(n): v for n, v in zip(names, values)})
+            out[stream] = per
+            for n, v in per.items():
+                out.setdefault(n, v)
+            newest = t if newest is None or t > newest else newest
+        out["age"] = (self.clock() - newest) if newest is not None else None
+        return out
+
     def latest_gaze(self) -> tuple[float, float] | None:
         """Latest valid gaze position in window coordinates (px, origin centre, y up)."""
         return None
@@ -195,6 +213,7 @@ class Device:
         if sync and self.streams[stream].time_base == "device":
             self.arrival_sync.add(device_time, t_arr)
         self.n_samples[stream] = self.n_samples.get(stream, 0) + 1
+        self.latest[stream] = (t_arr, values)
         for sink in self._sinks:
             sink(self.id, stream, device_time, t_arr, values)
 

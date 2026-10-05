@@ -33,8 +33,44 @@ def analyze_session(path: str | Path) -> dict[str, Any]:
     rep["markers"] = {"total": len(events), "time_locked_to_flip": len(flip_events)}
     rep["measures"] = _measures(root)
     rep["display_latency"] = _light_sensor(root, flip_events)
+    rep["audio_latency"] = _sound_sensor(root, events)
     rep["verdict"] = _verdict(rep)
     return rep
+
+
+def _sound_sensor(root: Path, events: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """A microphone at the speaker (an input named 'sound', or listed in a device's audio_inputs) against the
+    markers of sound components: how long after its onset a sound is really heard."""
+    import yaml
+    try:
+        exp = yaml.safe_load((root / "experiment.yaml").read_text(encoding="utf-8")) or {}
+    except OSError:
+        exp = {}
+    sound_ids = {c.get("id") for r in (exp.get("routines") or {}).values() for c in (r or {}).get("components", []) or []
+                 if c.get("type") == "sound"}
+    names_by_dev: dict[str, set[str]] = {}
+    for d in exp.get("devices") or []:
+        o = {**(d.get("options") or {}), **{k: v for k, v in d.items() if k not in ("id", "type", "options")}}
+        names_by_dev[str(d.get("id", d.get("type")))] = {str(x) for x in (o.get("audio_inputs") or ["sound"])}
+    onsets = []
+    for f in sorted((root / "streams").glob("*.inputs.csv")):
+        names = names_by_dev.get(f.name.split(".")[0], {"sound"})
+        with f.open(newline="") as fh:
+            for r in csv.DictReader(fh):
+                if r.get("input") in names and r.get("down") == "1":
+                    onsets.append(float(r["time"]))
+    refs = sorted(float(e["time"]) for e in events if str(e.get("source", "")).split(".")[-1] in sound_ids)
+    if not onsets or not refs:
+        return None
+    lat = []
+    for t in onsets:
+        prev = [x for x in refs if x <= t + 0.001]
+        if prev and t - prev[-1] < 0.5:
+            lat.append(t - prev[-1])
+    if not lat:
+        return {"sound_onsets": len(onsets), "matched": 0}
+    return {"sound_onsets": len(onsets), "matched": len(lat), "mean_ms": round(statistics.fmean(lat) * 1e3, 2),
+            "sd_ms": round(statistics.pstdev(lat) * 1e3, 2), "min_ms": round(min(lat) * 1e3, 2), "max_ms": round(max(lat) * 1e3, 2)}
 
 
 def _light_sensor(root: Path, flip_events: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -162,6 +198,9 @@ def _verdict(rep: dict[str, Any]) -> list[str]:
         notes.append(f"WARNING: the light sensor saw {dl['light_onsets']} changes but none within 150 ms of a screen flip")
     elif dl and dl.get("sd_ms", 0) > 4:
         notes.append(f"WARNING: display latency varies by {dl['sd_ms']} ms (light sensor); stimulus onsets are less precise than the flip times")
+    al = rep.get("audio_latency")
+    if al and al.get("sd_ms", 0) > 5:
+        notes.append(f"WARNING: audio latency varies by {al['sd_ms']} ms (microphone); sound onsets are not precise")
     for c in (rep.get("measures") or {}).get("checks", []):
         notes.append(f"WARNING: {c['message']}")
     for w in rep.get("warnings") or []:
@@ -202,6 +241,11 @@ def format_report(rep: dict[str, Any]) -> str:
             lines.append(f"      triggers {tr['matched']}/{tr['expected']} matched; alignment "
                          f"{tr['latency_mean_ms']} ± {tr['latency_sd_ms']} ms (max |err| {tr['latency_max_abs_ms']} ms)")
     lines += ["", f"Markers: {rep['markers']['total']} ({rep['markers']['time_locked_to_flip']} time-locked to screen flips)", ""]
+    al = rep.get("audio_latency")
+    if al and al.get("matched"):
+        lines += ["Audio latency (microphone)",
+                  f"  {al['mean_ms']} ± {al['sd_ms']} ms after the sound's onset (range {al['min_ms']}–{al['max_ms']}), "
+                  f"{al['matched']} of {al['sound_onsets']} sounds matched", ""]
     dl = rep.get("display_latency")
     if dl and dl.get("matched"):
         lines += ["Display latency (light sensor)",

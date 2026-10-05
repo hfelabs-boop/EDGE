@@ -472,19 +472,46 @@ class SimInputs(InputDevice):
     capabilities = {"input", "stream", "markers"}
     options_schema = {**_COMMON,
                       "light_latency_ms": {"type": "float", "default": 8.0, "help": "simulated display latency"},
-                      "simulate_light": {"type": "bool", "default": False}}
+                      "sound_latency_ms": {"type": "float", "default": 22.0, "help": "simulated audio latency"},
+                      "simulate_light": {"type": "bool", "default": None, "help": "empty = when an input is a light sensor"},
+                      "simulate_sound": {"type": "bool", "default": None, "help": "empty = when an input is named 'sound'"}}
 
     def connect(self) -> None:
         self._init_inputs()
+        names = set(self._names.values())
+        light = set(self.options.get("light_inputs") or ["light"])
+        if self.options.get("simulate_light") is None:
+            self.options["simulate_light"] = bool(names & light)
+        if self.options.get("simulate_sound") is None:
+            self.options["simulate_sound"] = "sound" in names
+        self._rng = __import__("random").Random(1)
         self.connected = True
 
+    def _kind_of(self, marker: Marker) -> str:
+        """Was this marker sent by a sound or by something on the screen?"""
+        cid = str(marker.source or "").split(".")[-1]
+        exp = getattr(getattr(self, "session", None), "exp", None)
+        for r in (exp.routines.values() if exp is not None else []):
+            for c in r.components:
+                if c.id == cid:
+                    return "sound" if c.type == "sound" else "visual"
+        return "visual"
+
     def send_marker(self, marker: Marker) -> None:
-        # a light sensor taped to the screen sees the change that came with a flip-locked marker
-        if self.options.get("simulate_light") and marker.on_flip and marker.time is not None:
+        # a light sensor taped to the screen sees the change that came with a flip-locked marker; a microphone
+        # at the speaker hears a sound a little after its onset
+        if not marker.on_flip or marker.time is None:
+            return
+        kind = self._kind_of(marker)
+        if kind == "visual" and self.options.get("simulate_light"):
             name = (self.options.get("light_inputs") or ["light"])[0]
             t = float(marker.time) + float(self.options["light_latency_ms"]) / 1e3
             self.emit("inputs", t, [name, 1, ""], sync=False)
             self.emit("inputs", t + 0.016, [name, 0, ""], sync=False)
+        elif kind == "sound" and self.options.get("simulate_sound"):
+            t = float(marker.time) + (float(self.options["sound_latency_ms"]) + self._rng.uniform(-1.5, 1.5)) / 1e3
+            self.emit("inputs", t, ["sound", 1, ""], sync=False)
+            self.emit("inputs", t + 0.05, ["sound", 0, ""], sync=False)
 
 
 INPUT_TYPES = ("serial_inputs", "parallel_inputs", "labjack", "voice_key", "sim_inputs")
