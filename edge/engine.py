@@ -491,6 +491,8 @@ class Runner:
             cond = self._eval(cond)
         rows = select_rows(load_conditions(cond, self.exp.base_dir), loop.select)
         repeats = int(self._eval(loop.repeats) if isinstance(loop.repeats, str) else loop.repeats)
+        if repeats < 0 or repeats * max(len(rows), 1) > 10_000_000:
+            raise ValueError(f"loop '{loop.id}': {repeats} repetitions of {len(rows)} rows is not a session anyone can run")
         p_index = _participant_index(s.participant)
         trials = order_trials(rows, loop.order, repeats, s.rng, loop.max_repeat, p_index)
         n_per_rep = max(len(rows), 1)
@@ -543,7 +545,8 @@ def run_experiment(exp: Experiment, backend: str = "pyglet", participant: dict[s
     if backend == "headless-realtime":
         backend, backend_kw["realtime"] = "headless", True
     if backend == "headless" and "size" not in backend_kw:
-        backend_kw["size"] = tuple(exp.settings["window"]["size"])
+        from .model import window_size
+        backend_kw["size"] = window_size(exp.settings)
     be = create_backend(backend, **backend_kw)
     session = Session(exp, be, participant=participant, data_dir=data_dir, virtual_participant=virtual_participant,
                       simulate_devices=bool(simulate_devices), log=log)

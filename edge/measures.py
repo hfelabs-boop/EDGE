@@ -286,18 +286,23 @@ def validate_measures(exp) -> list:
         if not isinstance(m0, dict) or not m0.get("column"):
             issues.append(Issue("error", where, "a measure needs a 'column': the data column it is based on, e.g. resp.rt"))
             continue
+        if not isinstance(m0.get("column"), str):
+            issues.append(Issue("error", where, "the 'column' of a measure must be a column name such as resp.rt"))
+            continue
         m = normalize(m0)
-        where = f"measures.{m['id']}"
+        mid = str(m["id"]) if isinstance(m["id"], (str, int, float)) else repr(m["id"])
+        where = f"measures.{mid}"
         for k in set(m0) - MEASURE_KEYS:
             issues.append(Issue("warning", where, f"unknown measure setting '{k}'", hint=", ".join(sorted(MEASURE_KEYS))))
-        if not str(m["id"]).isidentifier():
+        if not isinstance(m["id"], str) or not m["id"].isidentifier():
             issues.append(Issue("error", where, "a measure id must be a name (letters, digits, _)"))
-        if m["id"] in seen:
+        if mid in seen:
             issues.append(Issue("error", where, "two measures have the same id"))
-        seen.add(m["id"])
-        if m["role"] not in ROLES:
+        seen.add(mid)
+        if not isinstance(m["role"], str) or m["role"] not in ROLES:
             issues.append(Issue("error", where, f"unknown role '{m['role']}'", hint=", ".join(ROLES)))
-        if m["summary"] not in SUMMARIES:
+            m["role"] = "outcome"
+        if not isinstance(m["summary"], str) or m["summary"] not in SUMMARIES:
             issues.append(Issue("error", where, f"unknown summary '{m['summary']}'", hint=", ".join(SUMMARIES)))
         col = str(m["column"])
         comp, _, key = col.rpartition(".")
@@ -319,7 +324,7 @@ def validate_measures(exp) -> list:
         if m.get("trials") is not None:
             t = str(m["trials"])
             _check_expr(t if t.startswith("$") else "$" + t, where + ".trials", issues)
-        if m.get("loop") is not None and m["loop"] not in loop_ids:
+        if m.get("loop") is not None and (not isinstance(m["loop"], str) or m["loop"] not in loop_ids):
             issues.append(Issue("error", where, f"there is no loop called '{m['loop']}'",
                                 hint=", ".join(sorted(loop_ids)) if loop_ids else "this experiment has no loops"))
         e = m.get("expect")

@@ -151,7 +151,8 @@ class Player:
         errors = [i for i in self.exp.validate() if i.level == "error"]
         if errors:
             raise ValueError("; ".join(f"{i.where}: {i.message}" for i in errors[:5]))
-        self.backend = BrowserBackend(size=tuple(self.exp.settings["window"]["size"]))
+        from .model import window_size
+        self.backend = BrowserBackend(size=window_size(self.exp.settings))
         self.data_root = data_root
         self.summary: dict[str, Any] | None = None
         self.error: str | None = None

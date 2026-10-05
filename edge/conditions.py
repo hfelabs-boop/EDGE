@@ -31,6 +31,20 @@ def _coerce(v: str) -> Any:
         return s
 
 
+def _row(r: Any, i: int) -> dict[str, Any]:
+    if not isinstance(r, dict):
+        raise ValueError(f"conditions row {i + 1} must be a mapping of column -> value, e.g. {{word: red, ans: f}}, not {r!r:.60}")
+    return {str(k): v for k, v in r.items()}
+
+
+def _rows_from(data: Any, path: Path) -> list:
+    if isinstance(data, dict) and isinstance(data.get("rows"), list):
+        data = data["rows"]
+    if not isinstance(data, list):
+        raise ValueError(f"{path.name} must contain a list of rows (one mapping per trial)")
+    return data
+
+
 def load_conditions(spec: Any, base_dir: Path) -> list[dict[str, Any]]:
     """Resolve a loop's ``conditions`` field into a list of row dicts.
 
@@ -44,20 +58,27 @@ def load_conditions(spec: Any, base_dir: Path) -> list[dict[str, Any]]:
     if spec is None:
         return [{}]
     if isinstance(spec, list):
-        return [dict(r) for r in spec]
+        return [_row(r, i) for i, r in enumerate(spec)]
     if isinstance(spec, dict):
         if "factorial" in spec:
             factors = spec["factorial"]
-            names = list(factors)
+            if not isinstance(factors, dict) or not all(isinstance(v, (list, tuple)) for v in factors.values()):
+                raise ValueError("factorial must map each factor to a list of its levels, e.g. {colour: [red, blue]}")
+            names = [str(n) for n in factors]
+            factors = {str(k): v for k, v in factors.items()}
             rows = [dict(zip(names, combo)) for combo in itertools.product(*(factors[n] for n in names))]
             extra = spec.get("extra") or {}
+            if not isinstance(extra, dict):
+                raise ValueError("extra must be a mapping of column -> value")
             for r in rows:
-                r.update(extra)
+                r.update({str(k): v for k, v in extra.items()})
             return rows
         if "file" in spec:
             return load_conditions(spec["file"], base_dir)
         raise ValueError(f"unrecognized conditions spec: {spec!r}")
     if isinstance(spec, str):
+        if len(spec) > 1000 or not spec.strip():
+            raise ValueError("conditions must name a file (study.csv) or be a list of rows")
         path = (base_dir / spec)
         suffix = path.suffix.lower()
         if suffix in (".csv", ".tsv", ".txt"):
@@ -72,10 +93,10 @@ def load_conditions(spec: Any, base_dir: Path) -> list[dict[str, Any]]:
                         delim = ","
                 return [{k.strip(): _coerce(v) for k, v in row.items() if k} for row in csv.DictReader(f, delimiter=delim)]
         if suffix == ".json":
-            return list(json.loads(path.read_text(encoding="utf-8")))
+            return load_conditions(_rows_from(json.loads(path.read_text(encoding="utf-8")), path), base_dir)
         if suffix in (".yaml", ".yml"):
             import yaml
-            return list(yaml.safe_load(path.read_text(encoding="utf-8")))
+            return load_conditions(_rows_from(yaml.safe_load(path.read_text(encoding="utf-8")), path), base_dir)
         if suffix == ".xlsx":
             try:
                 import openpyxl  # type: ignore

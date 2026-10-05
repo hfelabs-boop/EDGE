@@ -81,6 +81,48 @@ def deep_merge(base: dict, override: dict) -> dict:
     return out
 
 
+def _bad(where: str, what: str, value: Any) -> "DocumentError":
+    from .storage import DocumentError
+    kind = {dict: "a mapping", list: "a list", str: "text", bool: "true/false", int: "a number", float: "a number",
+            type(None): "empty"}.get(type(value), type(value).__name__)
+    return DocumentError(f"{where}: expected {what}, got {kind}" + ("" if value is None else f" ({_short(value)})"))
+
+
+def _short(v: Any, n: int = 60) -> str:
+    text = repr(v)
+    return text if len(text) <= n else text[:n - 1] + "…"
+
+
+def _condition(value: Any, where: str) -> str | None:
+    """A condition (``if``, ``when``): an expression string; true/false are accepted as they are."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return "$True" if value else "$False"
+    if isinstance(value, (int, float)):
+        return f"${value!r}"
+    if not isinstance(value, str):
+        raise _bad(where, "a condition (an expression such as $score > 3)", value)
+    return value
+
+
+def _mapping(value: Any, where: str, what: str = "a mapping (key: value lines)") -> dict[str, Any]:
+    """``value`` as a dict with string keys, or a DocumentError saying where it is wrong."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise _bad(where, what, value)
+    return {str(k): v for k, v in value.items()}
+
+
+def _listing(value: Any, where: str, what: str = "a list (lines starting with -)") -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    raise _bad(where, what, value)
+
+
 @dataclass
 class ComponentSpec:
     id: str
@@ -99,7 +141,8 @@ class ComponentSpec:
     props: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "ComponentSpec":
+    def from_dict(cls, d: dict[str, Any], where: str = "component") -> "ComponentSpec":
+        d = _mapping(d, where, "a component (a mapping with id and type)")
         props = {k: v for k, v in d.items() if k not in SCHEDULE_KEYS}
         return cls(
             id=str(d.get("id", "")),
@@ -114,7 +157,7 @@ class ComponentSpec:
             end_routine=bool(d.get("end_routine", False)),
             disabled=d.get("disabled", False),
             save=bool(d.get("save", True)),
-            only_if=d.get("if"),
+            only_if=_condition(d.get("if"), f"{where}.if"),
             props=props,
         )
 
@@ -142,13 +185,24 @@ class Routine:
 
     @classmethod
     def from_dict(cls, rid: str, d: dict[str, Any]) -> "Routine":
+        where = f"routines.{rid}"
+        d = _mapping(d, where, "a routine (a mapping with a 'components' list)")
+        comps = _listing(d.get("components"), f"{where}.components", "a list of components")
+        rules = _listing(d.get("rules"), f"{where}.rules", "a list of rules (when/do)")
+        for i, r in enumerate(rules):
+            if not isinstance(r, dict):
+                raise _bad(f"{where}.rules[{i}]", "a rule (a mapping with 'when' and 'do')", r)
+            acts = r.get("do")
+            for a in (acts if isinstance(acts, list) else [acts]) if acts is not None else []:
+                if not isinstance(a, (dict, str)):
+                    raise _bad(f"{where}.rules[{i}].do", "an action such as end_routine or {set: {score: 1}}", a)
         return cls(
             id=rid,
-            components=[ComponentSpec.from_dict(c) for c in d.get("components", [])],
+            components=[ComponentSpec.from_dict(c, f"{where}.components[{i}]") for i, c in enumerate(comps)],
             duration=d.get("duration"),
             end_if=d.get("end_if"),
-            description=d.get("description", ""),
-            rules=list(d.get("rules") or []),
+            description=str(d.get("description") or ""),
+            rules=rules,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -232,9 +286,10 @@ class DeviceSpec:
     calibrate: bool = False     # run calibration at session start
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "DeviceSpec":
+    def from_dict(cls, d: dict[str, Any], where: str = "device") -> "DeviceSpec":
         known = {"id", "type", "options", "required", "record", "markers", "calibrate"}
-        options = dict(d.get("options", {}))
+        d = _mapping(d, where, "a device (a mapping with id and type)")
+        options = _mapping(d.get("options"), f"{where}.options", "the device options (a mapping)")
         options.update({k: v for k, v in d.items() if k not in known})
         return cls(
             id=str(d.get("id", d.get("type", ""))),
@@ -275,15 +330,25 @@ class Experiment:
     # ---------------------------------------------------------------- loading
     @classmethod
     def from_dict(cls, d: dict[str, Any], base_dir: str | Path | None = None) -> "Experiment":
-        routines = {rid: Routine.from_dict(rid, r or {}) for rid, r in (d.get("routines") or {}).items()}
+        """Build an experiment from a document. Anything of the wrong shape raises storage.DocumentError
+        naming the place (``routines.trial.components[2]``), never a bare AttributeError."""
+        d = _mapping(d, "experiment", "a mapping with name, settings, routines and flow")
+        routines = {str(rid): Routine.from_dict(str(rid), r)
+                    for rid, r in _mapping(d.get("routines"), "routines", "a mapping of routine name -> routine").items()}
+        settings = _mapping(d.get("settings"), "settings")
+        for k, v in settings.items():
+            if isinstance(DEFAULT_SETTINGS.get(k), dict) and v is not None and not isinstance(v, dict):
+                raise _bad(f"settings.{k}", "a mapping", v)
+        flow = _listing(d.get("flow"), "flow", "a list of routine names, loops and branches")
+        devices = _listing(d.get("devices"), "devices", "a list of devices")
         exp = cls(
-            name=str(d.get("name", "experiment")),
-            description=d.get("description", ""),
-            settings=deep_merge(DEFAULT_SETTINGS, d.get("settings") or {}),
+            name=str(d.get("name") or "experiment"),
+            description=str(d.get("description") or ""),
+            settings=deep_merge(DEFAULT_SETTINGS, settings),
             routines=routines,
-            flow=[_parse_flow_node(n, i) for i, n in enumerate(d.get("flow") or [])],
-            devices=[DeviceSpec.from_dict(x) for x in (d.get("devices") or [])],
-            variables=dict(d.get("variables") or {}),
+            flow=[_parse_flow_node(n, i, f"flow[{i}]") for i, n in enumerate(flow)],
+            devices=[DeviceSpec.from_dict(x, f"devices[{i}]") for i, x in enumerate(devices)],
+            variables=_mapping(d.get("variables"), "variables", "a mapping of variable name -> value"),
             measures=copy.deepcopy(d.get("measures")),
             base_dir=Path(base_dir) if base_dir else Path.cwd(),
             source=copy.deepcopy(d),
@@ -376,6 +441,9 @@ class Experiment:
                                         hint=f"available: {', '.join(sorted(comp_types))}"))
                     continue
                 issues.extend(cls.validate_spec(c, where, self))
+                if c.type == "code":
+                    issues.append(Issue("info", where, "runs Python code on this computer (not sandboxed)",
+                                        hint="read it first if the experiment came from someone else"))
                 for key in ("start", "duration", "start_if", "stop_if"):
                     v = getattr(c, key)
                     if isinstance(v, str):
@@ -395,8 +463,11 @@ class Experiment:
                 if not isinstance(rule, dict) or "when" not in rule:
                     issues.append(Issue("error", where, "a rule needs 'when' (a condition) and 'do' (actions)"))
                     continue
-                w_ = str(rule["when"])
-                _check_expr(w_ if w_.startswith("$") else "$" + w_, where + ".when", issues)
+                w_ = str(rule["when"]) if rule["when"] is not None else ""
+                if not w_:
+                    issues.append(Issue("error", where, "'when' is empty: give a condition such as $resp.corr == 1"))
+                else:
+                    _check_expr(w_ if w_.startswith("$") else "$" + w_, where + ".when", issues)
                 acts = rule.get("do") or []
                 for a in acts if isinstance(acts, list) else [acts]:
                     keys = set(a) if isinstance(a, dict) else {a}
@@ -406,7 +477,7 @@ class Experiment:
                                             hint=", ".join(sorted(RULE_ACTIONS))))
                     if isinstance(a, dict):
                         for k in ("start", "stop"):
-                            if k in a and a[k] not in ids:
+                            if k in a and (not isinstance(a[k], str) or a[k] not in ids):
                                 issues.append(Issue("error", where, f"{k}: no component '{a[k]}' in this routine"))
             for c in routine.components:
                 if c.start_after and c.start_after not in ids:
@@ -444,9 +515,19 @@ class Experiment:
                     if isinstance(n.conditions, str) and n.conditions.startswith("$"):
                         _check_expr(n.conditions, w + ".conditions", issues)
                     elif isinstance(n.conditions, str):
-                        p = (self.base_dir / n.conditions)
-                        if not p.exists():
-                            issues.append(Issue("error", w, f"conditions file not found: {p}"))
+                        try:
+                            exists = (self.base_dir / n.conditions).exists()
+                        except (OSError, ValueError):
+                            exists = False
+                        if not exists:
+                            issues.append(Issue("error", w, f"conditions file not found: {n.conditions[:200]}"))
+                    elif n.conditions is not None:
+                        from .conditions import load_conditions
+                        try:
+                            load_conditions(n.conditions, self.base_dir)
+                        except Exception as e:
+                            issues.append(Issue("error", w + ".conditions", str(e)))
+                    issues.extend(_check_loop_numbers(n, w))
                     walk(n.children, f"{w}.{n.id}")
                 elif isinstance(n, Branch):
                     _check_expr(n.condition if n.condition.startswith("$") else "$" + n.condition, w + ".if", issues)
@@ -469,6 +550,16 @@ class Experiment:
                 issues.append(Issue("info", f"routines.{rid}", "routine is defined but never used in the flow"))
         from .measures import validate_measures
         issues.extend(validate_measures(self))
+        issues.extend(validate_settings(self.settings))
+        data_dir = str((self.settings.get("data") or {}).get("dir") or "data")
+        try:
+            resolved = (self.base_dir / data_dir).resolve()
+            if self.base_dir.resolve() not in resolved.parents:
+                issues.append(Issue("warning", "settings.data.dir",
+                                    f"data is saved outside the experiment's folder ({resolved})",
+                                    hint="keep 'data' (a folder next to the experiment) unless you mean a shared drive"))
+        except OSError:
+            pass
         try:
             from .pitfalls import pitfall_issues
             issues.extend(pitfall_issues(self))
@@ -530,6 +621,34 @@ class Issue:
         return {"level": self.level, "where": self.where, "message": self.message, "hint": self.hint}
 
 
+MAX_TRIALS = 1_000_000
+
+
+def _check_loop_numbers(n: "Loop", w: str) -> list[Issue]:
+    """repeats / max_repeat / max_steps must be whole numbers (or expressions), and not absurd."""
+    out: list[Issue] = []
+    v = n.repeats
+    if isinstance(v, str):
+        _check_expr(v if v.startswith("$") else "$" + v, f"{w}.repeats", out)
+    elif v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or v != int(v) or v < 0):
+        out.append(Issue("error", f"{w}.repeats", f"repeats must be a whole number (or an expression), not {v!r:.40}"))
+    elif isinstance(v, (int, float)) and v > MAX_TRIALS:
+        out.append(Issue("error", f"{w}.repeats", f"{int(v)} repetitions is more than any session can run"))
+    mr = n.max_repeat
+    if mr is not None:
+        def _limit_ok(x: Any) -> bool:
+            return isinstance(x, int) and not isinstance(x, bool) and x >= 1
+        if not isinstance(mr, dict) or not all(_limit_ok(x) or (isinstance(x, dict) and all(map(_limit_ok, x.values())))
+                                               for x in mr.values()):
+            out.append(Issue("error", f"{w}.max_repeat", "max_repeat maps a column to a limit, e.g. {colour: 2} or "
+                                                          "{kind: {deviant: 1}}"))
+    if n.select is not None and not isinstance(n.select, (str, int, list)):
+        out.append(Issue("error", f"{w}.select", "select must be a number, a list of row numbers or an expression"))
+    if n.staircase is not None and not isinstance(n.staircase, dict):
+        out.append(Issue("error", f"{w}.staircase", "staircase must be a mapping (start, step, down, up, …)"))
+    return out
+
+
 def _check_expr(src: str, where: str, issues: list[Issue]) -> None:
     if not expressions.is_expr(src):
         return
@@ -539,26 +658,60 @@ def _check_expr(src: str, where: str, issues: list[Issue]) -> None:
         issues.append(Issue("error", where, str(e)))
 
 
-def _parse_nodes(nodes: Any, ctx: str) -> list[FlowNode]:
+def window_size(settings: dict[str, Any]) -> tuple[int, int]:
+    """``settings.window.size`` as (width, height), or a DocumentError saying what is wrong with it."""
+    from .storage import DocumentError
+    size = (settings.get("window") or {}).get("size")
+    if (isinstance(size, (list, tuple)) and len(size) == 2
+            and all(isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0 for v in size)):
+        return int(size[0]), int(size[1])
+    raise DocumentError(f"settings.window.size must be [width, height] in pixels, e.g. [1280, 720], not {_short(size)}")
+
+
+def validate_settings(settings: dict[str, Any]) -> list[Issue]:
+    """The settings an experiment can't run with: a window size that isn't two numbers, and so on."""
+    issues: list[Issue] = []
+    win = settings.get("window")
+    if not isinstance(win, dict):
+        return [Issue("error", "settings.window", "must be a mapping (size, fullscreen, background, units …)")]
+    try:
+        window_size(settings)
+    except ValueError as e:
+        issues.append(Issue("error", "settings.window.size", str(e)))
+    units = win.get("units")
+    if units is not None and not isinstance(units, str):
+        issues.append(Issue("error", "settings.window.units", "must be a name such as px, norm, height, deg or cm"))
+    for k in ("fullscreen", "vsync"):
+        if k in win and not isinstance(win[k], bool):
+            issues.append(Issue("error", f"settings.window.{k}", "must be true or false"))
+    data = settings.get("data")
+    if data is not None and not isinstance(data, dict):
+        issues.append(Issue("error", "settings.data", "must be a mapping (dir, …)"))
+    elif data and data.get("dir") is not None and not isinstance(data.get("dir"), str):
+        issues.append(Issue("error", "settings.data.dir", "must be a folder name"))
+    return issues
+
+
+def _parse_nodes(nodes: Any, ctx: str, where: str = "flow") -> list[FlowNode]:
     if nodes is None:
         return []
     if not isinstance(nodes, list):
         nodes = [nodes]
-    return [_parse_flow_node(n, f"{ctx}_{i}") for i, n in enumerate(nodes)]
+    return [_parse_flow_node(n, f"{ctx}_{i}", f"{where}[{i}]") for i, n in enumerate(nodes)]
 
 
-def _parse_flow_node(n: Any, idx: Any) -> FlowNode:
+def _parse_flow_node(n: Any, idx: Any, where: str = "flow") -> FlowNode:
     if isinstance(n, str):
         return RoutineRef(n)
     if not isinstance(n, dict):
-        raise ValueError(f"invalid flow entry: {n!r}")
+        raise _bad(where, "a routine name or a mapping with 'routine', 'loop', 'if' or 'statemachine'", n)
     if "routine" in n:
-        return RoutineRef(str(n["routine"]), if_=n.get("if"))
+        return RoutineRef(str(n["routine"]), if_=_condition(n.get("if"), f"{where}.if"))
     if "loop" in n:
         lid = str(n["loop"])
         return Loop(
             id=lid,
-            children=_parse_nodes(n.get("children"), lid),
+            children=_parse_nodes(n.get("children"), lid, f"{where}.children"),
             conditions=n.get("conditions"),
             order=str(n.get("order", "sequential")),
             repeats=n.get("repeats", 1),
@@ -568,23 +721,37 @@ def _parse_flow_node(n: Any, idx: Any) -> FlowNode:
             select=n.get("select"),
         )
     if "if" in n:
-        return Branch(str(n["if"]), _parse_nodes(n.get("then"), f"if{idx}"), _parse_nodes(n.get("else"), f"else{idx}"))
+        return Branch(_condition(n["if"], f"{where}.if") or "$False", _parse_nodes(n.get("then"), f"if{idx}", f"{where}.then"),
+                      _parse_nodes(n.get("else"), f"else{idx}", f"{where}.else"))
     if "statemachine" in n:
         sid = str(n["statemachine"])
         states = {}
-        for name, sd in (n.get("states") or {}).items():
-            sd = sd or {}
+        for name, sd in _mapping(n.get("states"), f"{where}.states", "a mapping of state name -> state").items():
+            sw = f"{where}.states.{name}"
+            sd = _mapping(sd, sw, "a state (a mapping with 'run' and 'next')")
             run = sd.get("run", [])
             nxt = sd.get("next") or []
             if isinstance(nxt, (str, dict)):
                 nxt = [nxt]
-            trans = [Transition(goto=str(t), condition=None) if isinstance(t, str) else
-                     Transition(goto=str(t.get("goto", "end")), condition=t.get("if"), set=dict(t.get("set") or {}))
-                     for t in nxt]
-            states[str(name)] = State(str(name), _parse_nodes(run, f"{sid}_{name}"), trans,
-                                      sd.get("max_visits"), sd.get("description", ""))
-        return StateMachine(sid, str(n.get("start") or next(iter(states), "")), states, int(n.get("max_steps", 1000)))
-    raise ValueError(f"flow entry must be a routine name or contain 'routine', 'loop', 'if' or 'statemachine': {n!r}")
+            if not isinstance(nxt, list):
+                raise _bad(f"{sw}.next", "a state name or a list of transitions", nxt)
+            trans = []
+            for t in nxt:
+                if isinstance(t, str):
+                    trans.append(Transition(goto=t, condition=None))
+                elif isinstance(t, dict):
+                    trans.append(Transition(goto=str(t.get("goto", "end")), condition=_condition(t.get("if"), f"{sw}.next.if"),
+                                            set=_mapping(t.get("set"), f"{sw}.next.set")))
+                else:
+                    raise _bad(f"{sw}.next", "a state name or a mapping with 'goto' and 'if'", t)
+            states[str(name)] = State(str(name), _parse_nodes(run, f"{sid}_{name}", f"{sw}.run"), trans,
+                                      sd.get("max_visits"), str(sd.get("description") or ""))
+        try:
+            max_steps = int(n.get("max_steps", 1000))
+        except (TypeError, ValueError):
+            raise _bad(f"{where}.max_steps", "a number", n.get("max_steps")) from None
+        return StateMachine(sid, str(n.get("start") or next(iter(states), "")), states, max_steps)
+    raise _bad(where, "a routine name or a mapping with 'routine', 'loop', 'if' or 'statemachine'", n)
 
 
 def _flow_to_dict(n: FlowNode) -> Any:
