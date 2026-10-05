@@ -14,7 +14,9 @@ icon on your desktop.
 | **Windows** | in PowerShell: `irm https://raw.githubusercontent.com/hfelabs-boop/edge/main/install/install_edge.ps1 \| iex` |
 | A downloaded copy of EDGE | run `install/install_edge.sh`, or right-click `install/install_edge.ps1` → *Run with PowerShell* |
 
-Run the installer again to update. More options are in [install/README.md](../install/README.md).
+To update later, run `edge update` (or double-click `update.bat` on Windows / run `sh update.sh` on macOS and Linux
+if you have the EDGE folder): it downloads the newest version and installs it, and never touches your
+experiments or data. More options are in [install/README.md](../install/README.md).
 
 <details><summary>Installing with pip instead (for Python users)</summary>
 

@@ -197,6 +197,20 @@ def cmd_timing_test(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_update(a: argparse.Namespace) -> int:
+    from .updater import current_version, update
+    before = current_version()
+    res = update(check_only=a.check, stash=a.stash, branch=a.branch)
+    if not res.get("ok"):
+        if res.get("reason") and res["reason"] != "local changes":
+            print(f"Update failed: {res['reason']}")
+        return 1
+    if res.get("updated") and not a.check:
+        print(f"\nEDGE is up to date (was {before}). Check this computer with:  edge doctor")
+        print("Restart the builder if it is open, and press Ctrl+Shift+R in the browser.")
+    return 0
+
+
 def cmd_lock(a: argparse.Namespace) -> int:
     from .reproduce import lock
     r = lock(a.experiment, golden=not a.no_golden)
@@ -523,6 +537,12 @@ def main(argv: list[str] | None = None) -> int:
     tt = sub.add_parser("timing-test", help="create a timing test: real display, audio and trigger latency on this computer")
     tt.add_argument("directory", nargs="?", default=".")
     tt.set_defaults(fn=cmd_timing_test)
+
+    up = sub.add_parser("update", help="download and install the newest EDGE")
+    up.add_argument("--check", action="store_true", help="only look whether there is something new")
+    up.add_argument("--stash", action="store_true", help="set your own uncommitted changes aside and put them back after")
+    up.add_argument("--branch", help="git branch to update from (default: the one you are on)")
+    up.set_defaults(fn=cmd_update)
 
     lk = sub.add_parser("lock", help="record versions, file fingerprints and a golden participant after piloting")
     lk.add_argument("experiment")

@@ -14,3 +14,12 @@ experiments folder (`Documents/EDGE Experiments`).
 `edge.spec` is a PyInstaller recipe for a single-folder app without Python. It is **experimental
 and not yet tested on every OS**; the release workflow (`.github/workflows/release.yml`) builds it
 when a version tag is pushed.
+
+
+## Updating
+
+`edge update` downloads the newest version. If you installed with these scripts (or `pip`), pip
+fetches it from the repository; if you cloned the repository, it fast-forwards the clone (`git pull`)
+and reinstalls, keeping any changes of your own safe (`--stash`). `update.bat` / `update.sh` in the
+repository's top folder do the same and find the right Python for you. Running the installer again
+also works.

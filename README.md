@@ -182,6 +182,18 @@ edge import stroop.psyexp       # also .ebs3 (E-Prime), .osexp (OpenSesame), jsP
 
 See [docs/IMPORT.md](docs/IMPORT.md) for what converts and how.
 
+## Updating
+
+```bash
+edge update            # download and install the newest version
+edge update --check    # only look whether there is something new
+edge update --stash    # keep your own uncommitted changes (put back afterwards)
+```
+
+From a copy of the repository you can also double-click `update.bat` (Windows) or run `sh update.sh`
+(macOS / Linux). Your experiments and data are never touched. If the update would overwrite changes
+you made to EDGE's own files, it stops and tells you instead.
+
 ## Hardware
 
 | Device | Driver | How |

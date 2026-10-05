@@ -174,6 +174,20 @@ edge timing-test [-h] [directory]
 |---|---|
 | `directory` |  |
 
+## edge update
+
+download and install the newest EDGE
+
+```
+edge update [-h] [--check] [--stash] [--branch BRANCH]
+```
+
+| argument | description |
+|---|---|
+| `--check` | only look whether there is something new |
+| `--stash` | set your own uncommitted changes aside and put them back after |
+| `--branch` | git branch to update from (default: the one you are on) |
+
 ## edge lock
 
 record versions, file fingerprints and a golden participant after piloting
