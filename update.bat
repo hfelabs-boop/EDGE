@@ -23,8 +23,31 @@ if not defined PY (
 )
 
 if exist "%HERE%.git" cd /d "%HERE%"
+%PY% -m edge update --help >nul 2>nul
+if errorlevel 1 goto :old
 %PY% -m edge update %*
 set "CODE=%ERRORLEVEL%"
+goto :end
+
+:old
+rem This EDGE is too old to know "edge update": do the same by hand (git clone only).
+if not exist "%HERE%.git" (
+  echo Update with:  %PY% -m pip install --upgrade "edge-experiments[all] @ git+https://github.com/hfelabs-boop/EDGE.git"
+  set "CODE=1"
+  goto :end
+)
+echo Updating the old way (git pull + reinstall)...
+git pull --ff-only
+if errorlevel 1 (
+  echo Could not update: you have changes of your own (git status), or no connection.
+  set "CODE=1"
+  goto :end
+)
+%PY% -m pip install --quiet --upgrade -e ".[all]" || %PY% -m pip install --quiet --upgrade -e .
+echo Done. From now on you can also use:  edge update
+set "CODE=0"
+
+:end
 echo.
 pause
 exit /b %CODE%

@@ -20,4 +20,15 @@ fi
 
 # update from the clone this script lives in (if it is one), otherwise from wherever that Python's EDGE came from
 if [ -d "$HERE/.git" ] && [ -f "$HERE/pyproject.toml" ]; then cd "$HERE"; fi
-exec "$PY" -m edge update "$@"
+if "$PY" -m edge update --help >/dev/null 2>&1; then exec "$PY" -m edge update "$@"; fi
+
+# This EDGE is too old to know "edge update": do the same by hand (git clone only).
+if [ -d "$HERE/.git" ]; then
+  echo "Updating the old way (git pull + reinstall)..."
+  git pull --ff-only || { echo "Could not update: you have changes of your own (git status), or no connection."; exit 1; }
+  "$PY" -m pip install --quiet --upgrade -e ".[all]" || "$PY" -m pip install --quiet --upgrade -e . || exit 1
+  echo "Done. From now on you can also use:  edge update"
+  exit 0
+fi
+echo "Update with:  $PY -m pip install --upgrade \"edge-experiments[all] @ git+https://github.com/hfelabs-boop/EDGE.git\""
+exit 1
