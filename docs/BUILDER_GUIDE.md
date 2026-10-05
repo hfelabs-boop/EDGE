@@ -82,6 +82,34 @@ storyboard; Expert mode opens the first screen.
   trial list. **▶** plays it at real speed. HTML pages are previewed live.
 * Things listed later are drawn on top. Use ↑/↓ in Properties to change the order.
 
+### Arranging the screen on the preview
+
+The preview is also an editor. **⤢** makes it bigger.
+
+| do this | to |
+|---|---|
+| click a text, picture or shape | select it (Properties shows it) |
+| drag it | move it; it snaps to the centre of the screen and to the centres of other things (hold **Alt** to stop snapping, **Shift** to move in a straight line) |
+| drag a corner square | resize: letter height for text, width × height for pictures and rectangles, the radius for circles. Pictures keep their proportions (hold **Shift** to stretch); shapes stretch freely (hold **Shift** to keep proportions) |
+| drag the round handle above it | rotate (hold **Shift** for 15° steps) |
+| double-click text | type the text right on the screen (**Enter** to finish, **Shift+Enter** for a new line, **Esc** to cancel) |
+| double-click a picture | choose another picture |
+| arrow keys (after clicking the preview) | nudge by one pixel; **Shift** for ten |
+| drag an item from the left onto the preview | add it exactly there |
+| drop picture, sound or .html files from your computer onto the preview | copy them into the experiment folder and add them where you dropped them |
+
+Every change can be undone. If a position or size comes from the trial list, the preview says so
+instead of moving it: change it in the trial list, or set the property back to **Fixed**.
+
+### Pictures, sounds and pages
+
+Adding a **Picture** or **Sound** opens a chooser straight away. It shows what is already in the
+experiment's folder (thumbnails for pictures, ▶ to listen to sounds), with a search box.
+**⬆ Upload from computer**, or dropping files on the chooser, copies them into `images/`, `sounds/`
+or `pages/` next to the experiment (save the experiment first; EDGE asks if needed). For sounds you
+can also pick a beep: low, middle, high, very high or any frequency. In Properties the file shows as
+a card with a thumbnail or ▶; **Change…** reopens the chooser, and you can drop a file on the card.
+
 ## Properties and where values come from
 
 Every property has help text, and **📖 docs** opens its reference. Next to most properties a small
@@ -95,6 +123,19 @@ menu says where the value comes from:
 | **Formula ($…)** | an expression, computed while the experiment runs. Type `$` to see what's available here: columns, results of other things (`$resp.corr`), trial-list statistics (`$practice.accuracy`), workflow state, variables. |
 
 Typing a value that starts with `$` also makes it a formula.
+
+Fixed values have editors that fit them:
+
+* **colours**: a row of swatches, a colour picker for any other colour, or type a name or `#hex`;
+  fills and outlines have a "none" swatch.
+* **numbers with a range** (opacity, rotation, letter height, line thickness, volume …): a slider
+  that updates the preview as you drag, next to a box for exact values.
+* **position** and **size**: X/Y or W/H boxes. Drag the letter (X, Y, W, H) sideways to change the
+  value (Shift for bigger steps). The small 3×3 grid puts the item in a standard place (centre,
+  top left, bottom right …). A picture's size keeps its proportions while 🔒 is on, and has
+  **Original size**, ½×, ¾×, 1½× and 2× buttons.
+* **shape** and other short choices: buttons with icons (▭ ◯ ⬭ ⬠ ╱ ✚).
+* **font**: a menu of common fonts, each shown in its own typeface, and **Other…** for any font.
 
 The **When** section has *starts at*, *lasts*, and *ends the screen* (move on when this gets a
 response). Under **More options**: *starts after* another thing, *starts when* / *stops when* a
@@ -210,5 +251,6 @@ Gazepoint, each with a one-click *add*. Simulated devices (`sim_eyetracker`, `si
 | Ctrl/⌘ S | save |
 | Ctrl/⌘ Z, Ctrl/⌘ Shift Z | undo, redo |
 | Delete / Backspace | remove the selected thing |
+| arrow keys, Shift + arrow keys | nudge the selected thing on the preview by 1 or 10 pixels |
 | ? | help |
 | Esc | close dialogs; stop Try it |

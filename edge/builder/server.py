@@ -22,6 +22,11 @@ from urllib.parse import parse_qs, urlparse
 from .. import storage
 
 STATIC = Path(__file__).parent / "static"
+ASSET_KINDS = {
+    "image": (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".tif", ".tiff"),
+    "audio": (".wav", ".mp3", ".ogg", ".flac", ".aiff", ".aif", ".m4a"),
+    "html": (".html", ".htm"),
+}
 
 
 def schema() -> dict[str, Any]:
@@ -78,6 +83,23 @@ class BuilderApp:
                 if "routines" in d or "flow" in d:
                     out.append({"path": str(p.relative_to(self.root)), "name": d.get("name", p.stem)})
         return out
+
+    def list_assets(self, exp_rel: str | None, kind: str) -> dict[str, Any]:
+        """Pictures, sounds or pages in the experiment's folder, as paths relative to the experiment."""
+        exts = ASSET_KINDS.get(kind)
+        if exts is None:
+            raise ValueError(f"unknown asset kind '{kind}'")
+        base = self.safe_path(exp_rel).parent if exp_rel else self.root
+        out = []
+        for p in sorted(base.rglob("*")):
+            parts = p.relative_to(base).parts
+            if p.suffix.lower() not in exts or not p.is_file() or "data" in parts[:-1] \
+                    or any(x.startswith(".") or x in ("node_modules", "__pycache__") for x in parts):
+                continue
+            out.append({"path": "/".join(parts), "folder": "/".join(parts[:-1]), "size": p.stat().st_size})
+            if len(out) >= 2000:
+                break
+        return {"assets": out, "folder": {"image": "images", "audio": "sounds", "html": "pages"}[kind]}
 
     def load(self, rel: str) -> dict[str, Any]:
         loaded = storage.load_document(self.safe_path(rel))
@@ -279,6 +301,8 @@ def make_handler(app: BuilderApp):
                     return self._json({"root": str(app.root), "files": app.list_files()})
                 if u.path == "/api/experiment":
                     return self._json(app.load(q["path"]))
+                if u.path == "/api/assets":
+                    return self._json(app.list_assets(q.get("exp") or None, q.get("kind", "image")))
                 if u.path == "/api/fingerprint":
                     return self._json({"fingerprint": storage.fingerprint(app.safe_path(q["path"]))})
                 if u.path == "/api/backups":

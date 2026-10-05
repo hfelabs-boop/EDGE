@@ -252,7 +252,7 @@ class Html(Component):
     description = ("An HTML page: consent, questionnaires, demographics, rich instructions or a custom JS task. "
                    "Form fields become data columns; {{variable}} placeholders show trial values.")
     props_schema = {
-        "file": {"type": "file", "default": "", "help": "path to an .html file (relative to the experiment)"},
+        "file": {"type": "file", "default": "", "accept": "html", "help": "path to an .html file (relative to the experiment)"},
         "html": {"type": "text", "default": "", "help": "inline HTML (used when no file is given)"},
         "display": {"type": "choice", "choices": ["auto", "webview", "browser"], "default": "auto",
                     "help": "auto = pywebview window if installed, otherwise the system browser"},

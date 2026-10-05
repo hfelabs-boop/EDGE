@@ -112,3 +112,35 @@ def test_builder_upload_and_import(server):
     assert _get(server + "/api/experiment?path=" + r["path"])["experiment"]["name"] == "Flanker_task"
     with pytest.raises(urllib.error.HTTPError):
         urllib.request.urlopen(urllib.request.Request(server + "/api/upload?path=../evil.txt", data=b"x", method="POST"))
+
+
+def test_builder_lists_pictures_and_sounds_next_to_the_experiment(server, tmp_path):
+    root = tmp_path / "stroop"
+    for rel in ("images/cat.png", "images/sub/dog.JPG", "sounds/beep.wav", "pages/consent.html",
+                "data/012/shot.png", ".hidden/x.png", "notes.txt"):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_bytes(b"x")
+    paths = lambda kind: [a["path"] for a in _get(server + f"/api/assets?kind={kind}&exp=stroop/stroop.yaml")["assets"]]
+    assert paths("image") == ["images/cat.png", "images/sub/dog.JPG"]       # relative to the experiment, no data/ or hidden
+    assert paths("audio") == ["sounds/beep.wav"] and paths("html") == ["pages/consent.html"]
+    res = _get(server + "/api/assets?kind=image&exp=stroop/stroop.yaml")
+    assert res["folder"] == "images" and res["assets"][1]["folder"] == "images/sub"
+    assert [a["path"] for a in _get(server + "/api/assets?kind=image")["assets"]] == ["stroop/images/cat.png", "stroop/images/sub/dog.JPG"]
+    for bad in ("kind=video", "kind=image&exp=../../etc/passwd"):
+        with pytest.raises(urllib.error.HTTPError):
+            _get(server + "/api/assets?" + bad)
+
+
+def test_schema_gives_the_builder_pickers_and_ranges():
+    from edge.builder.server import schema
+    comps = schema()["components"]
+    assert comps["image"]["props"]["image"]["accept"] == "image"
+    assert comps["sound"]["props"]["sound"]["accept"] == "audio" and comps["html"]["props"]["file"]["accept"] == "html"
+    for t, k in (("text", "opacity"), ("text", "ori"), ("text", "height"), ("sound", "volume"), ("shape", "line_width")):
+        p = comps[t]["props"][k]
+        assert p["min"] < p["max"] and p["min"] <= p["default"] <= p["max"], (t, k)
+    for t in ("shape", "fixation"):
+        p = comps[t]["props"]["shape"]
+        assert set(p["choices"]) <= set(p["icons"])
+    assert comps["text"]["props"]["font"]["suggest"] and comps["shape"]["props"]["fill"]["transparent"]
+    assert comps["image"]["props"]["size"]["aspect"]

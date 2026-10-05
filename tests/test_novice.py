@@ -310,9 +310,11 @@ def test_builder_static_files_reference_existing_functions():
     static = Path(__file__).resolve().parent.parent / "edge" / "builder" / "static"
     html = (static / "index.html").read_text()
     assert "simple.js" in html and 'id="btn-try"' in html and 'id="btn-mode"' in html
-    js = (static / "app.js").read_text() + (static / "simple.js").read_text()
+    assert "stage.js" in html and 'id="preview-big"' in html
+    js = (static / "app.js").read_text() + (static / "simple.js").read_text() + (static / "stage.js").read_text()
     for fn in ("function renderStoryboard", "function openWizard", "function tryIt", "function runDialog",
-               "function addTrialColumn", "function drawScreen", "function setMode"):
+               "function addTrialColumn", "function drawScreen", "function setMode", "function stageInput",
+               "function openAssetPicker", "function drawStageOverlay", "function uploadAsset", "function toggleBigPreview"):
         assert fn in js
 
 

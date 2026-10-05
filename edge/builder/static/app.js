@@ -558,7 +558,7 @@ function nodeMenu(e, path) {
 }
 
 /* ---------------- components & routines */
-function addComponent(type, at) {
+function addComponent(type, at, opts = {}) {
   if (!S.routine) newRoutine(false);
   let rid = S.routine;
   if ((type === "survey" || type === "html") && comps(rid).length) {
@@ -589,9 +589,12 @@ function addComponent(type, at) {
     freed.forEach((x) => { delete x.duration; S.autoDur.delete(rid + "." + x.id); });
     if (freed.length) setTimeout(() => toast(`${freed.map((x) => x.id).join(", ")} now stay${freed.length === 1 ? "s" : ""} on screen until the response`, 3500), 50);
   }
+  Object.assign(c, opts.props || {});
   if (at != null) comps(rid).splice(at, 0, c); else comps(rid).push(c);
   S.sel = {kind: "component", routine: rid, id: c.id}; S.view = "screen";
   commit();
+  if ((opts.picker || !opts.props) && (type === "image" || type === "sound") && typeof openAssetPicker === "function")
+    setTimeout(() => openAssetPicker(type === "image" ? "image" : "audio", (v) => { const cc = findComp(rid, c.id); if (cc) setProp(cc, type, v); }), 80);
 }
 
 function selectComp(rid, id, render = true) { S.routine = rid; S.sel = {kind: "component", routine: rid, id}; if (render) renderAll(); }
@@ -632,11 +635,13 @@ function renderProps() {
     el.append(h("div", {class: "desc"}, d?.description || "Unknown component type", " ", helpLink("reference/components", c.type)));
     el.append(field("name", {type: "str", help: "used to refer to it, e.g. $" + c.id + (S.schema.components[c.type]?.category === "response" ? ".rt" : "")}, c.id, (v) => renameComp(c, v), {noExpr: true}));
     const basic = new Set(BASIC_PROPS[c.type] || Object.keys(d?.props || {}));
+    const shapeExtra = {circle: ["radius"], line: ["start", "end", "line_width"], polygon: ["vertices"], cross: ["line_width"]}[c.shape || (c.type === "fixation" ? "cross" : "")];
+    if (shapeExtra && (c.type === "shape" || c.type === "fixation")) { if (c.shape === "circle" || c.shape === "line" || c.shape === "polygon") basic.delete("size"); shapeExtra.forEach((k) => basic.add(k)); }
     const isSet = (k, p) => c[k] !== undefined && c[k] !== null && JSON.stringify(c[k]) !== JSON.stringify(p?.default ?? null);
     const more = [];
     el.append(h("div", {class: "group"}, "What"));
     for (const [k, p] of Object.entries(d?.props || {})) {
-      const f = field(k, p, c[k], (v) => setProp(c, k, v));
+      const f = field(k, p, c[k], (v) => setProp(c, k, v), {comp: c, live: (v) => { if (v === null || v === undefined) delete c[k]; else c[k] = v; renderPreview(); }});
       if (S.mode === "expert" || basic.has(k) || p.required) el.append(f); else more.push([f, isSet(k, p)]);
     }
     el.append(h("div", {class: "group"}, "When"));
@@ -770,6 +775,8 @@ function field(name, p, value, onChange, opts = {}) {
       onclick: () => selectLoopWithColumn(col)}, "⟳ ", h("b", {}, col), ex !== undefined && ex !== "" ? h("span", {}, ` e.g. ${short(showVal("", ex), 24)}`) : null);
   } else if (source === "formula" && type !== "code") {
     input = h("input", {class: "expr", list: "expr-vars", value: value ?? "", placeholder: "$expression (type $ for suggestions)", onchange: commitText});
+  } else if (!opts.readonlyClick && typeof stageInput === "function" && (input = stageInput(name, p, value, onChange, opts))) {
+    // picker, slider, swatches or position editor from stage.js
   } else if (type === "bool") {
     input = h("input", {type: "checkbox", onchange: (e) => onChange(e.target.checked)});
     input.checked = value ?? p.default ?? false;
@@ -1038,7 +1045,11 @@ function renderPreview() {
     } else if (page.html) { frame.dataset.src = ""; frame.srcdoc = page.html; }
     frame.classList.remove("hidden");
   } else frame.classList.add("hidden");
-  drawScreen($("#preview"), S.routine, t);
+  const cv = $("#preview");
+  const want = Math.round((cv.clientWidth || 480) * Math.min(2, window.devicePixelRatio || 1));
+  if (cv.width !== want) cv.width = want;
+  drawScreen(cv, S.routine, t);
+  if (typeof drawStageOverlay === "function") drawStageOverlay(cv);
 }
 
 /* Draw one screen (routine) at time t onto a canvas, with values from its trial list's first row. */
@@ -1051,14 +1062,18 @@ function drawScreen(cv, rid, t, row) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = win.background || "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.translate(cv.width / 2, cv.height / 2); ctx.scale(k, -k);
-  const units = win.units || "px";
+  const winUnits = win.units || "px";
+  let units = winUnits;
   const conv = (v, axis) => units === "norm" ? v * (axis === "x" ? W / 2 : H / 2) : units === "height" ? v * H : v;
   const pos = (p) => Array.isArray(p) ? [conv(+p[0] || 0, "x"), conv(+p[1] || 0, "y")] : [0, 0];
   row = row || sampleRowFor(rid);
+  cv._boxes = []; cv._k = k; cv._W = W; cv._H = H;
+  const box = (c, hw, hh) => cv._boxes.push({id: c.id, type: c.type, x: pos(c.pos || [0, 0])[0], y: pos(c.pos || [0, 0])[1], hw, hh, rot: numOr(c.ori, 0), units});
   for (const c0 of comps(rid)) {
     const c = Object.fromEntries(Object.entries(c0).map(([kk, v]) => [kk, previewVal(v, row)]));
     const st = numOr(c.start, 0), du = numOr(c.duration, Infinity);
     if (c.start_after || c.start_if || t < st || t >= st + du || c.disabled === true) continue;
+    units = c.units && ["px", "norm", "height"].includes(c.units) ? c.units : winUnits;
     const [x, y] = pos(c.pos || [0, 0]);
     ctx.save(); ctx.translate(x, y); ctx.globalAlpha = Math.max(0, Math.min(1, typeof c.opacity === "number" ? c.opacity : 1));
     ctx.rotate(-(numOr(c.ori, 0)) * Math.PI / 180);
@@ -1073,24 +1088,36 @@ function drawScreen(cv, rid, t, row) {
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.direction = c.direction === "rtl" || (c.direction !== "ltr" && /[\u0590-\u05ff\ufb1d-\ufb4f]/.test(String(c.text ?? ""))) ? "rtl" : "ltr";
       const lines = String(c.text ?? "").split("\n"); lines.forEach((ln, i) => ctx.fillText(ln, 0, (i - (lines.length - 1) / 2) * hgt * 1.25));
+      box(c, Math.max(hgt / 2, ...lines.map((ln) => ctx.measureText(ln).width / 2)), lines.length * hgt * 1.25 / 2);
     } else if (c.type === "shape" || c.type === "fixation") {
       const shape = c.shape || (c.type === "fixation" ? "cross" : "rect");
       ctx.fillStyle = color(c.fill, "#fff"); ctx.strokeStyle = color(c.line_color, color(c.fill, "#fff"));
       ctx.lineWidth = numOr(c.line_width, shape === "cross" ? 4 : 2);
       const sz = Array.isArray(c.size) ? [conv(c.size[0], "x"), conv(c.size[1], "y")] : [conv(numOr(c.size, shape === "cross" ? 40 : 100), "y"), conv(numOr(c.size, 100), "y")];
+      const r = conv(numOr(c.radius, 50), "y");
+      if (shape === "circle") box(c, r, r);
+      else if (shape === "polygon" && Array.isArray(c.vertices) && c.vertices.length) { const m = Math.max(10, ...c.vertices.flatMap(([vx, vy]) => [Math.abs(conv(vx, "x")), Math.abs(conv(vy, "y"))])); box(c, m, m); }
+      else if (shape === "cross") box(c, sz[0] / 2, sz[0] / 2);
+      else if (shape !== "line") box(c, sz[0] / 2, sz[1] / 2);
       if (shape === "rect") { ctx.fillRect(-sz[0] / 2, -sz[1] / 2, sz[0], sz[1]); if (c.line_color) ctx.strokeRect(-sz[0] / 2, -sz[1] / 2, sz[0], sz[1]); }
-      else if (shape === "circle") { ctx.beginPath(); ctx.arc(0, 0, conv(numOr(c.radius, 50), "y"), 0, 2 * Math.PI); ctx.fill(); }
-      else if (shape === "ellipse") { ctx.beginPath(); ctx.ellipse(0, 0, sz[0] / 2, sz[1] / 2, 0, 0, 2 * Math.PI); ctx.fill(); }
+      else if (shape === "circle") { ctx.beginPath(); ctx.arc(0, 0, r, 0, 2 * Math.PI); ctx.fill(); if (c.line_color) ctx.stroke(); }
+      else if (shape === "ellipse") { ctx.beginPath(); ctx.ellipse(0, 0, sz[0] / 2, sz[1] / 2, 0, 0, 2 * Math.PI); ctx.fill(); if (c.line_color) ctx.stroke(); }
+      else if (shape === "line") { const a = pos(c.start || [-50, 0]), b = pos(c.end || [50, 0]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+        box(c, Math.max(6, Math.abs(a[0]), Math.abs(b[0])), Math.max(6, Math.abs(a[1]), Math.abs(b[1]))); }
       else if (shape === "cross") { const s = sz[0] / 2; ctx.beginPath(); ctx.moveTo(-s, 0); ctx.lineTo(s, 0); ctx.moveTo(0, -s); ctx.lineTo(0, s); ctx.stroke(); }
       else if (shape === "polygon" && Array.isArray(c.vertices) && c.vertices.length) { ctx.beginPath(); c.vertices.forEach(([vx, vy], i) => i ? ctx.lineTo(conv(vx, "x"), conv(vy, "y")) : ctx.moveTo(conv(vx, "x"), conv(vy, "y"))); ctx.closePath(); ctx.fill(); }
-    } else if (c.type === "image" && typeof c.image === "string" && !isExpr(c.image)) {
+    } else if (c.type === "image" && typeof c.image === "string" && c.image && !isExpr(c.image)) {
       const img = imgCache(c.image);
       if (img.complete && img.naturalWidth) { const sz = Array.isArray(c.size) ? [conv(c.size[0], "x"), conv(c.size[1], "y")] : [img.naturalWidth, img.naturalHeight];
-        ctx.scale(1, -1); ctx.drawImage(img, -sz[0] / 2, -sz[1] / 2, sz[0], sz[1]); }
-      else { ctx.strokeStyle = "#888"; ctx.strokeRect(-100, -75, 200, 150); }
+        ctx.scale(1, -1); ctx.drawImage(img, -sz[0] / 2, -sz[1] / 2, sz[0], sz[1]); box(c, sz[0] / 2, sz[1] / 2); }
+      else { ctx.strokeStyle = "#888"; ctx.strokeRect(-100, -75, 200, 150); box(c, 100, 75); }
+    } else if (c.type === "image") {
+      ctx.strokeStyle = "#888"; ctx.setLineDash([6, 4]); ctx.strokeRect(-100, -75, 200, 150);
+      ctx.scale(1, -1); ctx.fillStyle = "#888"; ctx.font = "22px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(c.image ? "picture from the trial list" : "click “Choose…” to pick a picture", 0, 0); box(c, 100, 75);
     } else if (c.type === "slider") {
       const sz = Array.isArray(c.size) ? c.size : [800, 30]; ctx.fillStyle = color(c.color, "#fff");
-      ctx.fillRect(-sz[0] / 2, -2, sz[0], 4);
+      ctx.fillRect(-sz[0] / 2, -2, sz[0], 4); box(c, sz[0] / 2, Math.max(10, sz[1] / 2));
     } else if (c.type === "survey" && cv.id !== "preview") {
       ctx.scale(1, -1); ctx.fillStyle = "#f7f8fa"; ctx.fillRect(-W * 0.32, -H * 0.4, W * 0.64, H * 0.8);
       ctx.fillStyle = "#2f6fde"; ctx.fillRect(-W * 0.28, -H * 0.33, W * 0.3, H * 0.025);
@@ -1105,8 +1132,8 @@ function drawScreen(cv, rid, t, row) {
       ctx.scale(1, -1); ctx.fillStyle = "#9ab"; ctx.font = `${H * 0.12}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("♪", 0, -H * 0.3);
     } else if (c.type === "gaze_roi" && !c.target) {
       ctx.strokeStyle = "#a070ff"; ctx.setLineDash([8, 6]); ctx.lineWidth = 2;
-      if ((c.shape || "circle") === "circle") { ctx.beginPath(); ctx.arc(0, 0, conv(numOr(c.radius, 100), "y"), 0, 2 * Math.PI); ctx.stroke(); }
-      else { const sz = c.size || [200, 200]; ctx.strokeRect(-sz[0] / 2, -sz[1] / 2, sz[0], sz[1]); }
+      if ((c.shape || "circle") === "circle") { const r = conv(numOr(c.radius, 100), "y"); ctx.beginPath(); ctx.arc(0, 0, r, 0, 2 * Math.PI); ctx.stroke(); box(c, r, r); }
+      else { const sz = Array.isArray(c.size) ? [conv(c.size[0], "x"), conv(c.size[1], "y")] : [200, 200]; ctx.strokeRect(-sz[0] / 2, -sz[1] / 2, sz[0], sz[1]); box(c, sz[0] / 2, sz[1] / 2); }
     }
     ctx.restore();
   }
