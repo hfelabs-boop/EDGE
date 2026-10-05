@@ -156,7 +156,7 @@ async function drawMeasures() {
         ...d.streams.map((s) => h("div", {class: "rec-col"}, h("span", {class: "rec-kind k-gaze"}, s.kind || "stream"),
           h("code", {}, `streams/${d.id}.${s.name}.csv`),
           h("span", {class: "rec-desc"}, `${s.what}: ${s.channels ? `${s.channels.length} channels` : "channels as the device reports them"}, ` +
-            (s.srate ? `${s.srate} samples/s` : "at the device's own rate")),
+            (s.srate ? `${s.srate} samples/s` : s.kind === "Events" ? "one row whenever an input changes" : "at the device's own rate")),
           s.channels ? h("details", {class: "rec-ch"}, h("summary", {}, "channels"), s.channels.join(", ")) : null)),
         d.note ? h("div", {class: "help"}, "↳ " + d.note) : null,
         d.markers ? h("div", {class: "help"}, "↳ receives the event markers") : null);
@@ -260,10 +260,10 @@ function monitorView() {
       "No measures declared, so there's nothing to follow here. Define them in ", h("b", {}, "Measures & data"), " to watch reaction times, accuracy or scores live."));
     el.append(kpis);
     // nobody responding?
-    const asked = hist.filter((t) => Object.keys(t.responses || {}).some((k) => /\.(keys|rt|rating|clicked)$/.test(k)));
+    const asked = hist.filter((t) => Object.keys(t.responses || {}).some((k) => /\.(keys|input|rt|rating|clicked)$/.test(k)));
     let silent = 0;
     for (let i = asked.length - 1; i >= 0; i--) {
-      if (Object.entries(asked[i].responses).some(([k, v]) => /\.(keys|rt|rating|clicked)$/.test(k) && v !== null && v !== "")) break;
+      if (Object.entries(asked[i].responses).some(([k, v]) => /\.(keys|input|rt|rating|clicked)$/.test(k) && v !== null && v !== "")) break;
       silent++;
     }
     if (!end && silent >= 3) warns.unshift(`No response on the last ${silent} trials. Is the participant still responding, and is the keyboard/response box connected?`);

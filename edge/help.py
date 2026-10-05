@@ -235,6 +235,14 @@ def build_component_reference() -> str:
                 req = " **(required)**" if meta.get("required") else ""
                 out.append(f"| `{prop}` | {typ} | {d} | {meta.get('help', '')}{req} |")
             out.append("")
+            if cls.outputs:
+                out += ["Records (data columns `<id>.<name>`):", "", "| column | meaning | units |", "|---|---|---|"]
+                for key, meta in cls.outputs.items():
+                    when = f" (only with `{meta['when']}`)" if meta.get("when") else ""
+                    out.append(f"| `{key}` | {meta['desc'].replace('the {who}', 'its').replace('{who}', 'this component')}{when} | {meta.get('units', '')} |")
+                out.append("")
+            if name == "variable":
+                out += ["Records one column per variable it sets (`<id>.<variable>`).", ""]
     out += ["## Timing properties", "", "Available on every component:", "",
             "| property | description |", "|---|---|"]
     desc = {
@@ -263,6 +271,21 @@ def build_device_reference() -> str:
         if cls.requires:
             out.append(f"Python packages: {', '.join(cls.requires)}")
         out.append("")
+        streams = cls.planned_streams({})
+        note = cls.records_note({})
+        if streams:
+            out.append("Records: " + "; ".join(
+                f"`streams/<id>.{st['name']}.csv`: {st['what']}" +
+                (f" ({len(st['channels'])} channels" if st["channels"] else " (channels as the device reports them") +
+                (f", {st['srate']:g} Hz)" if st["srate"] else ")") for st in streams))
+            out.append("")
+        if note:
+            out += [f"Also: {note}.", ""]
+        if getattr(cls, "describe", None) and "targets" in cls.describe():
+            out += ["| target | system | connection | lines | wiring | recorded as |", "|---|---|---|---|---|---|"]
+            for k, t in cls.describe()["targets"].items():
+                out.append(f"| `{k}` | {t['name']} | {t['connection']} | {t['bits'] or 'LSL'} | {t['wiring']} | {t['recorded_as']} |")
+            out.append("")
         if cls.options_schema:
             out += ["| option | type | default | description |", "|---|---|---|---|"]
             for k, meta in cls.options_schema.items():

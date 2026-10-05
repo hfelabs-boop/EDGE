@@ -25,6 +25,13 @@ Fixation cross.
 | `ori` | float | `0.0` | rotation, degrees clockwise |
 | `units` | choice: (default) / px / norm / height / deg |  | empty = experiment default |
 
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `onset` | Onset of this component (s from routine start, at the screen flip) | s |
+| `duration` | How long this component was active (s) | s |
+
 ### html
 
 An HTML page: consent, questionnaires, demographics, rich instructions or a custom JS task. Form fields become data columns; {{variable}} placeholders show trial values.
@@ -38,6 +45,14 @@ An HTML page: consent, questionnaires, demographics, rich instructions or a cust
 | `continue_button` | choice: auto / yes / no | `auto` | auto: add a Continue button when the page has no form |
 | `continue_label` | str | `Continue` | text of the automatic Continue button |
 
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `submitted` | 1 if the page this component was submitted |  |
+| `rt` | Time (s) from showing the page this component to its submission | s |
+| `onset` | Onset of this component (s from routine start) | s |
+
 ### image
 
 Image file (png, jpg, bmp ...). Size defaults to the image's native size.
@@ -50,6 +65,13 @@ Image file (png, jpg, bmp ...). Size defaults to the image's native size.
 | `opacity` | float | `1.0` | 0 (invisible) to 1 (opaque) |
 | `ori` | float | `0.0` | rotation, degrees clockwise |
 | `units` | choice: (default) / px / norm / height / deg |  | empty = experiment default |
+
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `onset` | Onset of this component (s from routine start, at the screen flip) | s |
+| `duration` | How long this component was active (s) | s |
 
 ### shape
 
@@ -71,6 +93,13 @@ Rectangle, circle, ellipse, polygon, line or cross.
 | `ori` | float | `0.0` | rotation, degrees clockwise |
 | `units` | choice: (default) / px / norm / height / deg |  | empty = experiment default |
 
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `onset` | Onset of this component (s from routine start, at the screen flip) | s |
+| `duration` | How long this component was active (s) | s |
+
 ### sound
 
 Play a sound file or a pure tone (number = frequency in Hz).
@@ -80,6 +109,12 @@ Play a sound file or a pure tone (number = frequency in Hz).
 | `sound` | file | `440` | file path or tone frequency in Hz |
 | `volume` | float | `1.0` | 0 to 1 |
 | `tone_duration` | float | `0.2` | length of a pure tone in seconds (for numeric sounds) |
+
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `onset` | Onset of this component (s from routine start) | s |
 
 ### survey
 
@@ -103,6 +138,14 @@ A questionnaire page: single and multiple choice, Likert items and matrices, sli
 | `display` | choice: auto / webview / browser | `auto` | auto = pywebview window if installed, otherwise the system browser |
 | `fullscreen` | bool | `True` | show the page full screen |
 
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `submitted` | 1 if the survey this component was completed |  |
+| `rt` | Time (s) from showing the survey this component to its submission | s |
+| `onset` | Onset of this component (s from routine start) | s |
+
 ### text
 
 Text: instructions, words, feedback. Supports expressions, e.g. "$f'Score: {score}'".
@@ -122,7 +165,38 @@ Text: instructions, words, feedback. Supports expressions, e.g. "$f'Score: {scor
 | `ori` | float | `0.0` | rotation, degrees clockwise |
 | `units` | choice: (default) / px / norm / height / deg |  | empty = experiment default |
 
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `onset` | Onset of this component (s from routine start, at the screen flip) | s |
+| `duration` | How long this component was active (s) | s |
+
 ## Response
+
+### device_response
+
+A response from an external device: a button box, fMRI buttons, a foot pedal, a voice key, a TTL line (e.g. wait for the scanner trigger). RT is measured from this component's onset flip.
+
+| property | type | default | description |
+|---|---|---|---|
+| `device` | device |  | the input device (empty = the first input device) |
+| `inputs` | list |  | inputs that count, e.g. [left, right] or [voice]; empty = any |
+| `correct` | str |  | the correct input (often a trial-list column: $correct_button) |
+| `store` | choice: first / last / all | `first` | which input to keep when several arrive |
+| `keys` | dict |  | keyboard keys that also count, e.g. {f: left, j: right}: for Try it, piloting without the box, or as a backup |
+| `discard_previous` | bool | `True` | ignore inputs that happened before onset |
+| `response_marker` | str |  | marker sent at the moment of the response |
+
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `input` | Which input of this component responded (button / line name); empty = no response |  |
+| `rt` | Response time (s) of this component, from its onset flip to the input | s |
+| `corr` | Correctness of its response: 1 = correct, 0 = incorrect (only with `correct`) |  |
+| `time` | Master-clock time (s) of its response | s |
+| `device` | Device that produced its response |  |
 
 ### keyboard
 
@@ -137,6 +211,16 @@ Collect key presses with RT measured from the component's onset flip.
 | `record_release` | bool | `False` | also store key-up times (durations) |
 | `response_marker` | str |  | marker sent at the moment of the response, e.g. $f'resp_{resp.keys}' |
 
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `keys` | Key(s) pressed in this component; empty = no response |  |
+| `rt` | Response time (s) of this component, from its onset flip to the response | s |
+| `corr` | Correctness of its response: 1 = correct, 0 = incorrect (only with `correct`) |  |
+| `time` | Master-clock time (s) of its response | s |
+| `duration` | How long the key was held down in this component (s) (only with `record_release`) | s |
+
 ### mouse
 
 Mouse clicks, optionally restricted to clickable components (e.g. images/shapes).
@@ -148,6 +232,18 @@ Mouse clicks, optionally restricted to clickable components (e.g. images/shapes)
 | `correct` | str |  | id of the correct clickable component |
 | `track` | bool | `False` | save the full mouse trajectory |
 | `response_marker` | str |  | marker sent at the moment of the click |
+
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `clicked` | Which target was clicked in this component |  |
+| `rt` | Response time (s) of this component, from its onset flip to the response | s |
+| `corr` | Correctness of its response: 1 = correct, 0 = incorrect (only with `correct`) |  |
+| `x` | Horizontal response position in this component (experiment units) |  |
+| `y` | Vertical response position in this component (experiment units) |  |
+| `button` | Mouse button used in this component |  |
+| `path` | Mouse trajectory in this component (time, x, y) (only with `track`) |  |
 
 ### slider
 
@@ -165,6 +261,14 @@ Rating scale / visual analogue scale answered with the mouse (or arrow keys + re
 | `units` | str |  | empty = experiment default |
 | `require_confirm` | bool | `False` | press return/space to confirm |
 
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `rating` | Rating given on this component |  |
+| `rt` | Response time (s) of this component, from its onset flip to the response | s |
+| `history` | All values selected in this component (time, value) |  |
+
 ## Eyetracking
 
 ### calibrate
@@ -174,6 +278,12 @@ Run the eye tracker's calibration (Tobii: drawn by EDGE; Gazepoint: native windo
 | property | type | default | description |
 |---|---|---|---|
 | `device` | device |  | gaze device id (default: first gaze device) |
+
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `result` | Result of this component |  |
 
 ### gaze_follow
 
@@ -202,6 +312,17 @@ Area of interest. Tracks entries, first-entry latency and dwell time; can end th
 | `dwell` | float |  | seconds of continuous dwell that complete the ROI |
 | `show` | bool | `False` | draw the ROI outline (debug) |
 
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `entered` | 1 if gaze entered this component |  |
+| `first_entry` | Time (s) from onset until gaze first entered this component | s |
+| `dwell_time` | Total gaze dwell time (s) in this component | s |
+| `entries` | Number of gaze entries into this component |  |
+| `completed` | 1 if the dwell criterion of this component was met |  |
+| `rt` | Time (s) from onset until the dwell criterion of this component was met | s |
+
 ## Hardware
 
 ### marker
@@ -214,6 +335,13 @@ Send an event marker at this component's onset (time-locked to the screen flip) 
 | `code` | int |  | TTL code 1-255 (auto-assigned from the label if empty) |
 | `devices` | list |  | device ids; empty = all marker-capable devices |
 | `offset_label` | str |  | optional marker sent when the component stops |
+
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `label` | Marker label sent by this component |  |
+| `code` | TTL code sent by this component |  |
 
 ## Logic
 
@@ -235,6 +363,8 @@ Set experiment variables from expressions, e.g. set: {score: '$score + resp.corr
 |---|---|---|---|
 | `set` | dict |  | variables to assign: {name: value or $expression} **(required)** |
 | `when` | choice: start / end | `start` | start: before the routine is shown (later components see the new value); end: after it |
+
+Records one column per variable it sets (`<id>.<variable>`).
 
 ### wait
 

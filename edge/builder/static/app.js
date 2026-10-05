@@ -17,7 +17,7 @@ const S = {
 const FRIENDLY = {
   text: ["Text", "Show"], image: ["Picture", "Show"], shape: ["Shape", "Show"], fixation: ["Fixation cross", "Show"],
   sound: ["Sound", "Show"], html: ["Web page / form", "Show"], survey: ["Survey / questionnaire", "Show"],
-  keyboard: ["Key press", "Responses"], mouse: ["Mouse click", "Responses"], slider: ["Rating scale", "Responses"],
+  keyboard: ["Key press", "Responses"], device_response: ["Button box / external input", "Responses"], mouse: ["Mouse click", "Responses"], slider: ["Rating scale", "Responses"],
   gaze_roi: ["Where they look", "Eye tracking"], gaze_follow: ["Follow the gaze", "Eye tracking"], calibrate: ["Calibrate eye tracker", "Eye tracking"],
   marker: ["Event marker", "Hardware"], variable: ["Set a variable", "Logic"], code: ["Python code", "Logic"], wait: ["Pause / blank", "Logic"],
 };
@@ -26,6 +26,7 @@ const SIMPLE_HIDDEN = new Set(["code", "marker", "gaze_follow", "calibrate"]);
 const BASIC_PROPS = {
   text: ["text", "color", "height", "pos"], image: ["image", "size", "pos"], shape: ["shape", "size", "fill", "pos"],
   fixation: ["size", "fill"], sound: ["sound", "volume"], html: ["file", "html"], survey: ["questions", "title"], keyboard: ["keys", "correct"],
+  device_response: ["device", "inputs", "correct", "keys"],
   mouse: ["clickable", "correct"], slider: ["ticks", "labels"], gaze_roi: ["target", "pos", "radius", "dwell"],
   gaze_follow: ["target"], calibrate: ["device"], marker: ["label"], variable: ["set", "when"], wait: [],
 };
@@ -520,7 +521,8 @@ function renderNodeInner(n, path) {
 function menu(e, items) {
   document.querySelectorAll(".menu").forEach((m) => m.remove());
   const m = h("div", {class: "menu", style: `left:${e.clientX}px;top:${e.clientY}px`});
-  for (const it of items) m.append(it === "-" ? h("hr") : h("div", {onclick: () => { m.remove(); it[1](); }}, it[0]));
+  for (const it of items) m.append(it === "-" ? h("hr") : it.head ? h("div", {class: "menu-head"}, it.head)
+    : h("div", {onclick: () => { m.remove(); it[1](); }, title: it[2] || ""}, it[0]));
   document.body.append(m);
   // keep long menus inside the window: shift up / left and scroll
   const r = m.getBoundingClientRect();
@@ -572,11 +574,16 @@ function addComponent(type, at, opts = {}) {
     setTimeout(() => toast(`Pages fill the whole screen, so this one got its own screen “${nid}” in the flow`, 4500), 50);
   }
   const d = S.schema.components[type];
-  const base = {keyboard: "resp", mouse: "click", slider: "rating", image: "picture", fixation: "fixation", html: "page"}[type] || type;
+  const base = {keyboard: "resp", device_response: "button", mouse: "click", slider: "rating", image: "picture", fixation: "fixation", html: "page"}[type] || type;
   const c = {id: uniqueId(base, new Set(comps(rid).map((x) => x.id))), type};
   for (const [k, p] of Object.entries(d.props)) if (p.required) c[k] = p.default ?? (p.type === "text" || p.type === "str" ? "" : null);
   if (type === "text") c.text = "Hello";
   if (type === "keyboard") { c.keys = ["space"]; c.end_routine = true; }
+  if (type === "device_response") {
+    c.end_routine = true;
+    const dev = S.exp.devices.find((d) => (S.schema.devices[d.type]?.capabilities || []).includes("input"));
+    if (dev) c.device = dev.id; else setTimeout(() => toast("Add the button box, TTL input or voice key under Devices (+), or give keyboard stand-ins in “keys”", 5000), 60);
+  }
   if (type === "marker") c.label = "event";
   if (type === "survey") { c.title = "A few questions"; c.questions = [{id: "q1", type: "likert", scale: "agree5", required: true, text: "I enjoyed the task."}]; c.end_routine = true; }
   if (type === "html") c.end_routine = true;
@@ -961,6 +968,13 @@ function renderDeviceProps(el, d, index, title) {
   el.append(field("type", {type: "choice", choices: Object.keys(S.schema.devices)}, d.type, (v) => { d.type = v; d.options = {}; commit(); }, {noExpr: true}));
   for (const [k, help] of [["required", "abort if it can't connect"], ["record", "save its data streams"], ["markers", "receive event markers"], ["calibrate", "calibrate at session start"]])
     el.append(field(k, {type: "bool", help}, d[k] ?? (k !== "calibrate"), (v) => { d[k] = v; commit(); }, {noExpr: true}));
+  if (d.type === "trigger_adapter" && info.targets) {
+    const t = info.targets[(d.options || {}).target || "generic"];
+    if (t) el.append(h("div", {class: "desc dev-wiring"}, h("b", {}, t.name), h("div", {}, "Wiring: ", t.wiring), h("div", {}, "Recorded as: ", t.recorded_as),
+      h("div", {}, `${t.bits ? `${t.bits} trigger line${t.bits > 1 ? "s" : ""}, codes 1–${(1 << t.bits) - 1}` : "markers as text labels"}, usually via ${t.connection}.`)));
+  }
+  if ((info.capabilities || []).includes("input")) el.append(h("div", {class: "desc dev-wiring"},
+    "Its inputs can be responses: add “Button box / external input” to a screen. Name the inputs below (e.g. 1: left, 2: right); an input named “light” is a light sensor on the screen, and the session report then measures the real display latency."));
   el.append(h("div", {class: "group"}, "Options"));
   d.options ||= {};
   for (const [k, p] of Object.entries(info.options || {})) el.append(field(k, p, d.options[k], (v) => { if (v === null) delete d.options[k]; else d.options[k] = v; commit(); }, {noExpr: true}));
@@ -1266,18 +1280,35 @@ async function scanHardware() {
   } catch (e) { el.textContent = e.message; }
 }
 
-function addDevice(type, options = {}) {
-  const id = uniqueId(type.split("_")[0], new Set(S.exp.devices.map((d) => d.id)));
+function addDevice(type, options = {}, idHint = null) {
+  const id = uniqueId(idHint || type.split("_")[0], new Set(S.exp.devices.map((d) => d.id)));
   S.exp.devices.push({id, type, options});
   S.sel = {kind: "device", index: S.exp.devices.length - 1}; commit(); toast(`Added ${type} as “${id}”`);
 }
 
+const DEVICE_MENU = [
+  ["Eye tracking", [["tobii", "Tobii Pro eye tracker"], ["gazepoint", "Gazepoint eye tracker"], ["lsl_inlet", "Any eye tracker on LSL", {stream_type: "Gaze"}]]],
+  ["Record EEG / physiology", [["gtec", "g.tec amplifier (Unicorn, g.USBamp …)"], ["lsl_inlet", "Any LSL stream (EEG, physiology, motion …)", {stream_type: "EEG"}], ["mindware", "MindWare BioLab"]]],
+  ["Response boxes & inputs", [["serial_inputs", "Button box / fMRI buttons / scanner trigger (USB)"], ["labjack", "LabJack: buttons, light sensor, TTL in & out"],
+    ["parallel_inputs", "Buttons or TTL on a parallel port"], ["voice_key", "Voice key (microphone)"]]],
+  ["Other marker outputs", [["ttl_serial", "USB trigger box (any)"], ["parallel_port", "Parallel port TTL"], ["lsl_markers", "LSL marker stream (LabRecorder)"]]],
+];
 function deviceMenu(e) {
-  const groups = {};
-  for (const [type, d] of Object.entries(S.schema.devices)) (groups[d.capabilities.includes("gaze") ? "Eye tracking" : d.capabilities.includes("ttl") ? "Triggers / TTL" : type.startsWith("sim") || type === "mouse_gaze" ? "Simulated" : "Streams / physiology"] ||= []).push([type, d]);
   const items = [];
-  for (const [g, list] of Object.entries(groups)) { if (items.length) items.push("-");
-    for (const [type, d] of list) items.push([`${type} — ${g}`, () => addDevice(type)]); }
+  const adapter = S.schema.devices.trigger_adapter;
+  if (adapter) {
+    items.push({head: "Send triggers to …"});
+    for (const [key, t] of Object.entries(adapter.targets || {}))
+      items.push([t.name, () => addDevice("trigger_adapter", {target: key}, key.split("_")[0] + "_trig"), `${t.wiring} Recorded in ${t.recorded_as}.`]);
+  }
+  for (const [g, list] of DEVICE_MENU) {
+    items.push("-", {head: g});
+    for (const [type, label, opts] of list) if (S.schema.devices[type]) items.push([label, () => addDevice(type, opts ? {...opts} : {}), S.schema.devices[type].description]);
+  }
+  if (S.mode === "expert") {
+    items.push("-", {head: "Simulated (testing)"});
+    for (const type of Object.keys(S.schema.devices).filter((t) => t.startsWith("sim") || t === "mouse_gaze" || t === "ttl_loopback")) items.push([type, () => addDevice(type)]);
+  }
   menu(e, items);
 }
 

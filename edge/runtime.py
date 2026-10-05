@@ -116,13 +116,21 @@ class Session:
     def _connect_devices(self) -> None:
         sim_map = {"tobii": "sim_eyetracker", "gazepoint": "sim_eyetracker", "gtec": "sim_eeg",
                    "mindware": "sim_physio", "lsl_inlet": "sim_eeg", "ttl_serial": "ttl_loopback",
-                   "parallel_port": "ttl_loopback", "lsl_markers": "ttl_loopback"}
+                   "parallel_port": "ttl_loopback", "lsl_markers": "ttl_loopback", "trigger_adapter": "ttl_loopback",
+                   "serial_inputs": "sim_inputs", "parallel_inputs": "sim_inputs", "labjack": "sim_inputs",
+                   "voice_key": "sim_inputs"}
+        from .devices import device_registry
+        registry = device_registry()
         for spec in self.exp.devices:
             dtype = spec.type
             options = {**spec.options, **self.device_overrides.get(spec.id, {})}
             if self.simulate_devices and dtype in sim_map:
                 self.log(f"[edge] {spec.id}: simulating '{dtype}' with '{sim_map[dtype]}'")
-                dtype, options = sim_map[dtype], {}
+                keep = registry[sim_map[dtype]].options_schema   # e.g. input names, code maps
+                dtype, options = sim_map[dtype], {k: v for k, v in options.items() if k in keep}
+                if dtype == "sim_inputs" and any(n in (options.get("light_inputs") or ["light"])
+                                                 for n in (options.get("inputs") or {}).values()):
+                    options["simulate_light"] = True
             try:
                 dev = create_device(dtype, spec.id, options, clock=self.clock)
                 dev.session = self
@@ -192,6 +200,13 @@ class Session:
     def poll_devices(self) -> None:
         for dev in self.devices.values():
             dev.poll()
+
+    def poll_inputs(self) -> list:
+        """Response events from external input devices (button boxes, TTL lines, voice key)."""
+        out = []
+        for dev in self.devices.values():
+            out.extend(dev.drain())
+        return out
 
     def check_abort(self) -> None:
         if self.backend.check_escape():

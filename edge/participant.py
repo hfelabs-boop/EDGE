@@ -49,6 +49,27 @@ class VirtualParticipant:
                 wrong = [k for k in keys if str(k) != str(correct)] or keys
                 key = self.rng.choice(wrong) if correct is not None else self.rng.choice(keys)
             backend.press(key, at)
+        elif kind == "device_response":
+            from .backends.base import InputEvent
+            dev = component.session.devices.get(component.device_id) if component.device_id else None
+            names = list(allowed) if allowed else \
+                [str(v) for v in ((dev.options.get("inputs") or {}).values() if dev is not None else [])] or \
+                list(component.keymap.values()) or ["1"]
+            if correct is not None and str(correct) in names and self.rng.random() < self.accuracy:
+                name = str(correct)
+            else:
+                wrong = [n for n in names if n != str(correct)] or names
+                name = self.rng.choice(wrong)
+            if component.device_id:
+                backend.schedule(InputEvent("device", name, at, True, device=component.device_id))
+                backend.schedule(InputEvent("device", name, at + 0.12, False, device=component.device_id))
+                if dev is not None and "inputs" in dev.streams:      # the simulated box records it too
+                    dev.emit("inputs", at, [name, 1, ""], sync=False)
+                    dev.emit("inputs", at + 0.12, [name, 0, ""], sync=False)
+            else:
+                key = next((k for k, v in component.keymap.items() if v == name), None)
+                if key:
+                    backend.press(key, at)
         elif kind == "mouse":
             targets = [c for c in (component.p.get("clickable") or [])
                        if c in component.run.components and hasattr(component.run.components[c], "stim")]

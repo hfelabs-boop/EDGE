@@ -51,6 +51,6 @@ def create_device(type_name: str, id: str, options: dict | None = None, **kw) ->
 
 
 # Built-in drivers (each module registers itself; none import optional deps at module level).
-from . import simulated, lsl, gazepoint, tobii, gtec, mindware, triggers  # noqa: E402,F401
+from . import simulated, lsl, gazepoint, tobii, gtec, mindware, triggers, inputs, adapters  # noqa: E402,F401
 
 __all__ = ["Device", "DeviceError", "StreamInfo", "register", "device_registry", "create_device"]

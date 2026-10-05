@@ -30,8 +30,43 @@ def analyze_session(path: str | Path) -> dict[str, Any]:
         rep["streams"][f.stem] = _analyze_stream(f, meta, events)
     rep["markers"] = {"total": len(events), "time_locked_to_flip": len(flip_events)}
     rep["measures"] = _measures(root)
+    rep["display_latency"] = _light_sensor(root, flip_events)
     rep["verdict"] = _verdict(rep)
     return rep
+
+
+def _light_sensor(root: Path, flip_events: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """A light sensor on the screen (an input named in the device's light_inputs) against the flips: how long
+    after EDGE's flip time the screen really changed (display latency) and how much that varies."""
+    import yaml
+    try:
+        exp = yaml.safe_load((root / "experiment.yaml").read_text(encoding="utf-8")) or {}
+    except OSError:
+        exp = {}
+    light: dict[str, set[str]] = {}
+    for d in exp.get("devices") or []:
+        o = {**(d.get("options") or {}), **{k: v for k, v in d.items() if k not in ("id", "type", "options")}}
+        light[str(d.get("id", d.get("type")))] = {str(x) for x in (o.get("light_inputs") or ["light"])}
+    onsets: list[float] = []
+    for f in sorted((root / "streams").glob("*.inputs.csv")):
+        names = light.get(f.name.split(".")[0], {"light"})
+        with f.open(newline="") as fh:
+            for r in csv.DictReader(fh):
+                if r.get("input") in names and r.get("down") == "1":
+                    onsets.append(float(r["time"]))
+    if not onsets or not flip_events:
+        return None
+    flips = sorted(float(e["time"]) for e in flip_events)
+    lat = []
+    for t in onsets:
+        prev = [f for f in flips if f <= t + 0.001]
+        if prev and t - prev[-1] < 0.15:
+            lat.append(t - prev[-1])
+    if not lat:
+        return {"light_onsets": len(onsets), "matched": 0}
+    return {"light_onsets": len(onsets), "matched": len(lat), "flips": len(flips),
+            "mean_ms": round(statistics.fmean(lat) * 1e3, 2), "sd_ms": round(statistics.pstdev(lat) * 1e3, 2),
+            "min_ms": round(min(lat) * 1e3, 2), "max_ms": round(max(lat) * 1e3, 2)}
 
 
 def _measures(root: Path) -> dict[str, Any] | None:
@@ -120,6 +155,11 @@ def _verdict(rep: dict[str, Any]) -> list[str]:
         allowed = 5.0 + (s.get("sample_period_ms") or 0.0)
         if tr and tr.get("latency_max_abs_ms") is not None and tr["latency_max_abs_ms"] > allowed:
             notes.append(f"WARNING: {name}: marker alignment error up to {tr['latency_max_abs_ms']} ms")
+    dl = rep.get("display_latency")
+    if dl and dl.get("matched") == 0:
+        notes.append(f"WARNING: the light sensor saw {dl['light_onsets']} changes but none within 150 ms of a screen flip")
+    elif dl and dl.get("sd_ms", 0) > 4:
+        notes.append(f"WARNING: display latency varies by {dl['sd_ms']} ms (light sensor); stimulus onsets are less precise than the flip times")
     for c in (rep.get("measures") or {}).get("checks", []):
         notes.append(f"WARNING: {c['message']}")
     if rep.get("errors"):
@@ -152,6 +192,11 @@ def format_report(rep: dict[str, Any]) -> str:
             lines.append(f"      triggers {tr['matched']}/{tr['expected']} matched; alignment "
                          f"{tr['latency_mean_ms']} ± {tr['latency_sd_ms']} ms (max |err| {tr['latency_max_abs_ms']} ms)")
     lines += ["", f"Markers: {rep['markers']['total']} ({rep['markers']['time_locked_to_flip']} time-locked to screen flips)", ""]
+    dl = rep.get("display_latency")
+    if dl and dl.get("matched"):
+        lines += ["Display latency (light sensor)",
+                  f"  {dl['mean_ms']} ± {dl['sd_ms']} ms after the flip (range {dl['min_ms']}–{dl['max_ms']}), "
+                  f"{dl['matched']} of {dl['light_onsets']} light changes matched", ""]
     ms = rep.get("measures")
     if ms and ms.get("values"):
         lines.append("Measures")

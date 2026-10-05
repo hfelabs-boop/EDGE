@@ -168,7 +168,7 @@ def suggest_measures(exp, plan: dict[str, Any] | None = None) -> list[dict[str, 
     where = _routine_loops(exp)          # routine -> enclosing loops, outermost first
     has_loops = any(where.values())
     responders = [c for c in plan["components"] if c["save"] and not c["disabled"]
-                  and c["type"] in ("keyboard", "mouse", "slider", "gaze_roi")
+                  and c["type"] in ("keyboard", "device_response", "mouse", "slider", "gaze_roi")
                   and (where.get(c["routine"]) or not has_loops)]      # "press space to continue" isn't a measure
     for c in responders:
         keys = {o["key"]: o for o in c["outputs"]}

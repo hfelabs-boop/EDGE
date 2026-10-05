@@ -16,6 +16,8 @@ display = ["pyglet>=2.0"]
 lsl = ["pylsl>=1.16"]
 tobii = ["tobii-research>=1.10"]
 serial = ["pyserial>=3.5"]
+inputs = ["pyserial>=3.5", "sounddevice>=0.4", "numpy>=1.24"]   # response boxes, voice key
+labjack = ["LabJackPython>=2.0"]
 gtec = []  # pygds ships with g.NEEDaccess; install it from g.tec's SDK
 mcp = ["mcp>=1.2"]
 html = ["pywebview>=4"]

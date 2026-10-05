@@ -194,7 +194,9 @@ See [docs/IMPORT.md](docs/IMPORT.md) for what converts and how.
 | LabRecorder & friends | `lsl_markers` | every marker becomes an LSL marker at its flip time |
 | TTL trigger boxes | `ttl_serial` | Brain Products TriggerBox, Cedrus StimTracker/c-pod, Arduino/Teensy |
 | Parallel port | `parallel_port` | inpoutx64 (Windows), pyparallel (Linux) |
-| No hardware yet | `sim_eyetracker`, `sim_eeg`, `sim_physio`, `mouse_gaze`, `ttl_loopback` | realistic simulators on drifting clocks |
+| EEG / fNIRS / physiology triggers | `trigger_adapter` | pick the system (BioSemi, Brain Products, EGI, ANT Neuro, NIRx, Artinis, Bitbrain, BIOPAC, ADInstruments, MRI): connection, lines, pulse width and wiring are set for you |
+| Response boxes & inputs | `serial_inputs`, `parallel_inputs`, `labjack`, `voice_key` | Cedrus pads and light sensors, fMRI buttons and scanner triggers, Arduino/BBTK boxes, LabJack, microphone voice key; used with the **Button box / external input** component; a light sensor measures the real display latency |
+| No hardware yet | `sim_eyetracker`, `sim_eeg`, `sim_physio`, `mouse_gaze`, `ttl_loopback`, `sim_inputs` | realistic simulators on drifting clocks; a virtual participant that presses box buttons and speaks |
 
 `edge scan` finds LSL streams, serial ports, Tobii trackers and Gazepoint Control, and suggests a
 config for each. The builder's **Hardware** tab does the same with one-click "add".

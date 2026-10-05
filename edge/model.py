@@ -353,6 +353,11 @@ class Experiment:
             if dev.type not in dev_types:
                 issues.append(Issue("error", f"devices.{dev.id}", f"unknown device type '{dev.type}'",
                                     hint=f"available: {', '.join(sorted(dev_types))}"))
+            else:
+                try:
+                    issues.extend(dev_types[dev.type].validate_options(dev, self))
+                except Exception as e:  # a driver's own check must not break validation
+                    issues.append(Issue("warning", f"devices.{dev.id}", f"could not check the options: {e}"))
 
         for rid, routine in self.routines.items():
             ids: set[str] = set()

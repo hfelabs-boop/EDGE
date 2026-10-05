@@ -104,6 +104,15 @@ class Device:
                  "what": "the samples the device sends, at its own rate"}]
 
     @classmethod
+    def validate_options(cls, spec: Any, exp: Any) -> list:
+        """Device-specific checks of an experiment's device entry (Issues)."""
+        return []
+
+    def drain(self) -> list:
+        """Input events (responses) collected since the last call; only input devices have any."""
+        return []
+
+    @classmethod
     def records_note(cls, options: dict[str, Any] | None = None) -> str:
         """What happens to data that is not saved by EDGE itself (e.g. TTL codes in another recorder)."""
         if "ttl" in cls.capabilities:

@@ -89,6 +89,102 @@ class Keyboard(Component):
             self.out["corr"] = int(str(self.p["correct"]).lower() in ("none", ""))
 
 
+class DeviceResponse(Component):
+    type_name = "device_response"
+    category = "response"
+    description = ("A response from an external device: a button box, fMRI buttons, a foot pedal, a voice key, "
+                   "a TTL line (e.g. wait for the scanner trigger). RT is measured from this component's onset flip.")
+    outputs = {
+        "input": {"desc": "Which input of {who} responded (button / line name); empty = no response", "type": "text",
+                  "kind": "response"},
+        "rt": {"desc": "Response time (s) of {who}, from its onset flip to the input", "units": "s", "type": "number",
+               "kind": "rt"},
+        "corr": {"desc": "Correctness of the {who} response: 1 = correct, 0 = incorrect", "type": "0/1",
+                 "kind": "accuracy", "when": "correct"},
+        "time": {"desc": "Master-clock time (s) of the {who} response", "units": "s", "type": "number", "kind": "timing"},
+        "device": {"desc": "Device that produced the {who} response", "type": "text", "kind": "other"},
+    }
+    props_schema = {
+        "device": {"type": "device", "default": None, "help": "the input device (empty = the first input device)"},
+        "inputs": {"type": "list", "default": None, "help": "inputs that count, e.g. [left, right] or [voice]; empty = any"},
+        "correct": {"type": "str", "default": None, "help": "the correct input (often a trial-list column: $correct_button)"},
+        "store": {"type": "choice", "choices": ["first", "last", "all"], "default": "first",
+                  "help": "which input to keep when several arrive"},
+        "keys": {"type": "dict", "default": {},
+                 "help": "keyboard keys that also count, e.g. {f: left, j: right}: for Try it, piloting without the box, or as a backup"},
+        "discard_previous": {"type": "bool", "default": True, "help": "ignore inputs that happened before onset"},
+        "response_marker": {"type": "str", "default": None, "help": "marker sent at the moment of the response"},
+    }
+
+    def prepare(self) -> None:
+        super().prepare()
+        self.allowed = _key_list(self.p["inputs"])
+        self.keymap = {str(k): str(v) for k, v in (self.p.get("keys") or {}).items()}
+        self.device_id = self.p.get("device") or next(
+            (did for did, d in self.session.devices.items() if "input" in d.capabilities), None)
+        self.hits: list[tuple[str, float]] = []
+        self.out.update(input=None, rt=None, corr=None)
+
+    def on_start(self, t: float) -> None:
+        self.session.notify_response_window(self, self.allowed, self.p["correct"])
+
+    def on_event(self, ev: InputEvent) -> None:
+        if not ev.down:
+            return
+        if ev.kind == "device":
+            if self.device_id and ev.device and ev.device != self.device_id:
+                return
+            name = ev.name
+        elif ev.kind == "key" and ev.name in self.keymap:
+            name = self.keymap[ev.name]
+        else:
+            return
+        if self.allowed is not None and name not in self.allowed:
+            return
+        if self.p["discard_previous"] and self.t_start is not None and ev.time < self.t_start:
+            return
+        self.hits.append((name, ev.time))
+        store = self.p["store"]
+        if store == "first" and len(self.hits) > 1:
+            return
+        if store == "all":
+            self.out["input"] = [n for n, _ in self.hits]
+            self.out["rt"] = [self.rt(tt) for _, tt in self.hits]
+        else:
+            self.out["input"] = name
+            self.out["rt"] = self.rt(ev.time)
+        corr = self.p["correct"]
+        if corr is not None:
+            first = self.out["input"][0] if store == "all" else self.out["input"]
+            self.out["corr"] = int(str(first) == str(corr))
+        self.out["time"] = ev.time
+        self.out["device"] = ev.device or "keyboard"
+        self.finished = True
+        self.send_response_marker(ev.time)
+
+    def on_stop(self, t: float) -> None:
+        if self.out["input"] is None and self.p["correct"] is not None:
+            self.out["corr"] = int(str(self.p["correct"]).lower() in ("none", ""))
+
+    @classmethod
+    def validate_spec(cls, spec, where, exp):
+        from ..devices import device_registry
+        from ..model import Issue
+        issues = super().validate_spec(spec, where, exp)
+        reg = device_registry()
+        inputs = [d for d in exp.devices if "input" in getattr(reg.get(d.type), "capabilities", set())]
+        dev = spec.props.get("device")
+        if dev and isinstance(dev, str) and not dev.startswith("$"):
+            d = next((x for x in exp.devices if x.id == dev), None)
+            if d is not None and d.type in reg and "input" not in reg[d.type].capabilities:
+                issues.append(Issue("error", where, f"'{dev}' ({d.type}) has no inputs to respond with",
+                                    hint=", ".join(x.id for x in inputs) or "add a button box, TTL input or voice key"))
+        elif not inputs and not spec.props.get("keys"):
+            issues.append(Issue("warning", where, "there is no input device (button box, TTL input, voice key) to respond with",
+                                hint="add one under Devices, or give keyboard stand-ins with 'keys'"))
+        return issues
+
+
 class Mouse(Component):
     type_name = "mouse"
     category = "response"
@@ -242,4 +338,4 @@ class Slider(Component):
         return abs(x - self.cx) <= self.w / 2 and abs(y - self.cy) <= self.h
 
 
-COMPONENTS = [Keyboard, Mouse, Slider]
+COMPONENTS = [Keyboard, DeviceResponse, Mouse, Slider]

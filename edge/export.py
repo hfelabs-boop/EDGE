@@ -39,7 +39,7 @@ FORMATS = ("csv", "tsv", "xlsx", "json", "jsonl", "parquet", "mat", "bids")
 
 STRUCT_COLS = {"routine", "routine_index", "routine_start", "routine_duration", "trial_key", "loop", "experiment"}
 
-RESPONSE_SUFFIXES = ("keys", "rt", "corr", "rating", "clicked", "button", "x", "y", "entered", "first_entry",
+RESPONSE_SUFFIXES = ("keys", "input", "rt", "corr", "rating", "clicked", "button", "x", "y", "entered", "first_entry",
                      "dwell_time", "entries", "completed", "result", "history", "path")
 TIMING_SUFFIXES = ("onset", "duration", "start", "time")
 UNITS = {"rt": "s", "onset": "s", "duration": "s", "start": "s", "time": "s", "first_entry": "s", "dwell_time": "s"}

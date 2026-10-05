@@ -75,7 +75,86 @@ lost. `lsl_inlet`: records any stream, matched by `name`, `stream_type` or `sour
 on a timer, so the frame loop never blocks. `code_map` maps labels to codes per device.
 *Status: logic tested via `ttl_loopback`; untested on physical boxes.*
 
-### Simulators — `sim_eyetracker`, `sim_eeg`, `sim_physio`, `mouse_gaze`, `ttl_loopback`
+### Trigger adapters — `trigger_adapter`
+Send the event markers into the system you record with, without working out ports, line counts and
+pulse widths yourself: the same job as the cables sold as "Chronos adapters", using hardware you
+may already have (a USB trigger box, a parallel port, a LabJack, or LSL). Pick `target` and EDGE
+sets the connection, the number of trigger lines and the pulse width, explains the wiring, and
+says where the triggers end up in that system's file:
+
+| `target` | system | usual connection | lines |
+|---|---|---|---|
+| `biosemi` | BioSemi ActiveTwo (Status channel of the .bdf) | parallel (DB25→DB37), or BioSemi's USB trigger interface | 8 |
+| `brainproducts` | Brain Products TriggerBox: actiCHamp, BrainAmp, LiveAmp (S 1 … S255 in .vmrk) | serial | 8 |
+| `brainamp_parallel` | BrainAmp / actiCHamp from a parallel port | parallel | 8 |
+| `egi` | Magstim EGI Net Amps (DIN events in Net Station) | parallel → DIN cable | 8 |
+| `ant_neuro` | ANT Neuro eego | parallel | 8 |
+| `nirx` | NIRx NIRSport2 / NIRScout (set `bits: 4` on old 4-line systems) | parallel, or LSL with Aurora | 8 |
+| `artinis` | Artinis OxySoft (PortaSync, LabStreamer) | LSL | labels |
+| `bitbrain` | Bitbrain | LSL | labels |
+| `biopac` | BIOPAC MP160 / MP36 (STP digital inputs D1 … D8) | parallel | 8 |
+| `adinstruments` | ADInstruments PowerLab / LabChart | one TTL line | 1 |
+| `mri` | MRI scanner log, any single TTL line | serial | 1 |
+| `generic` | any 8-line TTL input | serial | 8 |
+
+```yaml
+devices:
+  - {id: eeg_trig, type: trigger_adapter, options: {target: biosemi, address: "0x378"}}
+  - {id: nirs_trig, type: trigger_adapter, options: {target: nirx, connection: lsl}}
+```
+
+`connection` (`serial`, `parallel`, `labjack`, `lsl`) overrides the usual one; `bits` and
+`pulse_ms` override the preset. **Check** warns when a marker code doesn't fit in the system's
+lines ("codes 300 don't fit in 8 trigger lines; they would arrive as 44"), when a single-line
+system can't tell codes apart, and when a connection is unusual for that system. In the builder,
+**Devices → + → Send triggers to …** lists the systems by name and shows the wiring.
+*Status: the line/pulse logic is tested with a simulated serial port and in dry runs; check the
+first session on your system with `edge report` (trigger alignment per device).*
+
+### Response boxes, TTL inputs, light sensors, voice keys
+Everything a multifunction response box does, with open hardware. Each input becomes an event on
+the master clock, saved to `streams/<device>.inputs.csv` (input, down/up, value) and usable as a
+response by the **Button box / external input** component (`device_response`: `input`, `rt`,
+`corr`, `time`, `device` columns, like a key press).
+
+| driver | hardware |
+|---|---|
+| `serial_inputs` | Cedrus XID response pads (RB-x40, Lumina) and StimTracker light sensors (`protocol: cedrus`); fMRI button boxes and scanner triggers that send characters, e.g. Current Designs fORP, NNL, CRS (`ascii`); Arduino / Teensy / Black Box ToolKit boxes that send one byte with the state of 8 lines (`byte`) |
+| `parallel_inputs` | buttons, a scanner trigger or a light sensor on the 5 status pins of a parallel port |
+| `labjack` | LabJack U3/U6: digital inputs, analog inputs with a threshold (photodiode), and TTL markers out on EIO0-7: one box for responses *and* triggers |
+| `voice_key` | a microphone (sounddevice): the onset and offset of speech, plus a loudness envelope stream |
+
+Name the inputs with `inputs: {1: left, 2: right, 5: trigger}`. An input named `light` (or listed
+in `light_inputs`) is a light sensor taped to the screen: the session report then shows the real
+**display latency** (how long after EDGE's flip time the screen changed, and how much it varies)
+and warns when it varies by more than 4 ms.
+
+```yaml
+devices:
+  - {id: box, type: serial_inputs, options: {port: COM4, protocol: cedrus, inputs: {1: left, 2: right, 8: light}}}
+  - {id: mic, type: voice_key, options: {threshold_db: -30}}
+routines:
+  trial:
+    components:
+      - {id: press, type: device_response, device: box, inputs: [left, right], correct: $side,
+         keys: {f: left, j: right}, duration: 2, end_routine: true}
+  scanner:
+    components:     # wait for the MRI trigger, then start
+      - {id: ttl, type: device_response, device: box, inputs: [trigger], end_routine: true}
+```
+
+`keys` gives keyboard stand-ins: the same component works in **Try it**, when piloting without the
+box, or as a backup. In dry runs the input devices are simulated: the virtual participant presses
+the box's buttons and speaks into the voice key, and a simulated light sensor sees each screen
+change 8 ms after the flip.
+
+**PST Chronos itself** speaks a closed protocol that only E-Prime supports, so EDGE cannot drive
+the Chronos box directly. The drivers above cover the same jobs (buttons, voice key, light sensor,
+TTL in and out); the amplifier ends of the Chronos adapters are covered by `trigger_adapter`.
+*Status: decoding (Cedrus packets, character and line protocols, voice and light thresholds) is
+unit-tested; the drivers are untested on physical boxes.*
+
+### Simulators — `sim_eyetracker`, `sim_eeg`, `sim_physio`, `mouse_gaze`, `ttl_loopback`, `sim_inputs`
 Each simulator runs on its own clock with configurable offset, drift (ppm) and transport jitter,
 so dry runs exercise the full sync pipeline. `mouse_gaze` lets you build gaze-contingent tasks at
 your desk. `--dry-run` swaps every hardware driver for its simulator automatically.

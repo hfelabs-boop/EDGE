@@ -114,7 +114,7 @@ class Monitor:
                 self.values[m["id"]].append(v)
                 this[m["id"]] = v
         factors = {m["id"]: row.get(m["column"]) for m in self.measures if m["role"] == "factor" and m["column"] in row}
-        responses = {k: v for k, v in row.items() if k.rpartition(".")[2] in ("keys", "rt", "corr", "rating", "clicked")
+        responses = {k: v for k, v in row.items() if k.rpartition(".")[2] in ("keys", "input", "rt", "corr", "rating", "clicked")
                      and isinstance(v, (str, int, float, bool, type(None)))}
         self.emit({"type": "trial", "n": self.n_trials, "row": self.n_rows, "routine": row.get("routine"),
                    "loop": row.get("loop") or None, "loop_n": row.get(f"{row.get('loop')}.n") if row.get("loop") else None,

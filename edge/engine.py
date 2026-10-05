@@ -186,7 +186,7 @@ class RoutineRun:
                 c.on_stop(t_flip)
                 self._component_marker(c, "offset", t_flip)
 
-            for ev in backend.poll_events():
+            for ev in backend.poll_events() + session.poll_inputs():
                 for c in comps:
                     if c.status == STARTED and c._started_called:
                         c.on_event(ev)
