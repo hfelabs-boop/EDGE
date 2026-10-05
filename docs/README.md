@@ -13,6 +13,7 @@ are also built into the app: press **?** in the builder, or run `edge help` in a
 | [FAQ & troubleshooting](FAQ.md) | common questions, error messages, glossary |
 | [The usual pain points](PAIN_POINTS.md) | what goes wrong with experiment software (works here not there, updates, errors, timing, hardware) and how EDGE handles it: preflight, lock, error reports, device and timing tests |
 | [Known issues on lab computers](KNOWN_ISSUES.md) | power saving, display drivers, monitors, USB adapters, sound: what EDGE checks and fixes (`edge doctor`) |
+| [Security model](SECURITY.md) | what EDGE trusts and what it doesn't: the local-only builder, the expression sandbox, code components as scripts, messages from other programs, data files |
 
 ## Building experiments
 

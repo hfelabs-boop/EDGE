@@ -806,8 +806,9 @@ def create_server(root: str | Path = ".") -> FastMCP:
         """Write a text file in the workspace (e.g. a conditions CSV or instructions text)."""
         from .storage import atomic_write
         p = ws.path(path, must_exist=False)
-        if p.suffix.lower() in (".py", ".sh", ".bat", ".exe", ".ps1"):
-            raise EditError("refusing to write executable/script files")
+        from .builder.server import BLOCKED_UPLOAD_SUFFIXES
+        if p.suffix.lower() in BLOCKED_UPLOAD_SUFFIXES or p.name.startswith("."):
+            raise EditError("refusing to write executable, script or hidden files")
         atomic_write(p, content)
         return {"ok": True, "path": ws.rel(p), "bytes": len(content.encode())}
 

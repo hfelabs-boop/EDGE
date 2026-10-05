@@ -95,22 +95,37 @@ def key_name(k: str) -> str:
     return KEY_NAMES.get(low, low if len(low) > 1 else k.lower())
 
 
+def inside(out_dir: Path, rel: str) -> Path | None:
+    """``out_dir / rel`` when that stays inside ``out_dir`` (imported files name their own paths)."""
+    if not rel or Path(rel).is_absolute() or (len(rel) > 1 and rel[1] == ":"):
+        return None
+    dest = (out_dir / rel).resolve()
+    root = out_dir.resolve()
+    return dest if root in dest.parents else None
+
+
 def finalize(result: ImportResult, out_dir: Path) -> list[str]:
     """Copy referenced assets next to the converted experiment; returns files that were missing."""
     missing = []
     src_dir = result.source.parent
     for rel in sorted(result.assets):
         src = (src_dir / rel)
+        dest = inside(out_dir, rel)
+        if dest is None:
+            result.note("approx", "files", f"skipped '{rel}': it would land outside the experiment folder")
+            continue
         if not src.is_file():
             missing.append(rel)
             continue
-        dest = out_dir / rel
         if dest.resolve() == src.resolve():
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dest)
     for rel, text in result.generated_files.items():
-        dest = out_dir / rel
+        dest = inside(out_dir, rel)
+        if dest is None:
+            result.note("approx", "files", f"skipped '{rel}': it would land outside the experiment folder")
+            continue
         dest.parent.mkdir(parents=True, exist_ok=True)
         if isinstance(text, bytes):
             dest.write_bytes(text)

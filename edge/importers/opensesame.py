@@ -350,8 +350,12 @@ def _read(path: Path, res: ImportResult) -> tuple[str, dict[str, bytes]]:
             for m in tar.getmembers():
                 if m.name.endswith("script.opensesame"):
                     script = tar.extractfile(m).read().decode("utf-8", errors="replace")  # type: ignore[union-attr]
-                elif m.isfile() and "/pool/" in "/" + m.name and ".." not in m.name:
-                    pool[m.name.split("pool/", 1)[1]] = tar.extractfile(m).read()  # type: ignore[union-attr]
+                elif m.isfile() and "/pool/" in "/" + m.name:
+                    key = m.name.split("pool/", 1)[1].replace("\\", "/").lstrip("/")
+                    parts = [x for x in key.split("/") if x not in ("", ".")]
+                    if not parts or ".." in parts or (len(parts[0]) > 1 and parts[0][1] == ":"):
+                        continue                  # a file that would land outside the experiment folder
+                    pool["/".join(parts)] = tar.extractfile(m).read()  # type: ignore[union-attr]
             return script, pool
     return path.read_text(encoding="utf-8", errors="replace"), pool
 

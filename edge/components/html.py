@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import html as htmllib
 import json
+import secrets
 import queue
 import random
 import subprocess
@@ -48,7 +49,7 @@ BRIDGE = """
     vars: __VARS__,
     submit: function (data) {
       if (done) return; done = true;
-      fetch('/__edge/submit', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      fetch('/__edge/submit', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Edge-Token': '__TOKEN__'},
                                body: JSON.stringify(data || {})})
         .then(function () {
           document.body.innerHTML = '<div style="font:20px system-ui;text-align:center;margin-top:40vh">&#10003;</div>';
@@ -56,7 +57,7 @@ BRIDGE = """
         });
     },
     marker: function (label) {
-      fetch('/__edge/marker', {method: 'POST', body: JSON.stringify({label: String(label)})});
+      fetch('/__edge/marker', {method: 'POST', headers: {'X-Edge-Token': '__TOKEN__'}, body: JSON.stringify({label: String(label)})});
     }
   };
   document.addEventListener('submit', function (e) {
@@ -84,7 +85,8 @@ PAGE_SHELL = ('<!doctype html><html><head><meta charset="utf-8"><meta name="view
 
 
 # ----------------------------------------------------------------------------- page preparation
-def render_page(source: str, variables: dict[str, Any], continue_button: bool | None, label: str) -> str:
+def render_page(source: str, variables: dict[str, Any], continue_button: bool | None, label: str,
+                token: str | None = None) -> str:
     """Insert variables, the JS bridge and (if needed) a continue button."""
     if "<html" not in source.lower() and "<body" not in source.lower():
         source = PAGE_SHELL.replace("__BODY__", source)
@@ -97,7 +99,8 @@ def render_page(source: str, variables: dict[str, Any], continue_button: bool | 
     source = re.sub(r"\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\}\}", lambda m: sub(m.group(1)), source)
     has_form = "<form" in source.lower()
     add_button = continue_button if continue_button is not None else not has_form and "edge.submit" not in source
-    bridge = BRIDGE.replace("__VARS__", json.dumps(_jsonable(variables)))
+    bridge = BRIDGE.replace("__VARS__", json.dumps(_jsonable(variables)).replace("</", "<\\/")) \
+        .replace("__TOKEN__", token or "")
     extra = (CONTINUE.replace("__LABEL__", htmllib.escape(label)) if add_button else "") + bridge
     low = source.lower()
     i = low.rfind("</body>")
@@ -189,7 +192,7 @@ def auto_answer(page: str, rng: random.Random) -> dict[str, Any]:
 
 # ----------------------------------------------------------------------------- local page server
 class PageServer:
-    def __init__(self, page: str, root: Path):
+    def __init__(self, page: str, root: Path, token: str | None = None):
         self.page = page.encode("utf-8")
         self.root = root.resolve()
         self.submissions: queue.Queue[tuple[float | None, dict[str, Any]]] = queue.Queue()
@@ -212,6 +215,9 @@ class PageServer:
 
             def do_POST(self) -> None:  # noqa: N802
                 n = int(self.headers.get("Content-Length") or 0)
+                # only the page EDGE served (which knows the token) may submit answers or markers
+                if n > 20 * 1024 * 1024 or self.headers.get("X-Edge-Token") != server.token:
+                    return self._send(403, b"refused", "text/plain")
                 body = self.rfile.read(n) or b"{}"
                 try:
                     data = json.loads(body)
@@ -231,6 +237,7 @@ class PageServer:
                 self.end_headers()
                 self.wfile.write(body)
 
+        self.token = token or secrets.token_hex(16)
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), H)
         self.url = f"http://127.0.0.1:{self.httpd.server_address[1]}/"
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
@@ -317,7 +324,8 @@ class Html(Component):
         ns = self.run.namespace()
         variables = {k: v for k, v in ns.items() if isinstance(v, (str, int, float, bool)) or v is None}
         cb = {"auto": None, "yes": True, "no": False}[self.p.get("continue_button") or "auto"]
-        self.page = render_page(source, variables, cb, self.p.get("continue_label") or "Continue")
+        self.token = secrets.token_hex(16)        # proves a submission came from the page EDGE served
+        self.page = render_page(source, variables, cb, self.p.get("continue_label") or "Continue", token=self.token)
         self.root = root
         self.server: PageServer | None = None
         self.viewer: subprocess.Popen | None = None
@@ -333,7 +341,7 @@ class Html(Component):
             self._scheduled = (t + delay, answers)
             return
         self._scheduled = None
-        self.server = PageServer(self.page, self.root)
+        self.server = PageServer(self.page, self.root, token=self.token)
         mode = self.p.get("display") or "auto"
         if hasattr(self.backend, "show_url"):      # "Try it" in the builder shows the page in place
             self.backend.show_url(self.server.url)

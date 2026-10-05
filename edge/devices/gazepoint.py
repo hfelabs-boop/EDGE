@@ -94,8 +94,9 @@ class Gazepoint(Device):
 
     # ---------------------------------------------------------------- protocol
     def command(self, verb: str, id: str, **attrs: Any) -> None:
-        a = "".join(f' {k}="{v}"' for k, v in attrs.items())
-        self.sock.sendall(f'<{verb} ID="{id}"{a} />\r\n'.encode())
+        from xml.sax.saxutils import quoteattr
+        a = "".join(f" {k}={quoteattr(str(v))}" for k, v in attrs.items())
+        self.sock.sendall(f'<{verb} ID={quoteattr(str(id))}{a} />\r\n'.encode())
 
     def _read(self) -> None:
         try:
@@ -106,6 +107,8 @@ class Gazepoint(Device):
             raise DeviceError("Gazepoint closed the connection")
         arrival = self.clock()
         self._buf += data.decode(errors="replace")
+        if len(self._buf) > 1_000_000:        # a stream that never closes a tag must not eat memory
+            self._buf = self._buf[-100_000:]
         msgs, self._buf = parse_messages(self._buf)
         for kind, attrs in msgs:
             if kind == "REC":

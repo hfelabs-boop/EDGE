@@ -26,15 +26,82 @@ _ALLOWED_NODES = (
     ast.Gt, ast.GtE, ast.In, ast.NotIn, ast.Is, ast.IsNot,
 )
 
+class _Namespace:
+    """A read-only bag of functions (e.g. ``math``): exposes only what it was given, never a module."""
+
+    def __init__(self, name: str, members: dict[str, Any]):
+        object.__setattr__(self, "_name", name)
+        object.__setattr__(self, "_members", dict(members))
+
+    def __getattr__(self, k: str) -> Any:
+        try:
+            return object.__getattribute__(self, "_members")[k]
+        except KeyError:
+            raise AttributeError(f"{object.__getattribute__(self, '_name')} has no '{k}'") from None
+
+    def __setattr__(self, k: str, v: Any) -> None:
+        raise AttributeError("read-only")
+
+    def __dir__(self) -> list[str]:
+        return sorted(object.__getattribute__(self, "_members"))
+
+    def __repr__(self) -> str:
+        return f"<{object.__getattribute__(self, '_name')}>"
+
+
+def _public_functions(mod: Any, names: list[str]) -> dict[str, Any]:
+    return {n: getattr(mod, n) for n in names if hasattr(mod, n)}
+
+
+_MATH = _Namespace("math", _public_functions(math, [
+    "pi", "e", "tau", "inf", "nan", "sqrt", "exp", "log", "log10", "log2", "pow", "floor", "ceil", "trunc",
+    "fabs", "hypot", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "degrees", "radians", "isfinite",
+    "isnan", "isinf", "isclose", "copysign", "fmod", "gcd", "factorial", "comb", "perm", "prod", "fsum", "dist"]))
+_RANDOM = _Namespace("random", _public_functions(random, [
+    "random", "randint", "randrange", "choice", "choices", "sample", "shuffle", "uniform", "gauss",
+    "normalvariate", "expovariate", "triangular", "betavariate", "lognormvariate"]))
+_STATISTICS = _Namespace("statistics", _public_functions(statistics, [
+    "mean", "fmean", "median", "median_low", "median_high", "mode", "multimode", "stdev", "pstdev",
+    "variance", "pvariance", "quantiles", "harmonic_mean", "geometric_mean"]))
+
 _SAFE_BUILTINS: dict[str, Any] = {
     "abs": abs, "all": all, "any": any, "bool": bool, "dict": dict,
     "enumerate": enumerate, "float": float, "int": int, "len": len, "list": list,
     "max": max, "min": min, "range": range, "round": round, "sorted": sorted,
     "str": str, "sum": sum, "tuple": tuple, "zip": zip, "set": set,
     "True": True, "False": False, "None": None,
-    "math": math, "random": random, "statistics": statistics,
+    "math": _MATH, "random": _RANDOM, "statistics": _STATISTICS,
     "mean": statistics.fmean,
 }
+
+# Attributes that give access to frames, globals, code objects or attribute lookup by string.
+_DENIED_ATTRS = frozenset({
+    "format", "format_map", "mro", "subclasses", "gi_frame", "gi_code", "gi_yieldfrom", "f_globals", "f_locals",
+    "f_builtins", "f_code", "f_back", "cr_frame", "cr_code", "cr_await", "ag_frame", "ag_code", "tb_frame",
+    "tb_next", "co_consts", "co_names", "func_globals", "func_code", "im_func", "im_self", "load_module",
+})
+
+
+def _ga(obj: Any, attr: str) -> Any:
+    """Attribute access inside expressions: never on modules, classes, functions or frames."""
+    import types
+    if attr.startswith("_") or attr in _DENIED_ATTRS:
+        raise ExpressionError(f"'{attr}' is not allowed in expressions")
+    if isinstance(obj, (types.ModuleType, type, types.FunctionType, types.BuiltinFunctionType, types.MethodType,
+                        types.FrameType, types.CodeType, types.GeneratorType, types.CoroutineType)):
+        raise ExpressionError(f"'{attr}' of {type(obj).__name__} is not allowed in expressions")
+    return getattr(obj, attr)
+
+
+class _Guard(ast.NodeTransformer):
+    """Rewrite every ``a.b`` into ``_ga(a, "b")`` so the check above happens at run time too."""
+
+    def visit_Attribute(self, node: ast.Attribute) -> ast.AST:
+        self.generic_visit(node)
+        return ast.copy_location(ast.Call(func=ast.Name(id="_ga", ctx=ast.Load()),
+                                          args=[node.value, ast.Constant(node.attr)], keywords=[]), node)
+
+
 
 
 class ExpressionError(ValueError):
@@ -45,10 +112,12 @@ def _check(tree: ast.AST, source: str) -> None:
     for node in ast.walk(tree):
         if not isinstance(node, _ALLOWED_NODES):
             raise ExpressionError(f"'{type(node).__name__}' is not allowed in expression: {source}")
-        if isinstance(node, ast.Attribute) and node.attr.startswith("_"):
-            raise ExpressionError(f"private attribute access is not allowed: {source}")
-        if isinstance(node, ast.Name) and node.id.startswith("__"):
-            raise ExpressionError(f"dunder names are not allowed: {source}")
+        if isinstance(node, ast.Attribute) and (node.attr.startswith("_") or node.attr in _DENIED_ATTRS):
+            raise ExpressionError(f"'{node.attr}' is not allowed in expressions: {source}")
+        if isinstance(node, ast.Name) and (node.id.startswith("__") or node.id == "_ga"):
+            raise ExpressionError(f"'{node.id}' is not allowed in expressions: {source}")
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and len(node.value) > 100_000:
+            raise ExpressionError(f"a text in the expression is too long: {source[:60]}…")
 
 
 _cache: dict[str, Any] = {}
@@ -62,6 +131,7 @@ def compile_expr(source: str):
         except SyntaxError as e:
             raise ExpressionError(syntax_message(source, e)) from None
         _check(tree, source)
+        tree = ast.fix_missing_locations(_Guard().visit(tree))
         code = compile(tree, "<edge-expr>", "eval")
         _cache[source] = code
     return code
@@ -75,8 +145,9 @@ def evaluate(source: str, namespace: Mapping[str, Any]) -> Any:
     """Evaluate an expression (without the leading ``$``)."""
     code = compile_expr(source)
     try:
-        scope = {**_SAFE_BUILTINS, **namespace, "__builtins__": {}}
-        return eval(code, scope)  # noqa: S307 - AST allow-listed
+        scope = {**_SAFE_BUILTINS, **{k: v for k, v in namespace.items() if not str(k).startswith("_")},
+                 "_ga": _ga, "__builtins__": {}}
+        return eval(code, scope)  # noqa: S307 - AST allow-listed and attribute-guarded
     except ExpressionError:
         raise
     except NameError as e:
@@ -142,7 +213,7 @@ def names_in(source: str) -> set[str]:
                 if isinstance(t, ast.Name):
                     bound.add(t.id)
     return {n.id for n in ast.walk(tree)
-            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id not in bound} - set(_SAFE_BUILTINS)
+            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id not in bound} - set(_SAFE_BUILTINS) - {"_ga"}
 
 
 def resolve(value: Any, namespace: Mapping[str, Any]) -> Any:

@@ -23,6 +23,47 @@ from urllib.parse import parse_qs, urlparse
 from .. import storage
 
 STATIC = Path(__file__).parent / "static"
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]", "::1"}
+# files that must never be written into the experiments folder by the browser (python -m edge would import them)
+BLOCKED_UPLOAD_SUFFIXES = {".py", ".pyw", ".pyc", ".pth", ".sh", ".bat", ".cmd", ".ps1", ".exe", ".dll", ".so",
+                           ".dylib", ".vbs", ".scr", ".desktop", ".command", ".app", ".lnk"}
+ACTIVE_CONTENT = {"text/html", "image/svg+xml", "application/xhtml+xml", "text/xml", "application/xml"}
+MAX_JSON_BODY = 50 * 1024 * 1024
+
+
+class BadRequest(ValueError):
+    """The request is not something the builder can act on (wrong or missing fields)."""
+
+
+def request_allowed(headers: Any, method: str) -> str | None:
+    """Why a request must be refused, or None.
+
+    The builder listens on 127.0.0.1 only, but a web page in the same browser can still send requests to it
+    (CSRF) or, with DNS rebinding, read its answers. So: the Host header must name this computer, and a
+    browser request that changes anything must come from the builder's own page (Origin / Sec-Fetch-Site).
+    Non-browser clients (tests, scripts, the MCP server) send neither header and are allowed."""
+    host = (headers.get("Host") or "").strip().lower()
+    hostname = host.rsplit(":", 1)[0] if host.count(":") == 1 or host.startswith("[") and "]:" in host else host
+    if hostname.startswith("[") and hostname.endswith("]"):
+        hostname = hostname[1:-1]
+    if hostname and hostname not in LOCAL_HOSTS and hostname.rstrip("]") not in LOCAL_HOSTS:
+        return f"refused: requests must come from this computer (Host: {host})"
+    origin = (headers.get("Origin") or "").strip().lower()
+    site = (headers.get("Sec-Fetch-Site") or "").strip().lower()
+    if origin and origin != "null":
+        o_host = origin.split("://", 1)[-1].split("/", 1)[0]
+        o_name, _, o_port = o_host.rpartition(":") if o_host.count(":") == 1 or "]:" in o_host else (o_host, "", "")
+        h_port = host.rpartition(":")[2] if host.count(":") == 1 or "]:" in host else ""
+        if o_name.strip("[]") not in LOCAL_HOSTS or (o_port and h_port and o_port != h_port):
+            return f"refused: cross-site request from {origin}"     # another site, or another local program's page
+    elif origin == "null" and method != "GET":
+        return "refused: request from an opaque origin"
+    if site and site not in ("same-origin", "none") and method != "GET":
+        return f"refused: cross-site request ({site})"
+    if site and site not in ("same-origin", "none", "same-site") and method == "GET" and not origin:
+        return f"refused: cross-site request ({site})"
+    return None
+
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 ASSET_KINDS = {
     "image": (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".tif", ".tiff"),
@@ -65,6 +106,8 @@ class BuilderApp:
         self.play = PlayManager(self.root)
 
     def safe_path(self, rel: str) -> Path:
+        if not isinstance(rel, str) or "\0" in rel or len(rel) > 4096:
+            raise BadRequest("that file name can't be used")
         p = (self.root / rel).resolve()
         if self.root not in p.parents and p != self.root:
             raise PermissionError("path outside the builder directory")
@@ -226,6 +269,8 @@ class BuilderApp:
         exp = Experiment.load(p)
         data_dir = (p.parent / exp.settings["data"].get("dir", "data")).resolve()
         used: list[str] = []
+        if self.root not in data_dir.parents and data_dir != self.root:
+            data_dir = p.parent / "data"            # never look outside the experiments folder
         if data_dir.exists():
             for sj in data_dir.rglob("session.json"):
                 if "dry_runs" in sj.parts:
@@ -257,7 +302,8 @@ class BuilderApp:
         import tempfile
         from ..monitor import parse
         stop_file = Path(tempfile.gettempdir()) / f"edge-stop-{os.getpid()}-{len(self.runs)}-{int(time.time() * 1000)}"
-        env = {**os.environ, "EDGE_MONITOR": "1", "EDGE_STOP_FILE": str(stop_file), "PYTHONUNBUFFERED": "1"}
+        env = {**os.environ, "EDGE_MONITOR": "1", "EDGE_STOP_FILE": str(stop_file), "PYTHONUNBUFFERED": "1",
+               "PYTHONSAFEPATH": "1"}      # a file in the experiments folder must never shadow EDGE's own modules
         proc = subprocess.Popen(cmd, cwd=str(self.root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
         rid = str(proc.pid)
         mon: dict[str, Any] = {"start": None, "last": None, "history": [], "devices": None, "end": None}
@@ -309,25 +355,92 @@ class BuilderApp:
         return {"stopping": True}
 
 
+# what each POST endpoint needs in its JSON body: field -> (type, required)
+POST_FIELDS: dict[str, dict[str, tuple[type | tuple[type, ...], bool]]] = {
+    "/api/import": {"source": (str, True), "out": (str, False)},
+    "/api/export": {"path": (str, True), "formats": (list, False), "layout": (str, False)},
+    "/api/recording": {"experiment": (dict, True), "path": (str, False)},
+    "/api/validate": {"experiment": (dict, True), "path": (str, False)},
+    "/api/dryrun": {"experiment": (dict, True), "path": (str, False), "participant": (dict, False)},
+    "/api/device_test": {"experiment": (dict, True), "path": (str, False), "id": (str, True), "seconds": ((int, float), False)},
+    "/api/preflight": {"path": (str, True)},
+    "/api/lock": {"path": (str, True)},
+    "/api/system_fix": {"id": (str, False)},
+    "/api/run_stop": {"id": (str, False)},
+    "/api/run": {"path": (str, True), "participant": (dict, False), "fullscreen": (bool, False)},
+    "/api/wizard": {"answers": (dict, False), "save_as": (str, False)},
+    "/api/estimate": {"experiment": (dict, True), "path": (str, False)},
+    "/api/play/start": {"experiment": (dict, True), "path": (str, False), "routine": (str, False), "max_trials": ((int, float), False)},
+    "/api/survey/render": {"spec": (dict, False), "path": (str, False)},
+    "/api/survey/instrument": {"id": (str, True)},
+    "/api/to_yaml": {},
+    "/api/from_yaml": {"yaml": (str, True)},
+}
+QUERY_FIELDS = {"/api/experiment": ["path"], "/api/restore": ["path"], "/api/upload": ["path"]}
+
+
+def check_fields(path: str, body: Any, query: dict[str, str]) -> None:
+    """Raise BadRequest when a POST body or query lacks what the endpoint needs, naming the field."""
+    for k in QUERY_FIELDS.get(path, []):
+        if not query.get(k):
+            raise BadRequest(f"the request needs ?{k}=…")
+    spec = POST_FIELDS.get(path)
+    if spec is None:
+        return
+    if not isinstance(body, dict):
+        raise BadRequest("the request body must be a JSON object")
+    for k, (kind, required) in spec.items():
+        v = body.get(k)
+        if v is None:
+            if required:
+                raise BadRequest(f"the request needs '{k}'")
+            continue
+        if kind is dict and not isinstance(v, dict) or kind is list and not isinstance(v, list) \
+                or kind is str and not isinstance(v, str) or kind is bool and not isinstance(v, bool) \
+                or isinstance(kind, tuple) and (isinstance(v, bool) or not isinstance(v, kind)):
+            want = {dict: "an object", list: "a list", str: "text", bool: "true/false"}.get(kind, "a number")
+            raise BadRequest(f"'{k}' must be {want}")
+
+
 def make_handler(app: BuilderApp):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt: str, *args: Any) -> None:  # quiet
             pass
 
-        def _send(self, code: int, body: bytes, ctype: str = "application/json") -> None:
+        def _send(self, code: int, body: bytes, ctype: str = "application/json", sandbox: bool = False) -> None:
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            if sandbox:   # a user's file (page, svg …): shown in its own origin, so it can't call this API
+                self.send_header("Content-Security-Policy", "sandbox allow-scripts allow-forms")
             self.end_headers()
             self.wfile.write(body)
+
+        def _guard(self) -> bool:
+            why = request_allowed(self.headers, self.command)
+            if why:
+                self._json({"error": why}, 403)
+                return False
+            return True
 
         def _json(self, obj: Any, code: int = 200) -> None:
             self._send(code, json.dumps(obj, default=str).encode())
 
         def _body(self) -> Any:
             n = int(self.headers.get("Content-Length") or 0)
-            return json.loads(self.rfile.read(n) or b"{}")
+            if n > MAX_JSON_BODY:
+                raise BadRequest("request too large")
+            try:
+                return json.loads(self.rfile.read(n) or b"{}")
+            except ValueError as e:
+                raise BadRequest(f"the request body is not valid JSON ({e})") from None
+
+        def _body_cached(self) -> Any:
+            if not hasattr(self, "_body_value"):
+                self._body_value = self._body()
+            return self._body_value
 
         def _raw(self, limit: int = 200 * 1024 * 1024) -> bytes:
             n = int(self.headers.get("Content-Length") or 0)
@@ -336,6 +449,8 @@ def make_handler(app: BuilderApp):
             return self.rfile.read(n)
 
         def do_GET(self) -> None:  # noqa: N802
+            if not self._guard():
+                return None
             u = urlparse(self.path)
             q = {k: v[0] for k, v in parse_qs(u.query).items()}
             try:
@@ -418,11 +533,14 @@ def make_handler(app: BuilderApp):
                         self.end_headers()
                         self.wfile.write(data)
                         return None
-                    return self._send(200, p.read_bytes(), mimetypes.guess_type(str(p))[0] or "application/octet-stream")
+                    ctype = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
+                    return self._send(200, p.read_bytes(), ctype, sandbox=ctype in ACTIVE_CONTENT)
                 if u.path == "/api/conditions":
                     from ..conditions import load_conditions
                     base = app.safe_path(q.get("exp", ".")).parent if q.get("exp") else app.root
                     spec: Any = json.loads(q["spec"])
+                    if isinstance(spec, str) and not spec.startswith("$") and app.root not in (base / spec).resolve().parents:
+                        raise PermissionError("a conditions file must be inside the experiments folder")
                     return self._json({"rows": load_conditions(spec, base)[:500]})
                 if u.path.startswith("/api/help/"):
                     from .. import help as hp
@@ -462,18 +580,23 @@ def make_handler(app: BuilderApp):
                     return self._json(app.play.frame(int(q.get("sound", 0))))
                 return self._json({"error": "not found"}, 404)
             except Exception as e:
-                return self._json({"error": str(e), "trace": traceback.format_exc()}, 500)
+                return self._client_error(e)
 
         def do_POST(self) -> None:  # noqa: N802
+            if not self._guard():
+                return None
             u = urlparse(self.path)
             q = {k: v[0] for k, v in parse_qs(u.query).items()}
             try:
+                check_fields(u.path, None if u.path == "/api/upload" else self._body_cached(), q)
                 if u.path == "/api/upload":
                     dest = app.safe_path(q["path"])
+                    if dest.suffix.lower() in BLOCKED_UPLOAD_SUFFIXES or dest.name.startswith("."):
+                        return self._json({"error": f"files of type {dest.suffix or dest.name} can't be uploaded here"}, 400)
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     dest.write_bytes(self._raw())
                     return self._json({"saved": str(dest.relative_to(app.root))})
-                body = self._body()
+                body = self._body_cached()
                 if u.path == "/api/import":
                     from ..importers import ImportError_, import_experiment
                     try:
@@ -564,7 +687,23 @@ def make_handler(app: BuilderApp):
                         return self._json({"error": str(e)}, 400)
                 return self._json({"error": "not found"}, 404)
             except Exception as e:
-                return self._json({"error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()}, 500)
+                return self._client_error(e)
+
+        def _client_error(self, e: Exception) -> None:
+            """A mistake in the request is a 400 that says what is wrong; anything else is a 500 with the trace."""
+            if isinstance(e, BadRequest):
+                return self._json({"error": str(e)}, 400)
+            if isinstance(e, (storage.DocumentError, PermissionError, FileNotFoundError, NotADirectoryError,
+                              IsADirectoryError)):
+                return self._json({"error": str(e)}, 400)
+            if isinstance(e, OSError) and e.errno in (36, 63, 22):     # name too long, invalid argument
+                return self._json({"error": "that file name can't be used"}, 400)
+            if isinstance(e, KeyError):
+                return self._json({"error": f"the request needs {e}"}, 400)
+            if isinstance(e, (TypeError, AttributeError, ValueError)):
+                return self._json({"error": f"the request was not understood: {type(e).__name__}: {e}",
+                                   "trace": traceback.format_exc()}, 400)
+            return self._json({"error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()}, 500)
 
     return Handler
 

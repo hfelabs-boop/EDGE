@@ -37,8 +37,14 @@ from . import register
 from .base import Device, DeviceError
 
 
+RESERVED = {"devices", "vars", "session", "t", "frame", "participant", "experiment", "routine_index", "marker",
+            "end_routine", "routine"}
+
+
 def parse_message(data: bytes, event_key: str = "event") -> dict[str, Any]:
     """A packet -> fields. JSON objects as they are; anything else is an event with that text."""
+    if len(data) > 65536:
+        return {}
     text = data.decode("utf-8", errors="replace").strip()
     try:
         obj = json.loads(text)
@@ -79,7 +85,8 @@ class UDPMessages(Device):
             host, _, port = str(o["send_markers_to"]).rpartition(":")
             self.reply = (host or "127.0.0.1", int(port))
             self.out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._pending: collections.deque[tuple[float, dict[str, Any]]] = collections.deque()
+        self._pending: collections.deque[tuple[float, dict[str, Any]]] = collections.deque(maxlen=10_000)
+        self._allowed = {str(v) for v in (o.get("variables") or [])}
         self.values: dict[str, Any] = {}
         self.add_stream("messages", ["json"], 0.0, "Events", time_base="master")
         self.connected = True
@@ -110,9 +117,12 @@ class UDPMessages(Device):
         """Called by the session every frame (main thread): apply new messages, return their events."""
         out = []
         key = self.options["event_key"]
+        reserved = RESERVED | set((self.session.participant if self.session is not None else {}) or {})
         while self._pending:
             t, msg = self._pending.popleft()
-            fields = {k: v for k, v in msg.items() if k != key}
+            fields = {str(k): v for k, v in msg.items() if k != key and str(k).isidentifier()
+                      and not str(k).startswith("_") and str(k) not in reserved
+                      and (not self._allowed or str(k) in self._allowed)}
             self.values.update(fields)
             if self.options.get("into_variables", True) and self.session is not None:
                 self.session.vars.update(fields)
@@ -141,6 +151,21 @@ class UDPMessages(Device):
     def info(self) -> dict[str, Any]:
         return {"listening": f"{self.options['host']}:{getattr(self, 'port', self.options['port'])}",
                 "markers_to": self.options.get("send_markers_to") or None}
+
+    @classmethod
+    def validate_options(cls, spec, exp) -> list:
+        from ..model import Issue
+        o = cls.resolve_options(spec.options)
+        out = []
+        if str(o.get("host")) in ("0.0.0.0", "", "::"):
+            out.append(Issue("warning", f"devices.{spec.id}",
+                             "listens on every network: any computer on the network can set variables and send events",
+                             hint="use 127.0.0.1 unless the sender is another computer; then use a lab network, and list "
+                                  "the allowed fields under 'variables'"))
+        if not o.get("variables"):
+            out.append(Issue("info", f"devices.{spec.id}", "every field a message contains becomes a variable",
+                             hint="list the fields you expect under 'variables' so Check knows them and nothing else gets in"))
+        return out
 
     @classmethod
     def planned_streams(cls, options=None):

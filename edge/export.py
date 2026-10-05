@@ -489,8 +489,20 @@ def data_dictionary(st: SessionTables, cols: list[str], rows: list[dict[str, Any
 # ============================================================================ writers
 def _cell(v: Any) -> Any:
     if isinstance(v, (list, dict, tuple)):
-        return json.dumps(v, default=str)
-    return "" if v is None else v
+        v = json.dumps(v, default=str)
+    if v is None:
+        return ""
+    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") and not _looks_numeric(v):
+        return "'" + v        # a typed answer like "=HYPERLINK(...)" must not run as a formula in Excel
+    return v
+
+
+def _looks_numeric(s: str) -> bool:
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
 
 
 def write_delimited(path: Path, cols: list[str], rows: list[dict[str, Any]], delimiter: str = ",") -> Path:

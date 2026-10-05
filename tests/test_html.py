@@ -38,9 +38,16 @@ def test_page_server_round_trip(tmp_path):
         assert b"ok" in urllib.request.urlopen(srv.url).read()
         assert urllib.request.urlopen(srv.url + "img.png").read() == b"PNG"
         req = urllib.request.Request(srv.url + "__edge/submit", data=json.dumps({"agree": "yes"}).encode(),
-                                     headers={"Content-Type": "application/json"})
+                                     headers={"Content-Type": "application/json", "X-Edge-Token": srv.token})
         urllib.request.urlopen(req).read()
         assert srv.submissions.get(timeout=1)[1] == {"agree": "yes"}
+        # without the token (another local program guessing the port) nothing gets in
+        forged = urllib.request.Request(srv.url + "__edge/submit", data=b'{"agree": "no"}', headers={"Content-Type": "application/json"})
+        try:
+            urllib.request.urlopen(forged)
+            raise AssertionError("forged submission accepted")
+        except urllib.error.HTTPError as e:
+            assert e.code == 403 and srv.submissions.empty()
         try:
             urllib.request.urlopen(srv.url + "../../etc/passwd")
             raise AssertionError("path escape allowed")
@@ -76,9 +83,11 @@ def test_html_component_real_submission(tmp_path):
             time.sleep(0.01)
         html = urllib.request.urlopen(opened[0]).read().decode()
         assert "window.edge" in html
+        import re
+        token = re.search(r"'X-Edge-Token': '([0-9a-f]+)'", html).group(1)   # the page carries its own token
         time.sleep(0.2)
         req = urllib.request.Request(opened[0] + "__edge/submit", data=b'{"mood": "7"}',
-                                     headers={"Content-Type": "application/json"})
+                                     headers={"Content-Type": "application/json", "X-Edge-Token": token})
         urllib.request.urlopen(req)
 
     t = threading.Thread(target=browser, daemon=True)
