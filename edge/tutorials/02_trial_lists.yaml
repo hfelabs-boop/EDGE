@@ -1,0 +1,59 @@
+id: trial_lists
+order: 2
+title: Trial lists, randomization and counterbalancing
+level: beginner
+minutes: 8
+learn: conditions tables, factorial designs, order types, sequence constraints
+description: >
+  Control which trials participants see and in what order: random vs full random, limits on
+  repetitions in a row, factorial designs and counterbalancing by participant.
+start: tutorial_loops
+steps:
+  - title: Select the loop
+    body: |
+      This experiment already has a Stroop trial inside a loop called **trials**. Click the loop's
+      green header in the **Flow** strip to select it.
+    target: "#flow"
+    check: {selected: loop}
+  - title: Shuffle across repeats
+    body: |
+      Set **repeats** to `3` and **order** to `fullrandom`.
+
+      * `random` shuffles each repeat separately (you see all rows once before any repeats).
+      * `fullrandom` shuffles all repeats together.
+      * `latin_square` and `counterbalance` order the rows by participant number.
+    target: "#props"
+    check: {loop: {order: fullrandom}}
+  - title: Avoid long runs of the same colour
+    body: |
+      Random orders sometimes put the same ink colour five times in a row. Set **max_repeat** to
+
+      `{"ink": 2}`
+
+      and EDGE builds orders where the same ink never appears more than twice in a row.
+      (Per value works too: `{"kind": {"deviant": 1}}` keeps deviants apart.)
+    target: "#props"
+    check: {loop: {has: max_repeat}}
+  - title: Try a factorial design
+    body: |
+      Change **conditions source** to `factorial`. Instead of typing every row, you list each factor
+      with its levels, and EDGE builds every combination. For example
+      `{"word": ["RED", "GREEN"], "ink": ["red", "green"]}` gives 4 rows.
+
+      (For this Stroop you'd also need a `key` column, so switch back to `table` afterwards if you like.)
+    target: "#props"
+    check: {loop: {conditions_kind: factorial}}
+  - title: Conditions from a spreadsheet
+    body: |
+      For real studies, trial lists usually live in a file. Choose **conditions source** = `file`
+      and type a CSV, TSV or XLSX name next to your experiment. The builder shows a preview of the
+      rows.
+
+      Press **Next** when you've had a look.
+  - title: Check what participants will see
+    body: |
+      Run a **dry run**, then open the **Data** tab and tick *include dry runs*. The trial table shows
+      the order this virtual participant got, and the `trials.row` column tells you which row of the
+      list each trial used.
+    target: "#btn-dryrun"
+    check: {dry_run: true}

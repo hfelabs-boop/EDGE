@@ -20,7 +20,9 @@ edge/
   align.py          external-recording alignment via TTL code sequences
   participant.py    virtual participant for dry runs
   scan.py           hardware discovery
-  templates.py      starter experiments
+  templates.py      starter experiments (and hidden starting points for tutorials)
+  help.py           docs topics, search, tutorials, generated reference pages (`edge help`, `edge docs build`)
+  tutorials/        interactive tutorial definitions (YAML; also rendered into docs/TUTORIALS.md)
   builder/          local web server + single-page builder (no build step)
   cli.py            `edge` command
 ```

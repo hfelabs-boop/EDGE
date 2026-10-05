@@ -66,8 +66,9 @@ If `edge` isn't on the PATH Claude Desktop uses, give the full path to the execu
 | Data | `list_sessions`, `analyze_session`, `export_data` |
 | History & files | `undo`, `list_versions`, `restore_version`, `bundle_experiment`, `import_experiment_bundle`, `write_file` |
 | Builder | `open_builder`: starts the visual builder and returns its URL |
+| Help | `search_help`, `read_help`, `list_tutorials`: the documentation and cookbook, so the assistant can look things up instead of guessing |
 
-**Resources:** `edge://docs/experiment-format`, `edge://docs/devices`, `edge://docs/data`,
+**Resources:** `edge://docs/{name}` (any guide), `edge://docs/experiment-format`, `edge://docs/devices`, `edge://docs/data`,
 `edge://templates/{name}`.
 
 **Prompts:** `design_experiment` (paradigm → finished, dry-run-tested experiment),

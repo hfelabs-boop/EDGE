@@ -256,10 +256,10 @@ class Html(Component):
         "html": {"type": "text", "default": "", "help": "inline HTML (used when no file is given)"},
         "display": {"type": "choice", "choices": ["auto", "webview", "browser"], "default": "auto",
                     "help": "auto = pywebview window if installed, otherwise the system browser"},
-        "fullscreen": {"type": "bool", "default": True},
+        "fullscreen": {"type": "bool", "default": True, "help": "show the page full screen"},
         "continue_button": {"type": "choice", "choices": ["auto", "yes", "no"], "default": "auto",
                             "help": "auto: add a Continue button when the page has no form"},
-        "continue_label": {"type": "str", "default": "Continue"},
+        "continue_label": {"type": "str", "default": "Continue", "help": "text of the automatic Continue button"},
     }
 
     def _source(self) -> tuple[str, Path]:

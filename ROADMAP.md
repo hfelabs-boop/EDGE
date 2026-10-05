@@ -19,6 +19,8 @@
   live loop performance
 - HTML pages as experiment steps (forms, questionnaires, JS tasks) with saved answers
 - Importers: PsychoPy, E-Prime (generated script), OpenSesame, jsPsych; builder start screen and import dialog
+- Learning: 8 interactive in-builder tutorials, Help Center with search and contextual links, getting-started,
+  builder guide, tested cookbook, FAQ; component/device/CLI references generated from the code; `edge help`
 
 ## Next: hardware validation (highest priority)
 - [ ] Run every driver against physical devices; photodiode + TTL loopback timing benchmarks
@@ -37,6 +39,10 @@
 ## Import
 - [ ] Inquisit (.iqx), Gorilla, PsyToolkit, Presentation (.sce/.pcl), Psychtoolbox scripts (common patterns)
 - [ ] Validate importers against large public corpora of real experiments (Pavlovia, OSF)
+
+## Learning
+- [ ] Video walkthroughs; translated documentation and tutorials (DE, ES, FR, ZH, JA)
+- [ ] Published documentation site (`mkdocs` from docs/), versioned per release
 
 ## Builder
 - [ ] Multi-select, copy/paste between experiments, drag positions in the stimulus preview

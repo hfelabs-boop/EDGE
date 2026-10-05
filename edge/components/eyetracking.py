@@ -28,11 +28,11 @@ class GazeROI(Component):
     props_schema = {
         "device": {"type": "device", "default": None, "help": "gaze device id (default: first gaze device)"},
         "target": {"type": "component", "default": None, "help": "use another component's area (e.g. an image)"},
-        "shape": {"type": "choice", "choices": ["circle", "rect"], "default": "circle"},
-        "pos": {"type": "vec2", "default": [0, 0]},
-        "radius": {"type": "float", "default": 100},
-        "size": {"type": "vec2", "default": [200, 200]},
-        "units": {"type": "str", "default": ""},
+        "shape": {"type": "choice", "choices": ["circle", "rect"], "default": "circle", "help": "circle or rect (ignored when target is set)"},
+        "pos": {"type": "vec2", "default": [0, 0], "help": "centre of the area"},
+        "radius": {"type": "float", "default": 100, "help": "radius (shape: circle)"},
+        "size": {"type": "vec2", "default": [200, 200], "help": "width, height (shape: rect)"},
+        "units": {"type": "str", "default": "", "help": "empty = experiment default"},
         "dwell": {"type": "float", "default": None, "help": "seconds of continuous dwell that complete the ROI"},
         "show": {"type": "bool", "default": False, "help": "draw the ROI outline (debug)"},
     }
@@ -92,9 +92,9 @@ class GazeFollow(Component):
     category = "eyetracking"
     description = "Move another visual component to the current gaze position (moving windows, masks, gaze cursors)."
     props_schema = {
-        "device": {"type": "device", "default": None},
-        "target": {"type": "component", "default": None, "required": True},
-        "offset": {"type": "vec2", "default": [0, 0]},
+        "device": {"type": "device", "default": None, "help": "gaze device id (default: first gaze device)"},
+        "target": {"type": "component", "default": None, "required": True, "help": "id of the visual component to move"},
+        "offset": {"type": "vec2", "default": [0, 0], "help": "[x, y] added to the gaze position"},
         "smoothing": {"type": "float", "default": 0.0, "help": "0..1 exponential smoothing"},
     }
 
@@ -121,7 +121,7 @@ class Calibrate(Component):
     type_name = "calibrate"
     category = "eyetracking"
     description = "Run the eye tracker's calibration (Tobii: drawn by EDGE; Gazepoint: native window)."
-    props_schema = {"device": {"type": "device", "default": None}}
+    props_schema = {"device": {"type": "device", "default": None, "help": "gaze device id (default: first gaze device)"}}
 
     def on_start(self, t: float) -> None:
         dev = find_gaze_device(self.session, self.p["device"])

@@ -37,6 +37,17 @@ edge report data/012_1_study_…     # timing, data-integrity and sync report
 | Extending | E-Basic | Python | Python plugins for devices and components (entry points) |
 | License | commercial | GPL | MIT |
 
+## Learn EDGE
+
+* **Interactive tutorials** run inside the builder: a coach highlights what to click and moves on when
+  you've done each step. Start with `edge tutorial first_experiment`, or pick one on the welcome screen.
+* **Help Center:** press **?** in the builder for every guide, search, and the tutorials. Look for
+  **📖 docs** links next to components, devices, loops and workflows.
+* **In the terminal:** `edge help` lists the guides, and `edge help jitter isi` searches them.
+* **Documentation:** [docs/README.md](docs/README.md) has [Getting started](docs/GETTING_STARTED.md),
+  [Tutorials](docs/TUTORIALS.md), the [Builder guide](docs/BUILDER_GUIDE.md), a [Cookbook](docs/COOKBOOK.md)
+  of tested recipes, an [FAQ](docs/FAQ.md), and component/device/CLI references generated from the code.
+
 ## Quick start
 
 ```bash
@@ -183,7 +194,7 @@ claude mcp add edge -- edge mcp --root .          # Claude Code (VS Code: .vscod
 > "Build a 2-back task with letters, 3 blocks of 30 trials, g.tec EEG over LSL and TTL triggers,
 > dry-run it and give me the expected session length."
 
-The 44 tools cover building and editing experiments (with all-or-nothing batch edits), devices,
+The 47 tools cover building and editing experiments (with all-or-nothing batch edits), devices,
 validation, dry runs, real runs, session analysis, exports, undo and version history, and
 opening the visual builder. Edits are validated, backed up and show up live in an open builder.
 See [docs/MCP.md](docs/MCP.md).

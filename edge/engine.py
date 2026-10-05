@@ -442,7 +442,10 @@ class Runner:
                                               **_perf(acc))
             return
 
-        rows = select_rows(load_conditions(loop.conditions, self.exp.base_dir), loop.select)
+        cond = loop.conditions
+        if isinstance(cond, str) and cond.startswith("$"):   # e.g. conditions: $block_file (set by an outer loop)
+            cond = self._eval(cond)
+        rows = select_rows(load_conditions(cond, self.exp.base_dir), loop.select)
         repeats = int(self._eval(loop.repeats) if isinstance(loop.repeats, str) else loop.repeats)
         p_index = _participant_index(s.participant)
         trials = order_trials(rows, loop.order, repeats, s.rng, loop.max_repeat, p_index)

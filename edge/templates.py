@@ -97,6 +97,54 @@ TEMPLATES: dict[str, dict[str, Any]] = {
 }
 
 
+# ---------------------------------------------------------------- starting points for the tutorials
+# (hidden from template lists: names start with "tutorial_")
+_TRIAL = {"components": [
+    {"id": "fix", "type": "fixation", "duration": 0.5},
+    {"id": "word", "type": "text", "text": "$word", "color": "$ink", "start": 0.5, "height": 60},
+    {"id": "resp", "type": "keyboard", "keys": ["r", "g", "b"], "start": 0.5, "duration": 2, "correct": "$key",
+     "end_routine": True}]}
+_STROOP_ROWS = [{"word": "RED", "ink": "red", "key": "r"}, {"word": "RED", "ink": "green", "key": "g"},
+                {"word": "GREEN", "ink": "green", "key": "g"}, {"word": "GREEN", "ink": "blue", "key": "b"},
+                {"word": "BLUE", "ink": "blue", "key": "b"}, {"word": "BLUE", "ink": "red", "key": "r"}]
+
+TEMPLATES.update({
+    "tutorial_empty": {"name": "my_first_experiment", "settings": {"window": {"size": [1280, 720], "background": "#000000"}},
+                       "devices": [], "variables": {}, "routines": {}, "flow": []},
+    "tutorial_loops": {"name": "stroop_lists", "settings": {"window": {"size": [1280, 720], "background": "#111111"}},
+                       "routines": {"trial": _TRIAL},
+                       "flow": [{"loop": "trials", "conditions": _STROOP_ROWS, "children": ["trial"]}]},
+    "tutorial_practice": {
+        "name": "practice_until_criterion",
+        "settings": {"window": {"size": [1280, 720], "background": "#111111"}},
+        "routines": {
+            "trial": {"components": _TRIAL["components"] + [
+                {"id": "hint", "type": "text", "text": "r = red, g = green, b = blue", "pos": [0, -200],
+                 "height": 24, "start_if": "$False"}]},
+            "feedback": {"duration": 0.6, "components": [
+                {"id": "fb", "type": "text", "text": "$'Correct!' if resp.corr else 'Wrong'",
+                 "color": "$'#55dd55' if resp.corr else '#ff5555'"}]},
+            "main_trial": _TRIAL},
+        "flow": [{"loop": "practice", "conditions": _STROOP_ROWS, "order": "random", "children": ["trial", "feedback"]},
+                 {"loop": "main", "conditions": _STROOP_ROWS, "order": "random", "repeats": 3,
+                  "children": ["main_trial"]}]},
+    "tutorial_gaze": {
+        "name": "gaze_task", "settings": {"window": {"size": [1280, 720], "background": "#808080"}},
+        "routines": {"look": {"duration": 4, "components": [
+            {"id": "left_box", "type": "shape", "pos": [-300, 0], "size": [300, 300], "fill": "#c04040"},
+            {"id": "right_box", "type": "shape", "pos": [300, 0], "size": [300, 300], "fill": "#4040c0"}]}},
+        "flow": [{"loop": "trials", "repeats": 6, "children": ["look"]}]},
+    "tutorial_stroop": {
+        "name": "stroop_data", "settings": {"window": {"size": [1280, 720], "background": "#111111"}},
+        "routines": {"trial": _TRIAL},
+        "flow": [{"loop": "trials", "conditions": _STROOP_ROWS, "order": "random", "repeats": 3, "children": ["trial"]}]},
+})
+
+
+def public_templates() -> dict[str, dict[str, Any]]:
+    return {k: v for k, v in TEMPLATES.items() if not k.startswith("tutorial_")}
+
+
 def write_template(name: str, directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     data = TEMPLATES[name]

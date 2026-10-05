@@ -1,0 +1,35 @@
+id: import_existing
+order: 8
+title: Bring an experiment from PsychoPy, E-Prime, OpenSesame or jsPsych
+level: beginner
+minutes: 5
+learn: importing, import reports, checking a converted experiment
+description: >
+  Convert an existing experiment, read the import report, and verify the result with a dry run.
+start: keep
+steps:
+  - title: What can be imported
+    body: |
+      * **PsychoPy:** the `.psyexp` file plus its conditions files and images.
+      * **E-Prime:** in E-Studio press *Generate* to get the `.ebs3` script; also save each List as `<ListName>.txt`.
+      * **OpenSesame:** the `.osexp` file.
+      * **jsPsych:** the `.html` (or `.js`) file with the timeline.
+
+      Press **Next**.
+  - title: Import
+    body: |
+      Click **Import** in the top bar and select *all* the files at once (experiment, conditions,
+      images, list exports). EDGE converts them and shows a summary.
+    target: "#btn-import"
+  - title: Read the report
+    body: |
+      The summary lists what **needs manual work** (e.g. movies or custom code) and what was
+      **converted approximately**. The full list is in `IMPORT_REPORT.md` next to the new experiment.
+
+      Click **Open and dry-run** to load the converted experiment and test it straight away.
+  - title: Verify
+    body: |
+      Compare the dry run with the original: number of trials, timing per routine (read the plain-language
+      summary above each timeline), response keys and correct answers. Fix anything flagged, then save.
+
+      Command-line alternative: `edge import my_task.psyexp`.

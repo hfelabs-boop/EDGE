@@ -159,8 +159,8 @@ def create_server(root: str | Path = ".") -> FastMCP:
     @tool
     def list_templates() -> dict[str, Any]:
         """Starter experiments that create_experiment can copy."""
-        from .templates import TEMPLATES
-        return {k: v.get("description", v["name"]) for k, v in TEMPLATES.items()}
+        from .templates import public_templates
+        return {k: v.get("description", v["name"]) for k, v in public_templates().items()}
 
     # ================================================================ whole documents
     @tool
@@ -643,11 +643,40 @@ def create_server(root: str | Path = ".") -> FastMCP:
         return {"url": ws.builder_url}
 
     # ================================================================ resources & prompts
-    docs_dir = Path(__file__).resolve().parent.parent / "docs"
-
     def _doc(name: str) -> str:
-        f = docs_dir / name
+        from . import help as hp
+        f = hp.docs_dir() / name
         return f.read_text(encoding="utf-8") if f.exists() else f"(documentation {name} not installed)"
+
+    @tool
+    def search_help(query: str, limit: int = 6) -> dict[str, Any]:
+        """Search EDGE's documentation (guides, cookbook recipes, reference, tutorials). Use it before
+        guessing how to do something; then read_help for the full section."""
+        from . import help as hp
+        return {"results": hp.search(query, limit)}
+
+    @tool
+    def read_help(topic: str, section: str = "") -> dict[str, Any]:
+        """Read a documentation page (e.g. COOKBOOK, EXPERIMENT_FORMAT, DATA, reference/components) or one
+        section of it (the anchor from search_help results)."""
+        from . import help as hp
+        try:
+            text = hp.section_text(topic, section) if section else hp.read_topic(topic)
+        except KeyError as e:
+            raise EditError(str(e.args[0])) from None
+        return {"topic": topic, "markdown": text[:60000]}
+
+    @tool
+    def list_tutorials() -> dict[str, Any]:
+        """Hands-on tutorials (interactive in the builder: `edge tutorial <id>`). Useful when the user wants to learn."""
+        from . import help as hp
+        return {"tutorials": [{k: t.get(k) for k in ("id", "title", "level", "minutes", "learn")} for t in hp.tutorials()]}
+
+    @mcp.resource("edge://docs/{name}", mime_type="text/markdown")
+    def any_doc(name: str) -> str:
+        """Any documentation page by name (README, GETTING_STARTED, COOKBOOK, FAQ, BUILDER_GUIDE ...)."""
+        from . import help as hp
+        return hp.read_topic(name)
 
     @mcp.resource("edge://docs/experiment-format", mime_type="text/markdown")
     def doc_format() -> str:

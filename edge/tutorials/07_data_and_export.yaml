@@ -1,0 +1,43 @@
+id: data_and_export
+order: 7
+title: "Your data: tables, summaries and exports"
+level: beginner
+minutes: 6
+learn: Data tab, trial tables, summaries, data dictionary, Excel/BIDS exports
+description: >
+  See what EDGE saves, read the automatic per-condition summary, and export to Excel, CSV or BIDS,
+  for one participant or everyone at once.
+start: tutorial_stroop
+steps:
+  - title: Collect some data
+    body: |
+      Run a **dry run**. It writes a session folder exactly like a real participant would.
+    target: "#btn-dryrun"
+    check: {dry_run: true}
+  - title: Open the Data tab
+    body: |
+      Open the **Data** tab in the console and tick *include dry runs*. Every session in this folder is
+      listed. Click the newest one.
+    target: "[data-tab=data]"
+    check: {tab_open: data}
+  - title: One row per trial
+    body: |
+      **Trials** shows one row per trial with columns in a sensible order: participant, design,
+      conditions, responses (`resp.keys`, `resp.rt`, `resp.corr`), timing.
+
+      **Summary** shows accuracy and RT per condition (correct trials only, outliers removed), and
+      **Data dictionary** explains every column. Press **Next** when you've looked around.
+  - title: Export
+    body: |
+      Click **↓ Excel** for a workbook with all three tables. **↓ BIDS** writes a BIDS-style folder.
+      **Export all** (left) merges every participant into one dataset.
+
+      Press **Next**.
+  - title: Export automatically after every session
+    body: |
+      Click **Settings** (top bar) and, under the data settings, edit the experiment file so it reads
+      `data: {exports: [csv, xlsx]}`. The easiest way is the **Source (YAML)** tab: add `xlsx` to `exports`
+      and click **Apply YAML**.
+      From then on, every session also gets an Excel file automatically.
+    target: "[data-tab=source]"
+    check: {setting: {path: data.exports, contains: xlsx}}

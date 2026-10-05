@@ -431,7 +431,9 @@ class Experiment:
                         issues.append(Issue("error", w, f"unknown loop order '{n.order}'", hint=", ".join(LOOP_ORDERS)))
                     if not n.children:
                         issues.append(Issue("warning", w, f"loop '{n.id}' has no children"))
-                    if isinstance(n.conditions, str):
+                    if isinstance(n.conditions, str) and n.conditions.startswith("$"):
+                        _check_expr(n.conditions, w + ".conditions", issues)
+                    elif isinstance(n.conditions, str):
                         p = (self.base_dir / n.conditions)
                         if not p.exists():
                             issues.append(Issue("error", w, f"conditions file not found: {p}"))

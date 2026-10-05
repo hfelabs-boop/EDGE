@@ -1,0 +1,50 @@
+id: rules_and_feedback
+order: 6
+title: Rules, hints and conditional components
+level: intermediate
+minutes: 7
+learn: when → do rules, component if, variables
+description: >
+  Make routines react while they run: show a hint if the participant is slow, and show feedback
+  only during practice.
+start: tutorial_practice
+steps:
+  - title: Open the trial
+    body: |
+      Click **trial** in the Flow strip. It has a **hint** text that never starts by itself
+      (`start_if` is `$False`). You'll start it with a rule.
+    target: "#flow"
+    check: {selected: routine}
+  - title: Add a rule
+    body: |
+      In the routine's Properties (click an empty part of the timeline header if a component is
+      selected), find **Rules (when → do)** and click **+ Rule**.
+    target: "#props"
+    check: {rule: {routine: trial}}
+  - title: Say when
+    body: |
+      Set the rule's **When** to `$t > 1.5 and resp.keys is None`: 1.5 s into the trial, if no key
+      has been pressed yet.
+    target: "#props"
+    check: {rule: {routine: trial, when_contains: "resp.keys"}}
+  - title: Say what to do
+    body: |
+      Change the action from *end the routine* to **start component**, and pick **hint**. Slow
+      participants now see the key reminder.
+
+      Other actions: stop a component, set a variable, send a marker, or jump to another workflow state.
+    target: "#props"
+    check: {rule: {routine: trial, action: start}}
+  - title: Feedback only in practice
+    body: |
+      Open the **feedback** routine and select the **fb** text. In its Timing section set **if** to
+      `$practice.n < 6`, so feedback is shown only for the first six practice trials.
+      Any expression works, for example `$practice_mode` or `$word == 'RED'`.
+    target: "#props"
+    check: {component: {routine: feedback, type: text, prop: if, exists: true}}
+  - title: Check the summary
+    body: |
+      Read the grey summary above the timeline. EDGE describes each routine in plain language,
+      including the rules, so you can check the logic at a glance. Run a **dry run** to finish.
+    target: "#btn-dryrun"
+    check: {dry_run: true}

@@ -1,0 +1,68 @@
+id: workflow_practice
+order: 3
+title: Practice until criterion (workflows)
+level: intermediate
+minutes: 10
+learn: state machines, routes with conditions, live loop accuracy, max_visits
+description: >
+  Turn two loops into a workflow: participants repeat the practice block until they reach 80%
+  correct (at most three times), then continue to the main task.
+start: tutorial_practice
+steps:
+  - title: The plan
+    body: |
+      The flow has a **practice** loop (with feedback) and a **main** loop. You want:
+      *practice → if accuracy ≥ 80% go to main, otherwise practice again (at most 3 times)*.
+
+      That's a **workflow** (a state machine). Press **Next**.
+  - title: Add a workflow
+    body: |
+      In the **Flow** strip, click the first round **+** (far left) and choose **State machine (workflow)**.
+      A purple box appears with one state called `start`.
+    target: "#flow"
+    check: {statemachine: {}}
+  - title: Rename the state
+    body: |
+      Click the state name **start** inside the purple box. In Properties, click the **name**
+      field and rename it to `practice`.
+    target: ".sm-state"
+    check: {statemachine: {state: practice}}
+  - title: Move the practice loop into it
+    body: |
+      **Drag** the green *practice* loop header and drop it on the **+** inside the `practice` state.
+      (Every item in the flow can be dragged onto any + button.)
+    target: "#flow"
+    check: {statemachine: {state_contains: {state: practice, item: practice}}}
+  - title: Add the main state
+    body: |
+      Click **+ state** in the workflow box, name it `main`, and drag the *main* loop into it.
+    target: ".sm-states"
+    check: {statemachine: {state_contains: {state: main, item: main}}}
+  - title: Route by accuracy
+    body: |
+      Select the **practice** state. Under **Routes**, the first route has a condition and a target:
+
+      * condition: `$practice.accuracy >= 0.8` and go to **main**
+      * click **+ Route** and make the second one go to **practice** with an empty condition (that means "otherwise").
+
+      Loops measure accuracy live: `$practice.accuracy` is the proportion correct in the practice block.
+    target: "#props"
+    check: {statemachine: {route_contains: "accuracy"}}
+  - title: Limit the repetitions
+    body: |
+      Set **max_visits** to `3`. After three practice rounds the participant moves on even if they
+      haven't reached the criterion, so nobody gets stuck.
+    target: "#props"
+    check: {statemachine: {max_visits: true}}
+  - title: See the diagram
+    body: |
+      Click the workflow's header (**⚙ … workflow**). The top panel turns into a live diagram of the
+      states and routes. Solid arrows have conditions; dashed ones are the defaults.
+    target: ".fl-box.sm > .fl-head"
+    check: {selected: machine}
+  - title: Dry run
+    body: |
+      Run a **dry run**. The virtual participant answers 90% correctly, so they usually pass first time.
+      In the session data, the `workflow.state` and `workflow.visit` columns show the path taken.
+    target: "#btn-dryrun"
+    check: {dry_run: true}

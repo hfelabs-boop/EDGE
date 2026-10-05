@@ -10,10 +10,10 @@ import pytest
 
 from edge.builder.server import BuilderApp, make_handler
 from edge.cli import main
-from edge.templates import TEMPLATES, write_template
+from edge.templates import public_templates, write_template
 
 
-@pytest.mark.parametrize("name", list(TEMPLATES))
+@pytest.mark.parametrize("name", list(public_templates()))
 def test_templates_validate_and_dry_run(name, tmp_path, capsys):
     path = write_template(name, tmp_path)
     assert main(["validate", str(path)]) == 0

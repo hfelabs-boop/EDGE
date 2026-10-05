@@ -37,8 +37,10 @@ class Variable(Component):
     category = "logic"
     description = "Set experiment variables from expressions, e.g. set: {score: '$score + resp.corr'}."
     props_schema = {
-        "set": {"type": "dict", "default": {}, "required": True},
-        "when": {"type": "choice", "choices": ["start", "end"], "default": "start"},
+        "set": {"type": "dict", "default": {}, "required": True,
+                "help": "variables to assign: {name: value or $expression}"},
+        "when": {"type": "choice", "choices": ["start", "end"], "default": "start",
+                 "help": "start: before the routine is shown (later components see the new value); end: after it"},
     }
 
     def prepare(self) -> None:

@@ -22,7 +22,7 @@ class Keyboard(Component):
     description = "Collect key presses with RT measured from the component's onset flip."
     props_schema = {
         "keys": {"type": "list", "default": None, "help": "allowed keys, e.g. [f, j]; empty = any"},
-        "store": {"type": "choice", "choices": ["first", "last", "all"], "default": "first"},
+        "store": {"type": "choice", "choices": ["first", "last", "all"], "default": "first", "help": "which key to keep when several are pressed: first, last or all"},
         "correct": {"type": "str", "default": None, "help": "correct key (often an expression: $corr_key)"},
         "discard_previous": {"type": "bool", "default": True, "help": "ignore keys pressed before onset"},
         "record_release": {"type": "bool", "default": False, "help": "also store key-up times (durations)"},
@@ -84,7 +84,7 @@ class Mouse(Component):
     category = "response"
     description = "Mouse clicks, optionally restricted to clickable components (e.g. images/shapes)."
     props_schema = {
-        "buttons": {"type": "list", "default": ["left"]},
+        "buttons": {"type": "list", "default": ["left"], "help": "buttons that count as a response: left, middle, right"},
         "clickable": {"type": "list", "default": [], "help": "ids of components in this routine that can be clicked"},
         "correct": {"type": "str", "default": None, "help": "id of the correct clickable component"},
         "track": {"type": "bool", "default": False, "help": "save the full mouse trajectory"},
@@ -134,14 +134,14 @@ class Slider(Component):
     visual = True
     description = "Rating scale / visual analogue scale answered with the mouse (or arrow keys + return)."
     props_schema = {
-        "ticks": {"type": "list", "default": [1, 2, 3, 4, 5, 6, 7]},
-        "labels": {"type": "list", "default": []},
+        "ticks": {"type": "list", "default": [1, 2, 3, 4, 5, 6, 7], "help": "tick values; the first and last are the ends of the scale"},
+        "labels": {"type": "list", "default": [], "help": "labels spread along the scale"},
         "granularity": {"type": "float", "default": 1, "help": "0 = continuous"},
-        "pos": {"type": "vec2", "default": [0, -150]},
-        "size": {"type": "vec2", "default": [800, 30]},
-        "color": {"type": "color", "default": "white"},
-        "marker_color": {"type": "color", "default": "#ff9900"},
-        "units": {"type": "str", "default": ""},
+        "pos": {"type": "vec2", "default": [0, -150], "help": "centre of the scale"},
+        "size": {"type": "vec2", "default": [800, 30], "help": "width and height of the scale"},
+        "color": {"type": "color", "default": "white", "help": "colour of the bar, ticks and labels"},
+        "marker_color": {"type": "color", "default": "#ff9900", "help": "colour of the selected-value marker"},
+        "units": {"type": "str", "default": "", "help": "empty = experiment default"},
         "require_confirm": {"type": "bool", "default": False, "help": "press return/space to confirm"},
     }
 

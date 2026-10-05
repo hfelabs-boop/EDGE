@@ -135,3 +135,14 @@ def test_round_trip_preserves_workflow(tmp_path):
     assert again.to_dict()["flow"] == exp.to_dict()["flow"]
     assert again.to_dict()["routines"]["trial"]["rules"] == d["routines"]["trial"]["rules"]
     assert again.to_dict()["routines"]["trial"]["components"][0]["if"] == "$show"
+
+
+def test_conditions_file_from_variable(run, tmp_path):
+    (tmp_path / "a.csv").write_text("w\nA1\nA2\n")
+    (tmp_path / "b.csv").write_text("w\nB1\n")
+    d = {"routines": {"t": {"duration": 0.05, "components": [{"id": "x", "type": "text", "text": "$w"}]}},
+         "flow": [{"loop": "blocks", "conditions": [{"block_file": "a.csv"}, {"block_file": "b.csv"}],
+                   "order": "latin_square",
+                   "children": [{"loop": "trials", "conditions": "$block_file", "children": ["t"]}]}]}
+    _, session, _ = run(d)
+    assert sorted(r["w"] for r in session.data.trial_rows) == ["A1", "A2", "B1"]

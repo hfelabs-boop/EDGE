@@ -128,6 +128,7 @@ function enclosing(rid) {
 /* ------------------------------------------------------------------ boot */
 async function boot() {
   S.schema = await api("/api/schema");
+  try { S.tutorials = (await api("/api/help/tutorials")).tutorials; } catch { S.tutorials = []; }
   const files = (await api("/api/files")).files;
   const last = localStorage.getItem("edge.last");
   if (last && files.some((f) => f.path === last)) await openFile(last);
@@ -135,6 +136,9 @@ async function boot() {
   else { loadDoc(clone(await api("/api/template?name=blank")), null); welcome(files); }
   wire();
   setInterval(pollExternalChanges, 1500);
+  const params = new URLSearchParams(location.search);
+  if (params.get("tutorial")) { closeModal(); startTutorial(params.get("tutorial")); }
+  else if (params.get("help")) { closeModal(); openHelp(params.get("help")); }
 }
 
 function loadDoc(exp, path, fp = null, opts = {}) {
@@ -186,6 +190,7 @@ async function save(asNew = false) {
   clearDraft();
   S.path = path; S.fingerprint = r.fingerprint; localStorage.setItem("edge.last", path);
   $("#filename").textContent = path; setDirty(false); hideBanner(); toast("Saved " + path + " (previous version backed up)");
+  S.savedAt = Date.now(); checkTutorial();
 }
 
 /* ---------------- live sync with edits made elsewhere (MCP, editor, another window) */
@@ -269,6 +274,7 @@ async function exportData(path, formats) {
 function renderAll() {
   renderPalette(); renderDevices(); renderRoutineTabs(); renderTimeline(); renderFlow(); renderProps(); renderPreview();
   if ($("#tab-source").classList.contains("active")) renderSource();
+  if (typeof checkTutorial === "function") checkTutorial();
 }
 
 function renderPalette() {
@@ -284,7 +290,7 @@ function renderPalette() {
     if (!cats[cat]) continue;
     el.append(h("div", {class: "pal-cat"}, cat));
     for (const [type, d] of cats[cat].sort()) {
-      el.append(h("div", {class: "pal-item", title: d.description, draggable: "true",
+      el.append(h("div", {class: "pal-item", "data-type": type, title: d.description, draggable: "true",
         ondragstart: (e) => e.dataTransfer.setData("edge/component", type),
         onclick: () => addComponent(type)}, h("span", {class: `dot cat-${cat}`}), type));
     }
@@ -476,7 +482,7 @@ function flowInsertMenu(e, listPath, index) {
   const items = Object.keys(S.exp.routines).map((rid) => [`Routine: ${rid}`, () => { list.splice(index, 0, rid); commit(); }]);
   items.push("-",
     ["New routine…", () => { const rid = newRoutine(false); if (rid) { list.splice(index, 0, rid); commit(); } }],
-    ["Loop", () => { const id = uniqueId("trials", loopIds()); list.splice(index, 0, {loop: id, order: "random", repeats: 1, conditions: [{}], children: []});
+    ["Loop", () => { const id = uniqueId("trials", loopIds()); list.splice(index, 0, {loop: id, order: "random", repeats: 1, conditions: [{condition: "A"}, {condition: "B"}], children: []});
       S.sel = {kind: "loop", path: [...listPath, index]}; commit(); }],
     ["Branch (if / else)", () => { list.splice(index, 0, {if: "$True", then: [], else: []}); S.sel = {kind: "branch", path: [...listPath, index]}; commit(); }],
     ["State machine (workflow)", () => { const id = uniqueId("workflow", loopIds());
@@ -549,7 +555,7 @@ function renderProps() {
     const c = findComp(sel.routine, sel.id); if (!c) return;
     const d = S.schema.components[c.type];
     title.textContent = `${c.id} · ${c.type}`;
-    el.append(h("div", {class: "desc"}, d?.description || "Unknown component type"));
+    el.append(h("div", {class: "desc"}, d?.description || "Unknown component type", " ", helpLink("reference/components", c.type)));
     el.append(field("id", {type: "str"}, c.id, (v) => renameComp(c, v), {noExpr: true}));
     el.append(h("div", {class: "group"}, "Properties"));
     for (const [k, p] of Object.entries(d?.props || {})) el.append(field(k, p, c[k], (v) => setProp(c, k, v)));
@@ -566,7 +572,7 @@ function renderProps() {
   } else if (sel.kind === "routine") {
     const r = S.exp.routines[sel.routine]; if (!r) return;
     title.textContent = `Routine · ${sel.routine}`;
-    el.append(h("div", {class: "desc"}, "A routine is one screen/event sequence (a trial, instructions, feedback). Add components from the palette."));
+    el.append(h("div", {class: "desc"}, "A routine is one screen/event sequence (a trial, instructions, feedback). Add components from the palette. ", helpLink("EXPERIMENT_FORMAT", "routines-and-components")));
     el.append(field("name", {type: "str"}, sel.routine, (v) => renameRoutine(sel.routine), {noExpr: true, readonlyClick: () => renameRoutine(sel.routine)}));
     el.append(field("duration", {type: "float", help: "hard limit in seconds (empty = until components end)"}, r.duration, (v) => setProp(r, "duration", v)));
     el.append(field("end_if", {type: "expr", help: "end when this expression becomes true"}, r.end_if, (v) => setProp(r, "end_if", v)));
@@ -687,7 +693,7 @@ function field(name, p, value, onChange, opts = {}) {
 
 function renderLoopProps(el, n, title) {
   title.textContent = `Loop · ${n.loop}`;
-  el.append(h("div", {class: "desc"}, "Repeats its children once per condition row. Rows become variables (use them as $column)."));
+  el.append(h("div", {class: "desc"}, "Repeats its children once per condition row. Rows become variables (use them as $column). ", helpLink("COOKBOOK", "trial-lists-and-randomization")));
   el.append(field("id", {type: "str"}, n.loop, (v) => { if (v) { n.loop = v; commit(); } }, {noExpr: true}));
   const mode = n.staircase ? "staircase" : typeof n.conditions === "string" ? "file" :
     (n.conditions && n.conditions.factorial) ? "factorial" : n.conditions ? "table" : "none";
@@ -732,19 +738,27 @@ function condTable(n) {
   const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))];
   const tbl = h("table", {class: "grid cond-table"});
   tbl.append(h("tr", {}, cols.map((c) => h("th", {}, h("input", {value: c, onchange: (e) => {
-    const nc = e.target.value.trim(); if (!nc) { rows.forEach((r) => delete r[c]); } else rows.forEach((r) => { r[nc] = r[c]; if (nc !== c) delete r[c]; });
+    const nc = e.target.value.trim();
+    if (nc && nc !== c && cols.includes(nc)) { toast(`There is already a column “${nc}”`); e.target.value = c; return; }
+    rows.forEach((r, i) => {   // rebuild each row so the renamed column keeps its position
+      const out = {};
+      for (const [k, v] of Object.entries(r)) { if (k === c) { if (nc) out[nc] = v; } else out[k] = v; }
+      rows[i] = out;
+    });
     commit(); }}))), h("th", {}, h("button", {class: "mini", title: "add column", onclick: () => { const nc = uniqueId("var", new Set(cols)); rows.forEach((r) => r[nc] = ""); if (!rows.length) rows.push({[nc]: ""}); commit(); }}, "+"))));
   rows.forEach((r, i) => tbl.append(h("tr", {}, cols.map((c) => h("td", {}, h("input", {value: showVal("", r[c]), onchange: (e) => {
     const raw = e.target.value; r[c] = raw !== "" && !isNaN(Number(raw)) ? Number(raw) : raw; commit(); }}))),
     h("td", {}, h("button", {class: "mini danger", onclick: () => { rows.splice(i, 1); commit(); }}, "×")))));
-  return h("div", {class: "field"}, h("label", {}, "conditions"), h("div", {style: "overflow:auto"}, tbl),
+  return h("div", {class: "field"}, h("label", {}, "conditions (one row per trial; each column becomes a $variable)"),
+    cols.length ? null : h("div", {class: "help"}, "Empty table: click + to add a column, then + row."),
+    h("div", {style: "overflow:auto"}, tbl),
     h("button", {class: "mini", style: "margin-top:4px", onclick: () => { rows.push(Object.fromEntries(cols.map((c) => [c, ""]))); commit(); }}, "+ row"));
 }
 
 function renderDeviceProps(el, d, index, title) {
   const info = S.schema.devices[d.type] || {options: {}, capabilities: []};
   title.textContent = `Device · ${d.id}`;
-  el.append(h("div", {class: "desc"}, info.description || d.type,
+  el.append(h("div", {class: "desc"}, info.description || d.type, " ", helpLink("reference/devices", d.type),
     info.available === false ? h("div", {style: "color:var(--warn);margin-top:4px"}, "⚠ " + info.unavailable_reason) : null));
   el.append(field("id", {type: "str"}, d.id, (v) => { if (v) { d.id = v; commit(); } }, {noExpr: true}));
   el.append(field("type", {type: "choice", choices: Object.keys(S.schema.devices)}, d.type, (v) => { d.type = v; d.options = {}; commit(); }, {noExpr: true}));
@@ -908,6 +922,7 @@ function gotoIssue(i) {
 }
 
 function showTab(name) {
+  S.tab = name; setTimeout(() => checkTutorial(), 0);
   document.querySelectorAll("#console .tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll("#console .tab").forEach((t) => t.classList.toggle("active", t.id === "tab-" + name));
   if (name === "source") renderSource();
@@ -927,6 +942,7 @@ async function dryRun() {
 }
 
 function renderResults(r) {
+  S.lastDryRun = Date.now(); setTimeout(() => checkTutorial(), 0);
   const el = $("#tab-results"); el.innerHTML = "";
   const t = r.summary.timing || {}, rep = r.report;
   const kpi = (v, l) => h("div", {class: "kpi"}, h("b", {}, v), h("span", {}, l));
@@ -1011,15 +1027,15 @@ async function openDialog() {
     if (S.dirty && !confirm("Discard unsaved changes?")) return; closeModal(); await openFile(f.path); }}, h("b", {}, f.name), h("small", {}, f.path)));
   openModal();
 }
-function openModal() { $("#modal").classList.remove("hidden"); }
-function _resetModal() { $("#modal-body").classList.remove("welcome"); }
+function openModal() { $("#modal").classList.remove("hidden"); const box = $(".modal-box"); box.scrollTop = 0; box.scrollLeft = 0; }
+function _resetModal() { $("#modal-body").className = ""; }
 function closeModal() { $("#modal").classList.add("hidden"); _resetModal(); }
 
 /* ---------------- wiring */
 function wire() {
   $("#btn-new").onclick = () => welcome();
   $("#btn-import").onclick = () => { const inp = h("input", {type: "file", multiple: true, onchange: (e) => importFiles([...e.target.files])}); inp.click(); };
-  $("#btn-help").onclick = showHelp;
+  $("#btn-help").onclick = () => openHelp();
   $("#btn-open").onclick = openDialog;
   $("#btn-save").onclick = () => save();
   $("#btn-versions").onclick = versionsDialog;
@@ -1051,7 +1067,7 @@ function wire() {
       const list = comps(S.sel.routine); const i = list.findIndex((c) => c.id === S.sel.id);
       if (i >= 0) { list.splice(i, 1); S.sel = {kind: "routine", routine: S.routine}; commit(); } }
     else if (e.key === "Escape") closeModal();
-    else if (e.key === "?" && !typing) showHelp();
+    else if (e.key === "?" && !typing) openHelp();
   });
   window.addEventListener("beforeunload", (e) => { if (S.dirty) { e.preventDefault(); e.returnValue = ""; } });
 }
@@ -1197,7 +1213,7 @@ function renderDiagram(el) {
 function renderMachineProps(el, title) {
   const m = getNode(S.sel.path);
   title.textContent = `Workflow · ${m.statemachine}`;
-  el.append(h("div", {class: "desc"}, "A state machine runs one state at a time. Each state contains routines or loops; when it finishes, its routes decide the next state (or the end). Use it for practice-until-criterion, adaptive blocks, branching studies or consent screening."));
+  el.append(h("div", {class: "desc"}, "A state machine runs one state at a time. Each state contains routines or loops; when it finishes, its routes decide the next state (or the end). Use it for practice-until-criterion, adaptive blocks, branching studies or consent screening. ", helpLink("EXPERIMENT_FORMAT", "workflows-state-machines")));
   el.append(field("id", {type: "str"}, m.statemachine, (v) => { if (v) { m.statemachine = v; commit(); } }, {noExpr: true}));
   el.append(field("start state", {type: "choice", choices: Object.keys(m.states)}, m.start, (v) => { m.start = v; commit(); }, {noExpr: true}));
   el.append(field("max_steps", {type: "int", help: "safety limit on state changes"}, m.max_steps, (v) => setProp(m, "max_steps", v), {noExpr: true}));
@@ -1249,7 +1265,7 @@ const RULE_ACTIONS = {
   log: {label: "write to the log", param: "text"},
 };
 function renderRulesEditor(el, r) {
-  el.append(h("div", {class: "group"}, "Rules (when → do)"));
+  el.append(h("div", {class: "group"}, "Rules (when → do) ", helpLink("EXPERIMENT_FORMAT", "routine-rules-when-do")));
   el.append(h("div", {class: "help"}, "Rules react while the routine runs, e.g. when ", h("code", {}, "$t > 3"), " start a hint; when ", h("code", {}, "$resp.keys == 'q'"), " go to state 'end'."));
   r.rules ||= [];
   const comps_ = (r.components || []).map((c) => c.id);
@@ -1362,12 +1378,16 @@ async function welcome(files) {
   drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("drop"); importFiles([...e.dataTransfer.files]); };
   body.append(h("h2", {}, "Welcome to EDGE"),
     h("p", {class: "lead"}, "Build an experiment visually: routines are screens made of components on a timeline; the flow puts routines in order, repeats them in loops, and branches with if/else or full workflows."),
+    h("div", {class: "welcome-learn"}, h("h3", {}, "New to EDGE? Learn by doing"),
+      h("div", {class: "learn-row"}, ...(S.tutorials || []).slice(0, 4).map((t) => h("div", {class: "card learn", onclick: () => { closeModal(); startTutorial(t.id); }},
+        h("b", {}, (tutorialDone(t.id) ? "✓ " : "") + t.title), h("small", {}, `${t.minutes} min · ${t.level}`))),
+        h("div", {class: "card learn more", onclick: () => { closeModal(); openHelp("TUTORIALS"); }}, h("b", {}, "All tutorials & docs →"), h("small", {}, "guides, cookbook, reference")))),
     h("div", {class: "welcome-grid"},
       h("div", {}, h("h3", {}, "Start from a template"), ...tpl),
       h("div", {}, h("h3", {}, "Open"), ...(recent.length ? recent : [h("div", {class: "help"}, "No experiments in this folder yet.")]),
         h("h3", {style: "margin-top:16px"}, "Import"), drop, input)),
     h("div", {class: "btns"}, h("button", {onclick: () => { closeModal(); }}, "Start with a blank experiment"),
-      h("button", {onclick: () => { closeModal(); showHelp(); }}, "How EDGE works (?)")));
+      h("button", {onclick: () => { closeModal(); openHelp(); }}, "Help & documentation")));
   openModal();
 }
 
@@ -1417,4 +1437,240 @@ function showHelp() {
       h("li", {}, h("b", {}, "Dry run"), ": tests the whole experiment in seconds with simulated hardware and a virtual participant.")),
     h("h3", {}, "Keyboard"), h("table", {class: "grid"}, kb.map(([k, v]) => h("tr", {}, h("td", {}, k), h("td", {}, v)))));
   openModal();
+}
+
+
+/* ================================================================== markdown */
+function mdInline(t) {
+  t = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const codes = [];
+  t = t.replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
+  t = t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => `<img alt="${alt}" src="${/^https?:/.test(src) ? src : "/api/help/asset?path=" + encodeURIComponent(src.replace(/^\.\.\//, "").replace(/^docs\//, ""))}">`);
+  t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, txt, href) => {
+    if (/^https?:/.test(href)) return `<a href="${href}" target="_blank" rel="noopener">${txt}</a>`;
+    const [file, anchor] = href.split("#");
+    const topic = file ? file.replace(/^(\.\.\/|\.\/|docs\/)+/, "").replace(/\.md$/, "") : "";
+    return `<a href="#" data-topic="${topic}" data-anchor="${anchor || ""}">${txt}</a>`;
+  });
+  t = t.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g, "$1<i>$2</i>");
+  return t.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[+i].replace(/&/g, "&amp;").replace(/</g, "&lt;")}</code>`);
+}
+function slugify(s) { return s.toLowerCase().replace(/[`*_]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
+function md(src) {
+  const lines = String(src).replace(/\r/g, "").split("\n");
+  const out = [];
+  let i = 0;
+  const para = [];
+  const flush = () => { if (para.length) { out.push(`<p>${mdInline(para.join(" "))}</p>`); para.length = 0; } };
+  while (i < lines.length) {
+    const l = lines[i];
+    if (l.startsWith("```")) {
+      flush(); const code = []; i++;
+      while (i < lines.length && !lines[i].startsWith("```")) code.push(lines[i++]);
+      out.push(`<pre><code>${code.join("\n").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</code></pre>`); i++; continue;
+    }
+    const hm = l.match(/^(#{1,4})\s+(.*)/);
+    if (hm) { flush(); out.push(`<h${hm[1].length} id="${slugify(hm[2])}">${mdInline(hm[2])}</h${hm[1].length}>`); i++; continue; }
+    if (/^\|.*\|\s*$/.test(l) && i + 1 < lines.length && /^\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+      flush();
+      const cells = (row) => row.trim().replace(/^\||\|$/g, "").split(/(?<!\\)\|/).map((c) => mdInline(c.trim().replace(/\\\|/g, "|")));
+      const head = cells(l); i += 2;
+      const rows = [];
+      while (i < lines.length && /^\|.*\|\s*$/.test(lines[i])) rows.push(cells(lines[i++]));
+      out.push(`<table class="grid md-table"><tr>${head.map((c) => `<th>${c}</th>`).join("")}</tr>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</table>`);
+      continue;
+    }
+    if (/^\s*([-*]|\d+\.)\s+/.test(l)) {
+      flush();
+      const ordered = /^\s*\d+\./.test(l);
+      const items = [];
+      while (i < lines.length && (/^\s*([-*]|\d+\.)\s+/.test(lines[i]) || (/^\s{2,}\S/.test(lines[i]) && items.length))) {
+        if (/^\s*([-*]|\d+\.)\s+/.test(lines[i])) items.push(lines[i].replace(/^\s*([-*]|\d+\.)\s+/, ""));
+        else items[items.length - 1] += " " + lines[i].trim();
+        i++;
+      }
+      out.push(`<${ordered ? "ol" : "ul"}>${items.map((x) => `<li>${mdInline(x)}</li>`).join("")}</${ordered ? "ol" : "ul"}>`);
+      continue;
+    }
+    if (l.startsWith(">")) { flush(); out.push(`<blockquote>${mdInline(l.replace(/^>\s?/, ""))}</blockquote>`); i++; continue; }
+    if (/^---+\s*$/.test(l)) { flush(); out.push("<hr>"); i++; continue; }
+    if (!l.trim()) { flush(); i++; continue; }
+    para.push(l.trim()); i++;
+  }
+  flush();
+  return out.join("\n");
+}
+
+/* ================================================================== help center */
+function helpLink(topic, anchor) {
+  return h("a", {href: "#", class: "help-link", title: "Open the documentation", onclick: (e) => { e.preventDefault(); openHelp(topic, anchor); }}, "📖 docs");
+}
+const HELP = {topics: null};
+async function openHelp(topic, anchor) {
+  if (!HELP.topics) { try { HELP.topics = (await api("/api/help/topics")).topics; } catch (e) { return toast("Help unavailable: " + e.message); } }
+  const body = $("#modal-body"); body.innerHTML = ""; body.className = "helpcenter";
+  const nav = h("div", {class: "help-nav"});
+  const content = h("div", {class: "help-content"});
+  const search = h("input", {type: "search", placeholder: "Search the docs (e.g. jitter, TTL, accuracy)…", class: "help-search"});
+  let timer = null;
+  search.oninput = () => { clearTimeout(timer); timer = setTimeout(() => helpSearch(search.value, content), 200); };
+  nav.append(search, h("div", {class: "help-group"}, "Tutorials (interactive)"));
+  for (const t of S.tutorials || []) nav.append(h("div", {class: "help-item", onclick: () => { closeModal(); startTutorial(t.id); }},
+    (tutorialDone(t.id) ? "✓ " : "▶ ") + t.title, h("small", {}, ` ${t.minutes} min`)));
+  let group = null;
+  for (const t of HELP.topics) {
+    if (t.group !== group) { group = t.group; nav.append(h("div", {class: "help-group"}, group)); }
+    nav.append(h("div", {class: "help-item" + (t.id === topic ? " sel" : ""), "data-id": t.id, title: t.summary, onclick: () => showTopic(t.id, null, content, nav)}, t.title));
+  }
+  body.append(h("div", {class: "help-layout"}, nav, content), h("button", {class: "help-close", onclick: closeModal, title: "Close (Esc)"}, "×"));
+  openModal();
+  await showTopic(topic || "README", anchor, content, nav);
+  search.focus();
+}
+async function showTopic(id, anchor, content, nav) {
+  content.innerHTML = "Loading…";
+  let r;
+  try { r = await api(`/api/help/topic?id=${encodeURIComponent(id)}`); } catch (e) { content.textContent = e.message; return; }
+  content.innerHTML = md(r.markdown);
+  nav && nav.querySelectorAll(".help-item").forEach((x) => x.classList.toggle("sel", x.dataset.id === id));
+  content.querySelectorAll("a[data-topic]").forEach((a) => a.onclick = (e) => { e.preventDefault();
+    showTopic(a.dataset.topic || id, a.dataset.anchor || null, content, nav); });
+  content.scrollTop = 0;
+  if (anchor) {
+    const target = content.querySelector(`[id="${CSS.escape(anchor)}"]`) || [...content.querySelectorAll("h2,h3,h4")].find((x) => x.id.includes(slugify(anchor)));
+    if (target) { content.scrollTop = target.offsetTop - content.offsetTop - 8; target.classList.add("flash"); }
+  }
+}
+async function helpSearch(q, content) {
+  if (!q.trim()) return;
+  const {results} = await api(`/api/help/search?q=${encodeURIComponent(q)}`);
+  content.innerHTML = "";
+  content.append(h("h2", {}, `Results for “${q}”`));
+  if (!results.length) content.append(h("p", {}, "Nothing found. Try other words, or browse the guides on the left."));
+  for (const r of results) content.append(h("div", {class: "search-hit", onclick: () => {
+    if (r.topic === "tutorial") { closeModal(); startTutorial(r.anchor); } else showTopic(r.topic, r.anchor, content, document.querySelector(".help-nav")); }},
+    h("b", {}, r.section), h("small", {}, r.topic === "tutorial" ? " · interactive tutorial" : ` · ${r.topic}`), h("div", {}, r.snippet)));
+}
+
+/* ================================================================== tutorials */
+const T = {tut: null, i: 0, passed: false};
+function tutorialDone(id) { try { return (JSON.parse(localStorage.getItem("edge.tutorials.done") || "[]")).includes(id); } catch { return false; } }
+function markTutorialDone(id) { try { const d = new Set(JSON.parse(localStorage.getItem("edge.tutorials.done") || "[]")); d.add(id); localStorage.setItem("edge.tutorials.done", JSON.stringify([...d])); } catch {} }
+
+async function startTutorial(id) {
+  let r;
+  try { r = await api(`/api/help/tutorial?id=${encodeURIComponent(id)}`); } catch (e) { return toast(e.message); }
+  if (r.start_doc) {
+    if (S.dirty && !confirm("Start the tutorial? Your unsaved changes will be discarded (save first if you want to keep them).")) return;
+    clearDraft(); loadDoc(clone(r.start_doc), null, null, {silent: true});
+  }
+  S.lastDryRun = null; S.savedAt = null; S.tab = null;
+  T.tut = r.tutorial; T.i = 0; T.passed = false; T.startedAt = Date.now();
+  renderCoach();
+}
+function stopTutorial() { T.tut = null; document.querySelectorAll(".coach-target").forEach((x) => x.classList.remove("coach-target")); $("#coach")?.remove(); }
+
+function renderCoach() {
+  $("#coach")?.remove();
+  document.querySelectorAll(".coach-target").forEach((x) => x.classList.remove("coach-target"));
+  if (!T.tut) return;
+  const steps = T.tut.steps, st = steps[T.i];
+  if (!st) {           // finished
+    markTutorialDone(T.tut.id);
+    const next = (S.tutorials || []).find((t) => !tutorialDone(t.id));
+    const c = h("div", {id: "coach", class: "done"}, h("div", {class: "coach-head"}, "Tutorial complete 🎉"),
+      h("h4", {}, T.tut.title), h("p", {}, "Nicely done. Keep experimenting with this file, or continue learning."),
+      h("div", {class: "coach-btns"},
+        next ? h("button", {class: "primary", onclick: () => startTutorial(next.id)}, `Next: ${next.title}`) : null,
+        h("button", {onclick: () => { stopTutorial(); openHelp("TUTORIALS"); }}, "All tutorials"),
+        h("button", {onclick: stopTutorial}, "Close")));
+    document.body.append(c); return;
+  }
+  const ok = st.check ? tutorialCheck(st.check) : true;
+  const c = h("div", {id: "coach"});
+  c.append(h("div", {class: "coach-head"}, h("span", {}, `${T.tut.title}`), h("span", {class: "coach-step"}, `${T.i + 1} / ${steps.length}`),
+    h("button", {class: "mini", title: "Exit the tutorial", onclick: () => { if (confirm("Exit the tutorial?")) stopTutorial(); }}, "×")));
+  c.append(h("div", {class: "coach-progress"}, h("div", {style: `width:${(T.i / steps.length) * 100}%`})));
+  const bodyEl = h("div", {class: "coach-body"}); bodyEl.innerHTML = `<h4>${mdInline(st.title)}</h4>` + md(st.body);
+  bodyEl.querySelectorAll("a[data-topic]").forEach((a) => a.onclick = (e) => { e.preventDefault(); openHelp(a.dataset.topic, a.dataset.anchor); });
+  c.append(bodyEl);
+  const status = st.check ? h("div", {class: "coach-status" + (ok ? " ok" : "")}, ok ? "✓ Done!" : "Waiting for you to do this…") : null;
+  c.append(h("div", {class: "coach-btns"},
+    h("button", {disabled: T.i === 0 ? true : null, onclick: () => { T.i--; T.passed = false; renderCoach(); }}, "Back"),
+    status,
+    h("button", {class: "primary", disabled: (st.check && !ok) ? true : null, onclick: () => { T.i++; T.passed = false; renderCoach(); }}, T.i === steps.length - 1 ? "Finish" : "Next"),
+    st.check && !ok ? h("button", {class: "mini skip", title: "Skip this step", onclick: () => { T.i++; renderCoach(); }}, "skip") : null));
+  document.body.append(c);
+  if (st.target) {
+    const targets = document.querySelectorAll(st.target);
+    targets.forEach((x) => x.classList.add("coach-target"));
+    if (targets[0]) targets[0].scrollIntoView({block: "nearest", inline: "nearest"});
+  }
+}
+
+function checkTutorial() {
+  if (!T.tut) return;
+  const st = T.tut.steps[T.i];
+  if (!st) return;
+  // re-apply highlight after re-renders replaced the DOM
+  if (st.target) document.querySelectorAll(st.target).forEach((x) => x.classList.add("coach-target"));
+  if (!st.check || T.passed) return;
+  if (tutorialCheck(st.check)) {
+    T.passed = true; renderCoach();
+    setTimeout(() => { if (T.tut && T.passed && T.tut.steps[T.i] === st) { T.i++; T.passed = false; renderCoach(); } }, 1100);
+  } else {
+    const s2 = document.querySelector(".coach-status"); if (s2) s2.textContent = "Waiting for you to do this…";
+  }
+}
+setInterval(() => checkTutorial(), 800);
+
+function _flowItems() { const out = []; walkFlow((n, p) => out.push({n, p})); return out; }
+function _machines() { return _flowItems().map((x) => x.n).filter((n) => n && n.statemachine !== undefined); }
+function _cmpProp(obj, spec) {
+  if (!spec.prop) return true;
+  const v = obj[spec.prop];
+  if (spec.exists) return v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length);
+  if ("value" in spec) return String(v).trim() === String(spec.value) || (typeof spec.value === "number" && Number(v) === spec.value) || v === spec.value;
+  if ("contains" in spec) return JSON.stringify(v ?? "").includes(spec.contains);
+  return v !== undefined;
+}
+const TUTORIAL_CHECKS = {
+  routine_exists: (name) => !!S.exp.routines[name],
+  component: (c) => Object.entries(S.exp.routines).some(([rid, r]) => (!c.routine || rid === c.routine) &&
+    (r.components || []).some((x) => (!c.type || x.type === c.type) && _cmpProp(x, c))),
+  routine_prop: (c) => _cmpProp(S.exp.routines[c.routine] || {}, c),
+  loop: (c) => _flowItems().some(({n}) => n && n.loop !== undefined && (!c.id || n.loop === c.id) &&
+    (!c.children_include || JSON.stringify(n.children || []).includes(`"${c.children_include}"`)) &&
+    (!c.order || n.order === c.order) && (!c.has || n[c.has] != null) &&
+    (!c.conditions_kind || (c.conditions_kind === "factorial" ? !!(n.conditions && n.conditions.factorial) :
+      c.conditions_kind === "file" ? typeof n.conditions === "string" : Array.isArray(n.conditions))) &&
+    (!c.conditions_min || (Array.isArray(n.conditions) && n.conditions.filter((r) => Object.values(r).some((v) => v !== "" && v != null)).length >= c.conditions_min)) &&
+    (!c.columns || (Array.isArray(n.conditions) && c.columns.every((col) => n.conditions.some((r) => col in r))))),
+  flow_has: (rid) => _flowItems().some(({n}) => routineOfNode(n) === rid),
+  statemachine: (c) => _machines().some((m) => {
+    const states = m.states || {};
+    if (c.state && !states[c.state]) return false;
+    if (c.states_min && Object.keys(states).length < c.states_min) return false;
+    if (c.state_contains) { const st = states[c.state_contains.state]; if (!st) return false;
+      const names = (st.run || []).map((x) => typeof x === "string" ? x : (x.loop || x.routine || x.statemachine));
+      if (!names.includes(c.state_contains.item)) return false; }
+    if (c.route_contains && !Object.values(states).some((st) => (st.next || []).some((t) => typeof t === "object" && (t.if || "").includes(c.route_contains)))) return false;
+    if (c.max_visits && !Object.values(states).some((st) => st.max_visits)) return false;
+    return true;
+  }),
+  device: (type) => (S.exp.devices || []).some((d) => d.type === type),
+  rule: (c) => Object.entries(S.exp.routines).some(([rid, r]) => (!c.routine || rid === c.routine) &&
+    (r.rules || []).some((rule) => (!c.when_contains || (rule.when || "").includes(c.when_contains)) &&
+      (!c.action || (Array.isArray(rule.do) ? rule.do : [rule.do]).some((a) => (typeof a === "string" ? a : Object.keys(a || {})[0]) === c.action)))),
+  dry_run: () => !!S.lastDryRun && S.lastDryRun >= (T.startedAt || 0),
+  tab_open: (name) => S.tab === name,
+  saved: () => !!S.savedAt && S.savedAt >= (T.startedAt || 0),
+  selected: (kind) => S.sel?.kind === kind,
+  variable: (name) => name in (S.exp.variables || {}),
+  setting: (c) => { let v = S.exp.settings; for (const k of c.path.split(".")) v = v?.[k];
+    return "contains" in c ? JSON.stringify(v ?? "").includes(c.contains) : "value" in c ? v === c.value : v != null; },
+};
+function tutorialCheck(chk) {
+  try { return Object.entries(chk).every(([k, v]) => TUTORIAL_CHECKS[k] ? TUTORIAL_CHECKS[k](v) : false); }
+  catch { return false; }
 }

@@ -28,13 +28,13 @@ def schema() -> dict[str, Any]:
     from ..components import component_registry
     from ..devices import device_registry
     from ..model import DEFAULT_SETTINGS, LOOP_ORDERS
-    from ..templates import TEMPLATES
+    from ..templates import public_templates
 
     return {
         "components": {k: v.describe() for k, v in component_registry().items()},
         "devices": {k: v.describe() for k, v in device_registry().items()},
         "loop_orders": list(LOOP_ORDERS),
-        "templates": {k: {"name": v["name"], "description": v.get("description", "")} for k, v in TEMPLATES.items()},
+        "templates": {k: {"name": v["name"], "description": v.get("description", "")} for k, v in public_templates().items()},
         "import_extensions": [".psyexp", ".ebs3", ".ebs2", ".ebs", ".osexp", ".opensesame", ".html", ".htm", ".js"],
         "default_settings": DEFAULT_SETTINGS,
     }
@@ -243,6 +243,30 @@ def make_handler(app: BuilderApp):
                     base = app.safe_path(q.get("exp", ".")).parent if q.get("exp") else app.root
                     spec: Any = json.loads(q["spec"])
                     return self._json({"rows": load_conditions(spec, base)[:500]})
+                if u.path.startswith("/api/help/"):
+                    from .. import help as hp
+                    what = u.path[len("/api/help/"):]
+                    if what == "topics":
+                        return self._json({"topics": hp.topics()})
+                    if what == "topic":
+                        return self._json({"id": q["id"], "markdown": hp.read_topic(q["id"])})
+                    if what == "search":
+                        return self._json({"results": hp.search(q.get("q", ""), int(q.get("limit", 12)))})
+                    if what == "asset":
+                        f = (hp.docs_dir() / q["path"]).resolve()
+                        if hp.docs_dir().resolve() not in f.parents or not f.is_file():
+                            return self._json({"error": "not found"}, 404)
+                        return self._send(200, f.read_bytes(), mimetypes.guess_type(str(f))[0] or "application/octet-stream")
+                    if what == "tutorials":
+                        return self._json({"tutorials": [{k: t.get(k) for k in ("id", "title", "level", "minutes", "learn",
+                                                                                 "description")} | {"steps": len(t["steps"])}
+                                                          for t in hp.tutorials()]})
+                    if what == "tutorial":
+                        from ..templates import TEMPLATES
+                        t = hp.tutorial(q["id"])
+                        start = t.get("start")
+                        return self._json({"tutorial": t, "start_doc": TEMPLATES.get(start) if start and start != "keep" else None})
+                    return self._json({"error": "not found"}, 404)
                 if u.path == "/api/template":
                     from ..templates import TEMPLATES
                     return self._json(TEMPLATES[q["name"]])
@@ -305,10 +329,11 @@ def make_handler(app: BuilderApp):
     return Handler
 
 
-def serve(root: Path, host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True) -> None:
+def serve(root: Path, host: str = "127.0.0.1", port: int = 8765, open_browser: bool = True,
+          path_query: str = "") -> None:
     app = BuilderApp(root)
     httpd = ThreadingHTTPServer((host, port), make_handler(app))
-    url = f"http://{host}:{port}/"
+    url = f"http://{host}:{port}/{path_query}"
     print(f"EDGE builder running at {url}  (directory: {app.root})  Ctrl+C to stop")
     if open_browser:
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()

@@ -1,0 +1,102 @@
+id: first_experiment
+order: 1
+title: Your first experiment (a Stroop task)
+level: beginner
+minutes: 12
+learn: routines, components, timing, expressions, loops, dry runs
+description: >
+  Build a colour-word Stroop task from an empty file: a fixation cross, a coloured word and a
+  key press, repeated over a trial list in random order, then test it with a dry run.
+start: tutorial_empty
+steps:
+  - title: Welcome
+    body: |
+      This is the EDGE builder. You will build a complete Stroop experiment in about ten minutes.
+
+      * **Left:** components (the building blocks) and devices.
+      * **Centre:** the routine editor (timeline and live preview), the **flow** (the order things
+        happen in), and the console.
+      * **Right:** properties of whatever you select.
+
+      Press **Next** to start. The coach waits for you at each step and moves on by itself when
+      the step is done.
+  - title: Create a routine
+    body: |
+      A **routine** is one screen or event sequence, like a single trial. Click **+ routine** at the top
+      of the routine editor and name it `trial`.
+    target: ".rtab.add"
+    check: {routine_exists: trial}
+  - title: Show a word
+    body: |
+      Components go *inside* a routine. Click **text** in the component palette on the left.
+      It appears on the timeline as a bar (shown for 1 s for now) and in the preview on the right.
+    target: ".pal-item[data-type=text]"
+    check: {component: {routine: trial, type: text}}
+  - title: Make the word come from the trial list
+    body: |
+      In **Properties**, set **text** to `$word`.
+
+      Values that start with `$` are *expressions*: they're computed while the experiment runs. Here
+      `word` will be a column of the trial list you'll create shortly.
+    target: "#props"
+    check: {component: {routine: trial, type: text, prop: text, value: "$word"}}
+  - title: Colour the word
+    body: |
+      Still in Properties, set **color** to `$ink`. Each trial will now draw the word in the ink
+      colour from the trial list (red, green, blue…).
+    target: "#props"
+    check: {component: {routine: trial, type: text, prop: color, value: "$ink"}}
+  - title: Collect a response
+    body: |
+      Click **keyboard** in the palette. In its properties, set **keys** to `r, g, b` and
+      **correct** to `$key`. The keyboard already has **end_routine** ticked, so a key press ends
+      the trial.
+    target: ".pal-item[data-type=keyboard]"
+    check: {component: {routine: trial, type: keyboard, prop: correct, value: "$key"}}
+  - title: Add a fixation cross first
+    body: |
+      Click **fixation** in the palette, then set its **duration** to `0.5` (seconds).
+
+      Then select the **text** component (click its name on the timeline) and set its **start**
+      to `0.5`, so the word appears right after the cross. You can also drag the bars on the timeline.
+    target: ".pal-item[data-type=fixation]"
+    check: {component: {routine: trial, type: text, prop: start, value: 0.5}}
+  - title: Repeat the trial with a loop
+    body: |
+      In the **Flow** strip, click the round **+** and choose **Loop**. Then click the **+** *inside*
+      the green loop box and choose **Routine: trial**.
+    target: "#flow"
+    check: {loop: {children_include: trial}}
+  - title: Fill in the trial list
+    body: |
+      With the loop selected, the Properties panel shows its **conditions** table. Rename the first
+      column to `word`, and add columns `ink` and `key`. Then add at least 3 rows, for example:
+
+      | word | ink | key |
+      |---|---|---|
+      | RED | red | r |
+      | RED | green | g |
+      | BLUE | blue | b |
+    target: "#props"
+    check: {loop: {columns: [word, ink, key], conditions_min: 3}}
+  - title: Randomize
+    body: |
+      Set the loop's **order** to `random` and **repeats** to `2`. Every participant now gets each row
+      twice, in a new random order.
+    target: "#props"
+    check: {loop: {order: random}}
+  - title: Test it with a dry run
+    body: |
+      Click **Dry run**. EDGE runs the whole experiment in a few seconds with a *virtual participant*
+      who presses keys with realistic reaction times. Look at the results tab: the verdict, then the
+      data preview with one row per trial.
+    target: "#btn-dryrun"
+    check: {dry_run: true}
+  - title: Save
+    body: |
+      Press **Save** (or Ctrl/⌘+S) and give your experiment a file name. Every later save keeps the
+      previous version, so you can always go back (**Versions**).
+
+      That's it: you built a complete experiment. To run it for real, press **Run**.
+    target: "#btn-save"
+    check: {saved: true}
