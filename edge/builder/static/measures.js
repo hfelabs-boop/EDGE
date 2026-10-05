@@ -314,3 +314,33 @@ async function recordingSummary() {
   box.append(h("a", {href: "#", onclick: (e) => { e.preventDefault(); openMeasures(); }}, "Review measures & data →"));
   return box;
 }
+
+/* ================================================================== computer check (before a session) */
+async function computerCheckBox() {
+  const box = h("div", {class: "pc-check"}, h("span", {class: "help"}, "Checking this computer…"));
+  const draw = async () => {
+    let r;
+    try { r = await api("/api/system_check" + (S.path ? `?path=${encodeURIComponent(S.path)}` : "")); }
+    catch { box.innerHTML = ""; return; }
+    const bad = r.checks.filter((c) => c.level === "warning" || c.level === "error");
+    const info = r.checks.filter((c) => c.level === "info");
+    box.innerHTML = "";
+    if (!bad.length) {
+      box.append(h("div", {class: "ok"}, "✓ Computer check: nothing that would affect timing", info.length ? h("small", {}, ` (${info.length} note${info.length > 1 ? "s" : ""})`) : null));
+    } else box.append(h("b", {}, `Computer check: ${bad.length} thing${bad.length > 1 ? "s" : ""} to look at`));
+    for (const c of [...bad, ...info]) {
+      const row = h("div", {class: "issue " + (c.level === "info" ? "info" : c.level)}, h("b", {}, c.title), h("div", {}, c.detail),
+        c.fix ? h("div", {class: "pc-fix"}, "→ ", c.fix) : null);
+      if (c.fixable) row.append(h("button", {class: "mini", onclick: async (e) => {
+        e.target.disabled = true; e.target.textContent = "Fixing…";
+        const res = await api("/api/system_fix", {id: c.id}).catch((err) => ({ok: false, error: err.message}));
+        toast(res.ok ? `Done: ${res.done}` : `Could not fix: ${res.error}`, 5000);
+        draw();
+      }}, "Fix"));
+      if (c.level === "info") row.classList.add("pc-info");
+      box.append(row);
+    }
+  };
+  draw();
+  return box;
+}

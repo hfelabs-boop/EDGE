@@ -21,6 +21,7 @@ The builder's "New experiment → Guided" dialog, ``edge wizard`` and the MCP se
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
 STIMULUS_KINDS = ("word", "picture", "sound", "shape")
@@ -450,3 +451,38 @@ def _minutes(secs: float) -> str:
     if secs < 90:
         return f"{max(int(round(secs)), 1)} seconds"
     return f"{round(secs / 60):.0f} minutes"
+
+
+def write_placeholders(doc: dict[str, Any], folder: Path) -> list[str]:
+    """Write a plain coloured stand-in for every picture the trial lists name but that doesn't exist yet,
+    so a new picture experiment runs straight away (replace them with the real pictures)."""
+    import struct
+    import zlib
+    made = []
+    colours = [(70, 130, 180), (205, 92, 92), (60, 179, 113), (218, 165, 32), (147, 112, 219), (64, 224, 208)]
+
+    def png(path: Path, rgb: tuple[int, int, int], w: int = 400, h: int = 300) -> None:
+        raw = b"".join(b"\x00" + bytes(rgb) * w for _ in range(h))
+
+        def chunk(t: bytes, d: bytes) -> bytes:
+            return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+        path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+                         + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+    def rows(nodes):
+        for n in nodes or []:
+            if isinstance(n, dict):
+                if isinstance(n.get("conditions"), list):
+                    yield from n["conditions"]
+                yield from rows(n.get("children"))
+                for st in (n.get("states") or {}).values():
+                    yield from rows(st.get("run"))
+    for r in rows(doc.get("flow")):
+        for v in r.values():
+            if isinstance(v, str) and v.lower().endswith((".png", ".jpg", ".jpeg")) and not Path(v).is_absolute():
+                p = folder / v
+                if not p.exists() and folder.resolve() in p.resolve().parents:
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                    png(p, colours[len(made) % len(colours)])
+                    made.append(v)
+    return made

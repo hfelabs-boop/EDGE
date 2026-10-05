@@ -469,6 +469,11 @@ class Experiment:
                 issues.append(Issue("info", f"routines.{rid}", "routine is defined but never used in the flow"))
         from .measures import validate_measures
         issues.extend(validate_measures(self))
+        try:
+            from .pitfalls import pitfall_issues
+            issues.extend(pitfall_issues(self))
+        except Exception as e:  # advisory checks must never break validation
+            issues.append(Issue("info", "experiment", f"some timing/file checks could not run: {e}"))
         return issues
 
     def iter_routines(self):

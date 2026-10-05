@@ -191,6 +191,8 @@ def create_server(root: str | Path = ".") -> FastMCP:
         except WizardError as e:
             raise EditError(str(e)) from None
         save_document(p, data, label="wizard")
+        from .wizard import write_placeholders
+        write_placeholders(data, p.parent)
         doc = ExperimentDoc.open(p)
         return {"ok": True, "path": ws.rel(p), "estimate": estimate(data, p.parent), "outline": doc.outline(),
                 **_issues(doc)}
@@ -212,6 +214,27 @@ def create_server(root: str | Path = ".") -> FastMCP:
         return {"outline": doc.outline(), "measures": describe_measures(exp) or
                 "none declared: use describe_recording / set_measures to say what this experiment measures",
                 **_issues(doc), "migrated": doc.changes}
+
+    @tool
+    def check_system(path: str = "", fix: bool = False) -> dict[str, Any]:
+        """Check this computer for the known causes of bad timing and lost responses: laptop on battery,
+        power plan, USB selective suspend (response boxes stop answering), generic display driver (no valid
+        refresh rate), several monitors with Windows fullscreen optimizations (freezes, lost first key presses),
+        display scaling, FTDI USB-serial latency timer, input method editors, timer resolution. Give an
+        experiment path to also check its screen size and devices. fix=True fixes what can be fixed
+        automatically (ask the user first: it changes Windows settings)."""
+        from .model import Experiment
+        from .syscheck import apply_fix, run_checks
+        exp = Experiment.load(ws.path(path)) if path else None
+        fixed = []
+        if fix:
+            for c in run_checks(exp):
+                if c.fixable and c.level != "ok":
+                    try:
+                        fixed.append(apply_fix(c.id))
+                    except Exception as e:
+                        fixed.append(f"could not fix {c.id}: {e}")
+        return {"checks": [c.to_dict() for c in run_checks(exp)], "fixed": fixed}
 
     @tool
     def describe_recording(path: str) -> dict[str, Any]:
@@ -850,6 +873,7 @@ def create_server(root: str | Path = ".") -> FastMCP:
     def prepare_for_data_collection(path: str) -> str:
         """Checklist before running real participants."""
         return (f"Review '{path}' for real data collection: describe_experiment and validate_experiment; "
+                "check_system on the lab computer (battery, USB suspend, display driver, monitors, serial latency); "
                 "check fullscreen, monitor/units, devices required/calibrate flags, LSL wait_for_consumers, "
                 "marker codes and TTL collisions, response timeouts, counterbalancing, data exports; "
                 "dry_run twice with different participant ids and compare trial orders; list concrete fixes.")

@@ -103,6 +103,9 @@ class Backend:
     size: tuple[int, int] = (1280, 720)
     refresh_rate: float = 60.0
     clock: Callable[[], float]
+    warnings: Any = ()            # things about this display / sound device worth knowing (set in open)
+    diagnostics: Any = {}         # renderer, measured refresh rate, frame jitter, audio driver …
+    focus_events: Any = ()        # (time, has_focus) whenever the window gains or loses keyboard focus
 
     @property
     def frame_interval(self) -> float:
@@ -131,6 +134,10 @@ class Backend:
         inner.draw()
 
     # -------------------------------------------------------- sound
+    def preload_sound(self, source: Any, **kw: Any) -> Any:
+        """Prepare a sound ahead of its onset; the result is passed to play_sound."""
+        return source
+
     def play_sound(self, source: Any, volume: float = 1.0, **kw: Any) -> Any: ...
     def stop_sound(self, handle: Any) -> None: ...
 

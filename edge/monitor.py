@@ -146,7 +146,9 @@ class Monitor:
                 self._last_counts[(did, name)] = (now, n)
                 nominal = float(st.srate or 0)
                 status = "ok"
-                if n == n_prev and now - self.t0 > 2:
+                if not nominal:
+                    status = "events"          # button boxes, markers: quiet between events is normal
+                elif n == n_prev and now - self.t0 > 2:
                     status = "silent"
                 elif nominal and rate < 0.8 * nominal and now - self.t0 > 2:
                     status = "low"

@@ -204,7 +204,9 @@ class BuilderApp:
             out["fingerprint"] = storage.fingerprint(p)
             base = p.parent
             if (answers.get("stimulus") or {}).get("kind") == "picture":
+                from ..wizard import write_placeholders
                 (p.parent / "images").mkdir(exist_ok=True)
+                out["placeholders"] = write_placeholders(doc, p.parent)
         out["estimate"] = estimate(doc, base)
         out["issues"] = self.validate(doc, out.get("path"))
         return out
@@ -349,6 +351,13 @@ def make_handler(app: BuilderApp):
                     return self._json({"root": str(app.root), "files": app.list_files()})
                 if u.path == "/api/experiment":
                     return self._json(app.load(q["path"]))
+                if u.path == "/api/system_check":
+                    from ..syscheck import run_checks
+                    exp = None
+                    if q.get("path"):
+                        from ..model import Experiment
+                        exp = Experiment.load(app.safe_path(q["path"]))
+                    return self._json({"checks": [c.to_dict() for c in run_checks(exp)]})
                 if u.path == "/api/assets":
                     return self._json(app.list_assets(q.get("exp") or None, q.get("kind", "image")))
                 if u.path == "/api/fingerprint":
@@ -466,6 +475,12 @@ def make_handler(app: BuilderApp):
                     return self._json({"issues": app.validate(body["experiment"], body.get("path"))})
                 if u.path == "/api/dryrun":
                     return self._json(app.dry_run(body["experiment"], body.get("path"), body.get("participant") or {}))
+                if u.path == "/api/system_fix":
+                    from ..syscheck import apply_fix
+                    try:
+                        return self._json({"ok": True, "done": apply_fix(body.get("id") or q.get("id", ""))})
+                    except Exception as e:
+                        return self._json({"ok": False, "error": str(e)})
                 if u.path == "/api/run_stop":
                     return self._json(app.run_stop(q.get("id") or body.get("id")))
                 if u.path == "/api/run":

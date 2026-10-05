@@ -22,7 +22,9 @@ def analyze_session(path: str | Path) -> dict[str, Any]:
     meta = json.loads((root / "session.json").read_text())
     events = [json.loads(l) for l in (root / "events.jsonl").read_text().splitlines() if l.strip()]
     rep: dict[str, Any] = {"session": root.name, "experiment": meta.get("experiment"), "timing": meta.get("timing"),
-                           "aborted": meta.get("aborted"), "errors": meta.get("errors", []), "streams": {}}
+                           "aborted": meta.get("aborted"), "errors": meta.get("errors", []), "streams": {},
+                           "warnings": meta.get("warnings", []), "display": meta.get("display") or {},
+                           "computer": [c for c in meta.get("system_checks") or [] if c.get("level") in ("warning", "error")]}
     flip_events = [e for e in events if e.get("on_flip")]
     for f in sorted((root / "streams").glob("*.csv")):
         if f.name.endswith(".raw.csv"):
@@ -162,6 +164,10 @@ def _verdict(rep: dict[str, Any]) -> list[str]:
         notes.append(f"WARNING: display latency varies by {dl['sd_ms']} ms (light sensor); stimulus onsets are less precise than the flip times")
     for c in (rep.get("measures") or {}).get("checks", []):
         notes.append(f"WARNING: {c['message']}")
+    for w in rep.get("warnings") or []:
+        notes.append(f"WARNING: {w}")
+    for c in rep.get("computer") or []:
+        notes.append(f"COMPUTER: {c['title']}" + (f" → {c['fix']}" if c.get("fix") else ""))
     if rep.get("errors"):
         notes.append(f"{len(rep['errors'])} runtime error(s) logged")
     return notes or ["OK: no timing, data or synchronization problems detected"]
@@ -175,6 +181,10 @@ def format_report(rep: dict[str, Any]) -> str:
                   f"  frames {t['frames']}, refresh {t['refresh_rate_hz']} Hz, "
                   f"interval {t['mean_interval_ms']:.3f} ± {t['sd_interval_ms']:.3f} ms (max {t['max_interval_ms']:.2f}), "
                   f"dropped {t['dropped_frames']} ({t['dropped_pct']:.2f}%)", ""]
+    d = rep.get("display") or {}
+    if d.get("renderer") or d.get("audio_driver"):
+        lines += ["Computer", f"  display {d.get('renderer', '?')}, measured {d.get('refresh_rate_measured', '?')} Hz "
+                  f"(frame jitter {d.get('frame_jitter_ms', '?')} ms), sound {d.get('audio_driver', '?')}", ""]
     lines.append("Streams")
     for name, s in rep["streams"].items():
         cm = s.get("clock_model") or {}

@@ -176,8 +176,8 @@ class SerialInputs(InputDevice):
             if len(ports) != 1:
                 raise DeviceError(f"set 'port'; serial ports found: {ports or 'none'}")
             port = ports[0]
-        self.ser = serial.Serial(port, int(self.options["baudrate"]), timeout=0.001)
         self.port = port
+        self._open_port()
         if self.options["protocol"] == "cedrus":
             self.ser.write(b"c10")          # XID mode
             self.ser.write(b"e5")           # reset the response timer
@@ -191,10 +191,21 @@ class SerialInputs(InputDevice):
         th.start()
         self._threads.append(th)
 
+    def _open_port(self) -> None:  # pragma: no cover - needs hardware
+        import serial
+        self.ser = serial.Serial(self.port, int(self.options["baudrate"]), timeout=0.001)
+        low_latency(self.ser)
+
     def _read(self) -> None:  # pragma: no cover - needs hardware
         proto, buf, mask = self.options["protocol"], b"", 0
         while not self._stop.is_set():
-            data = self.ser.read(64)
+            try:
+                data = self.ser.read(64)
+            except Exception as e:      # unplugged, or put to sleep by USB selective suspend: reconnect
+                self.errors.append(f"{self.port}: connection lost ({e}); reconnecting")
+                if not reconnect(self, self._open_port, self._stop):
+                    return
+                continue
             if not data:
                 continue
             t = self.clock()
@@ -477,3 +488,27 @@ class SimInputs(InputDevice):
 
 
 INPUT_TYPES = ("serial_inputs", "parallel_inputs", "labjack", "voice_key", "sim_inputs")
+
+
+def low_latency(ser: Any) -> bool:
+    """Ask the serial driver not to hold bytes back (Linux ASYNC_LOW_LATENCY; FTDI adapters otherwise
+    wait up to their latency timer, 16 ms by default, before passing data on)."""
+    try:
+        ser.set_low_latency_mode(True)
+        return True
+    except Exception:
+        return False
+
+
+def reconnect(dev: Device, opener, stop: threading.Event, every: float = 0.5, give_up: float = 30.0) -> bool:
+    """Reopen a lost connection until it works (True) or ``give_up`` seconds pass / the device stops (False)."""
+    t_end = time.monotonic() + give_up
+    while not stop.is_set() and time.monotonic() < t_end:
+        try:
+            opener()
+            dev.errors.append(f"{dev.id}: reconnected")
+            return True
+        except Exception:
+            stop.wait(every)
+    dev.errors.append(f"{dev.id}: could not reconnect within {give_up:.0f} s")
+    return False

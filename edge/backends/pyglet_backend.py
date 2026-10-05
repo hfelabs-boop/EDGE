@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import statistics
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -156,6 +157,15 @@ class PygletBackend(Backend):
 
     def open(self, window: dict[str, Any]) -> None:
         import pyglet
+        self.warnings: list[str] = []
+        self.diagnostics: dict[str, Any] = {}
+        self.focus_events: list[tuple[float, bool]] = []
+        self._refocus = False
+        self._sounds: dict[str, Any] = {}
+        if sys.platform.startswith("win"):
+            _dpi_aware()   # draw in real pixels even with display scaling (Windows would stretch the window)
+            # DirectSound adds latency and clips; XAudio2 (Windows 10+) first
+            pyglet.options["audio"] = ("xaudio2", "directsound", "openal", "silent")
         pyglet.options["vsync"] = bool(window.get("vsync", True))
         display = pyglet.display.get_display()
         screens = display.get_screens()
@@ -175,7 +185,43 @@ class PygletBackend(Backend):
         self.win.set_mouse_visible(bool(window.get("mouse_visible", False)))
         self.set_background(window.get("background", "#000000"))
         self._install_handlers()
-        self.refresh_rate = float(window.get("refresh_rate") or self.measure_refresh_rate())
+        try:   # take keyboard focus now: otherwise the first key presses can go to another window
+            self.win.activate()
+        except Exception:
+            pass
+        self.diagnostics.update(screens=len(screens), screen=screens.index(screen) if screen in screens else 0,
+                                screen_size=[screen.width, screen.height])
+        self._check_renderer()
+        measured, jitter_ms = self.measure_refresh()
+        self.refresh_rate = measured
+        self.diagnostics.update(refresh_rate_measured=measured, frame_jitter_ms=jitter_ms)
+        self.warnings += refresh_warnings(measured, jitter_ms, window.get("refresh_rate"))
+        self._check_audio()
+
+    def _check_renderer(self) -> None:
+        try:
+            from pyglet import gl
+            renderer = gl.glGetString(gl.GL_RENDERER)
+            renderer = _gl_str(renderer)
+        except Exception:
+            return
+        self.diagnostics["renderer"] = renderer
+        from ..syscheck import is_software_renderer
+        if is_software_renderer(renderer):
+            self.warnings.append(f"software rendering ({renderer}): the graphics card's driver is not in use, so there is "
+                                 "no reliable vsync and stimulus timing cannot be trusted; install the GPU driver")
+
+    def _check_audio(self) -> None:
+        try:
+            import pyglet
+            drv = type(pyglet.media.get_audio_driver()).__name__
+        except Exception:
+            return
+        self.diagnostics["audio_driver"] = drv
+        if "Silent" in drv:
+            self.warnings.append("no sound device: sounds will not play")
+        elif "DirectSound" in drv:
+            self.warnings.append("sound uses DirectSound, which adds latency and can clip; XAudio2 was not available")
 
     def _install_handlers(self) -> None:
         from pyglet.window import key, mouse
@@ -190,6 +236,15 @@ class PygletBackend(Backend):
                 self._escape = True
             self._events.append(InputEvent("key", _keyname(symbol), t, True, meta={"modifiers": modifiers}))
             return True  # stop pyglet closing the window on ESC
+
+        @win.event
+        def on_deactivate():
+            self.focus_events.append((now(), False))
+            self._refocus = True
+
+        @win.event
+        def on_activate():
+            self.focus_events.append((now(), True))
 
         @win.event
         def on_key_release(symbol, modifiers):
@@ -217,13 +272,21 @@ class PygletBackend(Backend):
             self._buttons[{"left": 0, "middle": 1, "right": 2}[btn(button)]] = False
             self._events.append(InputEvent("mouse", btn(button), now(), False, (x - w / 2, y - h / 2)))
 
-    def measure_refresh_rate(self, n: int = 60) -> float:
+    def measure_refresh(self, n: int = 90) -> tuple[float, float]:
+        """Refresh rate from the flips themselves (the OS's figure is often wrong), and how much the
+        frame intervals vary (variable refresh such as G-Sync/FreeSync, or a compositor)."""
         times = []
         for _ in range(n + 10):
             times.append(self.flip())
         iv = [b - a for a, b in zip(times[10:], times[11:])]
         med = statistics.median(iv) if iv else 1 / 60
-        return round(1.0 / med, 2) if med > 0 else 60.0
+        rate = round(1.0 / med, 2) if med > 0 else 60.0
+        good = [x for x in iv if x < 1.5 * med]          # dropped frames aren't jitter
+        jitter = round(statistics.pstdev(good) * 1e3, 3) if len(good) > 2 else 0.0
+        return rate, jitter
+
+    def measure_refresh_rate(self, n: int = 60) -> float:
+        return self.measure_refresh(n)[0]
 
     def set_background(self, color: Any) -> None:
         from pyglet import gl
@@ -237,6 +300,12 @@ class PygletBackend(Backend):
         t = now()
         self.win.dispatch_events()
         self.win.clear()
+        if self._refocus:          # the window lost focus (a notification, another program): take it back
+            self._refocus = False
+            try:
+                self.win.activate()
+            except Exception:
+                pass
         return t
 
     def close(self) -> None:
@@ -265,15 +334,23 @@ class PygletBackend(Backend):
             self._images[src] = img
         return self._images[src]
 
-    def play_sound(self, source: Any, volume: float = 1.0, **kw: Any) -> Any:
+    def preload_sound(self, source: Any, **kw: Any) -> Any:
+        """Decode a sound before it is needed: loading at the moment of playing delays (and can clip) the onset."""
         import pyglet
-        if isinstance(source, (int, float)):  # tone in Hz
-            snd = pyglet.media.synthesis.Sine(float(kw.get("duration", 0.2)), frequency=float(source))
-        else:
-            path = Path(source)
-            if not path.is_absolute():
-                path = self.base_dir / path
-            snd = pyglet.media.load(str(path), streaming=False)
+        key = f"{source}|{kw.get('duration')}"
+        if key not in self._sounds:
+            if isinstance(source, (int, float)):  # tone in Hz
+                self._sounds[key] = pyglet.media.StaticSource(
+                    pyglet.media.synthesis.Sine(float(kw.get("duration", 0.2)), frequency=float(source)))
+            else:
+                path = Path(source)
+                if not path.is_absolute():
+                    path = self.base_dir / path
+                self._sounds[key] = pyglet.media.load(str(path), streaming=False)
+        return self._sounds[key]
+
+    def play_sound(self, source: Any, volume: float = 1.0, **kw: Any) -> Any:
+        snd = source if hasattr(source, "play") else self.preload_sound(source, **kw)
         player = snd.play()
         player.volume = volume
         return player
@@ -305,3 +382,44 @@ class PygletBackend(Backend):
                 if ev.kind == "key" and ev.down and (not keys or ev.name in keys):
                     return ev
             time.sleep(0.001)
+
+
+def _gl_str(v: Any) -> str:
+    import ctypes
+    if isinstance(v, bytes):
+        return v.decode(errors="replace")
+    try:
+        return ctypes.cast(v, ctypes.c_char_p).value.decode(errors="replace")
+    except Exception:
+        return str(v)
+
+
+def _dpi_aware() -> None:  # pragma: no cover - Windows only
+    import ctypes
+    try:
+        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))   # per-monitor v2
+    except Exception:
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except Exception:
+            pass
+
+
+def refresh_warnings(measured: float, jitter_ms: float, requested: Any = None) -> list[str]:
+    """What's worth knowing about the measured refresh rate before trusting frame timing."""
+    out = []
+    if requested and measured < 300:            # above 300 Hz vsync is off: that warning says it all
+        try:
+            req = float(requested)
+            if req > 0 and abs(measured - req) / req > 0.02:
+                out.append(f"the screen runs at {measured:g} Hz, not the {req:g} Hz in the settings: durations are "
+                           f"timed with {measured:g} Hz (set the monitor's refresh rate in the display settings)")
+        except (TypeError, ValueError):
+            pass
+    if measured < 300 and jitter_ms > 1.0:
+        out.append(f"frame intervals vary by {jitter_ms:.1f} ms: variable refresh (G-Sync / FreeSync / Adaptive Sync) "
+                   "or a desktop compositor seems to be on; turn it off for fixed frame timing")
+    if 200 <= measured < 300:
+        out.append(f"{measured:g} Hz monitor: many of these show each frame one refresh later than reported; "
+                   "measure the real delay with a light sensor (input named 'light')")
+    return out

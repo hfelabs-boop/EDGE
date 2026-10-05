@@ -160,6 +160,8 @@ def write_wizard_experiment(answers: dict[str, Any], directory: Path) -> tuple[P
         path = directory / f"{doc['name']}_{n}.yaml"
         n += 1
     save_document(path, doc, label="wizard")
+    from .wizard import write_placeholders
+    write_placeholders(doc, directory)
     return path, estimate(doc, directory)
 
 

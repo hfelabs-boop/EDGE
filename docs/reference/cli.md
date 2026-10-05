@@ -117,6 +117,20 @@ edge scan [-h] [--timeout TIMEOUT] [--json]
 | `--timeout` | seconds to listen for LSL streams |
 | `--json` | machine-readable output |
 
+## edge doctor
+
+check this computer for known causes of bad timing and lost responses
+
+```
+edge doctor [-h] [--fix] [--json] [experiment]
+```
+
+| argument | description |
+|---|---|
+| `experiment` | also check against this experiment's screen and devices |
+| `--fix` | fix what can be fixed automatically |
+| `--json` | machine-readable output |
+
 ## edge report
 
 timing / data / sync quality report for a session

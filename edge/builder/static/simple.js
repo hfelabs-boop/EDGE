@@ -477,6 +477,7 @@ async function runDialog() {
   const body = $("#modal-body"); body.innerHTML = ""; body.className = "rundlg";
   const recBox = h("div", {});
   if (typeof recordingSummary === "function") recordingSummary().then((b) => { if (b) recBox.append(b); });
+  if (typeof computerCheckBox === "function") computerCheckBox().then((b) => recBox.append(b));
   const pid = h("input", {value: info.suggestion});
   const warn = h("div", {class: "help"});
   const checkPid = () => { warn.textContent = info.used.includes(pid.value.trim()) ? `⚠ Participant ${pid.value} already has data. A new session folder will be made, nothing is overwritten.` : ""; warn.style.color = "var(--warn)"; };

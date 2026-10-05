@@ -127,6 +127,27 @@ def cmd_scan(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_doctor(a: argparse.Namespace) -> int:
+    from .syscheck import apply_fix, format_checks, run_checks
+    exp = None
+    if a.experiment:
+        from .model import Experiment
+        exp = Experiment.load(a.experiment)
+    checks = run_checks(exp)
+    if a.fix:
+        for c in [c for c in checks if c.fixable and c.level in ("warning", "info", "error")]:
+            try:
+                print(f"fixed: {apply_fix(c.id)}")
+            except Exception as e:
+                print(f"could not fix {c.id}: {e}")
+        checks = run_checks(exp)
+    if a.json:
+        print(json.dumps([c.to_dict() for c in checks], indent=2))
+    else:
+        print(format_checks(checks))
+    return 1 if any(c.level == "error" for c in checks) else 0
+
+
 def cmd_report(a: argparse.Namespace) -> int:
     from .report import analyze_session, format_report
 
@@ -401,6 +422,12 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--timeout", type=float, default=2.0, help="seconds to listen for LSL streams")
     s.add_argument("--json", action="store_true", help="machine-readable output")
     s.set_defaults(fn=cmd_scan)
+
+    dr = sub.add_parser("doctor", help="check this computer for known causes of bad timing and lost responses")
+    dr.add_argument("experiment", nargs="?", help="also check against this experiment's screen and devices")
+    dr.add_argument("--fix", action="store_true", help="fix what can be fixed automatically")
+    dr.add_argument("--json", action="store_true", help="machine-readable output")
+    dr.set_defaults(fn=cmd_doctor)
 
     rp = sub.add_parser("report", help="timing / data / sync quality report for a session")
     rp.add_argument("session_dir", help="a session folder in data/")

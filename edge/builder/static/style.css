@@ -548,7 +548,7 @@ body.mode-simple .expert-only { display: none !important; }
 .mon-dev { display: flex; gap: 6px; align-items: baseline; }
 .mon-dev small { color: var(--muted); }
 .mon-dev .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: var(--muted); align-self: center; }
-.mon-dev .dot.ok, .mon-dev .dot.done { background: var(--accent2); }
+.mon-dev .dot.ok, .mon-dev .dot.done, .mon-dev .dot.events { background: var(--accent2); }
 .mon-dev .dot.low { background: var(--warn); }
 .mon-dev .dot.silent { background: var(--err); }
 .mon-warns { display: flex; flex-direction: column; gap: 4px; }
@@ -556,3 +556,8 @@ body.mode-simple .expert-only { display: none !important; }
 .menu .menu-head { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); cursor: default; padding: 4px 10px 2px; }
 .menu .menu-head:hover { background: none; }
 .dev-wiring { padding: 8px 10px; border-radius: 6px; background: var(--panel2); display: flex; flex-direction: column; gap: 3px; }
+.pc-check { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; font-size: 12px; }
+.pc-check .issue { display: flex; flex-direction: column; gap: 2px; }
+.pc-check .issue button { align-self: flex-start; }
+.pc-check .pc-info { opacity: .8; }
+.pc-fix { color: var(--text); }

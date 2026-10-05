@@ -8,6 +8,14 @@ builder covers nearly everything else with menus: the value menu next to each pr
 column, or makes one, so you rarely type a formula. Formulas (`$resp.rt < 0.5`) are there when you want
 them, and Python `code` components (Expert mode) for anything beyond that.
 
+**Is this computer good enough for precise timing?**
+Run `edge doctor` (or open **Run with a participant**, which runs the same check). It looks for the
+known culprits: a laptop on battery, a generic display driver, several monitors with Windows
+fullscreen optimizations, USB power saving that puts response boxes to sleep, slow USB-serial
+adapters, input method editors. It explains each one and fixes what it can (`edge doctor --fix`).
+Every session also measures the real refresh rate and reports problems in its report. See
+[Known issues on lab computers](KNOWN_ISSUES.md).
+
 **How do I install it without a terminal?**
 Use the installer for your system (see [Getting started](GETTING_STARTED.md#1-install)); it puts an
 EDGE icon on the desktop. If you installed with pip, `edge desktop-shortcut` makes the icon.

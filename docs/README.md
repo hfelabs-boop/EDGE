@@ -11,6 +11,7 @@ are also built into the app: press **?** in the builder, or run `edge help` in a
 | [Tutorials](TUTORIALS.md) | eight hands-on lessons, also available as **interactive tutorials** in the builder |
 | [Builder guide](BUILDER_GUIDE.md) | a tour of every part of the visual builder |
 | [FAQ & troubleshooting](FAQ.md) | common questions, error messages, glossary |
+| [Known issues on lab computers](KNOWN_ISSUES.md) | power saving, display drivers, monitors, USB adapters, sound: what EDGE checks and fixes (`edge doctor`) |
 
 ## Building experiments
 

@@ -77,6 +77,8 @@ class SerialTrigger(Device):
                 raise DeviceError(f"set 'port' explicitly; found: {[p.device for p in ports]}")
             port = ports[0].device
         self.ser = serial.Serial(port, int(self.options["baudrate"]), timeout=0, write_timeout=0.05)
+        from .inputs import low_latency
+        low_latency(self.ser)
         self.port = port
         proto = self.options["protocol"]
 

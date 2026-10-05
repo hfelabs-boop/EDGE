@@ -70,6 +70,8 @@ class Session:
         self.frame_intervals: list[float] = []
         self.dropped_frames = 0
         self.errors: list[str] = []
+        self.warnings: list[str] = []       # not failures, but things that affect timing or data quality
+        self.system_checks: list[dict[str, Any]] = []
         self.aborted = False
         self.data_root = Path(data_dir) if data_dir else experiment.base_dir / self.settings["data"]["dir"]
         self.data: SessionData | None = None
@@ -96,6 +98,19 @@ class Session:
         if hasattr(self.backend, "base_dir"):
             self.backend.base_dir = self.exp.base_dir
         self.backend.open(self.settings["window"])
+        for w in getattr(self.backend, "warnings", ()) or ():
+            self.log(f"[edge] WARNING: {w}")
+            self.warnings.append(w)
+        if self.virtual_participant is None and self.backend.name != "headless":
+            try:     # the computer-level known issues (battery, USB suspend, monitors, serial latency …)
+                from .syscheck import run_checks
+                checks = run_checks(self.exp, quick=True)
+                self.system_checks = [c.to_dict() for c in checks]
+                for c in checks:
+                    if c.level in ("warning", "error"):
+                        self.log(f"[edge] computer check: {c.title}. {c.fix}")
+            except Exception:
+                pass
         if self.backend.refresh_rate > 300:
             self.log(f"[edge] WARNING: measured refresh rate {self.backend.refresh_rate:.0f} Hz: vsync is not "
                      "working, stimulus durations will not be frame-accurate (check GPU driver settings)")
@@ -110,6 +125,7 @@ class Session:
         for dev in self.devices.values():
             dev.start()
         self.marker("session_start", source="edge")
+        self.t_session_start = self.clock()
         if self.monitor:
             self.monitor.start()
 
@@ -254,6 +270,13 @@ class Session:
             except Exception as e:
                 self.errors.append(f"closing {did}: {e}")
             self.errors += [f"{did}: {err}" for err in dev.errors]
+        t0 = getattr(self, "t_session_start", None)
+        lost = [t for t, active in (getattr(self.backend, "focus_events", ()) or ())
+                if not active and t0 is not None and t >= t0]      # focus changes while the window opens don't count
+        if lost:
+            first = f" (first {lost[0] - t0:.1f} s into the session)" if t0 is not None else ""
+            self.warnings.append(f"the experiment window lost keyboard focus {len(lost)} time(s){first}: key presses "
+                                 "while another window had focus were not recorded")
         summary = self.summary(clock_models)
         if self.monitor:
             try:
@@ -320,6 +343,9 @@ class Session:
             "loops": self.loop_summaries,
             "variables": {k: v for k, v in self.vars.items() if isinstance(v, (int, float, str, bool, type(None)))},
             "errors": self.errors,
+            "warnings": self.warnings,
+            "display": _jsonable(getattr(self.backend, "diagnostics", {}) or {}),
+            "system_checks": self.system_checks,
         }
 
 
@@ -329,3 +355,7 @@ def _safe(fn) -> Any:
     except Exception as e:  # pragma: no cover
         return {"error": str(e)}
 
+
+
+def _jsonable(d: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in d.items() if isinstance(v, (str, int, float, bool, list, type(None)))}

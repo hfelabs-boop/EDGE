@@ -153,8 +153,16 @@ class Sound(Component):
         "tone_duration": {"type": "float", "default": 0.2, "min": 0.05, "max": 2, "step": 0.05, "help": "length of a pure tone in seconds (for numeric sounds)"},
     }
 
+    def prepare(self) -> None:
+        super().prepare()
+        # decode now, not at the onset: loading a file when it should start playing delays and clips it
+        try:
+            self.source = self.backend.preload_sound(self.p["sound"], duration=self.p["tone_duration"])
+        except Exception:
+            self.source = self.p["sound"]
+
     def on_start(self, t: float) -> None:
-        self.handle = self.backend.play_sound(self.p["sound"], self.p["volume"], duration=self.p["tone_duration"])
+        self.handle = self.backend.play_sound(self.source, self.p["volume"], duration=self.p["tone_duration"])
         self.out["onset"] = t - self.run.t0
 
     def on_frame(self, t: float) -> None:
