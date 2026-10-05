@@ -59,7 +59,7 @@ class Text(VisualComponent):
         "italic": {"type": "bool", "default": False, "help": "italic text"},
         "wrap_width": {"type": "float", "default": None, "help": "maximum line width before wrapping (window units)"},
         "direction": {"type": "choice", "choices": ["auto", "ltr", "rtl"], "default": "auto",
-                      "help": "text direction; auto detects Hebrew, Arabic, Persian … (right-to-left)"},
+                      "help": "text direction; auto detects Hebrew (right-to-left)"},
         **_VISUAL_COMMON,
     }
 

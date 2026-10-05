@@ -3,7 +3,7 @@
     - id: about_you
       type: survey
       title: A few questions about you
-      language: en                                   # he, ar … switch the page to right-to-left
+      language: en                                   # he switches the page to right-to-left
       questions:
         - {instrument: demographics}                  # from the library (edge/survey_library.py)
         - {id: mood, type: likert, scale: agree7, text: "I feel good right now."}
@@ -64,7 +64,7 @@ question uses ``test_answer: yes`` so test runs go through the whole study).
 ``{consent: yes, age: {">=": 18}}`` (all must hold), ``{any: [{a: 1}, {b: 1}]}``,
 ``{email: {answered: true}}``. Questions can show earlier answers with ``{{answer.<id>}}``.
 
-Right-to-left: ``language: he`` / ``ar`` / ``fa`` … or ``direction: rtl`` lays the page out right to left
+Right-to-left: ``language: he`` or ``direction: rtl`` lays the page out right to left
 (and translates the buttons and messages where a translation exists). With ``direction: auto`` (the
 default) the page follows the language, or the first strong character of the title and first question.
 """
@@ -1162,7 +1162,7 @@ def render_html(spec: dict[str, Any], rng: random.Random | None = None, asset_pr
     scores = {**lib_scores, **(spec.get("scores") or {})}
     direction = page_direction(spec, flat)
     language = spec.get("language")
-    if not language and direction == "rtl":      # Hebrew / Arabic text without a language: messages to match
+    if not language and direction == "rtl":      # Hebrew text without a language: messages to match
         from .bidi import guess_language
         language = guess_language(" ".join([str(spec.get("title") or "")] + [str(q.get("text") or "") for q in flat[:5]]))
     text = messages(language)

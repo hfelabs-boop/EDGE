@@ -1,7 +1,7 @@
 /* EDGE survey page. Logical properties (inline-start/end) so right-to-left languages mirror correctly. */
 :root{--accent:#2f6fde;--line:#d9dee5;--muted:#667085;--err:#c62828;--bg:#f7f8fa;--ok:#1e8e5a}
 *{box-sizing:border-box}
-body{font:17px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Noto Sans Hebrew","Noto Sans Arabic",Tahoma,sans-serif;margin:0;background:var(--bg);color:#1d2228}
+body{font:17px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Noto Sans Hebrew",Tahoma,sans-serif;margin:0;background:var(--bg);color:#1d2228}
 [dir=rtl] body{font-size:18px}
 .wrap{max-width:880px;margin:0 auto;padding:28px 20px 60px}
 h1.title{font-size:26px;margin:0 0 6px}.intro{color:#333;margin:0 0 18px}

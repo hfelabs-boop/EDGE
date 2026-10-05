@@ -148,7 +148,7 @@ function renderSurveyEditor() {
     svField("Title", c.title || "", (v) => { if (v) c.title = v; else delete c.title; svCommit(false); }),
     svField("Instructions on the first page", c.intro || "", (v) => { if (v) c.intro = v; else delete c.intro; svCommit(false); }, {area: true}),
     h("div", {class: "row2"},
-      svSelect("Language (buttons & messages)", c.language || "", [["", "automatic"], ["en", "English"], ["de", "Deutsch"], ["es", "Español"], ["fr", "Français"], ["he", "עברית (RTL)"], ["ar", "العربية (RTL)"], ["fa", "فارسی (RTL)"], ["ur", "اردو (RTL)"]],
+      svSelect("Language (buttons & messages)", c.language || "", [["", "automatic"], ["en", "English"], ["de", "Deutsch"], ["es", "Español"], ["fr", "Français"], ["he", "עברית (RTL)"]],
         (v) => { if (v) c.language = v; else delete c.language; svCommit(false); }),
       svSelect("Direction", c.direction || "auto", [["auto", "automatic"], ["ltr", "left to right"], ["rtl", "right to left"]],
         (v) => { if (v === "auto") delete c.direction; else c.direction = v; svCommit(false); })));

@@ -382,7 +382,7 @@ function drawPlayFrame(cv, f) {
       ctx.scale(1, -1); ctx.fillStyle = cssColor(p.color, "#fff");
       const hgt = p.height || 40; ctx.font = `${p.italic ? "italic " : ""}${p.bold ? "bold " : ""}${hgt}px ${p.font || "sans-serif"}`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.direction = p.direction === "rtl" || (p.direction !== "ltr" && /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc]/.test(String(p.text ?? ""))) ? "rtl" : "ltr";
+      ctx.direction = p.direction === "rtl" || (p.direction !== "ltr" && /[\u0590-\u05ff\ufb1d-\ufb4f]/.test(String(p.text ?? ""))) ? "rtl" : "ltr";
       const lines = wrapLines(ctx, String(p.text ?? ""), p.wrap_width || P.size[0] * 0.9);
       lines.forEach((ln, i) => ctx.fillText(ln, 0, (i - (lines.length - 1) / 2) * hgt * 1.25));
     } else if (kind === "image") {

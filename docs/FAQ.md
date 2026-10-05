@@ -130,10 +130,9 @@ common question type and a library of validated questionnaires (consent, demogra
 NASA-TLX, SUS …) that score themselves. See [Surveys](SURVEYS.md) and the interactive survey tutorial. For a
 page you designed yourself, use an `html` component.
 
-**… run a survey in Hebrew, Arabic or another right-to-left language?** Write the questions in that
-language: the page switches to right-to-left with translated buttons and messages. Or set `language: he`
-(ar, fa, ur …) or `direction: rtl` on the survey. Text components have `direction: auto | ltr | rtl` too.
-See [Surveys](SURVEYS.md#right-to-left-languages).
+**… run a survey in Hebrew (right to left)?** Write the questions in Hebrew: the page switches to
+right-to-left with Hebrew buttons and messages. Or set `language: he` or `direction: rtl` on the survey. Text components have `direction: auto | ltr | rtl` too.
+See [Surveys](SURVEYS.md#right-to-left-hebrew).
 
 **… score a questionnaire?** Library questionnaires score themselves. For your own, add `scores` (sum, mean,
 reverse items, bands); see [Surveys](SURVEYS.md#scores).

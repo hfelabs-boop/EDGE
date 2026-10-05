@@ -62,7 +62,7 @@
 - [ ] Wizard: picture upload from the dialog, more designs (go/no-go, n-back, visual search, questionnaires only)
 - [ ] Try it: render text with the same font metrics as the experiment window; slider dragging feedback
 - [ ] Surveys: online services (reCAPTCHA, ArcGIS maps), unmoderated user testing of external sites,
-      interview scheduling; more message translations (fa, ur, tr, zh, ja …)
+      interview scheduling; more message translations (tr, zh, ja …)
 - [ ] Surveys: per-question timing, loop & merge (repeat a block per selected option), carry-forward choices,
       side-by-side and heat-map questions, image choice, validated translations of the library
 - [ ] Signed stand-alone apps (PyInstaller recipe exists; needs testing and code signing on macOS/Windows)

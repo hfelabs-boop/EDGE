@@ -1071,7 +1071,7 @@ function drawScreen(cv, rid, t, row) {
       ctx.scale(1, -1); ctx.fillStyle = color(c.color, "#fff");
       const hgt = conv(numOr(c.height, 40), "y"); ctx.font = `${c.bold ? "bold " : ""}${hgt}px sans-serif`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.direction = c.direction === "rtl" || (c.direction !== "ltr" && /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc]/.test(String(c.text ?? ""))) ? "rtl" : "ltr";
+      ctx.direction = c.direction === "rtl" || (c.direction !== "ltr" && /[\u0590-\u05ff\ufb1d-\ufb4f]/.test(String(c.text ?? ""))) ? "rtl" : "ltr";
       const lines = String(c.text ?? "").split("\n"); lines.forEach((ln, i) => ctx.fillText(ln, 0, (i - (lines.length - 1) / 2) * hgt * 1.25));
     } else if (c.type === "shape" || c.type === "fixation") {
       const shape = c.shape || (c.type === "fixation" ? "cross" : "rect");

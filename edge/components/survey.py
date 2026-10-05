@@ -21,8 +21,8 @@ class Survey(Html):
                       "help": "the questions, in order; {instrument: phq9} adds a library questionnaire"},
         "title": {"type": "str", "default": "", "help": "heading on the first page"},
         "language": {"type": "str", "default": "",
-                     "help": "page language, e.g. en, de, es, fr, he, ar: translates buttons and messages; "
-                             "he / ar / fa / ur … switch to right-to-left"},
+                     "help": "page language, e.g. en, de, es, fr, he: translates buttons and messages; "
+                             "he switches to right-to-left"},
         "direction": {"type": "choice", "choices": ["auto", "ltr", "rtl"], "default": "auto",
                       "help": "auto follows the language, or the first letters of the title and questions"},
         "intro": {"type": "text", "default": "", "help": "instructions under the title (HTML allowed)"},

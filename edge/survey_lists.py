@@ -26,7 +26,7 @@ COUNTRIES = [
 ]
 
 LANGUAGES = [
-    "Afrikaans", "Albanian", "Amharic", "Arabic", "Armenian", "Azerbaijani", "Basque", "Belarusian", "Bengali", "Bosnian",
+    "Afrikaans", "Albanian", "Amharic", "Armenian", "Azerbaijani", "Basque", "Belarusian", "Bengali", "Bosnian",
     "Bulgarian", "Burmese", "Catalan", "Cantonese", "Croatian", "Czech", "Danish", "Dutch", "English", "Estonian",
     "Filipino (Tagalog)", "Finnish", "French", "Georgian", "German", "Greek", "Gujarati", "Hausa", "Hebrew", "Hindi",
     "Hungarian", "Icelandic", "Igbo", "Indonesian", "Irish", "Italian", "Japanese", "Kannada", "Kazakh", "Khmer", "Korean",

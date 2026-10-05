@@ -331,8 +331,8 @@ def create_server(root: str | Path = ".") -> FastMCP:
         text, essay, number, date, form, rank, side_by_side, constant_sum, group, hot_spot, heat_map, drill_down,
         highlight, signature, timing, meta_info, file_upload, captcha, autocomplete, tree_test, video_response,
         screen_capture, location, page_break) and display logic ("show_if": {"age": {">=": 18}}).
-        `language` (en, de, es, fr, he, ar, fa …) translates buttons and messages; right-to-left languages, or
-        questions written in Hebrew / Arabic, lay the page out right to left.
+        `language` (en, de, es, fr, he …) translates buttons and messages; Hebrew (set as the language, or used
+        in the questions) lays the page out right to left.
         `position`: "end", "start" or "after:<routine>". Creates the routine if it doesn't exist. Answers and
         scores (e.g. phq9_total, phq9_total_band) become data columns."""
         def op(d: ExperimentDoc) -> None:

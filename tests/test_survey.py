@@ -452,14 +452,24 @@ def test_extract_files_writes_and_replaces(tmp_path):
 def test_rtl_direction_language_and_messages():
     he, _, _ = sv.render_html({"title": "שאלון", "questions": [{"id": "a", "type": "text", "text": "מה שמך?"}]})
     assert "dir='rtl'" in he and "lang='he'" in he and "נא לענות על שאלה זו." in he
-    ar, _, _ = sv.render_html({"language": "ar", "questions": [{"id": "a", "type": "text", "text": "Name?"}]})
-    assert "dir='rtl'" in ar and "يرجى الإجابة" in ar
+    yi, _, _ = sv.render_html({"language": "yi", "questions": [{"id": "a", "type": "text", "text": "Name?"}]})
+    assert "dir='rtl'" in yi and "Please answer" in yi           # right to left, English messages
     forced, _, _ = sv.render_html({"direction": "rtl", "language": "en", "questions": [{"id": "a", "type": "text", "text": "x"}]})
     assert "dir='rtl'" in forced and "Please answer" in forced
     de, _, _ = sv.render_html({"language": "de", "labels": {"submit": "Fertig"}, "questions": [{"id": "a", "type": "text", "text": "x"}]})
     assert "dir='ltr'" in de and "Bitte beantworten" in de and "Fertig" in de
     en, _, _ = sv.render_html({"questions": [{"id": "a", "type": "text", "text": "Hello"}]})
     assert "dir='ltr'" in en
+
+
+def test_no_arabic_support():
+    from edge import bidi, survey_i18n
+    assert "ar" not in survey_i18n.MESSAGES and not bidi.is_rtl_language("ar")
+    root = Path(sv.__file__).parent
+    for f in list(root.rglob("*.py")) + list(root.rglob("*.js")) + list(root.rglob("*.css")):
+        text = f.read_text(encoding="utf-8")
+        assert "arabic" not in text.lower(), f
+        assert not any("\u0600" <= ch <= "\u06ff" for ch in text), f
 
 
 def test_translations_cover_every_message():
@@ -480,11 +490,10 @@ def test_bidi_helpers():
     from edge import bidi
     assert bidi.has_rtl("שלום") and not bidi.has_rtl("hello")
     assert bidi.is_rtl_language("he-IL") and not bidi.is_rtl_language("de")
-    assert bidi.guess_language("مرحبا") == "ar" and bidi.guess_language("سلام، چطوری؟") == "fa" and bidi.guess_language("שלום") == "he"
+    assert bidi.guess_language("שלום") == "he" and bidi.guess_language("hello") is None
     assert bidi.visual("plain text") == "plain text"
     if bidi.available():
         assert bidi.visual("שלום world") == "world םולש"
-        assert bidi.visual("مرحبا") != "مرحبا"          # letters joined into contextual forms
 
 
 def test_text_component_has_a_direction():

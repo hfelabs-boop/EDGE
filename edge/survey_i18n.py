@@ -1,6 +1,6 @@
-"""Messages and buttons of the survey page, per language. Set ``language: he`` (or ar, de, es, fr …) on a
+"""Messages and buttons of the survey page, per language. Set ``language: he`` (or de, es, fr …) on a
 survey; anything not translated falls back to English, and ``labels:`` overrides single messages.
-Right-to-left languages (Hebrew, Arabic, Persian, Urdu …) also switch the page to right-to-left."""
+Hebrew also switches the page to right-to-left."""
 
 from __future__ import annotations
 
@@ -93,52 +93,6 @@ HE = {
     "captcha": "הקלידו את התווים שאתם רואים", "captcha_wrong": "אין התאמה. נא לנסות את הקוד החדש.",
     "captcha_new": "קוד חדש", "tree_answer": "התשובה שלך:", "tree_required": "נא לבחור היכן הייתם מוצאים זאת.",
     "date_min": "נא לבחור תאריך החל מ-{d}.", "date_max": "נא לבחור תאריך עד {d}.",
-}
-
-AR = {
-    "next": "التالي", "back": "السابق", "submit": "إرسال",
-    "required": "يرجى الإجابة عن هذا السؤال.", "required_short": "حقل مطلوب.",
-    "rows": "يرجى الإجابة عن جميع العبارات (ناقص {n}).", "cells": "يرجى ملء جميع الخانات (ناقص {n}).",
-    "fix": "بعض الإجابات ناقصة أو تحتاج إلى تصحيح.", "fix_fields": "يرجى مراجعة الحقول المحددة.",
-    "choose": "اختر …", "other": "يرجى التحديد", "other_missing": "يرجى كتابة إجابتك في المربع.",
-    "min": "يرجى اختيار {n} على الأقل.", "max": "يرجى اختيار {n} على الأكثر.",
-    "number": "يرجى إدخال رقم.", "low": "يجب أن يكون الرقم {n} على الأقل.", "high": "يجب أن يكون الرقم {n} على الأكثر.",
-    "email": "يرجى إدخال بريد إلكتروني صحيح.", "url": "يرجى إدخال عنوان ويب يبدأ بـ http:// أو https://.",
-    "tel": "يرجى إدخال رقم هاتف صحيح.", "format": "يرجى التحقق من صيغة إجابتك.",
-    "short": "يرجى كتابة {n} حرفًا على الأقل.",
-    "sum": "يجب أن يكون المجموع {total}.", "sum_max": "يجب ألا يتجاوز المجموع {total}.",
-    "sum_min": "يجب أن يكون المجموع {total} على الأقل.", "total": "المجموع",
-    "slider": "يرجى تحريك المؤشر.", "move": "(حرّك المؤشر)", "value": "إجابتك: ",
-    "rank": "اسحب الخيارات، أو استخدم ↑ ↓، لترتيبها (الأعلى = الأول).",
-    "rankn": "أعطِ كل خيار رتبة مختلفة من 1 إلى {n}.", "rank_bad": "استخدم كل رتبة من 1 إلى {n} مرة واحدة فقط.",
-    "up": "تحريك لأعلى", "down": "تحريك لأسفل", "listbox": "اضغط مع الاستمرار على Ctrl (⌘ في ماك) لاختيار عدة خيارات.",
-    "typesearch": "ابدأ الكتابة …", "pick_list": "يرجى اختيار إجابة من القائمة.",
-    "nps_low": "غير مرجح على الإطلاق", "nps_high": "مرجح جدًا",
-    "items": "العناصر", "moveto": "نقل إلى", "group": "اسحب كل عنصر إلى مجموعة (أو استخدم قائمته).",
-    "group_rank": "اسحب كل عنصر إلى مجموعة؛ واسحب داخل المجموعة للترتيب (الأعلى = الأول).",
-    "group_all": "يرجى وضع كل عنصر في مجموعة.",
-    "hotspot": "انقر على المناطق لاختيارها.",
-    "hotspot_rate": "انقر مرة على المنطقة للإعجاب، ومرتين لعدم الإعجاب، وثلاث مرات للإلغاء.",
-    "heat": "انقر على الصورة (حتى {n} نقرة).", "clear": "مسح",
-    "loc_none": "لم يتم اختيار موقع بعد.", "loc_at": "الموقع: {lat}، {lon}", "loc_marked": "تم تحديد الموقع.",
-    "loc_wait": "جارٍ تحديد موقعك …", "loc_fail": "تعذّر تحديد موقعك.",
-    "loc_here": "استخدام موقعي الحالي", "loc_required": "يرجى اختيار موقع.",
-    "highlight": "اختر فئة، ثم انقر أو اسحب على الكلمات لتمييزها. انقر مرة أخرى للإزالة.",
-    "hl_required": "يرجى تمييز كلمة واحدة على الأقل.",
-    "sign": "وقّع باستخدام الفأرة أو القلم أو إصبعك.", "sign_required": "يرجى التوقيع في المربع.",
-    "file_ok": "تم الإرفاق: {name}", "file_max": "الحجم الأقصى {mb} ميغابايت.", "file_big": "حجم الملف أكبر من {mb} ميغابايت.",
-    "file_required": "يرجى إرفاق ملف.",
-    "rec_start": "● بدء التسجيل", "rec_stop": "■ إيقاف", "rec_again": "● إعادة التسجيل",
-    "rec_done": "تم تسجيل {s} ثانية. يمكنك الاستماع أو إعادة التسجيل.",
-    "rec_unsupported": "المتصفح لا يدعم التسجيل.", "rec_denied": "تم رفض الوصول إلى الكاميرا أو الميكروفون.",
-    "rec_short": "يرجى التسجيل لمدة {s} ثانية على الأقل.", "rec_required": "يرجى تسجيل إجابة.",
-    "shot_hint": "التقط صورة للشاشة، ثم اسحب فوق أي شيء خاص لإخفائه باللون الأسود.",
-    "shot_take": "التقاط الشاشة", "shot_black": "اسحب فوق المناطق لتسويدها.",
-    "shot_unsupported": "المتصفح لا يدعم التقاط الشاشة.", "shot_denied": "تم إلغاء التقاط الشاشة.",
-    "shot_required": "يرجى التقاط صورة للشاشة.", "undo": "تراجع",
-    "captcha": "اكتب الأحرف التي تراها", "captcha_wrong": "غير مطابق. يرجى تجربة الرمز الجديد.",
-    "captcha_new": "رمز جديد", "tree_answer": "إجابتك:", "tree_required": "يرجى اختيار المكان الذي ستجده فيه.",
-    "date_min": "يرجى اختيار تاريخ في {d} أو بعده.", "date_max": "يرجى اختيار تاريخ في {d} أو قبله.",
 }
 
 DE = {
@@ -279,7 +233,7 @@ FR = {
     "date_min": "Veuillez choisir une date à partir du {d}.", "date_max": "Veuillez choisir une date jusqu'au {d}.",
 }
 
-MESSAGES = {"en": EN, "he": HE, "iw": HE, "ar": AR, "de": DE, "es": ES, "fr": FR}
+MESSAGES = {"en": EN, "he": HE, "iw": HE, "de": DE, "es": ES, "fr": FR}
 
 
 def messages(language: str | None) -> dict[str, str]:

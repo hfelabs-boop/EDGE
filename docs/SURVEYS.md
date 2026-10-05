@@ -181,7 +181,7 @@ Data from this page: `about.age`, `about.gender` … `about.sleep`, `about.caffe
 |---|---|---|
 | `questions` | | the questions in order (required) |
 | `title`, `intro` | | heading and instructions on the first page (HTML allowed) |
-| `language` | automatic | `en`, `de`, `es`, `fr`, `he`, `ar` …: translates the buttons and messages; right-to-left languages (Hebrew, Arabic, Persian, Urdu …) lay the page out right to left |
+| `language` | automatic | `en`, `de`, `es`, `fr`, `he` …: translates the buttons and messages; Hebrew lays the page out right to left |
 | `direction` | `auto` | `ltr` or `rtl`; `auto` follows the language, or the first letters of the title and questions |
 | `progress_bar` | `true` | a progress bar across pages |
 | `allow_back` | `true` | a Back button (answers are kept when going back and forth) |
@@ -191,23 +191,22 @@ Data from this page: `about.age`, `about.gender` … `about.sleep`, `about.caffe
 | `css` | | extra CSS for the page |
 | `display`, `fullscreen` | auto / true | as for HTML pages: a pywebview window if installed, otherwise the browser |
 
-### Right-to-left languages
+### Right-to-left (Hebrew)
 
-Surveys support Hebrew, Arabic, Persian, Urdu and other right-to-left languages completely: the page
-direction, text alignment, the order of answer options and scale points (first option on the right),
-matrix tables, sliders (minimum on the right), progress bar, buttons, rank lists, drill-downs and the
-tree test are all mirrored, and mixed right-to-left / left-to-right text is laid out by the browser's
-bidirectional algorithm.
+Hebrew surveys are fully right to left: the page direction, text alignment, the order of answer options
+and scale points (first option on the right), matrix tables, sliders (minimum on the right), progress bar,
+buttons, rank lists, drill-downs and the tree test are all mirrored, and mixed Hebrew / English text is
+laid out by the browser's bidirectional algorithm.
 
-* Write the questions in Hebrew or Arabic and the page switches to right-to-left on its own, with the
-  buttons and messages in that language. Or set `language: he` / `ar` / `fa` / `ur`, or `direction: rtl`.
-* Buttons and messages are translated for English, German, Spanish, French, Hebrew and Arabic; for other
+* Write the questions in Hebrew and the page switches to right-to-left on its own, with the buttons and
+  messages in Hebrew. Or set `language: he`, or `direction: rtl`.
+* Buttons and messages are translated for English, German, Spanish, French and Hebrew; for other
   languages set `labels` (any message not given stays English).
 * In the builder, every text box follows the direction of what you type, and the survey editor has
   *Language* and *Direction* settings. The live preview shows the page exactly as participants see it.
 * Text on experiment screens (the `text` component) has `direction: auto | ltr | rtl`. The browser
-  views (preview, Try it) handle it natively; the experiment window reorders and joins the letters with
-  `python-bidi` and `arabic-reshaper` (included in `pip install "edge-experiments[all]"`, or `[rtl]`).
+  views (preview, Try it) handle it natively; the experiment window reorders Hebrew text with
+  `python-bidi` (included in `pip install "edge-experiments[all]"`, or `[rtl]`).
 
 ### Display logic
 
