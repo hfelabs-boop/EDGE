@@ -372,6 +372,11 @@ class Runner:
                 full[k] = v
         if self.session.data:
             self.session.data.add_trial(full)
+        if self.session.monitor:
+            try:
+                self.session.monitor.trial(full)
+            except Exception:   # the monitor is for the experimenter; it must never stop a session
+                pass
         if run.goto:
             raise StateJump(run.goto)
 

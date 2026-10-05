@@ -69,6 +69,11 @@ class Gazepoint(Device):
         "connect_timeout": {"type": "float", "default": 5.0},
     }
 
+    @classmethod
+    def planned_streams(cls, options=None):
+        return [{"name": "gaze", "kind": "Gaze", "channels": REC_FIELDS, "srate": 150.0,
+                 "what": "fixation and gaze point, pupil size and diameter of both eyes, cursor, user data"}]
+
     def connect(self) -> None:
         try:
             self.sock = socket.create_connection((self.options["host"], int(self.options["port"])),

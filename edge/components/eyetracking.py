@@ -25,6 +25,15 @@ class GazeROI(Component):
     category = "eyetracking"
     description = ("Area of interest. Tracks entries, first-entry latency and dwell time; can end the "
                    "routine after a continuous dwell (gaze-contingent triggers, fixation checks).")
+    outputs = {
+        "entered": {"desc": "1 if gaze entered {who}", "type": "0/1", "kind": "gaze"},
+        "first_entry": {"desc": "Time (s) from onset until gaze first entered {who}", "units": "s", "type": "number", "kind": "gaze"},
+        "dwell_time": {"desc": "Total gaze dwell time (s) in {who}", "units": "s", "type": "number", "kind": "gaze"},
+        "entries": {"desc": "Number of gaze entries into {who}", "type": "integer", "kind": "gaze"},
+        "completed": {"desc": "1 if the dwell criterion of {who} was met", "type": "0/1", "kind": "gaze"},
+        "rt": {"desc": "Time (s) from onset until the dwell criterion of {who} was met", "units": "s",
+               "type": "number", "kind": "rt"},
+    }
     props_schema = {
         "device": {"type": "device", "default": None, "help": "gaze device id (default: first gaze device)"},
         "target": {"type": "component", "default": None, "help": "use another component's area (e.g. an image)"},
@@ -121,6 +130,7 @@ class Calibrate(Component):
     type_name = "calibrate"
     category = "eyetracking"
     description = "Run the eye tracker's calibration (Tobii: drawn by EDGE; Gazepoint: native window)."
+    outputs = {"result": {"desc": "Result of {who}", "type": "text", "kind": "other"}}
     props_schema = {"device": {"type": "device", "default": None, "help": "gaze device id (default: first gaze device)"}}
 
     def on_start(self, t: float) -> None:

@@ -90,6 +90,13 @@ class LSLInlet(Device):
                           "help": "[x_channel, y_channel] to enable gaze-contingent use (normalized coords)"},
     }
 
+    @classmethod
+    def planned_streams(cls, options=None):
+        o = cls.resolve_options(options or {})
+        label = o.get("name") or o.get("stream_type") or "stream"
+        return [{"name": label, "kind": o.get("stream_type") or "", "channels": None, "srate": None,
+                 "what": f"every channel of the LSL stream {label!r}, at its own rate"}]
+
     def connect(self) -> None:
         lsl = _pylsl()
         preds = []

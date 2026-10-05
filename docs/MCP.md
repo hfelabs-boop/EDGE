@@ -64,7 +64,8 @@ If `edge` isn't on the PATH Claude Desktop uses, give the full path to the execu
 | Import | `import_experiment`: PsychoPy, E-Prime, OpenSesame, jsPsych |
 | Devices & settings | `add_device`, `update_device`, `remove_device`, `update_settings` |
 | Test & run | `validate_experiment` (plain-language issues, incl. names not defined where they're used), `dry_run`, `run_experiment`, `run_status` |
-| Data | `list_sessions`, `analyze_session`, `export_data` |
+| Measures | `describe_recording` (every column and stream the experiment will record, with meaning and units, plus suggested measures), `set_measures` (declare outcomes, factors, covariates and checks) |
+| Data | `list_sessions`, `analyze_session` (includes the measures and their checks), `export_data` |
 | History & files | `undo`, `list_versions`, `restore_version`, `bundle_experiment`, `import_experiment_bundle`, `write_file` |
 | Builder | `open_builder`: starts the visual builder and returns its URL |
 | Help | `search_help`, `read_help`, `list_tutorials`: the documentation and cookbook, so the assistant can look things up instead of guessing |

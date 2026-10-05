@@ -38,6 +38,13 @@ class GTec(Device):
         "scans_per_read": {"type": "int", "default": 8},
     }
 
+    @classmethod
+    def planned_streams(cls, options=None):
+        o = cls.resolve_options(options or {})
+        srate = {"unicorn": 250.0, "gds": float(o.get("srate") or 250.0)}.get(o.get("mode"))
+        return [{"name": "eeg", "kind": "EEG", "channels": None, "srate": srate,
+                 "what": "EEG channels as configured on the amplifier" + (" (via LSL)" if o.get("mode") == "lsl" else "")}]
+
     def connect(self) -> None:
         mode = self.options["mode"]
         if mode == "lsl":

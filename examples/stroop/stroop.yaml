@@ -16,6 +16,14 @@ devices:
 variables:
   score: 0
 
+# What this experiment measures. Summarised per participant and condition in measures.csv,
+# and checked in the session report (never recorded, many missing, implausible values).
+measures:
+  - {id: rt, label: Reaction time, role: outcome, column: resp.rt, trials: $resp.corr == 1, loop: trials,
+     summary: median, units: s, expect: [0.15, 2.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: congruent, label: Congruent trial, role: factor, column: congruent}
+
 routines:
   instructions:
     components:

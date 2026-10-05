@@ -265,6 +265,7 @@ class Experiment:
     devices: list[DeviceSpec] = field(default_factory=list)
     variables: dict[str, Any] = field(default_factory=dict)
     description: str = ""
+    measures: list[Any] | None = None   # what the experiment measures (see edge.measures)
     base_dir: Path = field(default_factory=Path.cwd)
     source: dict[str, Any] = field(default_factory=dict)
     path: Path | None = None
@@ -283,6 +284,7 @@ class Experiment:
             flow=[_parse_flow_node(n, i) for i, n in enumerate(d.get("flow") or [])],
             devices=[DeviceSpec.from_dict(x) for x in (d.get("devices") or [])],
             variables=dict(d.get("variables") or {}),
+            measures=copy.deepcopy(d.get("measures")),
             base_dir=Path(base_dir) if base_dir else Path.cwd(),
             source=copy.deepcopy(d),
         )
@@ -303,7 +305,7 @@ class Experiment:
 
     def to_dict(self) -> dict[str, Any]:
         from .storage import FORMAT_VERSION
-        return {
+        d = {
             "edge_format": FORMAT_VERSION,
             "name": self.name,
             "description": self.description,
@@ -313,6 +315,9 @@ class Experiment:
             "routines": {rid: r.to_dict() for rid, r in self.routines.items()},
             "flow": [_flow_to_dict(n) for n in self.flow],
         }
+        if self.measures is not None:
+            d["measures"] = self.measures
+        return d
 
     def save(self, path: str | Path | None = None, check_conflicts: bool = True) -> str:
         """Atomic save with automatic backup. If this experiment was loaded from the same file
@@ -457,6 +462,8 @@ class Experiment:
         for rid in self.routines:
             if rid not in used:
                 issues.append(Issue("info", f"routines.{rid}", "routine is defined but never used in the flow"))
+        from .measures import validate_measures
+        issues.extend(validate_measures(self))
         return issues
 
     def iter_routines(self):

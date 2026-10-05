@@ -475,6 +475,8 @@ async function runDialog() {
   try { info = await api(`/api/next_participant?path=${encodeURIComponent(S.path)}`); } catch { /* keep defaults */ }
   const hasDevices = S.exp.devices.length > 0;
   const body = $("#modal-body"); body.innerHTML = ""; body.className = "rundlg";
+  const recBox = h("div", {});
+  if (typeof recordingSummary === "function") recordingSummary().then((b) => { if (b) recBox.append(b); });
   const pid = h("input", {value: info.suggestion});
   const warn = h("div", {class: "help"});
   const checkPid = () => { warn.textContent = info.used.includes(pid.value.trim()) ? `⚠ Participant ${pid.value} already has data. A new session folder will be made, nothing is overwritten.` : ""; warn.style.color = "var(--warn)"; };
@@ -488,7 +490,8 @@ async function runDialog() {
     h("div", {class: "field"}, h("label", {}, "Session"), ses),
     hasDevices ? h("div", {class: "field"}, h("label", {}, `Hardware (${S.exp.devices.map((d) => d.id).join(", ")})`), hw) : null,
     h("div", {class: "field"}, h("label", {}, "Screen"), fs),
-    h("p", {class: "help"}, `The experiment opens in its own window on this computer. Data is saved to ${info.data_dir}/ as it runs; press Esc in the experiment window to stop early (everything so far is kept).`),
+    recBox,
+    h("p", {class: "help"}, `The experiment opens in its own window on this computer. Data is saved to ${info.data_dir}/ as it runs; you can follow it live here, and stop it with Stop or Esc in the experiment window (everything so far is kept).`),
     h("div", {class: "btns"}, h("button", {onclick: closeModal}, "Cancel"),
       h("button", {class: "primary", onclick: () => startRun(pid.value.trim(), ses.value.trim(), hasDevices && hw.value === "sim", fs.value === "1")}, "Start")));
   openModal(); pid.focus(); pid.select();
@@ -497,22 +500,32 @@ async function runDialog() {
 async function startRun(participant, session, simulate, fullscreen) {
   if (!participant) return toast("Enter a participant ID");
   const {run_id} = await api("/api/run", {path: S.path, participant: {participant, session: session || "1"}, simulate, fullscreen});
-  const body = $("#modal-body"); body.innerHTML = ""; body.className = "rundlg";
+  const body = $("#modal-body"); body.innerHTML = ""; body.className = "rundlg monitor";
   const status = h("div", {class: "run-status"}, "Starting…");
+  const mon = monitorView();
   const log = h("pre", {class: "run-log"});
-  put(body, h("h3", {}, `Participant ${participant}, session ${session || 1}`), status, log,
-    h("div", {class: "btns"}, h("button", {onclick: closeModal}, "Hide (keeps running)")));
+  const stopBtn = h("button", {class: "danger", onclick: async () => {
+    if (!confirm("Stop this session now? Everything recorded so far is kept.")) return;
+    stopBtn.disabled = true; stopBtn.textContent = "Stopping…";
+    try { await api(`/api/run_stop?id=${run_id}`, {}); } catch (e) { toast("Could not stop: " + e.message); }
+  }}, "■ Stop session");
+  put(body, h("h3", {}, `Participant ${participant}, session ${session || 1}`), status, mon.el,
+    h("details", {class: "run-logbox"}, h("summary", {}, "Log"), log),
+    h("div", {class: "btns"}, stopBtn, h("button", {onclick: closeModal, title: "Close this window; the session continues"}, "Hide (keeps running)")));
   openModal();
   const poll = async () => {
-    let st; try { st = await api(`/api/run_status?id=${run_id}`); } catch { return; }
-    log.textContent = st.output.slice(-14).join("\n");
-    if (st.running) { status.textContent = "Running: the experiment window is open."; setTimeout(poll, 800); return; }
+    let st; try { st = await api(`/api/run_status?id=${run_id}`); } catch { setTimeout(poll, 1500); return; }
+    log.textContent = st.output.slice(-40).join("\n");
+    mon.update(st);
+    if (st.running) { status.textContent = st.stopping ? "Stopping: saving the data…" : "Running: the experiment window is open."; setTimeout(poll, 800); return; }
     const saved = st.output.find((l) => l.startsWith("Saved to "));
     const why = st.output.find((l) => l.startsWith("EDGE could not run"));
     if (why) { status.innerHTML = ""; put(status, h("b", {style: "color:var(--err)"}, "Could not start."), h("div", {}, why.replace("EDGE could not run the experiment: ", "")));
+      body.querySelector(".run-logbox").open = true;
       body.querySelector(".btns").replaceChildren(h("button", {onclick: () => runDialog()}, "Try again"), h("button", {onclick: closeModal}, "Close")); return; }
     status.innerHTML = "";
-    put(status, st.returncode === 0 ? h("b", {class: "ok"}, "✓ Finished.") : h("b", {style: "color:var(--warn)"}, st.returncode === 1 ? "Stopped early (data so far is saved)." : `Ended with a problem (code ${st.returncode}).`),
+    const stopped = st.monitor?.end?.aborted || st.returncode === 1;
+    put(status, st.returncode === 0 && !stopped ? h("b", {class: "ok"}, "✓ Finished.") : h("b", {style: "color:var(--warn)"}, stopped ? "Stopped early (data so far is saved)." : `Ended with a problem (code ${st.returncode}).`),
       saved ? h("div", {}, saved) : null);
     body.querySelector(".btns").replaceChildren(h("button", {class: "primary", onclick: () => { closeModal(); D.dry = false; D.sel = null; showTab("data"); }}, "See the data"),
       h("button", {onclick: () => runDialog()}, "Next participant"), h("button", {onclick: closeModal}, "Close"));

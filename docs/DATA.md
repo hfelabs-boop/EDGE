@@ -30,6 +30,7 @@
 data/<participant>_<session>_<experiment>_<date>/
   trials_wide.csv      ★ one row per trial, ready for R / Python / SPSS / Excel
   summary.csv          ★ accuracy and RT per participant, overall and per condition level
+  measures.csv         ★ your declared measures, overall and per condition cell (see "Measures")
   data_dictionary.csv  ★ what every column means: group, type, units, levels, range, missing
   README.txt           guide to the folder
   trials.csv / .jsonl  one row per routine run (long format; .jsonl is written live and crash-safe)
@@ -86,6 +87,50 @@ Every column gets a description generated from the experiment definition, for ex
 time (s) of 'resp' (keyboard), from its onset flip to the response" or "Condition variable from loop
 'trials' (stroop.csv)". It also lists group, type, units, number present and missing, min/max, and
 levels for categorical columns. Ready for a preregistration or a data paper.
+
+## Measures: saying what the experiment measures
+
+Everything above is recorded automatically. **Measures** say which of it is the point of the
+study: the outcomes (dependent variables), the factors (independent variables), covariates and
+checks. Declare them in the builder (**Measures & data**), with the MCP tool `set_measures`, or in
+the experiment file:
+
+```yaml
+measures:
+  - {id: rt, label: Reaction time, role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.15, 2.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: congruent, role: factor, column: congruent}
+```
+
+| key | meaning |
+|---|---|
+| `column` | a recorded column: `<component>.<what>` (e.g. `resp.rt`, `about.phq9_total`), a trial-list column, a variable or a participant field |
+| `role` | `outcome` (default), `factor`, `covariate`, `check` (manipulation/attention check), `info` |
+| `summary` | `mean` (default), `median`, `sd`, `min`, `max`, `sum`, `count`, `proportion` (share of 1s, for correctness), `first`, `last`, `none` |
+| `trials` | only the trials where this expression is true, e.g. `$resp.corr == 1` (correct trials only) |
+| `loop` | only trials of this loop, e.g. leave out practice |
+| `expect` | `[lowest, highest]` plausible values; anything outside is flagged after each session |
+| `label`, `units`, `description` | for people reading the data |
+
+What each component records is declared by the component itself, so EDGE knows before anything
+runs which columns will exist. **Check** reports a measure that points at a column nobody records
+("'resp' (keyboard) records keys, rt, corr, time, not 'rtt'; did you mean resp.rt?"), at a
+component whose saving is switched off, at a loop that doesn't exist, or with a broken filter. The
+design wizard declares accuracy, reaction time and the condition factor for you; the builder
+suggests measures for experiments that have none.
+
+After every session:
+
+* `measures.csv` holds each measure overall and per cell of the factors (one row per cell, with
+  `n`, `missing` and `value`). Merged exports add a measures table/sheet for all participants.
+* The session report (`edge report`, the builder's Test results, `analyze_session`) lists the
+  measures and warns when one was never recorded, is missing on more than 20% of its trials, or has
+  values outside `expect`.
+* Declared factors become the default `by` of `summary.csv`.
+
+While a session runs from the builder, the run window shows each measure live (see
+[Builder guide](BUILDER_GUIDE.md#live-session-monitor)).
 
 ## Exports
 

@@ -94,11 +94,31 @@ class Device:
         return out
 
     @classmethod
+    def planned_streams(cls, options: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        """What this device will record, known before it connects:
+        [{name, kind, channels (list, or None = whatever the hardware reports), srate (Hz, None = the
+        device's own rate), what (plain words)}]. Devices that only send markers return []."""
+        if "stream" not in cls.capabilities:
+            return []
+        return [{"name": "data", "kind": "", "channels": None, "srate": None,
+                 "what": "the samples the device sends, at its own rate"}]
+
+    @classmethod
+    def records_note(cls, options: dict[str, Any] | None = None) -> str:
+        """What happens to data that is not saved by EDGE itself (e.g. TTL codes in another recorder)."""
+        if "ttl" in cls.capabilities:
+            return "sends event codes (TTL) to the acquisition system, where they are recorded with its data"
+        if "markers" in cls.capabilities and "stream" not in cls.capabilities:
+            return "publishes event markers for another recorder (e.g. LabRecorder)"
+        return ""
+
+    @classmethod
     def describe(cls) -> dict[str, Any]:
         return {
             "type": cls.type_name,
             "description": cls.description,
             "capabilities": sorted(cls.capabilities),
+            "planned_streams": cls.planned_streams(cls.resolve_options({})),
             "options": cls.options_schema,
             "requires": cls.requires,
             "available": cls.available()[0],

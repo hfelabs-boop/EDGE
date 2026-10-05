@@ -42,9 +42,11 @@ Recommended workflow:
 2. Use list_component_types / list_device_types to learn valid properties.
 3. Edit with the specific tools, or edit_experiment to apply many operations at once.
    Each edit returns validation issues; fix errors before running.
-4. dry_run to test the whole experiment with simulated devices and a virtual participant;
-   read the verdict and the data preview.
-5. After real sessions: list_sessions, analyze_session, export_data.
+4. Say what the experiment measures: describe_recording lists everything that will be recorded
+   (and suggests measures); set_measures declares outcomes, factors and checks.
+5. dry_run to test the whole experiment with simulated devices and a virtual participant;
+   read the verdict, the measures and the data preview.
+6. After real sessions: list_sessions, analyze_session (includes the measures and their checks), export_data.
 Edits are saved immediately with backups; use undo if something went wrong.
 Timing is in seconds; routine t=0 is its first screen flip. A routine needs something that ends it
 (a duration, an end_routine response, or end_if).
@@ -204,7 +206,60 @@ def create_server(root: str | Path = ".") -> FastMCP:
         """Readable outline of an experiment (devices, flow tree, routines with component timing) plus
         validation issues. Call this before editing."""
         doc = ExperimentDoc.open(ws.path(path))
-        return {"outline": doc.outline(), **_issues(doc), "migrated": doc.changes}
+        from .measures import describe as describe_measures
+        from .model import Experiment
+        exp = Experiment.from_dict(doc.doc, base_dir=ws.path(path).parent)
+        return {"outline": doc.outline(), "measures": describe_measures(exp) or
+                "none declared: use describe_recording / set_measures to say what this experiment measures",
+                **_issues(doc), "migrated": doc.changes}
+
+    @tool
+    def describe_recording(path: str) -> dict[str, Any]:
+        """Everything the experiment will record, before it runs: participant fields, trial-list columns,
+        each component's data columns (with meaning and units), device streams (channels, sample rate)
+        and files; plus the declared measures and suggested ones. Use it to help the user decide what is
+        measured, then set_measures."""
+        from .measures import describe as describe_measures, recording_plan, suggest_measures, validate_measures
+        from .model import Experiment
+        p = ws.path(path)
+        exp = Experiment.from_dict(ExperimentDoc.open(p).doc, base_dir=p.parent)
+        plan = recording_plan(exp)
+        have = {str(m.get("column")) for m in exp.measures or [] if isinstance(m, dict)}
+        return {
+            "measures": describe_measures(exp),
+            "suggested_measures": [m for m in suggest_measures(exp, plan) if m["column"] not in have],
+            "measure_issues": [str(i) for i in validate_measures(exp)],
+            "participant_fields": plan["participant"],
+            "trial_lists": plan["loops"],
+            "components": [{"routine": c["routine"], "id": c["id"], "type": c["type"], "saved": c["save"],
+                            "columns": {o["column"]: o["desc"] + (f" [{o['units']}]" if o["units"] else "") for o in c["outputs"]}}
+                           for c in plan["components"] if c["outputs"]],
+            "variables": plan["variables"],
+            "devices": plan["devices"],
+            "files": plan["always"],
+        }
+
+    @tool
+    def set_measures(path: str, measures: list[dict[str, Any]], replace: bool = True) -> dict[str, Any]:
+        """Say what the experiment measures. Each measure: {id, label, role: outcome|factor|covariate|check|info,
+        column (a recorded column, e.g. resp.rt or a trial-list column), summary: mean|median|sd|min|max|sum|count|
+        proportion|first|last|none, trials (optional filter, e.g. "$resp.corr == 1"), loop (only trials of this
+        loop, e.g. skip practice), expect ([low, high] plausible range), units}. They are summarised per
+        participant and condition in measures.csv after every session, shown live while it runs, and checked
+        in the session report. replace=False appends (same id = replaced)."""
+        def op(d: ExperimentDoc) -> Any:
+            cur = [] if replace else list(d.doc.get("measures") or [])
+            for m in measures:
+                cur = [x for x in cur if not (isinstance(x, dict) and x.get("id") and x.get("id") == m.get("id"))] + [m]
+            if cur:
+                d.doc["measures"] = cur
+            else:
+                d.doc.pop("measures", None)
+            d.changes.append(f"measures: {len(cur)} declared")
+            from .measures import describe as describe_measures
+            from .model import Experiment
+            return describe_measures(Experiment.from_dict(d.doc, base_dir=ws.path(path).parent))
+        return edit(path, op, "measures")
 
     @tool
     def get_experiment_source(path: str) -> dict[str, Any]:

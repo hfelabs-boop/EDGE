@@ -89,6 +89,12 @@ class SimEyeTracker(_SimBase):
                       "follow_mouse": {"type": "bool", "default": False},
                       "noise_px": {"type": "float", "default": 8.0}}
 
+    @classmethod
+    def planned_streams(cls, options=None):
+        o = cls.resolve_options(options or {})
+        return [{"name": "gaze", "kind": "Gaze", "channels": ["x", "y", "valid", "pupil_l", "pupil_r", "user"],
+                 "srate": o["srate"], "what": "simulated gaze position, validity and pupil size"}]
+
     def connect(self) -> None:
         super().connect()
         self.add_stream("gaze", ["x", "y", "valid", "pupil_l", "pupil_r", "user"], self.options["srate"], "Gaze",
@@ -133,6 +139,12 @@ class SimPhysio(_SimBase):
     options_schema = {**_SimBase.options_schema, "srate": {"type": "float", "default": 500.0},
                       "heart_rate": {"type": "float", "default": 70.0}}
 
+    @classmethod
+    def planned_streams(cls, options=None):
+        o = cls.resolve_options(options or {})
+        return [{"name": "physio", "kind": "Physio", "channels": ["ecg", "eda", "resp", "event"], "srate": o["srate"],
+                 "what": "simulated ECG, skin conductance and respiration"}]
+
     def connect(self) -> None:
         super().connect()
         self.add_stream("physio", ["ecg", "eda", "resp", "event"], self.options["srate"], "Physio",
@@ -160,6 +172,12 @@ class SimEEG(_SimBase):
     options_schema = {**_SimBase.options_schema,
                       "channels": {"type": "list", "default": ["Fz", "Cz", "Pz", "Oz", "C3", "C4", "P3", "P4"]}}
 
+    @classmethod
+    def planned_streams(cls, options=None):
+        o = cls.resolve_options(options or {})
+        return [{"name": "eeg", "kind": "EEG", "channels": list(o["channels"]) + ["TRIG"], "srate": o["srate"],
+                 "what": "simulated EEG plus a trigger channel"}]
+
     def connect(self) -> None:
         super().connect()
         chans = list(self.options["channels"])
@@ -179,6 +197,12 @@ class MouseGaze(Device):
     description = "Use the mouse as a stand-in eye tracker to develop gaze-contingent tasks without hardware."
     capabilities = {"gaze", "stream"}
     options_schema = {"srate": {"type": "float", "default": 60.0}}
+
+    @classmethod
+    def planned_streams(cls, options=None):
+        o = cls.resolve_options(options or {})
+        return [{"name": "gaze", "kind": "Gaze", "channels": ["x", "y"], "srate": o["srate"],
+                 "what": "the mouse position, standing in for gaze"}]
 
     def connect(self) -> None:
         self.add_stream("gaze", ["x", "y"], self.options["srate"], "Gaze", time_base="master")

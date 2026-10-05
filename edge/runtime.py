@@ -77,6 +77,8 @@ class Session:
         self.seed = seed if seed is not None else random.SystemRandom().randrange(2**31)
         self.rng = random.Random(self.seed)
         self.started_at: str | None = None
+        from .monitor import from_env
+        self.monitor = from_env(self)
 
     # ------------------------------------------------------------------ setup
     @property
@@ -108,6 +110,8 @@ class Session:
         for dev in self.devices.values():
             dev.start()
         self.marker("session_start", source="edge")
+        if self.monitor:
+            self.monitor.start()
 
     def _connect_devices(self) -> None:
         sim_map = {"tobii": "sim_eyetracker", "gazepoint": "sim_eyetracker", "gtec": "sim_eeg",
@@ -192,6 +196,9 @@ class Session:
     def check_abort(self) -> None:
         if self.backend.check_escape():
             raise ExperimentAborted("escape pressed")
+        if self.monitor and self.frame_index % 10 == 0 and self.monitor.stop_requested():
+            self.log("[edge] stopped by the experimenter")
+            raise ExperimentAborted("stopped by the experimenter")
 
     # ------------------------------------------------------------------ teardown
     def close(self) -> dict[str, Any]:
@@ -233,6 +240,11 @@ class Session:
                 self.errors.append(f"closing {did}: {e}")
             self.errors += [f"{did}: {err}" for err in dev.errors]
         summary = self.summary(clock_models)
+        if self.monitor:
+            try:
+                self.monitor.end(summary)
+            except Exception:
+                pass
         if self.data:
             self.data.close()
             self.data.write_json("session.json", summary)

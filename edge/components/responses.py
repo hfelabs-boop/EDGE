@@ -20,6 +20,16 @@ class Keyboard(Component):
     type_name = "keyboard"
     category = "response"
     description = "Collect key presses with RT measured from the component's onset flip."
+    outputs = {
+        "keys": {"desc": "Key(s) pressed in {who}; empty = no response", "type": "text", "kind": "response"},
+        "rt": {"desc": "Response time (s) of {who}, from its onset flip to the response", "units": "s",
+               "type": "number", "kind": "rt"},
+        "corr": {"desc": "Correctness of the {who} response: 1 = correct, 0 = incorrect", "type": "0/1",
+                 "kind": "accuracy", "when": "correct"},
+        "time": {"desc": "Master-clock time (s) of the {who} response", "units": "s", "type": "number", "kind": "timing"},
+        "duration": {"desc": "How long the key was held down in {who} (s)", "units": "s", "type": "number",
+                     "kind": "timing", "when": "record_release"},
+    }
     props_schema = {
         "keys": {"type": "list", "default": None, "help": "allowed keys, e.g. [f, j]; empty = any"},
         "store": {"type": "choice", "choices": ["first", "last", "all"], "default": "first", "help": "which key to keep when several are pressed: first, last or all"},
@@ -83,6 +93,17 @@ class Mouse(Component):
     type_name = "mouse"
     category = "response"
     description = "Mouse clicks, optionally restricted to clickable components (e.g. images/shapes)."
+    outputs = {
+        "clicked": {"desc": "Which target was clicked in {who}", "type": "text", "kind": "response"},
+        "rt": {"desc": "Response time (s) of {who}, from its onset flip to the response", "units": "s",
+               "type": "number", "kind": "rt"},
+        "corr": {"desc": "Correctness of the {who} response: 1 = correct, 0 = incorrect", "type": "0/1",
+                 "kind": "accuracy", "when": "correct"},
+        "x": {"desc": "Horizontal response position in {who} (experiment units)", "type": "number", "kind": "response"},
+        "y": {"desc": "Vertical response position in {who} (experiment units)", "type": "number", "kind": "response"},
+        "button": {"desc": "Mouse button used in {who}", "type": "text", "kind": "response"},
+        "path": {"desc": "Mouse trajectory in {who} (time, x, y)", "type": "list", "kind": "response", "when": "track"},
+    }
     props_schema = {
         "buttons": {"type": "list", "default": ["left"], "help": "buttons that count as a response: left, middle, right"},
         "clickable": {"type": "list", "default": [], "help": "ids of components in this routine that can be clicked"},
@@ -133,6 +154,12 @@ class Slider(Component):
     category = "response"
     visual = True
     description = "Rating scale / visual analogue scale answered with the mouse (or arrow keys + return)."
+    outputs = {
+        "rating": {"desc": "Rating given on {who}", "type": "number", "kind": "response"},
+        "rt": {"desc": "Response time (s) of {who}, from its onset flip to the response", "units": "s",
+               "type": "number", "kind": "rt"},
+        "history": {"desc": "All values selected in {who} (time, value)", "type": "list", "kind": "other"},
+    }
     props_schema = {
         "ticks": {"type": "list", "default": [1, 2, 3, 4, 5, 6, 7], "help": "tick values; the first and last are the ends of the scale"},
         "labels": {"type": "list", "default": [], "help": "labels spread along the scale"},

@@ -170,6 +170,40 @@ In a screen's properties (Simple mode: under *Rules: react while the screen runs
 (when → do)** react while the screen runs: *when* a condition becomes true, *do* actions (end the
 screen, start/stop something, set a variable, send a marker, go to a workflow state).
 
+## Measures & data
+
+**Measures & data** (top bar) answers two questions: *what does this experiment measure?* and
+*what exactly is recorded?*
+
+* **What this experiment measures**: one card per measure: a name, its role (outcome, factor,
+  covariate, check, info), the column it comes from, how it is summarised, which trials count
+  (*use trials of …*, *only when …*, e.g. correct trials only) and the range you expect. Each card
+  repeats it in plain words and shows problems right there. Experiments without measures get
+  suggestions (**Add all** takes them); the design wizard declares them for you.
+* **Everything that is recorded**: participant fields, trial-list columns, every screen's
+  components with the columns they record (meaning, units, kind), variables, and each device's
+  streams (channels, sample rate, file) or what it sends elsewhere (TTL codes, LSL markers). Untick
+  a component or device to stop saving it; **☆** turns any column into a measure (a trial-list
+  column becomes a factor, `resp.rt` a reaction time on correct trials, `resp.corr` an accuracy).
+
+### Live session monitor
+
+**Run with a participant** first lists the measures and what will be recorded. While the session
+runs, the window shows:
+
+* progress: trial *n* of about *N*, time elapsed and left;
+* each measure: its value so far (median RT, % correct, mean rating …), how many trials it is
+  based on and how many are missing, and a small chart of every trial (the expected range shaded,
+  values outside it and missing ones marked);
+* the last response: what was pressed, how fast, correct or not, in which condition;
+* every device stream: samples per second against its nominal rate, green / amber (too slow) /
+  red (no data);
+* warnings: *no response on the last 5 trials*, a measure missing on more than 20% of trials,
+  values outside the expected range, a device that went silent;
+* **■ Stop session** ends it like Esc in the experiment window: everything so far is saved.
+
+**Hide** closes the window; the session keeps running.
+
 ## Surveys and questionnaires
 
 **Survey / questionnaire** (under *Show*) adds a questionnaire page; if the screen already has something

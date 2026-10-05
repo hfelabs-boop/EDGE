@@ -262,6 +262,34 @@ class Html(Component):
         "continue_label": {"type": "str", "default": "Continue", "help": "text of the automatic Continue button"},
     }
 
+    outputs = {
+        "submitted": {"desc": "1 if the page {who} was submitted", "type": "0/1", "kind": "other"},
+        "rt": {"desc": "Time (s) from showing the page {who} to its submission", "units": "s", "type": "number", "kind": "rt"},
+        "onset": {"desc": "Onset of {who} (s from routine start)", "units": "s", "type": "number", "kind": "timing"},
+    }
+
+    @classmethod
+    def planned_outputs(cls, props, base_dir=None):
+        out = super().planned_outputs(props, base_dir)
+        src = props.get("html") or ""
+        f = props.get("file")
+        if isinstance(f, str) and f and not f.startswith("$"):
+            try:
+                src = (Path(base_dir or ".") / f).read_text(encoding="utf-8")
+            except OSError:
+                src = ""
+        if isinstance(src, str) and src:
+            ff = FormFields()
+            try:
+                ff.feed(src)
+            except Exception:
+                pass
+            for name, fd in ff.fields.items():
+                out.setdefault(name, {"desc": f"Answer to form field '{name}' on page {{who}}", "units": "",
+                                      "type": "number" if fd.get("type") in ("number", "range") else "text",
+                                      "kind": "answer"})
+        return out
+
     def _source(self) -> tuple[str, Path]:
         base = self.session.exp.base_dir
         f = self.p.get("file")

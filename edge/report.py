@@ -29,8 +29,28 @@ def analyze_session(path: str | Path) -> dict[str, Any]:
             continue
         rep["streams"][f.stem] = _analyze_stream(f, meta, events)
     rep["markers"] = {"total": len(events), "time_locked_to_flip": len(flip_events)}
+    rep["measures"] = _measures(root)
     rep["verdict"] = _verdict(rep)
     return rep
+
+
+def _measures(root: Path) -> dict[str, Any] | None:
+    """The experiment's declared measures: their values in this session and anything wrong with them."""
+    from .export import SessionTables, measures_table, wide_trials
+    from .measures import declared, measure_checks
+    try:
+        st = SessionTables(root)
+        if not declared(st.experiment):
+            return None
+        _, rows = wide_trials(st, drop_empty=False)
+        _, table = measures_table(st, rows)
+    except Exception as e:  # the report must still work on odd or partial sessions
+        return {"error": f"{type(e).__name__}: {e}", "values": [], "checks": []}
+    overall = [{k: r[k] for k in ("measure", "label", "role", "summary", "value", "n", "missing", "units")}
+               for r in table if all(v == "(all)" for k, v in r.items() if k not in
+                                     ("participant", "session", "measure", "label", "role", "column", "summary",
+                                      "n", "missing", "value", "units"))]
+    return {"values": overall, "checks": measure_checks(st.experiment, rows)}
 
 
 def _analyze_stream(path: Path, meta: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -100,6 +120,8 @@ def _verdict(rep: dict[str, Any]) -> list[str]:
         allowed = 5.0 + (s.get("sample_period_ms") or 0.0)
         if tr and tr.get("latency_max_abs_ms") is not None and tr["latency_max_abs_ms"] > allowed:
             notes.append(f"WARNING: {name}: marker alignment error up to {tr['latency_max_abs_ms']} ms")
+    for c in (rep.get("measures") or {}).get("checks", []):
+        notes.append(f"WARNING: {c['message']}")
     if rep.get("errors"):
         notes.append(f"{len(rep['errors'])} runtime error(s) logged")
     return notes or ["OK: no timing, data or synchronization problems detected"]
@@ -130,5 +152,14 @@ def format_report(rep: dict[str, Any]) -> str:
             lines.append(f"      triggers {tr['matched']}/{tr['expected']} matched; alignment "
                          f"{tr['latency_mean_ms']} ± {tr['latency_sd_ms']} ms (max |err| {tr['latency_max_abs_ms']} ms)")
     lines += ["", f"Markers: {rep['markers']['total']} ({rep['markers']['time_locked_to_flip']} time-locked to screen flips)", ""]
+    ms = rep.get("measures")
+    if ms and ms.get("values"):
+        lines.append("Measures")
+        for v in ms["values"]:
+            val = v["value"]
+            shown = f"{val:.4g}" if isinstance(val, float) else ("—" if val is None else str(val))
+            lines.append(f"  {v['label']}: {shown}{(' ' + v['units']) if v.get('units') and val is not None else ''}"
+                         f" ({v['summary']}, {v['role']}, n={v['n']}" + (f", {v['missing']} missing" if v["missing"] else "") + ")")
+        lines.append("")
     lines += ["Verdict"] + [f"  {v}" for v in rep["verdict"]]
     return "\n".join(lines)

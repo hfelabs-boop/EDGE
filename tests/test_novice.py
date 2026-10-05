@@ -311,10 +311,12 @@ def test_builder_static_files_reference_existing_functions():
     html = (static / "index.html").read_text()
     assert "simple.js" in html and 'id="btn-try"' in html and 'id="btn-mode"' in html
     assert "stage.js" in html and 'id="preview-big"' in html
-    js = (static / "app.js").read_text() + (static / "simple.js").read_text() + (static / "stage.js").read_text()
+    assert "measures.js" in html and 'id="btn-measures"' in html
+    js = "".join((static / f).read_text() for f in ("app.js", "simple.js", "stage.js", "measures.js"))
     for fn in ("function renderStoryboard", "function openWizard", "function tryIt", "function runDialog",
                "function addTrialColumn", "function drawScreen", "function setMode", "function stageInput",
-               "function openAssetPicker", "function drawStageOverlay", "function uploadAsset", "function toggleBigPreview"):
+               "function openAssetPicker", "function drawStageOverlay", "function uploadAsset", "function toggleBigPreview",
+               "function openMeasures", "function monitorView", "function recordingSummary"):
         assert fn in js
 
 

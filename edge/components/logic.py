@@ -14,6 +14,8 @@ class MarkerComp(Component):
     category = "hardware"
     description = ("Send an event marker at this component's onset (time-locked to the screen flip) to all "
                    "devices or a chosen subset: TTL codes, LSL markers, Gazepoint USER_DATA, Tobii sample tags.")
+    outputs = {"label": {"desc": "Marker label sent by {who}", "type": "text", "kind": "other"},
+               "code": {"desc": "TTL code sent by {who}", "type": "integer", "kind": "other"}}
     props_schema = {
         "label": {"type": "str", "default": "", "required": True, "help": "e.g. $f'stim_{condition}'"},
         "code": {"type": "int", "default": None, "help": "TTL code 1-255 (auto-assigned from the label if empty)"},
@@ -42,6 +44,11 @@ class Variable(Component):
         "when": {"type": "choice", "choices": ["start", "end"], "default": "start",
                  "help": "start: before the routine is shown (later components see the new value); end: after it"},
     }
+
+    @classmethod
+    def planned_outputs(cls, props, base_dir=None):
+        return {str(k): {"desc": f"Value assigned to variable '{k}' by {{who}}", "units": "", "type": "any", "kind": "other"}
+                for k in (props.get("set") or {}) if isinstance(props.get("set"), dict)}
 
     def prepare(self) -> None:
         # 'start' assignments happen during routine preparation, in component order, so that

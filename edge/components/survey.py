@@ -16,6 +16,25 @@ class Survey(Html):
     description = ("A questionnaire page: single and multiple choice, Likert items and matrices, sliders, text, "
                    "rank order, constant sum and more, plus validated scales (PHQ-9, GAD-7, Big Five, SUS …) "
                    "with automatic scoring. Every answer and score becomes a data column.")
+    outputs = {
+        "submitted": {"desc": "1 if the survey {who} was completed", "type": "0/1", "kind": "other"},
+        "rt": {"desc": "Time (s) from showing the survey {who} to its submission", "units": "s", "type": "number", "kind": "rt"},
+        "onset": {"desc": "Onset of {who} (s from routine start)", "units": "s", "type": "number", "kind": "timing"},
+    }
+
+    @classmethod
+    def planned_outputs(cls, props, base_dir=None):
+        out = {k: dict(v) for k, v in cls.outputs.items()}
+        try:
+            from ..survey import columns
+            cols = columns(props.get("questions") or [], props.get("scores") or {})
+        except Exception:
+            cols = {}
+        for k, desc in cols.items():
+            score = "score" in desc.lower() or k.endswith(("_total", "_score", "_mean", "_band"))
+            out[k] = {"desc": f"{desc} (survey {{who}})", "units": "", "type": "any", "kind": "score" if score else "answer"}
+        return out
+
     props_schema = {
         "questions": {"type": "survey", "default": [], "required": True,
                       "help": "the questions, in order; {instrument: phq9} adds a library questionnaire"},

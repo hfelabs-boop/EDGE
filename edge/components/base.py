@@ -62,6 +62,9 @@ class Component:
     props_schema: ClassVar[dict[str, dict[str, Any]]] = {}
     # properties that are re-evaluated every frame when given as expressions
     dynamic: ClassVar[set[str]] = set()
+    # What it records: data column suffix -> {desc ("{who}" = the component), units, type, kind}.
+    # kind: rt | accuracy | response | answer | score | gaze | timing | other
+    outputs: ClassVar[dict[str, dict[str, Any]]] = {}
 
     def __init__(self, spec: "ComponentSpec", run: "RoutineRun"):
         self.spec = spec
@@ -86,7 +89,12 @@ class Component:
     @classmethod
     def describe(cls) -> dict[str, Any]:
         return {"type": cls.type_name, "category": cls.category, "description": cls.description,
-                "visual": cls.visual, "props": cls.all_props()}
+                "visual": cls.visual, "props": cls.all_props(), "outputs": cls.outputs}
+
+    @classmethod
+    def planned_outputs(cls, props: dict[str, Any], base_dir: Any = None) -> dict[str, dict[str, Any]]:
+        """What a component with these properties will record (columns "<id>.<key>")."""
+        return {k: dict(v) for k, v in cls.outputs.items() if not v.get("when") or props.get(v["when"])}
 
     @classmethod
     def validate_spec(cls, spec: "ComponentSpec", where: str, exp: "Experiment") -> list["Issue"]:

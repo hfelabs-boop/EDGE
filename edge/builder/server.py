@@ -12,6 +12,7 @@ import mimetypes
 import subprocess
 import sys
 import threading
+import time
 import traceback
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -130,7 +131,7 @@ class BuilderApp:
         root = self.safe_path(rel)
         tables = session_tables(SessionTables(root))
         out: dict[str, Any] = {k: {"columns": c, "rows": r[:300], "total": len(r)} for k, (c, r) in tables.items()
-                               if k in ("trials", "summary", "dictionary")}
+                               if k in ("trials", "summary", "dictionary", "measures")}
         out["report"] = analyze_session(root)
         return out
 
@@ -153,6 +154,16 @@ class BuilderApp:
             return [i.to_dict() for i in self.experiment(data, rel).validate()]
         except Exception as e:
             return [{"level": "error", "where": "experiment", "message": str(e), "hint": ""}]
+
+    def recording(self, data: dict[str, Any], rel: str | None) -> dict[str, Any]:
+        """What the experiment records and measures, for the "Measures & data" panel."""
+        from ..measures import ROLES, SUMMARIES, describe, recording_plan, suggest_measures, validate_measures
+        exp = self.experiment(data, rel)
+        plan = recording_plan(exp)
+        have = {str(m.get("column")) for m in exp.measures or [] if isinstance(m, dict)}
+        return {"plan": plan, "lines": describe(exp), "roles": ROLES, "summaries": list(SUMMARIES),
+                "suggestions": [m for m in suggest_measures(exp, plan) if m["column"] not in have],
+                "issues": [i.to_dict() for i in validate_measures(exp)]}
 
     def dry_run(self, data: dict[str, Any], rel: str | None, participant: dict[str, Any]) -> dict[str, Any]:
         from ..engine import run_experiment
@@ -239,14 +250,30 @@ class BuilderApp:
             cmd.append("--simulate-devices")
         if fullscreen is not None:
             cmd.append("--fullscreen" if fullscreen else "--windowed")
-        proc = subprocess.Popen(cmd, cwd=str(self.root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        import os
+        import tempfile
+        from ..monitor import parse
+        stop_file = Path(tempfile.gettempdir()) / f"edge-stop-{os.getpid()}-{len(self.runs)}-{int(time.time() * 1000)}"
+        env = {**os.environ, "EDGE_MONITOR": "1", "EDGE_STOP_FILE": str(stop_file), "PYTHONUNBUFFERED": "1"}
+        proc = subprocess.Popen(cmd, cwd=str(self.root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
         rid = str(proc.pid)
-        state = {"proc": proc, "output": []}
+        mon: dict[str, Any] = {"start": None, "last": None, "history": [], "devices": None, "end": None}
+        state = {"proc": proc, "output": [], "monitor": mon, "stop_file": stop_file}
         self.runs[rid] = state
 
         def pump() -> None:
             for line in proc.stdout:  # type: ignore[union-attr]
-                state["output"].append(line.rstrip())
+                ev = parse(line.rstrip())
+                if ev is None:
+                    state["output"].append(line.rstrip())
+                elif ev.get("type") == "trial":
+                    mon["last"] = ev
+                    if ev.get("responses"):
+                        mon["last_response"] = ev
+                    mon["history"] = (mon["history"] + [{k: ev.get(k) for k in ("n", "routine", "values", "factors", "responses",
+                                                                                "elapsed")}])[-300:]
+                elif ev.get("type") in ("start", "devices", "end"):
+                    mon[ev["type"]] = ev
 
         threading.Thread(target=pump, daemon=True).start()
         return {"run_id": rid}
@@ -255,7 +282,28 @@ class BuilderApp:
         st = self.runs.get(rid)
         if not st:
             return {"error": "unknown run"}
-        return {"running": st["proc"].poll() is None, "returncode": st["proc"].returncode, "output": st["output"][-400:]}
+        running = st["proc"].poll() is None
+        if not running:
+            st["stop_file"].unlink(missing_ok=True)
+        return {"running": running, "returncode": st["proc"].returncode, "output": st["output"][-400:],
+                "monitor": st.get("monitor"), "stopping": bool(st.get("stopping"))}
+
+    def run_stop(self, rid: str) -> dict[str, Any]:
+        """Ask a running session to stop (like Esc: the data so far is saved). Forced after 10 s."""
+        st = self.runs.get(rid)
+        if not st:
+            return {"error": "unknown run"}
+        if st["proc"].poll() is not None:
+            return {"stopped": True}
+        st["stop_file"].touch()
+        st["stopping"] = True
+
+        def force() -> None:
+            if st["proc"].poll() is None:
+                st["proc"].terminate()
+                st["output"].append("[edge] the session did not stop by itself and was ended (data written so far is kept)")
+        threading.Timer(10.0, force).start()
+        return {"stopping": True}
 
 
 def make_handler(app: BuilderApp):
@@ -412,10 +460,14 @@ def make_handler(app: BuilderApp):
                 if u.path == "/api/export":
                     return self._json(app.export(body["path"], body.get("formats") or ["csv", "xlsx"],
                                                  body.get("layout", "wide"), bool(body.get("dry_runs"))))
+                if u.path == "/api/recording":
+                    return self._json(app.recording(body["experiment"], body.get("path")))
                 if u.path == "/api/validate":
                     return self._json({"issues": app.validate(body["experiment"], body.get("path"))})
                 if u.path == "/api/dryrun":
                     return self._json(app.dry_run(body["experiment"], body.get("path"), body.get("participant") or {}))
+                if u.path == "/api/run_stop":
+                    return self._json(app.run_stop(q.get("id") or body.get("id")))
                 if u.path == "/api/run":
                     return self._json(app.run_real(body["path"], body.get("participant") or {}, bool(body.get("simulate")),
                                                    body.get("fullscreen")))

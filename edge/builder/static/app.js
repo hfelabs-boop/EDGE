@@ -278,7 +278,7 @@ async function renderData() {
   const t = await api(`/api/session_tables?path=${encodeURIComponent(D.sel)}`);
   right.innerHTML = "";
   right.append(h("div", {}, t.report.verdict.map((v) => h("div", {class: v.startsWith("OK") ? "ok" : "issue warning"}, v))));
-  const subs = [["trials", `Trials (${t.trials.total})`], ["summary", "Summary"], ["dictionary", "Data dictionary"]];
+  const subs = [["trials", `Trials (${t.trials.total})`], ["summary", "Summary"], ...(t.measures ? [["measures", "Measures"]] : []), ["dictionary", "Data dictionary"]];
   right.append(h("div", {class: "subtabs"}, subs.map(([k, label]) => h("button", {class: D.sub === k ? "active" : "", onclick: () => { D.sub = k; renderData(); }}, label)),
     h("span", {style: "flex:1"}),
     ...[["csv", "CSV"], ["xlsx", "Excel"], ["tsv", "TSV"], ["json", "JSON"], ["bids", "BIDS"]].map(([f, label]) => h("button", {onclick: () => exportData(D.sel, [f])}, "↓ " + label))));
@@ -1227,6 +1227,14 @@ function renderResults(r) {
     kpi(r.summary.errors.length, "errors")));
   el.append(h("div", {class: "help", style: "margin-bottom:6px"}, "A virtual participant just did the whole experiment with simulated hardware. Want to do it yourself? Press ▶ Try it."));
   el.append(h("div", {}, rep.verdict.map((v) => h("div", {class: v.startsWith("OK") ? "ok" : "issue warning"}, v))));
+  const mv = rep.measures?.values || [];
+  if (mv.length && typeof fmtMeasure === "function") {
+    el.append(h("h3", {style: "margin-top:10px"}, "Measures (virtual participant)"),
+      h("div", {class: "kpis"}, mv.map((v) => kpi(fmtMeasure(v, v.value), `${v.label} · ${v.summary} of ${v.n}`))));
+  } else if (!mv.length && typeof openMeasures === "function") {
+    el.append(h("div", {class: "help", style: "margin:6px 0"}, "Say what this experiment measures to see those results here: ",
+      h("a", {href: "#", onclick: (e) => { e.preventDefault(); openMeasures(); }}, "Measures & data")));
+  }
   const streams = Object.entries(rep.streams);
   if (streams.length) {
     el.append(h("h3", {style: "margin-top:10px"}, "Streams & synchronization"));

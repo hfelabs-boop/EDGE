@@ -44,6 +44,20 @@ class MindWare(Device):
         "lsl_type": {"type": "str", "default": "", "help": "LSL stream type of live MindWare data (optional)"},
     }
 
+    @classmethod
+    def planned_streams(cls, options=None):
+        o = cls.resolve_options(options or {})
+        if not (o.get("lsl_name") or o.get("lsl_type")):
+            return []
+        return [{"name": o.get("lsl_name") or o.get("lsl_type"), "kind": "Physio", "channels": None, "srate": None,
+                 "what": "live physiology channels from BioLab (via LSL)"}]
+
+    @classmethod
+    def records_note(cls, options=None):
+        o = cls.resolve_options(options or {})
+        return "" if o.get("trigger") == "none" else \
+            "sends event codes (TTL) into BioLab, which records them with the physiology"
+
     def connect(self) -> None:
         o = self.options
         trig_opts: dict[str, Any] = {"pulse_ms": o["pulse_ms"], "code_map": o["code_map"]}

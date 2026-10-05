@@ -281,6 +281,14 @@ def build_experiment(answers: dict[str, Any] | None = None) -> dict[str, Any]:
     }
     if kind == "picture":
         doc["description"] += " Put your images in the images/ folder next to this file."
+    try:   # say what the experiment measures, so the summary and the checks focus on it
+        from .measures import suggest_measures
+        from .model import Experiment
+        ms = suggest_measures(Experiment.from_dict(doc))
+        if ms:
+            doc["measures"] = ms
+    except Exception:
+        pass
     return doc
 
 

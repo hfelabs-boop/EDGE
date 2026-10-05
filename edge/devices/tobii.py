@@ -41,6 +41,12 @@ class TobiiPro(Device):
         "eye": {"type": "choice", "choices": ["average", "left", "right"], "default": "average"},
     }
 
+    @classmethod
+    def planned_streams(cls, options=None):
+        o = cls.resolve_options(options or {})
+        return [{"name": "gaze", "kind": "Gaze", "channels": GAZE_FIELDS, "srate": o.get("frequency"),
+                 "what": "gaze position, validity and pupil size of both eyes"}]
+
     def connect(self) -> None:
         try:
             import tobii_research as tr

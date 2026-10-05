@@ -311,7 +311,8 @@ def summarize(st: SessionTables, rows: list[dict[str, Any]] | None = None, by: l
     auto_rt, auto_corr = detect_measures(st, rows)
     rt = rt or cfg.get("rt") or auto_rt
     correct = correct or cfg.get("correct") or (auto_corr if not cfg.get("rt") else None)
-    factors = by if by is not None else (cfg.get("by") or detect_factors(st, rows))
+    declared_factors = [m["column"] for m in _declared(st) if m["role"] == "factor"]
+    factors = by if by is not None else (cfg.get("by") or declared_factors or detect_factors(st, rows))
     trial_rows = [r for r in rows if r.get("loop")] or rows   # instructions etc. aren't trials
     pid_fields = [f for f in st.participant_fields if f in ("participant", "session")] or st.participant_fields[:1]
     out: list[dict[str, Any]] = []
@@ -337,7 +338,34 @@ def summarize(st: SessionTables, rows: list[dict[str, Any]] | None = None, by: l
     return cols, out, info
 
 
+def _declared(st: SessionTables) -> list[dict[str, Any]]:
+    from .measures import declared
+    return declared(st.experiment)
+
+
+def measures_table(st: SessionTables, rows: list[dict[str, Any]]) -> tuple[list[str], list[dict[str, Any]]]:
+    from .measures import measure_table
+    p = st.meta.get("participant") or {}
+    base = {k: p[k] for k in ("participant", "session") if k in p}
+    return measure_table(st.experiment, rows, base)
+
+
 # ============================================================================ dictionary
+def _output_meta(col: str, st: SessionTables) -> dict[str, Any] | None:
+    """The component's own declaration of this column (Component.outputs), if any."""
+    comp, _, attr = col.rpartition(".")
+    cid = comp.split(".")[-1]
+    ctype = st.comp_types.get(cid)
+    if not ctype:
+        return None
+    from .components import component_registry
+    cls = component_registry().get(ctype)
+    if cls is None:
+        return None
+    meta = cls.outputs.get(attr) or cls.outputs.get(attr.rstrip("_0123456789"))
+    return dict(meta, who=f"'{comp}' ({ctype})") if meta else None
+
+
 def describe_column(col: str, st: SessionTables) -> str:
     group = classify(col, st)
     if col == "experiment":
@@ -410,7 +438,12 @@ def describe_column(col: str, st: SessionTables) -> str:
         "history": f"All values selected in {who} (time, value)",
         "path": f"Mouse trajectory in {who} (time, x, y)",
     }
-    return templates.get(base_attr, f"{attr} of {who}" if comp else col)
+    if base_attr in templates:
+        return templates[base_attr]
+    meta = _output_meta(col, st)
+    if meta:
+        return meta["desc"].replace("{who}", who)
+    return f"{attr} of {who}" if comp else col
 
 
 def _type_of(values: list[Any]) -> str:
@@ -433,9 +466,11 @@ def data_dictionary(st: SessionTables, cols: list[str], rows: list[dict[str, Any
     for c in cols:
         vals = [r.get(c) for r in rows]
         t = _type_of(vals)
+        meta = _output_meta(c, st)
+        units = meta["units"] if meta and meta.get("units") else \
+            UNITS.get(c.rpartition(".")[2].rstrip("_0123456789"), "") if classify(c, st) in ("response", "timing") else ""
         entry: dict[str, Any] = {"column": c, "group": classify(c, st), "description": describe_column(c, st),
-                                 "type": t, "units": UNITS.get(c.rpartition(".")[2].rstrip("_0123456789"), "")
-                                 if classify(c, st) in ("response", "timing") else "",
+                                 "type": t, "units": units,
                                  "n": sum(v not in (None, "") for v in vals),
                                  "missing": sum(v in (None, "") for v in vals)}
         present = [v for v in vals if v not in (None, "")]
@@ -726,8 +761,11 @@ def session_tables(st: SessionTables, layout: str = "wide") -> dict[str, tuple[l
     dd = data_dictionary(st, cols, rows)
     ev_cols = ["time", "label", "code", "source", "on_flip"]
     t = timing_row(st)
-    return {"trials": (cols, rows), "summary": (scols, srows), "dictionary": (DICT_COLS, dd),
-            "events": (ev_cols, st.events), "session": (list(t), [t])}
+    out = {"trials": (cols, rows), "summary": (scols, srows), "dictionary": (DICT_COLS, dd),
+           "events": (ev_cols, st.events), "session": (list(t), [t])}
+    if _declared(st):
+        out["measures"] = measures_table(st, wide)
+    return out
 
 
 def timing_row(st: SessionTables) -> dict[str, Any]:
@@ -767,6 +805,8 @@ def _write_all(tables, formats, out: Path, stem: str, sessions: list[SessionTabl
                 files.append(write_table(out / f"{stem}_dictionary.{ext}", fmt, *tables["dictionary"]))
                 if "sessions" in tables:
                     files.append(write_table(out / f"{stem}_sessions.{ext}", fmt, *tables["sessions"]))
+                if "measures" in tables:
+                    files.append(write_table(out / f"{stem}_measures.{ext}", fmt, *tables["measures"]))
     return files
 
 
@@ -778,6 +818,8 @@ def export_many(path: str | Path, formats: Iterable[str] = ("csv", "xlsx"), out_
         raise FileNotFoundError(f"no EDGE sessions found under {path}")
     sessions = [SessionTables(r) for r in roots]
     all_rows, sum_rows, sess_rows, dd_by_col = [], [], [], {}
+    meas_cols: list[str] = []
+    meas_rows: list[dict[str, Any]] = []
     col_order: list[str] = []
     for st in sessions:
         cols, rows = wide_trials(st)
@@ -789,6 +831,10 @@ def export_many(path: str | Path, formats: Iterable[str] = ("csv", "xlsx"), out_
         all_rows += rows
         scols, srows, _ = summarize(st)
         sum_rows += srows
+        if _declared(st):
+            mcols, mrows = measures_table(st, rows)
+            meas_cols += [c for c in mcols if c not in meas_cols]
+            meas_rows += mrows
         sess_rows.append(timing_row(st))
         for e in data_dictionary(st, cols, rows):
             dd_by_col.setdefault(e["column"], e)
@@ -811,6 +857,8 @@ def export_many(path: str | Path, formats: Iterable[str] = ("csv", "xlsx"), out_
     tables = {"trials": (col_order, all_rows), "summary": (scols, sum_rows),
               "dictionary": (DICT_COLS, [dd_by_col[c] for c in col_order if c in dd_by_col]),
               "sessions": (sess_cols, sess_rows)}
+    if meas_rows:
+        tables["measures"] = (meas_cols, meas_rows)
     out = Path(out_dir) if out_dir else Path(path) / "exports"
     out.mkdir(parents=True, exist_ok=True)
     stem = name or f"{sessions[0].meta.get('experiment', 'edge')}_all_{datetime.now():%Y%m%d}"
@@ -823,6 +871,7 @@ README_TXT = """EDGE session data
 =================
 trials_wide.csv      one row per trial (all routines of a loop iteration merged), analysis-ready
 summary.csv          per-participant accuracy / RT overall and per condition level
+measures.csv         your declared measures (experiment "measures:"), overall and per condition cell
 data_dictionary.csv  what every column in trials_wide.csv means (type, units, levels, range)
 trials.csv           one row per routine run (long format; trials.jsonl is the crash-safe original)
 events.jsonl         every marker: master-clock time, label, TTL code, delivery time per device
@@ -842,6 +891,8 @@ def auto_export(session_dir: str | Path, settings: dict[str, Any]) -> list[Path]
     files.append(write_delimited(st.root / "trials_wide.csv", *tables["trials"]))
     files.append(write_delimited(st.root / "summary.csv", *tables["summary"]))
     files.append(write_delimited(st.root / "data_dictionary.csv", *tables["dictionary"]))
+    if "measures" in tables:
+        files.append(write_delimited(st.root / "measures.csv", *tables["measures"]))
     (st.root / "README.txt").write_text(README_TXT, encoding="utf-8")
     extra = [f for f in (settings.get("data", {}).get("exports") or []) if f != "csv"]
     if extra:

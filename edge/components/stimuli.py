@@ -24,6 +24,9 @@ class VisualComponent(Component):
     visual = True
     category = "stimulus"
     dynamic = {"pos", "opacity", "ori", "size", "color", "fill", "text", "radius", "line_color", "image"}
+    outputs = {"onset": {"desc": "Onset of {who} (s from routine start, at the screen flip)", "units": "s",
+                         "type": "number", "kind": "timing"},
+               "duration": {"desc": "How long {who} was active (s)", "units": "s", "type": "number", "kind": "timing"}}
     stim_kind = "rect"
 
     def stim_props(self) -> dict[str, Any]:  # pragma: no cover - abstract
@@ -143,6 +146,7 @@ class Sound(Component):
     type_name = "sound"
     category = "stimulus"
     description = "Play a sound file or a pure tone (number = frequency in Hz)."
+    outputs = {"onset": {"desc": "Onset of {who} (s from routine start)", "units": "s", "type": "number", "kind": "timing"}}
     props_schema = {
         "sound": {"type": "file", "default": 440, "accept": "audio", "help": "file path or tone frequency in Hz"},
         "volume": {"type": "float", "default": 1.0, "min": 0, "max": 1, "step": 0.05, "help": "0 to 1"},

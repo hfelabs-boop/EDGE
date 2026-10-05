@@ -286,6 +286,21 @@ a column `<survey id>.<question id>` (matrix items by item id); library question
 Question text is used as written: a leading `$` is not an expression there. The full guide:
 [Surveys](SURVEYS.md).
 
+## measures
+
+What the experiment measures: outcomes, factors, covariates and checks, each pointing at a recorded
+column, with how to summarise it (`mean`, `median`, `proportion` …), on which trials (`trials:`
+filter, `loop:`) and the plausible range (`expect`). See [Measures](DATA.md#measures-saying-what-the-experiment-measures).
+
+```yaml
+measures:
+  - {id: rt, role: outcome, column: resp.rt, trials: $resp.corr == 1, summary: median, expect: [0.15, 2.5]}
+  - {id: congruent, role: factor, column: congruent}
+```
+
+Every component type declares the columns it records (`edge components --json` lists them under
+`outputs`), and every device the streams it records (`planned_streams`).
+
 ## HTML pages
 
 ```yaml
