@@ -239,7 +239,7 @@ def test_builder_wizard_estimate_play_and_participants(server):
     url, root = server
     pre = _post(url + "/api/wizard", {"answers": {"blocks": {"count": 2}}})
     assert pre["ok"] and "path" not in pre and pre["estimate"]["trials"] == 4
-    bad = _post(url + "/api/wizard", {"answers": {"stimulus": {"items": []}, "response": {"kind": "keys", "keys": ["q"]}}})
+    bad = _post(url + "/api/wizard", {"answers": {"response": {"kind": "keys", "keys": ["q"]}}})   # examples use f/j
     assert bad["ok"] is False and "not among the response keys" in bad["error"]
     made = _post(url + "/api/wizard", {"answers": {"name": "demo", "stimulus": {"kind": "picture"}}, "save_as": "demo/demo.yaml"})
     assert made["path"] == "demo/demo.yaml" and (root / "demo" / "images").is_dir()

@@ -36,6 +36,23 @@ def _expr_sources(value: Any, *, bare: bool = False) -> Iterable[str]:
             yield from _expr_sources(v)
 
 
+def _compared(src: str) -> set[str]:
+    """Bare names compared with something ($ink == red): usually text that lost its quotes."""
+    try:
+        tree = ast.parse(src.strip(), mode="eval")
+    except SyntaxError:
+        return set()
+    out: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Compare):
+            for side in [node.left, *node.comparators]:
+                if isinstance(side, ast.Name):
+                    out.add(side.id)
+                elif isinstance(side, (ast.List, ast.Tuple, ast.Set)):
+                    out.update(e.id for e in side.elts if isinstance(e, ast.Name))
+    return out
+
+
 def _code_assigned(src: str) -> set[str]:
     try:
         tree = ast.parse(src or "")
@@ -73,11 +90,74 @@ def loop_columns(loop, base_dir: Path) -> set[str] | None:
     return cols
 
 
+def _named_column(cond: Any) -> str | None:
+    """'block_file' for ``conditions: $block_file`` (a trial list named by an outer loop's column)."""
+    if isinstance(cond, str) and cond.startswith("$") and cond[1:].strip().isidentifier():
+        return cond[1:].strip()
+    return None
+
+
+def resolved_loop_columns(exp) -> dict[str, set[str] | None]:
+    """Columns of every loop, by loop id. ``conditions: $block_file`` is resolved through the enclosing
+    loops: the columns are those of the files that ``block_file`` lists (counterbalanced blocks).
+    None when they can't be known before running."""
+    from .conditions import load_conditions
+    from .model import Branch, Loop, StateMachine
+
+    out: dict[str, set[str] | None] = {}
+
+    def static_rows(lp) -> list[dict[str, Any]] | None:
+        if lp.staircase or lp.conditions is None or _named_column(lp.conditions) or \
+                (isinstance(lp.conditions, str) and lp.conditions.startswith("$")):
+            return None
+        try:
+            return load_conditions(lp.conditions, exp.base_dir)
+        except Exception:
+            return None
+
+    def from_outer(name: str, stack: list) -> set[str] | None:
+        for outer in reversed(stack):
+            rows = static_rows(outer)
+            if not rows or not any(name in r for r in rows):
+                continue
+            files = {r.get(name) for r in rows}
+            if not files or not all(isinstance(f, str) and f and not f.startswith("$") for f in files):
+                return None
+            cols: set[str] = set()
+            try:
+                for f in sorted(files):
+                    for r in load_conditions(f, exp.base_dir):
+                        cols.update(k for k in r if not str(k).startswith("_"))
+            except Exception:
+                return None
+            return cols
+        return None
+
+    def walk(nodes, stack: list) -> None:
+        for n in nodes:
+            if isinstance(n, Loop):
+                cols = loop_columns(n, exp.base_dir)
+                name = _named_column(n.conditions)
+                if cols is None and name and not n.staircase:
+                    cols = from_outer(name, stack)
+                out[n.id] = cols
+                walk(n.children, stack + [n])
+            elif isinstance(n, Branch):
+                walk(n.then, stack)
+                walk(n.else_, stack)
+            elif isinstance(n, StateMachine):
+                for st in n.states.values():
+                    walk(st.run, stack)
+    walk(exp.flow, [])
+    return out
+
+
 def global_names(exp) -> tuple[set[str], bool]:
     """Names visible everywhere, and whether code components make the check uncertain."""
     from .model import Loop, StateMachine, Branch
 
     names = set(ALWAYS) | set(exp.settings.get("participant", {}) or {}) | {"participant", "session"}
+    names |= {str(k) for k in (exp.variables or {})}      # the experiment's `variables:` section
     for d in exp.devices:       # variables an external program sends (udp_messages: variables)
         names.update(str(v) for v in (d.options.get("variables") or []) if isinstance(d.options.get("variables"), list))
     has_code = False
@@ -136,16 +216,18 @@ def scope_issues(exp) -> list:
                 for st in n.states.values():
                     collect(st.run)
     collect(exp.flow)
-    columns_of: dict[str, set[str] | None] = {}
+    columns_of = resolved_loop_columns(exp)
+    loop_by_id = {lp.id: lp for lp in loops}
     for lp in loops:
-        cols = loop_columns(lp, exp.base_dir)
-        columns_of[lp.id] = cols
-        for c in cols or ():
+        for c in columns_of.get(lp.id) or ():
             all_columns.setdefault(c, lp.id)
 
     seen: set[tuple[str, str]] = set()
 
-    def report(src: str, where: str, scope: set[str], unknown_scope: bool, enclosing: list[str]) -> None:
+    def report(src: str, where: str, scope: set[str], unknown_scope: str | None, enclosing: list[str],
+               kind: str = "condition") -> None:
+        """kind: 'text' (a property value: '$' makes it an expression), 'number' (a time or a count) or
+        'condition' (if / when / end_if: always an expression); it picks the hint."""
         for name in sorted(expressions.names_in(src)):
             if name in scope or name in glob:
                 continue
@@ -162,24 +244,36 @@ def scope_issues(exp) -> list:
                                     f"runs outside that loop, where '{name}' doesn't exist",
                                     hint=f"move it inside '{lp}', or give it a value with a variable component"))
                 continue
-            if unknown_scope or has_code:
-                level = "warning"
-            else:
-                level = "error"
+            if unknown_scope:
+                lp = loop_by_id.get(unknown_scope)
+                cond = getattr(lp, "conditions", None)
+                if not (isinstance(cond, str) and cond.startswith("$")):
+                    continue        # its trial list can't be read: that error is reported on the loop itself
+                close = difflib.get_close_matches(name, sorted(scope | glob - ALWAYS), n=2, cutoff=0.6)
+                issues.append(Issue("info", where,
+                                    f"'{name}' can't be checked before running: loop '{unknown_scope}' picks its "
+                                    f"trial list while it runs (conditions: {cond[:80]})"
+                                    + (f". Did you mean {' or '.join(repr(c) for c in close)}?" if close else ""),
+                                    hint=f"every trial list it can load needs a column called '{name}'"))
+                continue
+            level = "warning" if has_code else "error"
             cols = sorted(set().union(*[columns_of.get(e) or set() for e in enclosing])) if enclosing else []
             if enclosing and cols:
                 msg = f"the trial list has no column called '{name}'"
                 hint = f"columns here: {', '.join(cols)}"
             else:
                 msg = f"'{name}' isn't defined anywhere in this experiment"
-                hint = ("add a trial list (loop) with that column, or set it with a variable component; "
-                        "to show the text literally, remove the leading '$'")
+                hint = "add a trial list (loop) with that column, or set it with a variable component" + {
+                    "text": "; to show the text literally, remove the leading '$'",
+                    "number": "; or write a number instead"}.get(kind, "")
             close = difflib.get_close_matches(name, sorted(scope | glob - ALWAYS), n=2, cutoff=0.6)
             if close:
                 msg += f". Did you mean {' or '.join(repr(c) for c in close)}?"
+            if name in _compared(src):
+                msg += f". If you meant the text {name}, put it in quotes: '{name}'"
             issues.append(Issue(level, where, msg, hint=hint))
 
-    def check_routine(rid: str, scope: set[str], unknown: bool, enclosing: list[str]) -> None:
+    def check_routine(rid: str, scope: set[str], unknown: str | None, enclosing: list[str]) -> None:
         routine = exp.routines.get(rid)
         if routine is None:
             return
@@ -195,14 +289,18 @@ def scope_issues(exp) -> list:
             for key in ("start", "duration", "start_if", "stop_if", "only_if"):
                 v = getattr(c, key, None)
                 for src in _expr_sources(v, bare=True):
-                    report(src, f"{where}.{'if' if key == 'only_if' else key}", scope, unknown, enclosing)
+                    report(src, f"{where}.{'if' if key == 'only_if' else key}", scope, unknown, enclosing,
+                           "number" if key in ("start", "duration") else "condition")
             if c.type == "code":
                 continue
             for k, v in c.props.items():
                 if c.type == "survey" and k in ("questions", "scores", "labels", "css"):
                     continue
                 for src in _expr_sources(v):
-                    report(src, f"{where}.{k}", scope, unknown, enclosing)
+                    report(src, f"{where}.{k}", scope, unknown, enclosing, "text")
+        if routine.duration is not None and not isinstance(routine.duration, (int, float)):
+            for src in _expr_sources(routine.duration if isinstance(routine.duration, str) else None, bare=True):
+                report(src, f"routines.{rid}.duration", scope, unknown, enclosing, "number")
         if isinstance(routine.end_if, str):
             for src in _expr_sources(routine.end_if, bare=True):
                 report(src, f"routines.{rid}.end_if", scope, unknown, enclosing)
@@ -216,9 +314,9 @@ def scope_issues(exp) -> list:
                     for k in ("set", "marker", "log"):
                         if k in a:
                             for src in _expr_sources(a[k]):
-                                report(src, f"routines.{rid}.rules[{i}]", scope, unknown, enclosing)
+                                report(src, f"routines.{rid}.rules[{i}]", scope, unknown, enclosing, "text")
 
-    def walk(nodes, scope: set[str], unknown: bool, enclosing: list[str], where: str) -> None:
+    def walk(nodes, scope: set[str], unknown: str | None, enclosing: list[str], where: str) -> None:
         for i, n in enumerate(nodes):
             w = f"{where}[{i}]"
             if isinstance(n, RoutineRef):
@@ -230,13 +328,14 @@ def scope_issues(exp) -> list:
                 for src in _expr_sources(n.conditions if isinstance(n.conditions, str) else None):
                     report(src, w + ".conditions", scope, unknown, enclosing)
                 for src in _expr_sources(n.repeats if isinstance(n.repeats, str) else None, bare=True):
-                    report(src, w + ".repeats", scope, unknown, enclosing)
+                    report(src, w + ".repeats", scope, unknown, enclosing, "number")
                 cols = columns_of.get(n.id)
                 inner = scope | (cols or set())
-                walk(n.children, inner, unknown or cols is None, enclosing + [n.id], f"{w}.{n.id}")
+                inner_unknown = unknown or (n.id if cols is None else None)
+                walk(n.children, inner, inner_unknown, enclosing + [n.id], f"{w}.{n.id}")
                 if n.stop_if:
                     for src in _expr_sources(n.stop_if, bare=True):
-                        report(src, w + ".stop_if", inner, unknown or cols is None, enclosing + [n.id])
+                        report(src, w + ".stop_if", inner, inner_unknown, enclosing + [n.id])
             elif isinstance(n, Branch):
                 for src in _expr_sources(n.condition, bare=True):
                     report(src, w + ".if", scope, unknown, enclosing)
@@ -251,5 +350,5 @@ def scope_issues(exp) -> list:
                             for src in _expr_sources(t.condition, bare=True):
                                 report(src, f"{sw}.next[{j}]", scope, unknown, enclosing)
 
-    walk(exp.flow, set(), False, [], "flow")
+    walk(exp.flow, set(), None, [], "flow")
     return issues

@@ -26,6 +26,13 @@ CHECK_TYPES = {"routine_exists", "component", "loop", "flow_has", "statemachine"
                "tab_open", "saved", "selected", "variable", "routine_prop", "setting"}
 
 
+class HelpNotFound(KeyError):
+    """No such help topic, section or tutorial; the message lists what exists."""
+
+    def __str__(self) -> str:
+        return str(self.args[0]) if self.args else "not found"
+
+
 def docs_dir() -> Path:
     for cand in (PACKAGE_DIR.parent / "docs", PACKAGE_DIR / "docs"):
         if cand.is_dir():
@@ -73,10 +80,16 @@ def read_topic(topic: str) -> str:
     for cand in (base / f"{name}.md", base / "reference" / f"{name}.md"):
         if cand.is_file() and base.resolve() in cand.resolve().parents:
             return cand.read_text(encoding="utf-8")
-    matches = [t["id"] for t in topics() if name.lower() in t["id"].lower()]
+    if name.lower() == "tutorial":           # search results name tutorials so
+        return read_topic("TUTORIALS")
+    all_ids = [t["id"] for t in topics()]
+    matches = [t for t in all_ids if name.lower() in t.lower()]
     if len(matches) == 1:
         return read_topic(matches[0])
-    raise KeyError(f"no help topic '{topic}'" + (f"; did you mean {', '.join(matches)}?" if matches else ""))
+    if not all_ids:
+        raise HelpNotFound(f"no help topic '{topic}': the documentation is not installed with this copy of EDGE")
+    raise HelpNotFound(f"no help topic '{topic}'" + (f"; did you mean {', '.join(matches)}?" if matches else
+                                                      f"; topics: {', '.join(all_ids)}"))
 
 
 def sections() -> list[Section]:
@@ -141,10 +154,16 @@ def _snippet(text: str, words: list[str], width: int = 220) -> str:
 
 
 def section_text(topic: str, anchor: str) -> str:
-    for s in sections():
-        if s.topic == topic and s.anchor == anchor:
+    """One section of a guide by its anchor; for topic "tutorial" (search results), the tutorial with that id."""
+    if topic == "tutorial":
+        return tutorial_markdown(tutorial(anchor))
+    found = [s for s in sections() if s.topic == topic]
+    for s in found:
+        if s.anchor == anchor:
             return f"{'#' * max(s.level, 2)} {s.title}\n\n{s.text}"
-    raise KeyError(f"no section '{anchor}' in {topic}")
+    if not found:
+        read_topic(topic)        # raises "no help topic …" with the list of topics
+    raise HelpNotFound(f"no section '{anchor}' in {topic}; sections: {', '.join(s.anchor for s in found)}")
 
 
 # ============================================================================ tutorials
@@ -162,7 +181,7 @@ def tutorial(tid: str) -> dict[str, Any]:
     for t in tutorials():
         if t["id"] == tid:
             return t
-    raise KeyError(f"no tutorial '{tid}'; available: {', '.join(t['id'] for t in tutorials())}")
+    raise HelpNotFound(f"no tutorial '{tid}'; available: {', '.join(t['id'] for t in tutorials())}")
 
 
 def validate_tutorial(t: dict[str, Any]) -> list[str]:
@@ -330,7 +349,7 @@ def build_cli_reference() -> str:
         out += [f"## edge {name}", "", helps.get(name, "") or "", "", "```", usage, "```", ""]
         rows = []
         for a in p._actions:
-            if isinstance(a, argparse._HelpAction):
+            if isinstance(a, argparse._HelpAction) or a.help == argparse.SUPPRESS:     # hidden options stay hidden
                 continue
             flag = ", ".join(a.option_strings) or a.dest
             rows.append(f"| `{flag}` | {a.help or ''} |")
@@ -408,8 +427,19 @@ GENERATED = {
 }
 
 
+def is_source_checkout() -> bool:
+    """True when EDGE runs from its source folder (with pyproject.toml and docs/), not an installed copy."""
+    root = PACKAGE_DIR.parent
+    return (root / "pyproject.toml").is_file() and (root / "docs").is_dir() and docs_dir() == root / "docs"
+
+
 def build_docs(check: bool = False) -> list[str]:
-    """Write generated pages. With ``check`` only report which are out of date."""
+    """Write generated pages. With ``check`` only report which are out of date. Only in a source checkout:
+    in an installed copy there is nothing to rebuild (and site-packages is no place for new folders)."""
+    from .storage import DocumentError
+    if not is_source_checkout():
+        raise DocumentError("this is a developer command: the generated documentation can only be rebuilt in a "
+                            "source checkout of EDGE (a git clone), not in an installed copy")
     stale = []
     base = docs_dir()
     for rel, fn in GENERATED.items():

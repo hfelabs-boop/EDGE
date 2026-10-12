@@ -64,6 +64,8 @@ If `edge` isn't on the PATH Claude Desktop uses, give the full path to the execu
 | Import | `import_experiment`: PsychoPy, E-Prime, OpenSesame, jsPsych |
 | Devices & settings | `add_device`, `update_device`, `remove_device`, `update_settings` |
 | Test & run | `validate_experiment` (plain-language issues, incl. names not defined where they're used), `dry_run`, `run_experiment`, `run_status` |
+| Before collecting data | `preflight` (one go / no-go: checks, packages, a full test run, the lock), `check_system` (this computer: power saving, display, the known causes of bad timing), `test_device` (connect one device for a few seconds: data rate, buttons, markers) |
+| Reproducibility & support | `lock_experiment` (after piloting: versions, file fingerprints and a golden participant), `verify_experiment` (what changed since the lock), `support_bundle` (one zip to ask for help, without participant data) |
 | Measures | `describe_recording` (every column and stream the experiment will record, with meaning and units, plus suggested measures), `set_measures` (declare outcomes, factors, covariates and checks) |
 | Data | `list_sessions`, `analyze_session` (includes the measures and their checks), `export_data` |
 | History & files | `undo`, `list_versions`, `restore_version`, `bundle_experiment`, `import_experiment_bundle`, `write_file` |
@@ -80,11 +82,15 @@ If `edge` isn't on the PATH Claude Desktop uses, give the full path to the execu
 
 * **Workspace jail:** paths are resolved inside `--root`. The server won't write scripts or
   executables.
-* **Validated edits:** unknown component types, properties, devices and options are rejected, and
-  the error message lists the valid choices so the assistant can correct itself.
-* **All-or-nothing batches:** if any operation in `edit_experiment` fails, the file is left untouched.
+* **Validated edits:** unknown component types, properties, devices and options, settings, measures,
+  questionnaires and misspelled tool arguments are rejected, and the error message lists the valid
+  choices so the assistant can correct itself. A failed call returns `{"ok": false, "error": …}` and is
+  marked as an error (`isError`) for the client; nothing is saved.
+* **All-or-nothing batches:** if any operation in `edit_experiment` fails, the file (and any conditions
+  file the batch would write) is left untouched.
 * **Backups and undo:** every save keeps the previous version (`.edge/backups/`); `undo` and
-  `restore_version` walk back through them.
+  `restore_version` walk back through them. A conditions file an edit replaces is backed up too, and
+  `undo` puts it back; a file that another loop also uses is only replaced with `overwrite=true`.
 * **No silent overwrites:** the builder detects edits made over MCP. If you have unsaved changes
   of your own, it asks which version to keep.
 * **Real sessions only when asked:** `run_experiment` opens the experiment window and uses real

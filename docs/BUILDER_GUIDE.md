@@ -12,9 +12,9 @@ The **Simple / Expert** button (top right) decides how much you see. Your choice
 
 | | Simple (default) | Expert |
 |---|---|---|
-| Things you can add | Show (text, picture, shape, fixation cross, sound, web page), Responses (key press, mouse click, rating scale), Pause, Set a variable; *Where they look* once an eye tracker is added | everything, including Python code, event markers, gaze following and calibration |
+| Things you can add | Show (text, picture, shape, fixation cross, sound, web page, survey / questionnaire), Responses (key press, button box / external input, mouse click, rating scale), Pause, Set a variable; *Where they look* once an eye tracker is added | everything, including Python code, event markers, gaze following and calibration |
 | Properties | the essentials; the rest under **More options** (with a count of options already set) | every property |
-| Top bar | New, Open, Save, Settings, Check, Test run, Try it, Run with a participant | also Import, Versions, Bundle |
+| Top bar | New, Open, Save, Undo/Redo, Measures & data, Settings, Check, Test run, Try it, Run with a participant | also Import, Versions, Bundle |
 | Console | Check, Test results, Data | also Source (YAML), Hardware |
 | Check messages | must-fix problems and things to check | also notes (info) |
 
@@ -37,7 +37,7 @@ Searching the list on the left always finds every kind of thing, in either mode.
 
 | area | what it's for |
 |---|---|
-| **Top bar** | New, Open, Save, Undo/Redo, Settings, Check, ▶ Test run, ▶ Try it, Run with a participant, Simple/Expert, Help (?) |
+| **Top bar** | New, Open, Save, Undo/Redo, Measures & data (what the experiment measures and everything it records), Settings, Check, ▶ Test run, ▶ Try it, Run with a participant, Simple/Expert, Help (?) |
 | **Left** | what you can **add to this screen** (click, or drag onto the timeline) and the **devices** list |
 | **Centre top** | the **storyboard**, or one screen's **timeline** with its plain-language summary and live preview. When a workflow is selected, a **diagram** replaces it. |
 | **Centre middle** | the **flow**: the order of screens, trial lists, if/else and workflows |

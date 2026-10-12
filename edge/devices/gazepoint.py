@@ -27,6 +27,10 @@ _TAG = re.compile(r"<(REC|ACK|CAL|NACK)\b([^>]*)/>")
 REC_FIELDS = ["CNT", "TIME", "TIME_TICK", "FPOGX", "FPOGY", "FPOGS", "FPOGD", "FPOGID", "FPOGV",
               "BPOGX", "BPOGY", "BPOGV", "LPCX", "LPCY", "LPD", "LPS", "LPV", "RPCX", "RPCY", "RPD", "RPS", "RPV",
               "LPMM", "LPMMV", "RPMM", "RPMMV", "CX", "CY", "CS", "USER"]
+REC_UNITS = ["", "s", "ticks", "screen fraction", "screen fraction", "s", "s", "", "bool",
+             "screen fraction", "screen fraction", "bool", "camera fraction", "camera fraction", "camera px", "", "bool",
+             "camera fraction", "camera fraction", "camera px", "", "bool",
+             "mm", "bool", "mm", "bool", "screen fraction", "screen fraction", "", ""]
 
 ENABLE = ["ENABLE_SEND_COUNTER", "ENABLE_SEND_TIME", "ENABLE_SEND_TIME_TICK", "ENABLE_SEND_POG_FIX",
           "ENABLE_SEND_POG_BEST", "ENABLE_SEND_PUPIL_LEFT", "ENABLE_SEND_PUPIL_RIGHT", "ENABLE_SEND_PUPILMM",
@@ -89,7 +93,9 @@ class Gazepoint(Device):
         self._cal: list[dict[str, str]] = []
         for cmd in ENABLE:
             self.command("SET", cmd, STATE=1)
-        self.add_stream("gaze", REC_FIELDS, 150.0, "Gaze")
+        self.add_stream("gaze", REC_FIELDS, 150.0, "Gaze", units=REC_UNITS,
+                        coordinates="FPOG/BPOG x, y: fraction of the screen (0-1) from its top-left corner, +y down; "
+                                    "pupil diameter LPMM/RPMM in mm")
         self.connected = True
 
     # ---------------------------------------------------------------- protocol

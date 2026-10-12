@@ -45,7 +45,7 @@ in the session report. Claude can run it too (`check_system`).
 |---|---|
 | **A response box stops accepting responses after a pause** (USB selective suspend) | `edge doctor` warns when Windows may suspend USB devices and the experiment uses a USB/serial device; `--fix` turns USB selective suspend off. If the connection drops anyway, `serial_inputs` reconnects by itself (and logs it), and the live monitor shows the device. |
 | **USB-to-serial adapters (FTDI) delay data by up to 16 ms** (their latency timer) | EDGE asks the driver for low-latency mode on every serial port it opens; `edge doctor` reads each FTDI adapter's latency timer and tells you how to set it to 1 ms (on Linux `--fix` does it). |
-| **Codes that don't fit the recording system's trigger lines** | `trigger_adapter` knows each system's lines; **Check** warns before you run (see [Devices](DEVICES.md#trigger-adapters-triggeradapter)). |
+| **Codes that don't fit the recording system's trigger lines** | `trigger_adapter` knows each system's lines; **Check** warns before you run (see [Devices](DEVICES.md#trigger-adapters)). |
 
 ## Sound
 

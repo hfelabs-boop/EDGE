@@ -91,8 +91,13 @@ class Stim:
         cx, cy = p.get("pos", (0, 0))
         if self.kind == "circle":
             return math.hypot(x - cx, y - cy) <= p.get("radius", 0)
-        w, h = p.get("size", (0, 0))
+        size = p.get("size") or (self.native_size() if self.kind == "image" else None) or (0, 0)
+        w, h = size
         return abs(x - cx) <= w / 2 and abs(y - cy) <= h / 2
+
+    def native_size(self) -> tuple[float, float] | None:
+        """Width and height in px of an image shown without a size (its own size)."""
+        return None
 
     def release(self) -> None:
         pass

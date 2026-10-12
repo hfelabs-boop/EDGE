@@ -89,6 +89,34 @@ class Keyboard(Component):
             self.out["corr"] = int(str(self.p["correct"]).lower() in ("none", ""))
 
 
+def _input_name_issues(wanted: Any, dev: Any, where: str) -> list:
+    """The inputs a device_response waits for, against the names the device gives its lines/buttons
+    (``inputs: {1: left, 2: right, 5: trigger}``): a name the box never sends means waiting forever."""
+    from ..model import Issue
+    import difflib
+    named = dev.options.get("inputs")
+    if not isinstance(named, dict) or not named or not isinstance(wanted, list):
+        return []
+    names = {str(v) for v in named.values()}
+    if dev.options.get("input_name"):
+        names.add(str(dev.options["input_name"]))
+    out = []
+    for w in wanted:
+        if not isinstance(w, (str, int)) or isinstance(w, bool) or str(w).startswith("$") or str(w) in names:
+            continue
+        raw = {str(k): str(v) for k, v in named.items()}
+        if str(w) in raw:
+            out.append(Issue("error", where, f"input {w} of '{dev.id}' is called '{raw[str(w)]}': wait for "
+                                             f"'{raw[str(w)]}' instead", hint=f"inputs: [{raw[str(w)]}]"))
+            continue
+        close = difflib.get_close_matches(str(w), sorted(names), 1, 0.6)
+        out.append(Issue("warning", where, f"'{w}' isn't one of the inputs named for '{dev.id}' ({', '.join(sorted(names))}), "
+                         f"so this screen may wait for an input the device never sends"
+                         + (f". Did you mean '{close[0]}'?" if close else ""),
+                         hint=f"or name it under the device's inputs, e.g. {{5: {w}}} (5 = its line or button)"))
+    return out
+
+
 class DeviceResponse(Component):
     type_name = "device_response"
     category = "response"
@@ -179,6 +207,8 @@ class DeviceResponse(Component):
             if d is not None and d.type in reg and "input" not in reg[d.type].capabilities:
                 issues.append(Issue("error", where, f"'{dev}' ({d.type}) has no inputs to respond with",
                                     hint=", ".join(x.id for x in inputs) or "add a button box, TTL input or voice key"))
+            elif d is not None:
+                issues += _input_name_issues(spec.props.get("inputs"), d, where)
         elif not inputs and not spec.props.get("keys"):
             issues.append(Issue("warning", where, "there is no input device (button box, TTL input, voice key) to respond with",
                                 hint="add one under Devices, or give keyboard stand-ins with 'keys'"))

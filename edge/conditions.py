@@ -37,6 +37,36 @@ def _row(r: Any, i: int) -> dict[str, Any]:
     return {str(k): v for k, v in r.items()}
 
 
+def _table_rows(reader: Any, name: str, delim: str) -> list[dict[str, Any]]:
+    """Rows of a CSV/TSV trial list. A row with more values than there are column names means a value
+    contained the separator without quotes ("Hello, world"): every value after it would land in the
+    wrong column, so that is an error naming the row, not a silent shift."""
+    header: list[str] | None = None
+    out: list[dict[str, Any]] = []
+    for cells in reader:
+        if header is None:
+            if any(c.strip() for c in cells):        # blank lines above the column names are skipped
+                header = [h.strip() for h in cells]
+            continue
+        if not cells:
+            continue
+        extra = cells[len(header):]
+        if any(c.strip() for c in extra):
+            sep = {",": "comma", ";": "semicolon", "\t": "tab"}.get(delim, repr(delim))
+            seen = " | ".join(c if len(c) <= 20 else c[:19] + "…" for c in cells[:8]) + (" | …" if len(cells) > 8 else "")
+            raise ValueError(
+                f"{name} row {reader.line_num} has {len(cells)} values but only {len(header)} column names "
+                f"({', '.join(header)}), so its values would end up in the wrong columns (read as: {seen}). "
+                f"A value that contains a {sep} must be in double quotes"
+                + (f", e.g. \"Hello{delim} world\"" if delim in ",;" else "") + "; or remove the extra values")
+        row = {h: _coerce(v) for h, v in zip(header, cells) if h}
+        for h in header[len(cells):]:
+            if h:
+                row.setdefault(h, None)        # trailing empty cells left out
+        out.append(row)
+    return out
+
+
 def _rows_from(data: Any, path: Path) -> list:
     if isinstance(data, dict) and isinstance(data.get("rows"), list):
         data = data["rows"]
@@ -91,7 +121,7 @@ def load_conditions(spec: Any, base_dir: Path) -> list[dict[str, Any]]:
                         delim = csv.Sniffer().sniff(sample, delimiters=",;\t").delimiter
                     except csv.Error:
                         delim = ","
-                return [{k.strip(): _coerce(v) for k, v in row.items() if k} for row in csv.DictReader(f, delimiter=delim)]
+                return _table_rows(csv.reader(f, delimiter=delim), path.name, delim)
         if suffix == ".json":
             return load_conditions(_rows_from(json.loads(path.read_text(encoding="utf-8")), path), base_dir)
         if suffix in (".yaml", ".yml"):
@@ -168,11 +198,13 @@ def _window(max_repeat: dict[str, Any]) -> int:
 
 
 def constrained_shuffle(rows: list[dict], rng: random.Random, max_repeat: dict[str, Any] | None,
-                        attempts: int = 5000) -> list[dict]:
+                        attempts: int = 5000, before: list[dict] | None = None) -> list[dict]:
     """Shuffle so that no column in ``max_repeat`` repeats more than N times in a row.
 
     ``max_repeat`` maps a column to an int (applies to all values) or to
     ``{value: limit}`` (e.g. ``{kind: {deviant: 1}}``: deviants never back to back).
+    ``before`` is what the participant saw just before this block (the previous repeat), so a run
+    can't continue across the boundary between two repeats.
     Uses randomized greedy construction with restarts, which succeeds quickly for
     any feasible constraint set (unlike plain rejection sampling on long lists).
     """
@@ -180,13 +212,26 @@ def constrained_shuffle(rows: list[dict], rng: random.Random, max_repeat: dict[s
     rng.shuffle(seq)
     if not max_repeat:
         return seq
+    win = _window(max_repeat)
+    head = list(before or [])[-win:]
+    if head:
+        state = rng.getstate()
+        try:
+            return _greedy(rows, rng, max_repeat, min(attempts, 500), head, win)
+        except ValueError:
+            rng.setstate(state)      # this block can't follow the previous one: keep it valid on its own
+    return _greedy(rows, rng, max_repeat, attempts, [], win)
+
+
+def _greedy(rows: list[dict], rng: random.Random, max_repeat: dict[str, Any], attempts: int,
+            head: list[dict], win: int) -> list[dict]:
     for _ in range(attempts):
         pool = rows[:]
         rng.shuffle(pool)
         out: list[dict] = []
         while pool:
             for idx, cand in enumerate(pool):
-                if _respects(out[-_window(max_repeat):] + [cand], max_repeat):
+                if _respects((head + out)[-win:] + [cand], max_repeat):
                     out.append(pool.pop(idx))
                     break
             else:
@@ -210,7 +255,7 @@ def order_trials(rows: list[dict], order: str, repeats: int, rng: random.Random,
             out += [dict(r) for r in indexed]
     elif order == "random":
         for _ in range(repeats):
-            out += [dict(r) for r in constrained_shuffle(indexed, rng, max_repeat)]
+            out += [dict(r) for r in constrained_shuffle(indexed, rng, max_repeat, before=out)]
     elif order == "fullrandom":
         out = [dict(r) for r in constrained_shuffle(indexed * repeats, rng, max_repeat)]
     elif order in ("latin_square", "counterbalance"):

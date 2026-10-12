@@ -19,12 +19,12 @@ serial = ["pyserial>=3.5"]
 inputs = ["pyserial>=3.5", "sounddevice>=0.4", "numpy>=1.24"]   # response boxes, voice key
 labjack = ["LabJackPython>=2.0"]
 gtec = []  # pygds ships with g.NEEDaccess; install it from g.tec's SDK
-mcp = ["mcp>=1.2"]
+mcp = ["mcp>=1.2,<2"]   # mcp 2 renamed FastMCP, which edge/mcp_server.py uses
 html = ["pywebview>=4"]
 export = ["pyarrow>=12", "scipy>=1.10"]
 rtl = ["python-bidi>=0.4"]
-all = ["pyglet>=2.0", "pylsl>=1.16", "pyserial>=3.5", "numpy>=1.24", "mcp>=1.2", "python-bidi>=0.4"]
-dev = ["pytest>=7", "mcp>=1.2", "openpyxl>=3", "python-bidi>=0.4"]
+all = ["pyglet>=2.0", "pylsl>=1.16", "pyserial>=3.5", "numpy>=1.24", "mcp>=1.2,<2", "python-bidi>=0.4"]
+dev = ["pytest>=7", "mcp>=1.2,<2", "openpyxl>=3", "python-bidi>=0.4"]
 
 [project.scripts]
 edge = "edge.cli:main"
@@ -39,6 +39,7 @@ include = ["edge*"]
 [tool.setuptools.package-data]
 "edge.builder" = ["static/*"]
 "edge" = ["tutorials/*.yaml", "survey_page/*", "assets/*"]
+# The guides in docs/ are copied into the package as edge/docs by setup.py (edge help, Help Center, MCP).
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

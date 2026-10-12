@@ -8,11 +8,17 @@ import sys
 from pathlib import Path
 
 
+class CLIError(Exception):
+    """A mistake on the command line, said in words (``edge <command>: <message>``, exit code 2)."""
+
+
 def _kv(items: list[str] | None) -> dict[str, str]:
     out = {}
     for it in items or []:
-        k, _, v = it.partition("=")
-        out[k] = v
+        k, eq, v = it.partition("=")
+        if not eq or not k.strip():
+            raise CLIError(f"-f {it}: use key=value, e.g. -f age=30")
+        out[k.strip()] = v.strip()
     return out
 
 
@@ -27,7 +33,7 @@ def cmd_run(a: argparse.Namespace) -> int:
         if i.level != "info":
             print(i)
     if errors:
-        print(f"\n{len(errors)} error(s): fix them before running (edge validate {a.experiment})")
+        print(f"\n{len(errors)} error(s): fix them before running (edge validate {shlex_quote(a.experiment)})")
         return 2
     if getattr(a, "fullscreen", None) is not None:
         exp.settings["window"]["fullscreen"] = a.fullscreen
@@ -36,6 +42,12 @@ def cmd_run(a: argparse.Namespace) -> int:
         participant["participant"] = a.participant
     if a.session:
         participant["session"] = a.session
+    lock_state = None
+    if not a.dry_run:          # a real session: the checks the builder's run dialog makes
+        lock_state = _check_lock(a.experiment)
+        if lock_state is None or not _check_participant(exp, participant, a.data_dir):
+            print("Nothing was run.")
+            return 2
     try:
         summary = run_experiment(exp, backend=a.backend, participant=participant, dry_run=a.dry_run,
                                  data_dir=a.data_dir, simulate_devices=a.simulate_devices or None)
@@ -49,6 +61,8 @@ def cmd_run(a: argparse.Namespace) -> int:
         print(f"\nEDGE could not run the experiment: {friendly_run_error(cause)}")
         print(f"(details: {type(cause).__name__}: {cause})")
         return 3
+    if lock_state is not None and summary.get("data_dir"):
+        _add_to_session(summary["data_dir"], "lock", lock_state)
     t = summary.get("timing", {})
     print(f"\nSaved to {summary.get('data_dir')}")
     if t.get("mean_interval_ms"):
@@ -59,6 +73,100 @@ def cmd_run(a: argparse.Namespace) -> int:
         from .report import analyze_session, format_report
         print("\n" + format_report(analyze_session(summary["data_dir"])))
     return 1 if summary.get("aborted") else 0
+
+
+def _interactive() -> bool:
+    """Someone at a terminal who can answer (not the builder, the MCP server or a script)."""
+    try:
+        return bool(sys.stdin and sys.stdin.isatty() and sys.stdout and sys.stdout.isatty())
+    except (AttributeError, ValueError, OSError):
+        return False
+
+
+def _go_ahead(question: str) -> bool:
+    """Ask in the terminal (Enter means no). With nobody to ask, go ahead: the warning above is in the log."""
+    if not _interactive():
+        return True
+    try:
+        return input(f"{question} [y/N]: ").strip().lower() in ("y", "yes")
+    except EOFError:
+        return False
+
+
+def _check_lock(path: str) -> dict | None:
+    """Before a real session: does the experiment still match its lock (edge lock)? The quick part of
+    'edge verify' (no golden participant). Returns what to record with the session, or None to stop."""
+    from .reproduce import verify
+    try:
+        r = verify(path, golden=False)
+    except Exception as e:       # a damaged lock file
+        r = {"locked": True, "findings": [{"level": "error", "what": "the lock file could not be read",
+                                           "detail": f"{type(e).__name__}: {e}"}]}
+    if not r.get("locked"):
+        return {"locked": False}
+    problems = [f for f in r["findings"] if f["level"] in ("warning", "error")]
+    state = {"locked": True, "lock": r.get("lock"), "created": r.get("created"), "matches": not problems,
+             "findings": problems}
+    if problems:
+        q = shlex_quote(path)
+        print(f"This experiment was locked{' on ' + str(r['created']).replace('T', ' ') if r.get('created') else ''}, "
+              "but since then:")
+        for f in problems:
+            print(f"  ! {f['what']}" + (f"\n      {f['detail']}" if f.get("detail") else ""))
+        print(f"Check everything (with a test run of the golden participant):  edge verify {q}\n"
+              f"If the change is intended, lock it again:  edge lock {q}")
+        if not _go_ahead("Run the session anyway?"):
+            return None
+        state["run_anyway"] = True
+    return state
+
+
+def _check_participant(exp, participant: dict, data_dir: str | None) -> bool:
+    """Say which participant id is used, and warn before a second session under the same participant and session
+    numbers (EDGE keeps both, but they are easy to mix up in the analysis). False to stop."""
+    from .export import find_sessions
+    given = {**(exp.settings.get("participant") or {}), **participant}
+    pid, ses = str(given.get("participant", "")), str(given.get("session", ""))
+    root = Path(data_dir) if data_dir else exp.base_dir / exp.settings["data"]["dir"]
+    used, same = [], []
+    for s in find_sessions(root) if root.is_dir() else []:          # real sessions only, not test runs
+        try:
+            meta = json.loads((s / "session.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        p = meta.get("participant") or {}
+        if meta.get("experiment") != exp.name or not isinstance(p, dict):
+            continue
+        used.append((str(p.get("participant", "")), str(p.get("session", ""))))
+        if used[-1] == (pid, ses):
+            same.append(s)
+    nums = [int(u) for u, _ in used if u.isdigit()]
+    width = max([len(u) for u, _ in used if u.isdigit()] + [3])
+    free = str(max(nums) + 1 if nums else 1).zfill(width)
+    if "participant" not in participant:
+        print(f"Participant: {pid} (the default; give each participant their own id with -p"
+              + (f", e.g. -p {free})" if free != pid else ")"))
+    if not same:
+        return True
+    sessions = [int(x) for u, x in used if u == pid and x.isdigit()]
+    shown = ", ".join(str(s) for s in same[:3]) + (f" and {len(same) - 3} more" if len(same) > 3 else "")
+    print(f"Participant {pid}, session {ses} already has data from this experiment: {shown}")
+    print(f"A new session is saved separately (nothing is overwritten), but the two are easy to mix up. "
+          f"For this participant's next session use -s {max(sessions, default=1) + 1}; for a new participant "
+          f"use -p {free} (the next free number).")
+    return _go_ahead(f"Run participant {pid}, session {ses} again anyway?")
+
+
+def _add_to_session(data_dir: str | Path, key: str, value) -> None:
+    sj = Path(data_dir) / "session.json"
+    try:
+        meta = json.loads(sj.read_text(encoding="utf-8"))
+        meta[key] = value
+        tmp = sj.with_name("session.json.tmp")
+        tmp.write_text(json.dumps(meta, indent=2, default=str), encoding="utf-8")
+        tmp.replace(sj)
+    except (OSError, ValueError):
+        pass
 
 
 def friendly_run_error(e: Exception) -> str:
@@ -112,8 +220,9 @@ def cmd_components(a: argparse.Namespace) -> int:
     if a.json:
         print(json.dumps({k: v.describe() for k, v in reg.items()}, indent=2, default=str))
         return 0
+    width = max((len(n) for n in reg), default=12)
     for name, cls in sorted(reg.items(), key=lambda kv: (kv[1].category, kv[0])):
-        print(f"{cls.category:12s} {name:12s} {cls.description}")
+        print(f"{cls.category:12s} {name:{width}s} {cls.description}")
     return 0
 
 
@@ -124,12 +233,20 @@ def cmd_scan(a: argparse.Namespace) -> int:
     if a.json:
         print(json.dumps(found, indent=2, default=str))
         return 0
+    import yaml
     for section, items in found.items():
-        print(f"{section}:")
+        print(f"{section.replace('_', ' ')}:")
         if not items:
             print("  (none)")
         for it in items:
-            print("  - " + ", ".join(f"{k}={v}" for k, v in it.items()))
+            print("  - " + ", ".join(f"{k.replace('_', ' ')}: {v}" for k, v in it.items()
+                                     if k != "suggested" and v not in (None, "", "n/a")))
+            if it.get("suggested"):
+                sug = dict(it["suggested"])
+                ids = {"tobii": "eyetracker", "gazepoint": "eyetracker", "ttl_serial": "triggers", "lsl_inlet": "stream"}
+                dev = {"id": ids.get(sug.get("type"), sug.get("type") or "device"), **sug}
+                line = yaml.safe_dump(dev, default_flow_style=True, sort_keys=False, width=1000).strip()
+                print(f"    in the experiment's devices:  {line}")
     return 0
 
 
@@ -172,9 +289,21 @@ def cmd_test_device(a: argparse.Namespace) -> int:
     if not ids:
         print("This experiment has no devices.")
         return 0
+    known = [d.id for d in exp.devices]
+    if a.device and a.device not in known:
+        import difflib
+        close = difflib.get_close_matches(a.device, known, 1)
+        raise CLIError(f"there is no device '{a.device}' in this experiment" + (f"; did you mean {close[0]}?" if close else "")
+                       + f" (its devices: {', '.join(known)})")
+    from .devices import device_registry
+    reg = device_registry()
     bad = 0
     for did in ids:
-        print(f"{did}: testing for {a.seconds:g} s" + (" (press the buttons / speak now)" if a.seconds >= 3 else ""))
+        dtype = next(d.type for d in exp.devices if d.id == did)
+        caps = getattr(reg.get(dtype), "capabilities", ()) or ()
+        what = ("speak into the microphone now" if dtype == "voice_key" else "press the buttons now" if "input" in caps
+                else "look at the screen now" if "gaze" in caps else "")
+        print(f"{did}: testing for {a.seconds:g} s" + (f" ({what})" if what and a.seconds >= 3 else ""))
         r = test_experiment_device(exp, did, a.seconds, a.simulate)
         if not r["connected"]:
             bad += 1
@@ -192,31 +321,32 @@ def cmd_timing_test(a: argparse.Namespace) -> int:
     print("1. Tape a light sensor over the top-left corner of the screen and put a microphone at the speaker.")
     print("2. Replace the 'sensors' device with your hardware (serial_inputs, labjack, voice_key …), naming its")
     print("   inputs 'light' and 'sound' (and keep your trigger device).")
-    print(f"3. edge run {path} --report   → display latency, audio latency and trigger alignment.")
-    print(f"   (Try it first without hardware: edge run {path} --dry-run --report)")
+    q = shlex_quote(str(path))
+    print(f"3. edge run {q} --report   → display latency, audio latency and trigger alignment.")
+    print(f"   (Try it first without hardware: edge run {q} --dry-run --report)")
     return 0
 
 
 def cmd_update(a: argparse.Namespace) -> int:
-    from .updater import current_version, update
-    before = current_version()
-    res = update(check_only=a.check, stash=a.stash, branch=a.branch)
-    if not res.get("ok"):
-        if res.get("reason") and res["reason"] != "local changes":
-            print(f"Update failed: {res['reason']}")
-        return 1
-    if res.get("updated") and not a.check:
-        print(f"\nEDGE is up to date (was {before}). Check this computer with:  edge doctor")
-        print("Restart the builder if it is open, and press Ctrl+Shift+R in the browser.")
-    return 0
+    from .updater import update
+    res = update(check_only=a.check, stash=a.stash, branch=a.branch)   # says what happened, once
+    return 0 if res.get("ok") else 1
 
 
 def cmd_lock(a: argparse.Namespace) -> int:
+    from .model import Experiment
     from .reproduce import lock
+    errors = [i for i in Experiment.load(a.experiment).validate() if i.level == "error"]
+    if errors:           # the golden participant can't go through an experiment with errors
+        for i in errors:
+            print(i)
+        print(f"\n{len(errors)} error(s): fix them before locking (edge validate {shlex_quote(a.experiment)})")
+        return 2
     r = lock(a.experiment, golden=not a.no_golden)
     print(f"Locked {r['experiment']}: {r['lock']} ({r['files']} file(s) fingerprinted"
           + (f", golden participant: {r['trials']} trials" if r.get("trials") is not None else "") + ")")
-    print("Run 'edge verify' (the builder does it before every session) to catch any later change.")
+    print("From now on 'edge run' and the builder warn before a session if the experiment or its files change; "
+          f"check it in full any time with:  edge verify {shlex_quote(a.experiment)}")
     return 0
 
 
@@ -239,19 +369,104 @@ def cmd_support(a: argparse.Namespace) -> int:
     return 0
 
 
+def _is_session(p: Path) -> bool:
+    return p.is_dir() and ((p / "session.json").exists() or (p / "events.jsonl").exists())
+
+
+def _started(p: Path) -> str:
+    try:
+        return str(json.loads((p / "session.json").read_text(encoding="utf-8")).get("started") or "")
+    except (OSError, ValueError, AttributeError):
+        from datetime import datetime
+        return datetime.fromtimestamp(p.stat().st_mtime).isoformat(timespec="seconds")
+
+
+def _sessions_for(path: str) -> list[Path]:
+    """The session folders meant by a session folder, a data folder or an experiment file (its data folder)."""
+    p = Path(path)
+    if _is_session(p):
+        return [p]
+    if p.is_file() and p.suffix.lower() in (".yaml", ".yml", ".json"):
+        from .model import Experiment
+        try:
+            exp = Experiment.load(p)
+            name, data = exp.name, exp.base_dir / exp.settings["data"]["dir"]
+        except Exception:
+            name, data = None, p.parent / "data"
+        found = _sessions_in(data)
+        mine = [s for s in found if _experiment_of(s) == name]
+        return mine or found
+    if p.is_dir():
+        return _sessions_in(p)
+    if any(c in str(p) for c in "*?["):        # a pattern the shell found nothing for
+        raise CLIError(f"no folder matches {p}: session folders are named participant_session_name_date, where name "
+                       "is the experiment's name (its 'name:'), not its file name. Copy the folder 'edge run' printed "
+                       "after 'Saved to', or give the data folder to see the newest session")
+    raise FileNotFoundError(2, "no such session folder, data folder or experiment file", str(p))
+
+
+def _sessions_in(folder: Path) -> list[Path]:
+    from .export import find_sessions
+    if not folder.is_dir():
+        return []
+    return find_sessions(folder) or find_sessions(folder, include_dry_runs=True)     # test runs if there is nothing else
+
+
+def _experiment_of(p: Path) -> str | None:
+    try:
+        return json.loads((p / "session.json").read_text(encoding="utf-8")).get("experiment")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def _one_session(paths: list[str], cmd: str) -> tuple[Path, str | None]:
+    """The session to look at, and a note when it was chosen among several (the newest)."""
+    found: list[Path] = []
+    for p in paths:
+        found += [s for s in _sessions_for(p) if s not in found]
+    if not found:
+        raise CLIError(f"no sessions in {', '.join(paths)} yet: give a session folder (they are inside data/; "
+                       "'edge run' prints 'Saved to …' with its name)")
+    if len(found) == 1:
+        return found[0], None
+    found.sort(key=lambda s: (_started(s), s.name))
+    others = ", ".join(s.name for s in found[-4:-1][::-1]) + (" …" if len(found) > 4 else "")
+    return found[-1], (f"{len(found)} sessions match; this is the newest, {found[-1]}. To see another, give its folder: "
+                       f"edge {cmd} {shlex_quote(str(found[-1].parent))}/<folder>  (others: {others})")
+
+
 def cmd_report(a: argparse.Namespace) -> int:
     from .report import analyze_session, format_report
 
-    rep = analyze_session(a.session_dir)
+    session, note = _one_session(a.session_dir, "report")
+    rep = analyze_session(session)
+    if note:
+        print(note + "\n", file=sys.stderr if a.json else sys.stdout)
     print(json.dumps(rep, indent=2, default=str) if a.json else format_report(rep))
     return 0
 
 
 def cmd_align(a: argparse.Namespace) -> int:
-    from .align import align
+    from .align import AlignError, align
 
-    res = align(a.session_dir, a.external, tolerance=a.tolerance)
-    print(json.dumps(res, indent=2))
+    if len(a.session_dir) > 1:      # e.g. a pattern that matched several folders: never guess which one
+        raise CLIError(f"{len(a.session_dir)} session folders were given ({', '.join(Path(s).name for s in a.session_dir[:4])}"
+                       f"{' …' if len(a.session_dir) > 4 else ''}): give the one the external recording belongs to")
+    try:
+        res = align(a.session_dir[0], a.external, tolerance=a.tolerance)
+    except AlignError as e:
+        print(f"edge align: {e}", file=sys.stderr)
+        return 2
+    if a.json:
+        print(json.dumps(res, indent=2))
+        return 0
+    m = res["model"]
+    drift = (m["slope"] - 1) * 1e6
+    print(f"Matched {res['matched']} of {res['external_events']} events in {Path(res['external_file']).name} "
+          f"with the session's {res['edge_events']} markers.")
+    print(f"External clock: offset {m['offset']:.4f} s" + (f", drift {drift:+.1f} ppm" if m.get("method") != "offset" else "")
+          + (f", residual {m['residual_sd_ms']:.2f} ms" if m.get("residual_sd_ms") is not None else "") + ".")
+    print(f"Saved to {Path(a.session_dir[0]) / 'alignment.json'}: convert external times with  {res['usage']}")
     return 0
 
 
@@ -265,7 +480,9 @@ def cmd_new(a: argparse.Namespace) -> int:
               + f"\n  choose from: {', '.join(public_templates())}", file=sys.stderr)
         return 2
     path = write_template(a.template, Path(a.directory))
-    print(f"created {path}\n  try:  edge run {path} --dry-run")
+    if path.stem != TEMPLATES[a.template]["name"]:     # never over an existing experiment
+        print(f"{TEMPLATES[a.template]['name']}.yaml already exists there, so it was left as it is")
+    print(f"created {path}\n  try:  edge run {shlex_quote(str(path))} --dry-run")
     return 0
 
 
@@ -275,11 +492,13 @@ def cmd_export(a: argparse.Namespace) -> int:
     formats = [f.strip() for f in a.formats.split(",") if f.strip()]
     p = Path(a.path)
     if (p / "session.json").exists():
-        files = export_session(p, formats, a.out, a.layout)
+        files = export_session(p, formats, a.out, a.layout, name=a.name)
         print("\n".join(str(f) for f in files))
     else:
-        res = export_many(p, formats, a.out, a.include_dry_runs, a.name)
+        res = export_many(p, formats, a.out, a.include_dry_runs, a.name, layout=a.layout)
         print(f"{res['sessions']} session(s), {res['participants']} participant(s), {res['trials']} trials")
+        for note in res.get("notes") or []:       # several experiments, unreadable folders, BIDS renames
+            print(f"note: {note}")
         print("\n".join(res["files"]))
     return 0
 
@@ -308,7 +527,16 @@ def cmd_backups(a: argparse.Namespace) -> int:
         rid = restore_backup(a.experiment, a.restore or None)
         print(f"restored {rid}")
         return 0
-    for b in list_backups(a.experiment):
+    backups = list_backups(a.experiment)
+    if not Path(a.experiment).is_file() and not backups:
+        raise FileNotFoundError(2, "file not found", a.experiment)
+    if not backups:
+        print(f"No backups yet for {a.experiment} (EDGE keeps one each time it saves the file).")
+        return 0
+    if not Path(a.experiment).is_file():
+        print(f"{a.experiment} itself is missing; bring back the newest version with:  "
+              f"edge backups {shlex_quote(a.experiment)} --restore")
+    for b in backups:
         print(f"{b['id']:40s} {b['time']}  {b['label']}")
     return 0
 
@@ -326,7 +554,7 @@ def cmd_import(a: argparse.Namespace) -> int:
     print(f"imported {res.platform} experiment -> {path}")
     print("converted: " + ", ".join(f"{v} {k}" for k, v in sorted(res.stats.items())))
     print(f"{n_approx} item(s) converted approximately, {n_unsup} not converted: see {path.parent / 'IMPORT_REPORT.md'}")
-    print(f"next:  edge run {path} --dry-run --report")
+    print(f"next:  edge run {shlex_quote(str(path))} --dry-run --report")
     return 0
 
 
@@ -399,6 +627,10 @@ def cmd_tutorial(a: argparse.Namespace) -> int:
 def cmd_docs(a: argparse.Namespace) -> int:
     from . import help as hp
 
+    if a.action is None and not a.check:    # `edge docs` alone: most people want to read, not rebuild
+        print("To read the documentation:  edge help        (or search it:  edge help <words>)\n"
+              "'edge docs build' is for EDGE developers: it regenerates the reference pages from the code.")
+        return 0
     stale = hp.build_docs(check=a.check)
     if a.check:
         if stale:
@@ -413,17 +645,37 @@ def cmd_docs(a: argparse.Namespace) -> int:
 def cmd_mcp(a: argparse.Namespace) -> int:
     try:
         from .mcp_server import main as mcp_main
-    except ImportError:
-        print("the MCP server needs the 'mcp' package: pip install 'edge-experiments[mcp]'", file=sys.stderr)
+    except ImportError as e:
+        from importlib import metadata
+        try:
+            have = metadata.version("mcp")
+        except metadata.PackageNotFoundError:
+            have = None
+        fix = f'"{sys.executable}" -m pip install "mcp>=1.2,<2"'
+        if have is None:
+            print(f"The MCP server needs the 'mcp' package, which is not installed. Install it with:\n  {fix}", file=sys.stderr)
+        elif not have.startswith("1."):
+            print(f"The MCP server needs version 1 of the 'mcp' package, but version {have} is installed. "
+                  f"Install version 1 with:\n  {fix}", file=sys.stderr)
+        else:
+            print(f"The MCP server could not start ({e}). Reinstalling the 'mcp' package may help:\n  {fix} --force-reinstall",
+                  file=sys.stderr)
         return 2
-    mcp_main(a.root, a.transport)
+    mcp_main(a.directory or a.root, a.transport)
     return 0
 
 
 def cmd_builder(a: argparse.Namespace) -> int:
     from .builder.server import serve
+    from .launcher import open_query, workspace_for
 
-    serve(Path(a.directory), host=a.host, port=a.port, open_browser=not a.no_browser)
+    folder, name = workspace_for(a.directory)        # an experiment file opens the folder it is in
+    if not folder.is_dir():
+        raise CLIError(f"there is no folder '{a.directory}'. Check the name, or create it and open it with:  "
+                       f"edge start {shlex_quote(a.directory)}")
+    if name:
+        print(f"{name} is an experiment file: opening the folder it is in, {folder}")
+    serve(folder, host=a.host, port=a.port, open_browser=not a.no_browser, path_query=open_query(name))
     return 0
 
 
@@ -435,65 +687,128 @@ def cmd_start(a: argparse.Namespace) -> int:
 
 
 def cmd_shortcut(a: argparse.Namespace) -> int:
-    from .launcher import default_workspace, desktop_shortcut
-    files = desktop_shortcut(workspace=Path(a.workspace) if a.workspace else None)
+    from .launcher import default_workspace, desktop_shortcut, workspace_for
+    ws = None
+    if a.workspace:     # the icon starts in another folder: a relative path must not depend on where that is
+        folder, _ = workspace_for(a.workspace)
+        ws = folder.resolve()
+    files = desktop_shortcut(workspace=ws)
     for f in files:
         print(f"created {f}")
-    print(f"The icon opens the builder on {a.workspace or default_workspace()}")
+    print(f"The icon opens the builder on {ws or default_workspace()}")
     return 0 if files else 1
 
 
 def cmd_wizard(a: argparse.Namespace) -> int:
     from .launcher import ask_wizard, load_answers, write_wizard_experiment
     from .wizard import WizardError
-    answers = load_answers(a.answers) if a.answers else ask_wizard()
+    try:
+        answers = load_answers(a.answers) if a.answers else ask_wizard()
+    except (EOFError, KeyboardInterrupt):
+        print("\nCancelled: nothing was created.")
+        return 1
+    except WizardError as e:          # the answers file can't be read
+        print(f"Can't use those answers: {e}")
+        return 2
     try:
         path, est = write_wizard_experiment(answers, Path(a.directory))
     except WizardError as e:
         print(f"Can't build that: {e}")
         return 2
     print(f"\nCreated {path}: {est['text']}")
+    for note in est.get("notes") or []:       # answers filled in, adjusted or left out; files still to provide
+        print(f"Note: {note}")
     print(f"Try it:   edge run {shlex_quote(str(path))} --dry-run")
     print(f"Edit it:  edge builder {shlex_quote(str(path.parent))}")
     return 0
 
 
 def shlex_quote(s: str) -> str:
+    """A path as it must be typed in this computer's terminal (names with spaces in quotes), so a command EDGE
+    suggests works when copied."""
+    if sys.platform.startswith("win"):        # cmd.exe and PowerShell: double quotes
+        return f'"{s}"' if any(c in s for c in ' \t&()[]{}^=;!\'+,`~') else s
     import shlex
     return shlex.quote(s)
 
 
+class _Parser(argparse.ArgumentParser):
+    """A mistake after a command is explained by that command (its own usage and a did-you-mean), not with the
+    list of every command."""
+
+    def _commands(self) -> dict[str, argparse.ArgumentParser]:
+        subs = [x for x in self._actions if isinstance(x, argparse._SubParsersAction)]
+        return dict(subs[0].choices) if subs else {}
+
+    def parse_known_args(self, args=None, namespace=None):
+        ns, extra = super().parse_known_args(args, namespace)
+        cmd = getattr(ns, "cmd", None)
+        if extra and cmd in self._commands():
+            self._commands()[cmd].error(_unrecognized(self._commands()[cmd], extra))
+        return ns, extra
+
+    def error(self, message):
+        import re
+        m = re.search(r"invalid choice: '([^']*)'", message)
+        if m and self._commands() and "<command>" in message:
+            import difflib
+            close = difflib.get_close_matches(m.group(1), list(self._commands()), 1)
+            message = (f"there is no command '{m.group(1)}'" + (f"; did you mean {close[0]}?" if close else "")
+                       + f" (all commands: {self.prog} --help)")
+        super().error(message)
+
+
+def _unrecognized(parser: argparse.ArgumentParser, extra: list[str]) -> str:
+    import difflib
+    options = [o for act in parser._actions for o in act.option_strings]
+    words = []
+    for x in extra:
+        close = difflib.get_close_matches(x.split("=")[0], options, 1, 0.6) if x.startswith("-") else []
+        words.append(f"{x} (did you mean {close[0]}?)" if close else x)
+    msg = "unrecognized arguments: " + " ".join(words)
+    if any(not x.startswith("-") for x in extra):
+        msg += "\n  (a file or folder name with spaces must be in quotes, e.g. \"my study/study.yaml\")"
+    return msg
+
+
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="edge", description="EDGE experiment builder and runtime")
+    p = _Parser(prog="edge", description="EDGE experiment builder and runtime")
     from . import __version__
+    from .launcher import WORKSPACE_HELP
     p.add_argument("--version", action="version", version=f"edge {__version__}")
-    sub = p.add_subparsers(dest="cmd")
+    sub = p.add_subparsers(dest="cmd", metavar="<command>")
 
     st = sub.add_parser("start", help="open the builder on your experiments folder (what `edge` alone does)")
-    st.add_argument("directory", nargs="?", help="experiments folder (default: ~/Documents/EDGE Experiments)")
-    st.add_argument("--port", type=int, default=8765, help="local port for the builder")
+    st.add_argument("directory", nargs="?", help=f"experiments folder, or an experiment file to open the folder it is in "
+                                                 f"(default: {WORKSPACE_HELP})")
+    st.add_argument("--port", type=int, default=8765, help="local port for the builder (default: 8765)")
     st.add_argument("--no-browser", action="store_true", help="do not open a browser window")
     st.add_argument("--from-shortcut", action="store_true", help=argparse.SUPPRESS)
     st.set_defaults(fn=cmd_start)
 
     sc = sub.add_parser("desktop-shortcut", help="put an EDGE icon on the desktop / in the app menu")
-    sc.add_argument("--workspace", help="folder the icon opens (default: ~/Documents/EDGE Experiments)")
+    sc.add_argument("--workspace", help=f"folder the icon opens (default: {WORKSPACE_HELP})")
     sc.set_defaults(fn=cmd_shortcut)
 
     wz = sub.add_parser("wizard", help="answer a few questions and get a finished experiment")
-    wz.add_argument("directory", nargs="?", default=".", help="where to create it")
-    wz.add_argument("--answers", help="JSON file with the answers instead of asking")
+    wz.add_argument("directory", nargs="?", default=".", help="where to create it (default: the current folder)")
+    wz.add_argument("--answers", help="JSON or YAML file with the answers instead of asking")
     wz.set_defaults(fn=cmd_wizard)
 
     r = sub.add_parser("run", help="run an experiment")
     r.add_argument("experiment", help="experiment file (.yaml or .json)")
-    r.add_argument("-p", "--participant", help="participant id (also used for counterbalancing)")
-    r.add_argument("-s", "--session", help="session id")
-    r.add_argument("-f", "--field", action="append", help="extra participant field key=value")
-    r.add_argument("--dry-run", action="store_true", help="headless, simulated devices, virtual participant")
+    r.add_argument("-p", "--participant", help="participant id (also used for counterbalancing; default: the "
+                                               "experiment's, usually 001). EDGE warns if it already has data")
+    r.add_argument("-s", "--session", help="session number (default: 1)")
+    r.add_argument("-f", "--field", action="append", metavar="KEY=VALUE",
+                   help="another participant field, e.g. -f age=30 (repeat for more)")
+    r.add_argument("--dry-run", action="store_true", help="test run: no window, simulated devices, a virtual "
+                                                         "participant; saved under data/dry_runs")
     r.add_argument("--simulate-devices", action="store_true", help="replace hardware with simulators")
     r.add_argument("--backend", default="pyglet", choices=["pyglet", "headless", "headless-realtime"],
-                   help="headless-realtime: no window, real clock (screenless tasks with real hardware)")
+                   help="pyglet (default): the experiment window; headless-realtime: no window, real clock "
+                        "(screenless tasks with real hardware); headless: no window, simulated clock, for automated "
+                        "tests (to test an experiment use --dry-run)")
     r.add_argument("--data-dir", help="where to write data (default: data/ next to the experiment)")
     r.add_argument("--report", action="store_true", help="print the quality report afterwards")
     fs = r.add_mutually_exclusive_group()
@@ -527,21 +842,21 @@ def main(argv: list[str] | None = None) -> int:
     dr.set_defaults(fn=cmd_doctor)
 
     pf = sub.add_parser("preflight", help="go / no-go before collecting data: checks, test run, lock, computer")
-    pf.add_argument("experiment")
+    pf.add_argument("experiment", help="experiment file")
     pf.add_argument("--no-golden", action="store_true", help="don't re-run the golden participant of the lock")
     pf.add_argument("--no-computer", action="store_true", help="skip the computer check")
     pf.add_argument("--json", action="store_true", help="machine-readable output")
     pf.set_defaults(fn=cmd_preflight)
 
     td = sub.add_parser("test-device", help="connect an experiment's device(s): data rate, inputs, a test marker")
-    td.add_argument("experiment")
-    td.add_argument("device", nargs="?", help="device id (default: all)")
-    td.add_argument("--seconds", type=float, default=3.0)
+    td.add_argument("experiment", help="experiment file whose devices to test")
+    td.add_argument("device", nargs="?", help="device id (default: all of the experiment's devices)")
+    td.add_argument("--seconds", type=float, default=3.0, help="how long to record from each device (default: 3)")
     td.add_argument("--simulate", action="store_true", help="test with the device's simulator")
     td.set_defaults(fn=cmd_test_device)
 
     tt = sub.add_parser("timing-test", help="create a timing test: real display, audio and trigger latency on this computer")
-    tt.add_argument("directory", nargs="?", default=".")
+    tt.add_argument("directory", nargs="?", default=".", help="where to create it (default: the current folder)")
     tt.set_defaults(fn=cmd_timing_test)
 
     up = sub.add_parser("update", help="download and install the newest EDGE")
@@ -551,12 +866,12 @@ def main(argv: list[str] | None = None) -> int:
     up.set_defaults(fn=cmd_update)
 
     lk = sub.add_parser("lock", help="record versions, file fingerprints and a golden participant after piloting")
-    lk.add_argument("experiment")
+    lk.add_argument("experiment", help="experiment file")
     lk.add_argument("--no-golden", action="store_true", help="skip the golden-participant dry run")
     lk.set_defaults(fn=cmd_lock)
 
     vf = sub.add_parser("verify", help="check that the experiment, its files and this computer still match the lock")
-    vf.add_argument("experiment")
+    vf.add_argument("experiment", help="experiment file (its lock is the .lock.json next to it)")
     vf.add_argument("--no-golden", action="store_true", help="skip the golden-participant dry run")
     vf.add_argument("--json", action="store_true", help="machine-readable output")
     vf.set_defaults(fn=cmd_verify)
@@ -568,14 +883,17 @@ def main(argv: list[str] | None = None) -> int:
     sb.set_defaults(fn=cmd_support)
 
     rp = sub.add_parser("report", help="timing / data / sync quality report for a session")
-    rp.add_argument("session_dir", help="a session folder in data/")
+    rp.add_argument("session_dir", nargs="+", help="a session folder in data/ (a data folder or an experiment file "
+                                                   "means its newest session)")
     rp.add_argument("--json", action="store_true", help="machine-readable output")
     rp.set_defaults(fn=cmd_report)
 
     al = sub.add_parser("align", help="align an external recording via shared TTL codes")
-    al.add_argument("session_dir", help="the EDGE session folder")
+    al.add_argument("session_dir", nargs="+", help="the EDGE session folder")
     al.add_argument("external", help="CSV with columns time,code (external clock)")
-    al.add_argument("--tolerance", type=float, default=0.05, help="maximum timing mismatch (s) when pairing events")
+    al.add_argument("--tolerance", type=float, default=0.05,
+                    help="maximum timing mismatch (s) when pairing events (default: 0.05)")
+    al.add_argument("--json", action="store_true", help="machine-readable output")
     al.set_defaults(fn=cmd_align)
 
     n = sub.add_parser("new", help="create an experiment from a template")
@@ -585,7 +903,8 @@ def main(argv: list[str] | None = None) -> int:
     n.set_defaults(fn=cmd_new)
 
     b = sub.add_parser("builder", help="open the visual experiment builder")
-    b.add_argument("directory", nargs="?", default=".", help="folder with your experiments (default: current)")
+    b.add_argument("directory", nargs="?", default=".", help="folder with your experiments, or an experiment file to open "
+                                                            "the folder it is in (default: the current folder)")
     b.add_argument("--host", default="127.0.0.1", help="interface to listen on (keep the default for safety)")
     b.add_argument("--port", type=int, default=8765, help="local port for the builder")
     b.add_argument("--no-browser", action="store_true", help="do not open a browser window")
@@ -593,10 +912,13 @@ def main(argv: list[str] | None = None) -> int:
 
     ex = sub.add_parser("export", help="export analysis-ready tables (one session or a whole data folder)")
     ex.add_argument("path", help="session folder or data folder")
-    ex.add_argument("--formats", default="csv,xlsx", help="csv,tsv,xlsx,json,jsonl,parquet,mat,bids")
-    ex.add_argument("--layout", default="wide", choices=["wide", "long"], help="wide: one row per trial; long: one row per routine")
+    ex.add_argument("--formats", default="csv,xlsx",
+                    help="one or more of csv,tsv,xlsx,json,jsonl,parquet,mat,bids, separated by commas (default: csv,xlsx)")
+    ex.add_argument("--layout", default="wide", choices=["wide", "long"],
+                    help="wide (default): one row per trial; long: one row per routine")
     ex.add_argument("--out", help="output folder (default: <path>/exports)")
-    ex.add_argument("--name", help="file name stem for merged exports")
+    ex.add_argument("--name", help="start of the file names (default: the session folder's name, or "
+                                   "<experiment>_all_<date> for a data folder)")
     ex.add_argument("--include-dry-runs", action="store_true", help="also include dry-run sessions")
     ex.set_defaults(fn=cmd_export)
 
@@ -637,12 +959,13 @@ def main(argv: list[str] | None = None) -> int:
     tu.add_argument("--no-browser", action="store_true", help="do not open a browser window")
     tu.set_defaults(fn=cmd_tutorial)
 
-    dc = sub.add_parser("docs", help="regenerate the reference documentation from the code")
-    dc.add_argument("action", choices=["build"], nargs="?", default="build", help="build: regenerate reference pages and TUTORIALS.md")
+    dc = sub.add_parser("docs", help="for EDGE developers: regenerate the reference pages (to read the docs: edge help)")
+    dc.add_argument("action", choices=["build"], nargs="?", default=None, help="build: regenerate reference pages and TUTORIALS.md")
     dc.add_argument("--check", action="store_true", help="only report whether generated pages are up to date")
     dc.set_defaults(fn=cmd_docs)
 
     m = sub.add_parser("mcp", help="run the MCP server (natural-language control from Claude / VS Code)")
+    m.add_argument("directory", nargs="?", default=None, help="workspace folder (the same as --root)")
     m.add_argument("--root", default=".", help="workspace folder the server may read and write")
     m.add_argument("--transport", default="stdio", choices=["stdio", "sse", "streamable-http"], help="stdio for Claude/VS Code; http transports for remote clients")
     m.set_defaults(fn=cmd_mcp)
@@ -650,16 +973,27 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     if a.cmd is None:          # plain `edge`, e.g. from the desktop icon
         from .launcher import launch
-        return launch()
+        a.cmd, a.fn = "start", lambda _a: launch()
+    from .diagnostics import ExperimentError
+    from .export import ExportError
     from .storage import ConflictError, DocumentError
     try:
         return a.fn(a)
-    except (DocumentError, ConflictError) as e:
+    except (DocumentError, ConflictError, ExportError, CLIError) as e:
         print(f"edge {a.cmd}: {e}", file=sys.stderr)
         return 2
-    except (FileNotFoundError, IsADirectoryError, NotADirectoryError, PermissionError) as e:
+    except FileExistsError as e:        # e.g. a folder was asked for where a file of that name is
+        name = e.filename or ""
+        print(f"edge {a.cmd}: '{name}' already exists" + (" and is a file, not a folder: give the name of a folder "
+                                                           "(a new one, or one that exists)" if Path(name).is_file() else ""),
+              file=sys.stderr)
+        return 2
+    except OSError as e:                # file not found, not a folder, no permission, no free port …
         where = f" ({e.filename})" if getattr(e, "filename", None) else ""
         print(f"edge {a.cmd}: {e.strerror or e}{where}", file=sys.stderr)
+        return 2
+    except (ValueError, ImportError, ExperimentError) as e:     # said in words by the code that raised it
+        print(f"edge {a.cmd}: {e}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
         print(f"edge {a.cmd}: stopped", file=sys.stderr)

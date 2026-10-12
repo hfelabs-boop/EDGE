@@ -1,7 +1,8 @@
 name: stroop
 description: >
   Classic colour-word Stroop with eye tracking, EEG and physiology all time-locked
-  to the word onset. Run without hardware using:  edge run examples/stroop/stroop.yaml --dry-run
+  to the word onset. Try it without hardware with a test run (edge run stroop.yaml --dry-run in this folder,
+  or Test run in the builder).
 
 settings:
   window: {size: [1280, 720], background: "#111111", units: px}

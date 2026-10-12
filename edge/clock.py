@@ -16,6 +16,27 @@ from typing import Callable
 _clock_fn: Callable[[], float]
 CLOCK_SOURCE: str
 
+
+def _quiet_liblsl() -> None:
+    """liblsl prints its own log lines (config loaded, no IPv6 …) to the terminal; keep them out unless the lab
+    has its own lsl_api.cfg (network settings), which liblsl then reads as usual."""
+    import os
+    from pathlib import Path
+    if os.environ.get("LSLAPICFG"):
+        return
+    own = [Path("lsl_api.cfg"), Path.home() / "lsl_api" / "lsl_api.cfg", Path("/etc/lsl_api/lsl_api.cfg")]
+    if os.environ.get("PROGRAMDATA"):
+        own.append(Path(os.environ["PROGRAMDATA"]) / "lsl_api" / "lsl_api.cfg")
+    quiet = Path(__file__).with_name("assets") / "lsl_api.cfg"
+    try:
+        if quiet.is_file() and not any(p.is_file() for p in own):
+            os.environ["LSLAPICFG"] = str(quiet)
+    except OSError:
+        pass
+
+
+_quiet_liblsl()
+
 try:  # pragma: no cover - depends on the native liblsl being present
     from pylsl import local_clock as _lsl_clock
 

@@ -8,7 +8,7 @@ are also built into the app: press **?** in the builder, or run `edge help` in a
 | | |
 |---|---|
 | [Getting started](GETTING_STARTED.md) | install EDGE (one command, desktop icon), answer a few questions to get a finished experiment, try it, run it (15 minutes) |
-| [Tutorials](TUTORIALS.md) | eight hands-on lessons, also available as **interactive tutorials** in the builder |
+| [Tutorials](TUTORIALS.md) | hands-on lessons (nine, from a first Stroop task to surveys and imports), also available as **interactive tutorials** in the builder |
 | [Builder guide](BUILDER_GUIDE.md) | a tour of every part of the visual builder |
 | [FAQ & troubleshooting](FAQ.md) | common questions, error messages, glossary |
 | [The usual pain points](PAIN_POINTS.md) | what goes wrong with experiment software (works here not there, updates, errors, timing, hardware) and how EDGE handles it: preflight, lock, error reports, device and timing tests |

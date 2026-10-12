@@ -35,6 +35,14 @@ class BadRequest(ValueError):
     """The request is not something the builder can act on (wrong or missing fields)."""
 
 
+class Query(dict):
+    """The parsed ?a=b query: a field the endpoint needs but the request lacks is a BadRequest naming it
+    (so a KeyError raised deeper down is never mistaken for a missing field)."""
+
+    def __missing__(self, key: str) -> Any:
+        raise BadRequest(f"the request needs ?{key}=…")
+
+
 def request_allowed(headers: Any, method: str) -> str | None:
     """Why a request must be refused, or None.
 
@@ -185,7 +193,7 @@ class BuilderApp:
         if (p / "session.json").exists():
             files = export_session(p, formats, None, layout)
         else:
-            files = [Path(f) for f in export_many(p, formats, None, include_dry_runs)["files"]]
+            files = [Path(f) for f in export_many(p, formats, None, include_dry_runs, layout=layout)["files"]]
         return {"files": [str(Path(f).resolve().relative_to(self.root)) for f in files]}
 
     def experiment(self, data: dict[str, Any], rel: str | None):
@@ -233,11 +241,12 @@ class BuilderApp:
     # --------------------------------------------------------------- guided design
     def wizard(self, answers: dict[str, Any], save_as: str | None) -> dict[str, Any]:
         from ..wizard import WizardError, build_experiment, estimate
+        notes: list[str] = []      # answers filled in, adjusted or left out; files still to provide
         try:
-            doc = build_experiment(answers)
+            doc = build_experiment(answers, notes)
         except WizardError as e:
             return {"ok": False, "error": str(e)}
-        out: dict[str, Any] = {"ok": True, "experiment": doc}
+        out: dict[str, Any] = {"ok": True, "experiment": doc, "notes": notes}
         base = self.root
         if save_as:
             p = self.safe_path(save_as)
@@ -247,10 +256,11 @@ class BuilderApp:
             out["path"] = str(p.relative_to(self.root))
             out["fingerprint"] = storage.fingerprint(p)
             base = p.parent
+            from ..wizard import prepare_files, write_placeholders
             if (answers.get("stimulus") or {}).get("kind") == "picture":
-                from ..wizard import write_placeholders
                 (p.parent / "images").mkdir(exist_ok=True)
-                out["placeholders"] = write_placeholders(doc, p.parent)
+            out["placeholders"] = write_placeholders(doc, p.parent)
+            notes += prepare_files(doc, p.parent, out["placeholders"])
         out["estimate"] = estimate(doc, base)
         out["issues"] = self.validate(doc, out.get("path"))
         return out
@@ -452,7 +462,7 @@ def make_handler(app: BuilderApp):
             if not self._guard():
                 return None
             u = urlparse(self.path)
-            q = {k: v[0] for k, v in parse_qs(u.query).items()}
+            q = Query({k: v[0] for k, v in parse_qs(u.query).items()})
             try:
                 if u.path in ("/", "/index.html"):
                     return self._send(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8")
@@ -586,7 +596,7 @@ def make_handler(app: BuilderApp):
             if not self._guard():
                 return None
             u = urlparse(self.path)
-            q = {k: v[0] for k, v in parse_qs(u.query).items()}
+            q = Query({k: v[0] for k, v in parse_qs(u.query).items()})
             try:
                 check_fields(u.path, None if u.path == "/api/upload" else self._body_cached(), q)
                 if u.path == "/api/upload":
@@ -698,8 +708,9 @@ def make_handler(app: BuilderApp):
                 return self._json({"error": str(e)}, 400)
             if isinstance(e, OSError) and e.errno in (36, 63, 22):     # name too long, invalid argument
                 return self._json({"error": "that file name can't be used"}, 400)
-            if isinstance(e, KeyError):
-                return self._json({"error": f"the request needs {e}"}, 400)
+            if isinstance(e, KeyError):      # a lookup that found nothing (missing fields are BadRequests)
+                msg = e.args[0] if e.args and isinstance(e.args[0], str) else str(e)
+                return self._json({"error": msg if " " in msg else f"not found: {msg}"}, 404)
             if isinstance(e, (TypeError, AttributeError, ValueError)):
                 return self._json({"error": f"the request was not understood: {type(e).__name__}: {e}",
                                    "trace": traceback.format_exc()}, 400)

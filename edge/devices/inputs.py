@@ -408,7 +408,7 @@ class VoiceKey(InputDevice):
         self._np = np
         self.detector = VoiceDetector(sr, float(o["threshold_db"]), float(o["min_ms"]) / 1e3, float(o["release_ms"]) / 1e3)
         self._init_inputs()
-        self.add_stream("envelope", ["db"], sr / blk, "Audio", time_base="master")
+        self.add_stream("envelope", ["db"], sr / blk, "Audio", units=["dBFS"], time_base="master")
 
         def cb(indata, frames, tinfo, status):
             now = self.clock()

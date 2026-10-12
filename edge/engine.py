@@ -156,8 +156,12 @@ class RoutineRun:
         self._rule_prev = [False] * len(self.routine.rules)
         self._rule_fired = [0] * len(self.routine.rules)
         max_dur = self._val(self.routine.duration) if self.routine.duration is not None else None
+        # on simulated time (dry runs, the plain 'headless' backend) a screen that waits for something that
+        # never comes would run forever in a split second of real time: stop it with an explanation
+        nobody = session.virtual_participant is None
+        simulated_time = backend.name == "headless" and not getattr(backend, "realtime", False)
         dry_limit = float(session.settings["timing"].get("dry_run_routine_limit", 600)) \
-            if session.virtual_participant is not None else None
+            if session.virtual_participant is not None or simulated_time else None
 
         while True:
             interval = backend.frame_interval
@@ -224,7 +228,13 @@ class RoutineRun:
             # end_routine: the routine ends when this component responds *or* times out
             if any(c.spec.end_routine and (c.finished or c.status == FINISHED) for c in comps):
                 break
-            if dry_limit is not None and t_now > dry_limit:
+            if dry_limit is not None and t_now > dry_limit and (max_dur is None or t_now > float(max_dur)):
+                if nobody:
+                    raise RuntimeError(
+                        f"routine '{self.routine.id}' did not end after {dry_limit:.0f} s of simulated time: the "
+                        "'headless' backend has no screen, no keyboard and no participant, so nobody can answer. "
+                        "Use --dry-run for a test with a virtual participant, or --backend headless-realtime for a "
+                        "real session without a screen")
                 raise RuntimeError(f"dry run: routine '{self.routine.id}' did not end after {dry_limit:.0f} s; "
                                    "add a duration, end_if, or an end_routine component")
             if max_dur is not None and t_now + interval >= float(max_dur) - self._half:
@@ -320,34 +330,54 @@ class Runner:
         self.stack: list[dict[str, Any]] = []
         self.results: dict[str, Results] = {}
         self.routine_count = 0
+        self.trial_keys: set[str] = set()          # loop iterations done (a trial = one row of trials_wide)
         self.machines: list[dict[str, Any]] = []   # active state machines (innermost last)
 
     def run(self) -> dict[str, Any]:
         s = self.session
-        try:
-            s.open()
-            self.run_nodes(self.exp.flow)
-        except ExperimentAborted:
-            s.aborted = True
-            s.log("[edge] aborted by user; data saved")
-        except StateJump as j:
-            s.errors.append(f"goto '{j.target}' used outside a state machine that has that state")
-        except BaseException as e:
-            from .diagnostics import ExperimentError, build_report
-            s.aborted = True
-            if isinstance(e, Exception):
-                rep = build_report(e, phase="setup" if s.data is None or s.last_flip is None and not self.routine_count
-                                   else "flow", runner=self)
-                s.crash = rep
-                s.errors.append(rep["what"])
-                if not isinstance(e, ExperimentError):
-                    raise ExperimentError(rep) from e
-            else:
-                s.errors.append(f"{type(e).__name__}: {e}")
-            raise
-        finally:
-            summary = s.close()
-            summary["data_dir"] = str(s.data.root) if s.data else None
+        guard = _StopOnSignals(s)
+        with guard:
+            try:
+                s.open()
+                self.run_nodes(self.exp.flow)
+            except ExperimentAborted:
+                guard.disarm()
+                s.aborted = True
+            except StateJump as j:
+                guard.disarm()
+                s.errors.append(f"goto '{j.target}' used outside a state machine that has that state")
+            except KeyboardInterrupt:
+                guard.disarm()
+                s.aborted = True
+                s.stop_reason = "Ctrl+C was pressed"
+                if s.virtual_participant is not None:
+                    raise           # a test run: Ctrl+C stops whatever command started it
+                # a real session: Ctrl+C stops it like Esc, and the summary says where the data is
+            except BaseException as e:
+                guard.disarm()
+                from .diagnostics import ExperimentError, build_report
+                s.aborted = True
+                if isinstance(e, Exception):
+                    rep = build_report(e, phase="setup" if s.data is None or s.last_flip is None and not self.routine_count
+                                       else "flow", runner=self)
+                    s.crash = rep
+                    s.errors.append(rep["what"])
+                    if not isinstance(e, ExperimentError):
+                        raise ExperimentError(rep) from e
+                else:
+                    s.errors.append(f"{type(e).__name__}: {e}")
+                raise
+            finally:
+                guard.disarm()
+                summary = s.close()
+                summary["data_dir"] = str(s.data.root) if s.data else None
+                if s.aborted and s.data:
+                    n = len(self.trial_keys)
+                    why = s.stop_reason or ("because of the error below" if s.crash else None)
+                    _say(s, f"[edge] stopped early{f' ({why})' if why else ''} after {n} "
+                            f"trial{'' if n == 1 else 's'}: everything recorded until then is saved in {s.data.root}")
+        if s.aborted and s.data is None and s.stop_reason:
+            raise KeyboardInterrupt(s.stop_reason)    # stopped while starting: nothing was recorded or saved
         return summary
 
     def run_nodes(self, nodes: Iterable[Any]) -> None:
@@ -380,6 +410,8 @@ class Runner:
         self.routine_count += 1
         key = [f"{m['id']}:{m['state']}#{m['visit']}" for m in self.machines]
         key += [f"{f['loop']}={f['state']['n']}" for f in self.stack]
+        if self.stack:
+            self.trial_keys.add("|".join(key))
         full: dict[str, Any] = {"experiment": self.exp.name, **self.session.participant, "routine_index": self.routine_count,
                                 "trial_key": "|".join(key) if self.stack else "",
                                 "loop": self.stack[-1]["loop"] if self.stack else ""}
@@ -522,6 +554,69 @@ class Runner:
             self.results[loop.id] = state
 
 
+def _say(session: Session, text: str) -> None:
+    try:
+        session.log(text)
+    except Exception:       # e.g. the terminal was closed: the data is saved either way
+        pass
+
+
+class _StopOnSignals:
+    """While a session runs, closing its terminal (SIGHUP), ``kill``/the builder's forced stop (SIGTERM) or
+    Ctrl+Break on Windows (SIGBREAK) stop it like Esc: the session is finished properly and session.json is
+    written, so the data so far can be reported and exported. Once the session is being saved, further
+    signals are ignored until it is done."""
+
+    NAMES = ("SIGTERM", "SIGHUP", "SIGBREAK")
+
+    def __init__(self, session: Session):
+        self.session = session
+        self.old: dict[Any, Any] = {}
+        self.armed = False
+
+    def __enter__(self) -> "_StopOnSignals":
+        import signal
+        import threading
+        if threading.current_thread() is not threading.main_thread():
+            return self              # signals only reach the main thread (builder/MCP test runs use threads)
+        for name in self.NAMES:
+            sig = getattr(signal, name, None)
+            if sig is None:
+                continue
+            try:
+                self.old[sig] = signal.signal(sig, self._handle)
+            except (ValueError, OSError):
+                continue
+        self.armed = True
+        return self
+
+    def _handle(self, signum: int, frame: Any) -> None:
+        if not self.armed:
+            return                   # already saving: finish that first
+        self.armed = False
+        import signal
+        try:
+            name = signal.Signals(signum).name
+        except ValueError:
+            name = str(signum)
+        self.session.stop_reason = {"SIGHUP": "EDGE was closed: its terminal window was closed",
+                                    "SIGBREAK": "EDGE was closed with Ctrl+Break"}.get(
+            name, "EDGE was ended by another program or by the builder's forced stop")
+        raise ExperimentAborted(self.session.stop_reason)
+
+    def disarm(self) -> None:
+        self.armed = False
+
+    def __exit__(self, *exc: Any) -> None:
+        import signal
+        self.armed = False
+        for sig, old in self.old.items():
+            try:
+                signal.signal(sig, old if old is not None else signal.SIG_DFL)
+            except (ValueError, OSError):
+                pass
+
+
 def _participant_index(participant: dict[str, Any]) -> int:
     """Participant number used for counterbalancing (digits in the participant id)."""
     pid = str(participant.get("participant", "0"))
@@ -532,7 +627,10 @@ def _participant_index(participant: dict[str, Any]) -> int:
 def run_experiment(exp: Experiment, backend: str = "pyglet", participant: dict[str, Any] | None = None,
                    dry_run: bool = False, data_dir: str | None = None, simulate_devices: bool | None = None,
                    virtual_participant: Any = None, log=print, **backend_kw: Any) -> dict[str, Any]:
-    """Run an experiment end to end and return the session summary."""
+    """Run an experiment end to end and return the session summary.
+
+    A dry run (test run) is saved under ``<data>/dry_runs/`` unless ``data_dir`` says otherwise, the same
+    place the builder and MCP use, so test runs never mix with participants' data."""
     from .backends import create_backend
     from .participant import VirtualParticipant
 
@@ -542,6 +640,8 @@ def run_experiment(exp: Experiment, backend: str = "pyglet", participant: dict[s
             virtual_participant = VirtualParticipant()
         if simulate_devices is None:
             simulate_devices = True
+        if data_dir is None:
+            data_dir = str(exp.base_dir / exp.settings["data"]["dir"] / "dry_runs")
     if backend == "headless-realtime":
         backend, backend_kw["realtime"] = "headless", True
     if backend == "headless" and "size" not in backend_kw:

@@ -26,12 +26,16 @@ class Survey(Html):
     def planned_outputs(cls, props, base_dir=None):
         out = {k: dict(v) for k, v in cls.outputs.items()}
         try:
-            from ..survey import columns
-            cols = columns(props.get("questions") or [], props.get("scores") or {})
+            from ..survey import columns, expand
+            qs = props.get("questions") or []
+            own = props.get("scores") or {}
+            cols = columns(qs, own)
+            score_keys = set(expand(qs)[1]) | set(own)    # the instruments' scores and the survey's own
         except Exception:
-            cols = {}
+            cols, score_keys = {}, set()
         for k, desc in cols.items():
-            score = "score" in desc.lower() or k.endswith(("_total", "_score", "_mean", "_band"))
+            # a score is what `scores` computes (TIPI traits, PSS-10 total …), not an item "(reverse scored)"
+            score = k in score_keys or (k.endswith("_band") and k[:-5] in score_keys)
             out[k] = {"desc": f"{desc} (survey {{who}})", "units": "", "type": "any", "kind": "score" if score else "answer"}
         return out
 

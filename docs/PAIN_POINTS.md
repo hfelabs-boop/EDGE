@@ -34,7 +34,7 @@ edge support-bundle study.yaml   # everything needed to ask for help, without pa
 | pain | EDGE |
 |---|---|
 | A working experiment changes after an update | Lock it after piloting. Every preflight re-runs the golden participant and compares trial by trial, so an update that changes the order, the screens or the data columns is caught before data collection, not in the analysis. |
-| Which version produced this data? | Every `session.json` records EDGE, Python, OS and package versions, plugins, the experiment's fingerprint, and the last preflight verdict. |
+| Which version produced this data? | Every `session.json` records EDGE, Python, OS and package versions, plugins, the experiment's fingerprint, and the last preflight verdict. The EDGE version names the exact code (`0.1.0+g61bc96e`: release and git commit), so two builds of the same release are told apart. |
 | Upgrading in the middle of a study | Don't: `edge verify` tells you whether the lab computer still matches the lock. If you must, the golden participant shows whether anything changed. |
 
 ## "The error doesn't tell me anything"
@@ -58,14 +58,14 @@ edge support-bundle study.yaml   # everything needed to ask for help, without pa
 | pain | EDGE |
 |---|---|
 | Is the device even talking? | **Test this device** (device panel) / `edge test-device`: connects with a time limit, shows samples per second against the nominal rate, the first values, button presses, and sends a test marker; if the device records a trigger channel, it shows whether the marker came back and how fast. A wrong serial port lists the ports that exist. |
-| Triggers into EEG / fNIRS / physiology | `trigger_adapter` knows BioSemi, Brain Products, EGI, ANT Neuro, NIRx, Artinis, Bitbrain, BIOPAC, ADInstruments and MRI logs: connection, lines, pulse width, wiring, where the triggers end up, and warnings for codes that don't fit. See [Devices](DEVICES.md#trigger-adapters-triggeradapter). |
+| Triggers into EEG / fNIRS / physiology | `trigger_adapter` knows BioSemi, Brain Products, EGI, ANT Neuro, NIRx, Artinis, Bitbrain, BIOPAC, ADInstruments and MRI logs: connection, lines, pulse width, wiring, where the triggers end up, and warnings for codes that don't fit. See [Devices](DEVICES.md#trigger-adapters). |
 | Response boxes, voice keys, light sensors | Cedrus, fMRI buttons, scanner triggers, Arduino boxes, parallel ports, LabJack and a microphone voice key, with keyboard stand-ins for piloting. See [Devices](DEVICES.md#response-boxes-ttl-inputs-light-sensors-voice-keys). |
 
 ## "Once it gets complex, the builder stops helping"
 
 | pain | EDGE |
 |---|---|
-| Closed loop: react to EEG, a tracker, a classifier | Any expression can read the latest sample of any device: `$devices.eeg.Cz`, `$devices.eye.x`. Another program (a classifier, a tracker, a script on another computer) can steer a running experiment by sending UDP messages to a `udp_messages` device: their fields become variables (`$alpha`) and events that rules and responses react to, and EDGE can send its markers back. No threads or callbacks in the experiment. See [Devices](DEVICES.md#closed-loop-udpmessages). |
+| Closed loop: react to EEG, a tracker, a classifier | Any expression can read the latest sample of any device: `$devices.eeg.Cz`, `$devices.eye.x`. Another program (a classifier, a tracker, a script on another computer) can steer a running experiment by sending UDP messages to a `udp_messages` device: their fields become variables (`$alpha`) and events that rules and responses react to, and EDGE can send its markers back. No threads or callbacks in the experiment. See [Devices](DEVICES.md#closed-loop). |
 | Branching, repeating until a criterion, adaptive paths | Visual workflows (state machines) with a diagram, "when → do" rules, staircases, live loop accuracy. See [Experiment format](EXPERIMENT_FORMAT.md#workflow-logic). |
 | Which variable is visible where? | Check says, before running, when an expression uses a name that doesn't exist at that point ("the trial list has no column called 'ink'"). The storyboard shows every screen in order. |
 | Having to learn a product-specific scripting language | When code is needed, it's Python, and expressions are Python too. |

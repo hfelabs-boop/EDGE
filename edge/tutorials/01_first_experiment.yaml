@@ -12,7 +12,7 @@ mode: simple
 steps:
   - title: Welcome
     body: |
-      This is the EDGE builder. You will build a complete Stroop experiment in about ten minutes.
+      This is the EDGE builder. You will build a complete Stroop experiment in about 12 minutes.
 
       * **Left:** the things you can put on a screen (text, pictures, key presses …) and devices.
       * **Centre:** the storyboard or one screen's timeline with a live preview, the **flow** (the order

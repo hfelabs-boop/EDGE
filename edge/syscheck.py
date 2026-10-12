@@ -180,6 +180,21 @@ def check_display_driver(adapters: list[str] | None = None) -> list[Check]:
     return [Check("display_driver", "ok", "Display: " + ", ".join(adapters))]
 
 
+def no_display_reason() -> str | None:
+    """Why no experiment window can open on this computer right now (None: a screen is there, or the window
+    library is missing, which the software check reports)."""
+    try:
+        import pyglet
+    except Exception:
+        return None
+    try:
+        if not pyglet.display.get_display().get_screens():
+            return "the display reports no screens"
+    except Exception as e:
+        return f"{type(e).__name__}: {e}"
+    return None
+
+
 def screens() -> list[dict[str, Any]]:
     try:
         import pyglet
@@ -224,8 +239,16 @@ def fullscreen_optimizations_disabled(exe: str | None = None) -> bool | None:
 def check_screens(window: dict[str, Any] | None = None, scr: list[dict[str, Any]] | None = None,
                   dpi: float | None = None, fso: bool | None = None) -> list[Check]:
     window = window or {}
-    scr = screens() if scr is None else scr
     out: list[Check] = []
+    if scr is None:
+        scr = screens()
+        why = no_display_reason() if not scr else None
+        if why:
+            out.append(Check("no_display", "error", "No screen found",
+                             f"EDGE could not reach a display ({why}), so the experiment window can't open here: "
+                             "for example over SSH, in a container or a remote session, or with the monitor off.",
+                             "Run participants on the computer the monitor is connected to (test runs with "
+                             "'edge run --dry-run' work anywhere)."))
     if scr:
         idx = int(window.get("screen", 0) or 0)
         desc = ", ".join(f"{s['width']}×{s['height']}" + (f" @ {s['rate']} Hz" if s.get("rate") else "") for s in scr)
@@ -351,15 +374,51 @@ def check_timer() -> list[Check]:
     return [Check("timer", "ok", f"High-resolution timer ({res * 1e9:.0f} ns)")]
 
 
+# ============================================================================ software
+PIP_NAMES = {"tobii_research": "tobii-research", "serial": "pyserial", "u3": "LabJackPython", "u6": "LabJackPython",
+             "pylsl": "pylsl", "sounddevice": "sounddevice", "numpy": "numpy",
+             "pygds": "pygds (from g.tec's g.NEEDaccess SDK)"}
+
+
+def check_software(exp: Any = None) -> list[Check]:
+    """The packages the experiment window (and, for an experiment, its devices) need are installed."""
+    from importlib.util import find_spec
+    out: list[Check] = []
+    if find_spec("pyglet") is None:
+        out.append(Check("software:pyglet", "error", "The window library (pyglet) is not installed",
+                         "Without it EDGE can't open the experiment window: real sessions fail at the start "
+                         "(test runs with --dry-run still work).", 'pip install "edge-experiments[display]"'))
+    if exp is not None:
+        from .devices import device_registry
+        reg = device_registry()
+        for d in exp.devices:
+            cls = reg.get(d.type)
+            if cls is None:
+                continue
+            ok, why = cls.available()
+            if not ok:
+                pkg = " ".join(PIP_NAMES.get(r, r) for r in cls.requires) or d.type
+                out.append(Check(f"software:{d.id}", "error" if d.required else "warning",
+                                 f"Device '{d.id}' ({d.type}) can't be used here: {why or 'missing ' + pkg}",
+                                 "" if d.required else "It is optional, so the session would run without it.",
+                                 f"pip install {pkg}  (see Devices in the docs)"))
+    if not out:
+        out.append(Check("software", "ok", "Everything the window and devices need is installed" if exp is not None
+                         else "Everything the window needs is installed"))
+    return out
+
+
 # ============================================================================ all together
-def run_checks(exp: Any = None, quick: bool = False) -> list[Check]:
-    """All checks that apply to this computer (and, if given, to this experiment's settings and devices)."""
+def run_checks(exp: Any = None, quick: bool = False, software: bool = True) -> list[Check]:
+    """All checks that apply to this computer (and, if given, to this experiment's settings and devices).
+    ``quick`` (at the start of a session) leaves out the slow display-driver and the software checks."""
     window = dict((exp.settings.get("window") if exp is not None else None) or {})
     serial_types = {"serial_inputs", "ttl_serial", "trigger_adapter", "mindware", "labjack"}
     uses_usb = bool(exp is not None and any(d.type in serial_types for d in exp.devices))
     used_ports = {str(d.options.get("port") or "") for d in (exp.devices if exp is not None else []) if d.type in serial_types}
     out: list[Check] = []
-    for fn in (check_power, lambda: check_usb_suspend(uses_usb), check_timer, check_keyboard,
+    for fn in (*((lambda: check_software(exp),) if software and not quick else ()),
+               check_power, lambda: check_usb_suspend(uses_usb), check_timer, check_keyboard,
                lambda: check_screens(window, dpi=dpi_scale(), fso=fullscreen_optimizations_disabled()),
                lambda: check_serial(used=used_ports or None),
                *(() if quick else (check_display_driver,))):

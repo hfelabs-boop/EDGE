@@ -39,8 +39,9 @@ expression where it is used: a name that no trial list, variable, component, loo
 provides at that point is reported in plain words, with the closest match and the names that do
 exist (*"the trial list has no column called 'ink'. Did you mean 'colour'?"*). A routine used both
 inside and outside a loop gets a warning if it reads that loop's columns. Names assigned in `code`
-components count as defined, and conditions given as an expression (`conditions: $block_file`) make
-the check lenient for that loop, since its columns are only known at run time. Errors while running
+components count as defined. A trial list named by an outer loop's column (`conditions: $block_file`)
+is checked through the files that column lists; any other expression makes the check lenient for
+that loop (a note says which names can only be checked at run time). Errors while running
 are explained the same way, with a hint for common slips (`=` instead of `==`, missing quotes,
 using a response before there is one).
 
@@ -138,7 +139,9 @@ help text.
 | | `image` | image, size | |
 | | `sound` | sound (file or Hz), volume, tone_duration | onset |
 | | `html` | file or html, display (auto/webview/browser), fullscreen, continue_button | every form field, submitted, rt |
+| | `survey` | questions (incl. `{instrument: phq9}` from the library), title, intro, language, scores, allow_back (see [Surveys](SURVEYS.md)) | every answer and score, submitted, rt |
 | response | `keyboard` | keys, store (first/last/all), correct, record_release, response_marker | keys, rt, corr, time, duration |
+| | `device_response` | device, inputs, correct, store, keys (keyboard stand-ins), response_marker: a button box, fMRI buttons, foot pedal, voice key or TTL line | input, rt, corr, time, device |
 | | `mouse` | buttons, clickable (component ids), correct, track, response_marker | x, y, button, clicked, rt, corr, path |
 | | `slider` | ticks, labels, granularity, require_confirm | rating, rt, history |
 | eye tracking | `gaze_roi` | device, target or pos+radius/size, dwell, show | entered, first_entry, dwell_time, entries, completed, rt |
@@ -291,7 +294,7 @@ Question text is used as written: a leading `$` is not an expression there. The 
 Expressions can read the latest sample of every device: `$devices.<device>.<channel>` (or
 `$devices.<device>.<stream>.<channel>`), and `$devices.<device>.age`, the seconds since that sample.
 A `udp_messages` device exposes the fields of the messages another program sent. See
-[Devices](DEVICES.md#closed-loop-udpmessages).
+[Devices](DEVICES.md#closed-loop).
 
 ## measures
 

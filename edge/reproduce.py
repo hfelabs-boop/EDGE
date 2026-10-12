@@ -88,9 +88,16 @@ def golden_run(doc: dict[str, Any], base: Path) -> dict[str, Any]:
         cols, rows = wide_trials(st, drop_empty=False)
     conds = list(st.condition_cols)
     steps = [[r.get("routines", ""), {c: r.get(c) for c in conds if c in r}] for r in rows]
-    return {"seed": d["settings"]["seed"], "n_trials": len(rows), "columns": cols,
-            "steps_sha256": _sha(json.dumps(steps, sort_keys=True, default=str).encode()),
+    # a trial is a loop iteration (as in preflight, the report and exports); steps also count the screens
+    # outside loops (instructions, goodbye), so any change in what the participant goes through is caught
+    return {"seed": d["settings"]["seed"], "n_trials": sum(1 for r in rows if r.get("loop")), "n_steps": len(rows),
+            "columns": cols, "steps_sha256": _sha(json.dumps(steps, sort_keys=True, default=str).encode()),
             "steps": steps[:400]}
+
+
+def _n_steps(g: dict[str, Any]) -> Any:
+    # locks written before n_steps existed stored the number of steps under n_trials
+    return g.get("n_steps", g.get("n_trials"))
 
 
 def lock(path: str | Path, golden: bool = True) -> dict[str, Any]:
@@ -164,7 +171,7 @@ def verify(path: str | Path, golden: bool = True) -> dict[str, Any]:
             add("error", "the golden participant could not finish", f"{type(e).__name__}: {e}")
         else:
             lg = lk["golden"]
-            if g["steps_sha256"] != lg.get("steps_sha256") or g["n_trials"] != lg.get("n_trials"):
+            if g["steps_sha256"] != lg.get("steps_sha256") or _n_steps(g) != _n_steps(lg):
                 add("warning", "the experiment now behaves differently from the pilot", _first_difference(lg, g))
             missing = [c for c in lg.get("columns", []) if c not in g["columns"]]
             extra = [c for c in g["columns"] if c not in lg.get("columns", [])]
@@ -180,13 +187,19 @@ def verify(path: str | Path, golden: bool = True) -> dict[str, Any]:
 
 
 def _first_difference(old: dict[str, Any], new: dict[str, Any]) -> str:
-    if old.get("n_trials") != new.get("n_trials"):
+    if "n_steps" in old and old.get("n_trials") != new.get("n_trials"):
         head = f"{old.get('n_trials')} trials in the pilot, {new.get('n_trials')} now"
+    elif _n_steps(old) != _n_steps(new):
+        head = f"{_n_steps(old)} screens and trials in the pilot, {_n_steps(new)} now"
     else:
         head = "same number of trials, different order or content"
+    trial = 0
     for i, (a, b) in enumerate(zip(old.get("steps") or [], new.get("steps") or [])):
+        in_loop = bool((a[1] if len(a) > 1 else None) or (b[1] if len(b) > 1 else None))
+        trial += in_loop
         if a != b:
-            return f"{head}; first difference at trial {i + 1}: pilot {_step(a)}, now {_step(b)}"
+            where = f"trial {trial}" if in_loop else f"step {i + 1}"
+            return f"{head}; first difference at {where}: pilot {_step(a)}, now {_step(b)}"
     return head
 
 

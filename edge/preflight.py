@@ -22,8 +22,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-PIP_NAMES = {"tobii_research": "tobii-research", "serial": "pyserial", "u3": "LabJackPython", "u6": "LabJackPython",
-             "pylsl": "pylsl", "sounddevice": "sounddevice", "numpy": "numpy", "pygds": "pygds (from g.tec's g.NEEDaccess SDK)"}
+from .syscheck import PIP_NAMES  # noqa: E402,F401  (kept importable from here)
+
 ORDER = {"error": 0, "warning": 1, "info": 2, "ok": 3}
 
 
@@ -43,28 +43,66 @@ def _item(level: str, text: str, hint: str = "", **kw: Any) -> dict[str, Any]:
 
 
 def software_items(exp) -> list[dict[str, Any]]:
-    from importlib.util import find_spec
-    from .devices import device_registry
-    reg = device_registry()
+    """The same check as ``edge doctor``'s software check (syscheck.check_software), as preflight items."""
+    from .syscheck import check_software
     items = []
-    if find_spec("pyglet") is None:
-        items.append(_item("error", "the window library (pyglet) is not installed", 'pip install "edge-experiments[display]"'))
-    for d in exp.devices:
-        cls = reg.get(d.type)
-        if cls is None:
-            continue
-        ok, why = cls.available()
-        if not ok:
-            pkg = " ".join(PIP_NAMES.get(r, r) for r in cls.requires) or d.type
-            items.append(_item("error" if d.required else "warning",
-                               f"device '{d.id}' ({d.type}) can't be used here: {why or 'missing ' + pkg}",
-                               f"pip install {pkg}  (see Devices in the docs)" + ("" if d.required else "; it is optional, so the session would run without it")))
-    if not items:
-        items.append(_item("ok", "everything the window and devices need is installed"))
+    for c in check_software(exp):
+        text = c.title[:1].lower() + c.title[1:]
+        hint = c.fix + ("; it is optional, so the session would run without it" if c.level == "warning" else "")
+        items.append(_item(c.level, text, hint if c.level != "ok" else ""))
     return items
 
 
-def run_preflight(path: str | Path, golden: bool = True, computer: bool = True, save: bool = True) -> dict[str, Any]:
+def measures_hint(exp) -> str:
+    """How to declare measures, with this experiment's own columns, for people working in the YAML file."""
+    try:
+        from .measures import recording_plan, suggest_measures
+        sugg = suggest_measures(exp, recording_plan(exp))[:2]
+    except Exception:
+        sugg = []
+    keys = ("id", "column", "role", "summary")
+    if sugg:
+        example = ", ".join("{" + ", ".join(f"{k}: {m[k]}" for k in keys if m.get(k) is not None) + "}" for m in sugg)
+    else:
+        example = "{id: rt, column: resp.rt, role: outcome, summary: median}"
+    return ("say which recorded columns are your outcomes and factors, so they are summarised per participant, shown "
+            f"live and checked: in the experiment file add  measures: [{example}]  (edge help --first measures "
+            "explains it), or use Measures & data in the builder")
+
+
+def device_items(exp, timeout: float = 6.0) -> list[dict[str, Any]]:
+    """Connect each device briefly, as the session will: is it switched on and reachable right now?"""
+    from concurrent.futures import ThreadPoolExecutor
+    from .devtest import SIMULATORS, test_device
+
+    def one(d) -> dict[str, Any]:
+        if d.type in SIMULATORS:
+            return _item("warning", f"device '{d.id}' is EDGE's simulator ({d.type}), not real hardware: "
+                                    "its data would be made up",
+                         "replace it with your device's driver (edge devices lists them) before running participants")
+        try:
+            r = test_device(d.type, d.id, dict(d.options), seconds=0.3, connect_timeout=timeout, marker=False)
+        except Exception as e:     # a broken driver must not stop the preflight
+            r = {"connected": False, "error": f"{type(e).__name__}: {e}"}
+        if r.get("connected"):
+            return _item("ok", f"device '{d.id}' ({d.type}) answers")
+        why = r.get("error") or "it did not answer"
+        if d.required:
+            return _item("error", f"device '{d.id}' ({d.type}) is not reachable: {why}",
+                         "switch it on, check its cable/port/address (edge test-device shows the details); "
+                         "the session can't start without it" + (f". {r['hint']}" if r.get("hint") else ""))
+        return _item("warning", f"device '{d.id}' ({d.type}) is not reachable: {why}",
+                     "it is optional, so the session would run WITHOUT recording it: switch it on and check its "
+                     "cable/port/address (edge test-device shows the details)" + (f". {r['hint']}" if r.get("hint") else ""))
+
+    with ThreadPoolExecutor(max_workers=max(1, min(8, len(exp.devices)))) as pool:
+        items = list(pool.map(one, exp.devices))
+    return items
+
+
+def run_preflight(path: str | Path, golden: bool = True, computer: bool = True, save: bool = True,
+                  devices: bool | None = None) -> dict[str, Any]:
+    """``devices`` (default: the same as ``computer``): briefly connect every device of the experiment."""
     from .model import Experiment
     t0 = time.monotonic()
     p = Path(path)
@@ -90,8 +128,7 @@ def run_preflight(path: str | Path, golden: bool = True, computer: bool = True, 
     ms = declared({"measures": exp.measures})
     if not ms:
         sections.append(_section("measures", "Measures", [_item(
-            "warning", "nothing is declared as what this experiment measures",
-            "say which columns are your outcomes and factors (Measures & data): they are summarised, shown live and checked")]))
+            "warning", "nothing is declared as what this experiment measures", measures_hint(exp))]))
     else:
         sections.append(_section("measures", "Measures", [_item("ok", f"{len(ms)} declared: " +
                                                                 ", ".join(m.get("label") or m["id"] for m in ms))]))
@@ -105,9 +142,14 @@ def run_preflight(path: str | Path, golden: bool = True, computer: bool = True, 
     else:
         sections.append(_section("lock", "Lock", [_item(f["level"], f["what"], f.get("detail", "")) for f in v["findings"]]))
 
+    if devices is None:
+        devices = computer
+    if devices and exp.devices:
+        sections.append(_section("devices", "Devices (connected now?)", device_items(exp)))
+
     if computer:
         from .syscheck import run_checks
-        checks = run_checks(exp)
+        checks = run_checks(exp, software=False)        # the software is its own section above
         items = [_item(c.level, c.title, c.fix, detail=c.detail, fixable=c.fixable, check_id=c.id)
                  for c in checks if c.level != "ok"]
         if not items:
@@ -140,21 +182,36 @@ def test_run_items(exp) -> list[dict[str, Any]]:
             return [_item("error", "the test run stopped: " + (summary_line(rep) if rep else f"{type(e).__name__}: {e}"),
                           (rep or {}).get("hint", ""), crash=rep)]
         rep = analyze_session(s["data_dir"])
-        n = None
-        try:
-            from .export import SessionTables, wide_trials
-            n = sum(1 for r in wide_trials(SessionTables(s["data_dir"]))[1] if r.get("loop"))
-        except Exception:
-            pass
+        n = rep.get("trials")        # loop iterations, counted as everywhere else
     items.append(_item("ok", f"a virtual participant finished the whole experiment" + (f" ({n} trials)" if n else "")))
     for v in rep.get("verdict", []):
-        if v.startswith("WARNING"):
-            items.append(_item("warning", v.removeprefix("WARNING: ")))
+        if v.startswith(("WARNING", "ERROR")):
+            items.append(_item("warning", v.removeprefix("WARNING: ").removeprefix("ERROR: ")))
+    unstable = _unplanned_trigger_codes(exp, s.get("marker_codebook") or {})
+    if unstable:
+        shown = ", ".join(unstable[:4]) + (" …" if len(unstable) > 4 else "")
+        example = ", ".join(f"{lab}: {s['marker_codebook'][lab]}" for lab in unstable[:3])
+        items.append(_item("warning", f"the trigger codes of {shown} are given in the order they first happen, so "
+                                      "the same event can get a different code for different participants",
+                           f"fix them in the experiment file: settings: {{markers: {{codes: {{{example}}}}}}} "
+                           "(marker_codebook in session.json lists all of them)"))
     for m in (rep.get("measures") or {}).get("values", []):
         if m.get("value") is None and m.get("role") != "factor":
             items.append(_item("warning", f"measure {m['label']} got no value in the test run",
                                "check its column and its trials filter"))
     return items
+
+
+def _unplanned_trigger_codes(exp, codebook: dict[str, int]) -> list[str]:
+    """Marker labels sent in the test run whose code isn't fixed before the session (they depend on a response,
+    a variable …), in an experiment that sends codes to a trigger/EEG/physiology device."""
+    from .devices import device_registry
+    from .runtime import planned_marker_labels
+    reg = device_registry()
+    if not any(d.markers and "markers" in getattr(reg.get(d.type), "capabilities", ()) for d in exp.devices):
+        return []
+    fixed = set(((exp.settings.get("markers") or {}).get("codes") or {})) | set(planned_marker_labels(exp))
+    return sorted(lab for lab in codebook if lab not in fixed)
 
 
 def last_preflight(exp_path: str | Path, doc: dict[str, Any] | None = None) -> dict[str, Any] | None:

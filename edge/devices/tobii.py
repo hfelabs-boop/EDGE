@@ -23,6 +23,8 @@ GAZE_FIELDS = ["device_time_stamp", "system_time_stamp",
                "left_x", "left_y", "left_valid", "right_x", "right_y", "right_valid",
                "left_pupil", "left_pupil_valid", "right_pupil", "right_pupil_valid",
                "left_origin_z", "right_origin_z", "marker"]
+GAZE_UNITS = ["us", "us", "screen fraction", "screen fraction", "bool", "screen fraction", "screen fraction", "bool",
+              "mm", "bool", "mm", "bool", "mm", "mm", ""]
 
 
 @register
@@ -72,7 +74,9 @@ class TobiiPro(Device):
             et.set_gaze_output_frequency(float(self.options["frequency"]))
         self.srate = et.get_gaze_output_frequency()
         # Device time base used for alignment = system_time_stamp in seconds.
-        self.add_stream("gaze", GAZE_FIELDS, self.srate, "Gaze")
+        self.add_stream("gaze", GAZE_FIELDS, self.srate, "Gaze", units=GAZE_UNITS,
+                        coordinates="x, y: fraction of the screen (0-1) from its top-left corner, +y down; "
+                                    "pupil diameter and eye distance (origin_z) in mm")
         self.rt_sync = RoundTripSync(lambda: tr.get_system_time_stamp() / 1e6, self.clock)
         self.rt_sync.probe(50)
         self._latest = None
