@@ -259,7 +259,10 @@ def cmd_new(a: argparse.Namespace) -> int:
     from .templates import TEMPLATES, public_templates, write_template
 
     if a.template not in TEMPLATES:
-        print(f"unknown template; choose from: {', '.join(public_templates())}")
+        import difflib
+        close = difflib.get_close_matches(a.template, list(public_templates()), 1)
+        print(f"unknown template '{a.template}'" + (f"; did you mean {close[0]}?" if close else "")
+              + f"\n  choose from: {', '.join(public_templates())}", file=sys.stderr)
         return 2
     path = write_template(a.template, Path(a.directory))
     print(f"created {path}\n  try:  edge run {path} --dry-run")
@@ -576,7 +579,8 @@ def main(argv: list[str] | None = None) -> int:
     al.set_defaults(fn=cmd_align)
 
     n = sub.add_parser("new", help="create an experiment from a template")
-    n.add_argument("template", help="blank, freeview_eyetracking, eeg_oddball or staircase")
+    from .templates import public_templates
+    n.add_argument("template", help=", ".join(public_templates()))
     n.add_argument("directory", nargs="?", default=".", help="where to create it")
     n.set_defaults(fn=cmd_new)
 
@@ -647,7 +651,19 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd is None:          # plain `edge`, e.g. from the desktop icon
         from .launcher import launch
         return launch()
-    return a.fn(a)
+    from .storage import ConflictError, DocumentError
+    try:
+        return a.fn(a)
+    except (DocumentError, ConflictError) as e:
+        print(f"edge {a.cmd}: {e}", file=sys.stderr)
+        return 2
+    except (FileNotFoundError, IsADirectoryError, NotADirectoryError, PermissionError) as e:
+        where = f" ({e.filename})" if getattr(e, "filename", None) else ""
+        print(f"edge {a.cmd}: {e.strerror or e}{where}", file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        print(f"edge {a.cmd}: stopped", file=sys.stderr)
+        return 130
 
 
 if __name__ == "__main__":

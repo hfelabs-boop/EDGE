@@ -149,9 +149,21 @@ def load_document(path: str | Path) -> Loaded:
     p = Path(path)
     if not p.exists():
         raise DocumentError(f"{p}: file not found")
+    if p.is_dir():
+        found = sorted(x.name for x in p.iterdir() if x.suffix.lower() in (".yaml", ".yml", ".json"))
+        raise DocumentError(f"{p} is a folder; give the experiment file inside it"
+                            + (f", e.g. {p / found[0]}" if found else " (this folder has no .yaml or .json file)"))
     raw = p.read_bytes()
-    doc = loads(raw.decode("utf-8-sig"), fmt_of(p), str(p))
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise DocumentError(f"{p}: not a text file; an experiment is a .yaml or .json file") from None
+    doc = loads(text, fmt_of(p), str(p))
+    if doc is not None and not isinstance(doc, dict):
+        raise DocumentError(f"{p}: doesn't look like an EDGE experiment (it should start with name:, routines: and flow:)")
     if doc and not ({"routines", "flow", "name"} & set(doc)):
+        if "steps" in doc and "title" in doc:
+            raise DocumentError(f"{p} is a tutorial, not an experiment; start it with:  edge tutorial {doc.get('id') or p.stem}")
         raise DocumentError(f"{p}: doesn't look like an EDGE experiment (no 'routines' or 'flow')")
     applied = migrate(doc)
     return Loaded(doc, p, hashlib.sha256(raw).hexdigest(), applied)
