@@ -1,0 +1,1 @@
+{"meta": {"author": "lab", "version": 2}, "blocks": [{"name": "practice", "trials": [{"word": "RED", "ink": "red"}, {"word": "BLUE", "ink": "green"}]}, {"name": "main", "trials": [{"word": "GREEN", "ink": "blue"}]}]}

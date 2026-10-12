@@ -304,3 +304,58 @@ def test_bad_queries_are_400_not_500(api):
             if code >= 500:
                 bad.append(f"{ep}{q[:40]} -> {code} {json.loads(body).get('error')}")
     assert not bad, "\n".join(bad)
+
+
+# ----------------------------------------------------------------------------- the assistant's endpoints
+ASSISTANT_POST = ["/api/assistant/config", "/api/assistant/consent", "/api/assistant/test", "/api/assistant/ask",
+                  "/api/assistant/cancel", "/api/assistant/discard", "/api/assistant/applied", "/api/assistant/detach",
+                  "/api/assistant/attach", "/api/assistant/attach?exp=exp.yaml", "/api/assistant/attach?exp=exp.yaml&name=x.csv",
+                  "/api/assistant/attach?exp=../x.yaml&name=x.csv", "/api/assistant/nothing"]
+ASSISTANT_BODIES = API_BODIES + [
+    b'{"provider": 5}', b'{"provider": "gemini"}', b'{"anthropic": "x"}', b'{"anthropic": {"api_key": 5}}',
+    b'{"options": {"max_steps": "many"}}', b'{"settings": {"model": 5}, "provider": "anthropic"}',
+    b'{"experiment": {}, "message": 5}', b'{"experiment": {}, "message": "x", "attachments": [1]}',
+    b'{"experiment": {}, "message": "x", "options": "fast"}', b'{"experiment": {"routines": "x"}, "message": "x"}',
+    b'{"experiment": {}, "message": "x", "path": "../../x.yaml"}', b'{"id": ["x"]}', b'{"id": "j_nope"}',
+    b'{"exp": "../x.yaml", "file": "y"}', b'{"exp": "exp.yaml", "file": "../../etc/passwd"}', b"\xff\xfe",
+    b'{"experiment": {}, "message": "x", "options": {"model": 123}}',
+    b'{"experiment": {}, "message": "x", "options": {"model": ["a"], "provider": {"x": 1}}}',
+    b'{"experiment": {}, "message": "x", "options": {"reviewed_code": "all", "auto_dry_run": 2}}',
+    b'{"experiment": {"settings": 3}, "message": "x"}', b'{"experiment": {"devices": {"a": 1}}, "message": "x"}',
+    b'{"experiment": {"routines": {"r": "x"}}, "message": "x"}',
+    b'{"provider": "ollama", "settings": {"base_url": "http://192.0.2.1:1/v1/"}}',
+    b'{"ollama": {"base_url": "http://[::1"}}', b'{"anthropic": {"base_url": "https://api.anthropic.com/v1/messages"}}']
+
+
+def test_assistant_bad_bodies_are_400_not_500(api, tmp_path, monkeypatch):
+    monkeypatch.setenv("EDGE_CONFIG_DIR", str(tmp_path / "assistant-cfg"))
+    bad = []
+    for ep in ASSISTANT_POST:
+        for body in ASSISTANT_BODIES:
+            code, res = _post(api, ep, body)
+            if code >= 500:
+                bad.append(f"{ep} {body[:40]!r} -> {code} {res.get('error')}")
+            elif code == 400:
+                assert res.get("error"), f"{ep} {body!r}: a 400 must say what is wrong"
+                assert "trace" not in res, f"{ep} {body!r}: a 400 never carries a Python traceback"
+    assert not bad, "\n".join(bad)
+
+
+def test_assistant_bad_queries_are_400_not_500(api, tmp_path, monkeypatch):
+    import json
+    import urllib.error
+    import urllib.request
+    monkeypatch.setenv("EDGE_CONFIG_DIR", str(tmp_path / "assistant-cfg"))
+    bad = []
+    for ep in ["/api/assistant/status", "/api/assistant/models", "/api/assistant/preview", "/api/assistant/job",
+               "/api/assistant/conversation", "/api/assistant/suggest_path", "/api/assistant/ask"]:
+        for q in GET_QUERIES + ["?provider=gemini", "?exp=exp.yaml&file=../../x", "?id=j_x&since=abc",
+                                "?id=j_x&wait=nan", "?name=" + "x" * 5000, "?exp=exp.yaml&file=%00"]:
+            try:
+                with urllib.request.urlopen(api + ep + q, timeout=30) as r:
+                    code, body = r.status, r.read()
+            except urllib.error.HTTPError as e:
+                code, body = e.code, e.read()
+            if code >= 500:
+                bad.append(f"{ep}{q[:40]} -> {code} {json.loads(body).get('error')}")
+    assert not bad, "\n".join(bad)

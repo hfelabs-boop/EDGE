@@ -51,10 +51,15 @@ def request_allowed(headers: Any, method: str) -> str | None:
     origin = (headers.get("Origin") or "").strip().lower()
     site = (headers.get("Sec-Fetch-Site") or "").strip().lower()
     if origin and origin != "null":
+        scheme = origin.split("://", 1)[0] if "://" in origin else ""
         o_host = origin.split("://", 1)[-1].split("/", 1)[0]
         o_name, _, o_port = o_host.rpartition(":") if o_host.count(":") == 1 or "]:" in o_host else (o_host, "", "")
         h_port = host.rpartition(":")[2] if host.count(":") == 1 or "]:" in host else ""
-        if o_name.strip("[]") not in LOCAL_HOSTS or (o_port and h_port and o_port != h_port):
+        # an Origin without a port means the scheme's default (http://127.0.0.1 is port 80): a page served by
+        # another program on this computer is still another site
+        o_port = o_port or {"http": "80", "https": "443"}.get(scheme, "")
+        h_port = h_port or "80"
+        if o_name.strip("[]") not in LOCAL_HOSTS or o_port != h_port:
             return f"refused: cross-site request from {origin}"     # another site, or another local program's page
     elif origin == "null" and method != "GET":
         return "refused: request from an opaque origin"
@@ -69,7 +74,9 @@ ASSET_KINDS = {
     "image": (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".tif", ".tiff"),
     "audio": (".wav", ".mp3", ".ogg", ".flac", ".aiff", ".aif", ".m4a"),
     "html": (".html", ".htm"),
+    "data": (".csv", ".tsv", ".xlsx", ".json", ".txt"),
 }
+ASSET_FOLDERS = {"image": "images", "audio": "sounds", "html": "pages", "data": "conditions"}
 
 
 def schema() -> dict[str, Any]:
@@ -104,6 +111,7 @@ class BuilderApp:
         self.root = root.resolve()
         self.runs: dict[str, Any] = {}
         self.play = PlayManager(self.root)
+        self.assistant: Any = None            # edge.assistant.jobs.AssistantService, created on first use
 
     def safe_path(self, rel: str) -> Path:
         if not isinstance(rel, str) or "\0" in rel or len(rel) > 4096:
@@ -114,7 +122,7 @@ class BuilderApp:
         return p
 
     # --------------------------------------------------------------- API
-    def list_files(self) -> list[dict[str, Any]]:
+    def list_files(self, status: bool = False) -> list[dict[str, Any]]:
         out = []
         for p in sorted(self.root.rglob("*")):
             parts = p.relative_to(self.root).parts
@@ -126,7 +134,39 @@ class BuilderApp:
                 except Exception:
                     continue
                 if "routines" in d or "flow" in d:
-                    out.append({"path": str(p.relative_to(self.root)), "name": d.get("name", p.stem)})
+                    row: dict[str, Any] = {"path": str(p.relative_to(self.root)), "name": d.get("name", p.stem)}
+                    if status:
+                        row.update(self.file_status(p, d))
+                    out.append(row)
+        return out
+
+    def file_status(self, p: Path, d: dict[str, Any]) -> dict[str, Any]:
+        """When it was changed, how many sessions it has (real / test runs), the last session, locked or not."""
+        from datetime import datetime
+        from ..reproduce import lock_path
+        out: dict[str, Any] = {"modified": datetime.fromtimestamp(p.stat().st_mtime).isoformat(timespec="seconds"),
+                               "sessions": {"real": 0, "test": 0}, "last_session": None,
+                               "locked": lock_path(p).exists()}
+        data_dir = (d.get("settings") or {}).get("data", {}) if isinstance(d.get("settings"), dict) else {}
+        rel = data_dir.get("dir", "data") if isinstance(data_dir, dict) else "data"
+        root = (p.parent / (rel if isinstance(rel, str) and rel else "data")).resolve()
+        if self.root not in root.parents or not root.is_dir():
+            return out
+        last = 0.0
+        name = d.get("name", p.stem)
+        for sj in root.rglob("session.json"):
+            try:
+                info = json.loads(sj.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if not isinstance(info, dict) or info.get("experiment") not in (None, name):
+                continue
+            test = bool(info.get("dry_run")) or "dry_runs" in sj.parts
+            out["sessions"]["test" if test else "real"] += 1
+            if not test:
+                last = max(last, sj.stat().st_mtime)
+        if last:
+            out["last_session"] = datetime.fromtimestamp(last).isoformat(timespec="seconds")
         return out
 
     def list_assets(self, exp_rel: str | None, kind: str) -> dict[str, Any]:
@@ -135,25 +175,33 @@ class BuilderApp:
         if exts is None:
             raise ValueError(f"unknown asset kind '{kind}'")
         base = self.safe_path(exp_rel).parent if exp_rel else self.root
+        from ..assistant.attachments import data_roots, is_data_path
+        # participant data (data/, the experiment's settings.data.dir, session folders) is never offered as a
+        # trial list or picture
+        roots = data_roots(base, exp_file=self.safe_path(exp_rel) if exp_rel else None) if base.is_dir() else []
+        seen: dict[Path, bool] = {}
         out = []
         for p in sorted(base.rglob("*")):
             parts = p.relative_to(base).parts
             if p.suffix.lower() not in exts or not p.is_file() or "data" in parts[:-1] \
-                    or any(x.startswith(".") or x in ("node_modules", "__pycache__") for x in parts):
+                    or any(x.startswith(".") or x in ("node_modules", "__pycache__") for x in parts) \
+                    or is_data_path(base, p, roots, seen):
                 continue
             out.append({"path": "/".join(parts), "folder": "/".join(parts[:-1]), "size": p.stat().st_size})
             if len(out) >= 2000:
                 break
-        return {"assets": out, "folder": {"image": "images", "audio": "sounds", "html": "pages"}[kind]}
+        return {"assets": out, "folder": ASSET_FOLDERS[kind]}
 
     def load(self, rel: str) -> dict[str, Any]:
         loaded = storage.load_document(self.safe_path(rel))
         return {"experiment": loaded.doc, "fingerprint": loaded.fingerprint, "migrations": loaded.migrations}
 
-    def save(self, rel: str, data: dict[str, Any], expected: str | None, force: bool) -> dict[str, Any]:
+    def save(self, rel: str, data: dict[str, Any], expected: str | None, force: bool,
+             label: str | None = None) -> dict[str, Any]:
         p = self.safe_path(rel)
+        label = " ".join(str(label or "").split())[:60] or "builder"
         fp = storage.save_document(p, data, expected_fingerprint=None if force or not expected else expected,
-                                   label="builder")
+                                   label=label)
         return {"saved": str(p.relative_to(self.root)), "fingerprint": fp}
 
     # --------------------------------------------------------------- data
@@ -307,7 +355,11 @@ class BuilderApp:
         proc = subprocess.Popen(cmd, cwd=str(self.root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
         rid = str(proc.pid)
         mon: dict[str, Any] = {"start": None, "last": None, "history": [], "devices": None, "end": None}
-        state = {"proc": proc, "output": [], "monitor": mon, "stop_file": stop_file}
+        from datetime import datetime
+        state = {"proc": proc, "output": [], "monitor": mon, "stop_file": stop_file,
+                 "path": str(self.safe_path(rel).relative_to(self.root)),
+                 "participant": (participant or {}).get("participant"), "session": (participant or {}).get("session"),
+                 "started": datetime.now().isoformat(timespec="seconds")}
         self.runs[rid] = state
 
         def pump() -> None:
@@ -326,6 +378,15 @@ class BuilderApp:
 
         threading.Thread(target=pump, daemon=True).start()
         return {"run_id": rid}
+
+    def list_runs(self) -> list[dict[str, Any]]:
+        """Sessions started from this builder (to find a running one again after a page reload)."""
+        out = []
+        for rid, st in self.runs.items():
+            out.append({"run_id": rid, "path": st.get("path"), "participant": st.get("participant"),
+                        "session": st.get("session"), "started": st.get("started"),
+                        "running": st["proc"].poll() is None})
+        return out
 
     def run_status(self, rid: str) -> dict[str, Any]:
         st = self.runs.get(rid)
@@ -375,8 +436,24 @@ POST_FIELDS: dict[str, dict[str, tuple[type | tuple[type, ...], bool]]] = {
     "/api/survey/instrument": {"id": (str, True)},
     "/api/to_yaml": {},
     "/api/from_yaml": {"yaml": (str, True)},
+    # the experiment assistant (edge/assistant/api.py)
+    "/api/assistant/config": {},
+    "/api/assistant/consent": {"provider": (str, True)},
+    "/api/assistant/test": {"provider": (str, False), "settings": (dict, False), "deep": (bool, False)},
+    "/api/assistant/ask": {"experiment": (dict, True), "path": (str, False), "message": (str, True),
+                           "attachments": (list, False), "focus": (dict, False), "conversation_id": (str, False),
+                           "recap": (list, False), "options": (dict, False)},
+    "/api/assistant/cancel": {"id": (str, True)},
+    "/api/assistant/discard": {"id": (str, True)},
+    "/api/assistant/applied": {"id": (str, True)},
+    "/api/assistant/detach": {"exp": (str, True), "file": (str, True)},
 }
-QUERY_FIELDS = {"/api/experiment": ["path"], "/api/restore": ["path"], "/api/upload": ["path"]}
+QUERY_FIELDS = {"/api/experiment": ["path"], "/api/restore": ["path"], "/api/upload": ["path"],
+                "/api/assistant/attach": ["exp", "name"], "/api/assistant/preview": ["exp", "file"],
+                "/api/assistant/job": ["id"], "/api/assistant/conversation": ["id"],
+                "/api/assistant/models": ["provider"]}
+RAW_BODY = {"/api/upload", "/api/assistant/attach"}      # the body is a file, not JSON
+ATTACH_LIMIT = 60 * 1024 * 1024
 
 
 def check_fields(path: str, body: Any, query: dict[str, str]) -> None:
@@ -470,7 +547,13 @@ def make_handler(app: BuilderApp):
                 if u.path == "/api/schema":
                     return self._json(schema())
                 if u.path == "/api/files":
-                    return self._json({"root": str(app.root), "files": app.list_files()})
+                    return self._json({"root": str(app.root), "files": app.list_files(q.get("status") == "1")})
+                if u.path == "/api/runs":
+                    return self._json({"runs": app.list_runs()})
+                if u.path.startswith("/api/assistant/"):
+                    from ..assistant import api as assistant_api
+                    check_fields(u.path, None, q)
+                    return self._json(*assistant_api.handle(app, "GET", u.path, q, None))
                 if u.path == "/api/experiment":
                     return self._json(app.load(q["path"]))
                 if u.path == "/api/support_bundle":
@@ -588,7 +671,21 @@ def make_handler(app: BuilderApp):
             u = urlparse(self.path)
             q = {k: v[0] for k, v in parse_qs(u.query).items()}
             try:
-                check_fields(u.path, None if u.path == "/api/upload" else self._body_cached(), q)
+                if u.path.startswith("/api/assistant/") and u.path not in RAW_BODY \
+                        and "application/json" not in (self.headers.get("Content-Type") or "").lower():
+                    # a form or text/plain "simple request" from another page never reaches the assistant
+                    return self._json({"error": "send the request as JSON (Content-Type: application/json)"}, 415)
+                check_fields(u.path, None if u.path in RAW_BODY else self._body_cached(), q)
+                if u.path.startswith("/api/assistant/"):
+                    from ..assistant import api as assistant_api
+                    if u.path == "/api/assistant/attach":
+                        if int(self.headers.get("Content-Length") or 0) > ATTACH_LIMIT:
+                            return self._json({"error": "The file is too large to attach (the limit is 50 MB).",
+                                               "code": "too_large"}, 400)
+                        body_in: Any = self._raw(ATTACH_LIMIT)
+                    else:
+                        body_in = self._body_cached()
+                    return self._json(*assistant_api.handle(app, "POST", u.path, q, body_in))
                 if u.path == "/api/upload":
                     dest = app.safe_path(q["path"])
                     if dest.suffix.lower() in BLOCKED_UPLOAD_SUFFIXES or dest.name.startswith("."):
@@ -608,7 +705,8 @@ def make_handler(app: BuilderApp):
                                        "notes": res.notes, "stats": res.stats, "report": res.report_markdown()})
                 if u.path == "/api/experiment":
                     try:
-                        return self._json(app.save(q["path"], body, q.get("fingerprint"), q.get("force") == "1"))
+                        return self._json(app.save(q["path"], body, q.get("fingerprint"), q.get("force") == "1",
+                                                   q.get("label")))
                     except storage.ConflictError as e:
                         return self._json({"error": str(e), "conflict": True}, 409)
                 if u.path == "/api/restore":

@@ -407,6 +407,18 @@ edge docs [-h] [--check] [{build}]
 | `action` | build: regenerate reference pages and TUTORIALS.md |
 | `--check` | only report whether generated pages are up to date |
 
+## edge assistant
+
+change experiments by describing them (Claude, OpenAI-compatible, Ollama or LM Studio)
+
+```
+edge assistant [-h] {setup,config,test,models,ask} ...
+```
+
+| argument | description |
+|---|---|
+| `action` | setup, config, test, models or ask (edge assistant <action> -h for its options) |
+
 ## edge mcp
 
 run the MCP server (natural-language control from Claude / VS Code)

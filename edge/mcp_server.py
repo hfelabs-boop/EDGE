@@ -14,7 +14,6 @@ All paths are relative to the workspace root and cannot escape it.
 from __future__ import annotations
 
 import contextlib
-import copy
 import functools
 import subprocess
 import sys
@@ -309,14 +308,7 @@ def create_server(root: str | Path = ".") -> FastMCP:
         participant and condition in measures.csv after every session, shown live while it runs, and checked
         in the session report. replace=False appends (same id = replaced)."""
         def op(d: ExperimentDoc) -> Any:
-            cur = [] if replace else list(d.doc.get("measures") or [])
-            for m in measures:
-                cur = [x for x in cur if not (isinstance(x, dict) and x.get("id") and x.get("id") == m.get("id"))] + [m]
-            if cur:
-                d.doc["measures"] = cur
-            else:
-                d.doc.pop("measures", None)
-            d.changes.append(f"measures: {len(cur)} declared")
+            d.set_measures(measures, replace)
             from .measures import describe as describe_measures
             from .model import Experiment
             return describe_measures(Experiment.from_dict(d.doc, base_dir=ws.path(path).parent))
@@ -359,31 +351,18 @@ def create_server(root: str | Path = ".") -> FastMCP:
           add_rule(rid, when, do, repeat, name) · remove_rule(rid, index)
         Example: [{"op":"add_routine","rid":"trial"},{"op":"add_component","rid":"trial","ctype":"text",
                    "properties":{"text":"$word","duration":1}}]"""
-        allowed = {"add_routine", "update_routine", "rename_routine", "remove_routine", "duplicate_routine",
-                   "add_component", "update_component", "remove_component", "move_component", "insert_flow",
-                   "remove_from_flow", "move_in_flow", "add_loop", "update_loop", "set_conditions", "add_branch",
-                   "add_device", "update_device", "remove_device", "update_settings", "set_variables", "set_info",
-                   "add_state_machine", "update_state", "remove_state", "add_rule", "remove_rule"}
+        from .editing import apply_operations
         p = ws.path(path)
         doc = ExperimentDoc.open(p)
-        snapshot = copy.deepcopy(doc.doc)
-        results = []
-        for i, op in enumerate(operations):
-            args = dict(op)
-            name = args.pop("op", None)
-            if name not in allowed:
-                return {"ok": False, "error": f"operation {i}: unknown op '{name}'", "allowed": sorted(allowed)}
-            try:
-                results.append(getattr(doc, name)(**args))
-            except TypeError as e:
-                doc.doc = snapshot
-                return {"ok": False, "error": f"operation {i} ({name}): bad arguments: {e}", "applied": 0}
-            except EditError as e:
-                doc.doc = snapshot
-                return {"ok": False, "error": f"operation {i} ({name}): {e}", "applied": 0}
+        res = apply_operations(doc, operations)
+        if not res["ok"]:
+            out = {"ok": False, "error": res["error"], "applied": 0}
+            if "allowed" in res:
+                out["allowed"] = res["allowed"]
+            return out
         doc.save(f"{len(operations)} edits")
         return {"ok": True, "applied": len(operations), "changes": doc.changes,
-                "results": [r for r in results if r is not None], **_issues(doc)}
+                "results": res["results"], **_issues(doc)}
 
     # ================================================================ routines & components
     @tool
@@ -452,29 +431,7 @@ def create_server(root: str | Path = ".") -> FastMCP:
         `position`: "end", "start" or "after:<routine>". Creates the routine if it doesn't exist. Answers and
         scores (e.g. phq9_total, phq9_total_band) become data columns."""
         def op(d: ExperimentDoc) -> None:
-            if routine not in d.routines:
-                d.add_routine(routine, description="questionnaire")
-                if position == "start":
-                    d.insert_flow(routine, position=0)
-                elif position.startswith("after:"):
-                    target = position.split(":", 1)[1]
-                    idx = next((i for i, n in enumerate(d.doc["flow"]) if d._node_name(n) == target), None)
-                    if idx is None:
-                        raise EditError(f"no top-level flow item '{target}'")
-                    d.insert_flow(routine, position=idx + 1)
-                else:
-                    d.insert_flow(routine)
-            props: dict[str, Any] = {"questions": questions, "end_routine": True}
-            if title:
-                props["title"] = title
-            if intro:
-                props["intro"] = intro
-            if scores:
-                props["scores"] = scores
-            if language:
-                props["language"] = language
-            taken = {c.get("id") for c in d.routine(routine)["components"]}
-            d.add_component(routine, "survey", props, routine if routine not in taken else None)   # columns: <routine>.<answer>
+            d.add_survey(questions, routine, title, intro, position, scores, language)
         return edit(path, op, f"add survey to {routine}")
 
     @tool

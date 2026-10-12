@@ -410,6 +410,11 @@ def cmd_docs(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_assistant(a: argparse.Namespace) -> int:
+    from .assistant.cli import main as assistant_main
+    return assistant_main(a)
+
+
 def cmd_mcp(a: argparse.Namespace) -> int:
     try:
         from .mcp_server import main as mcp_main
@@ -641,6 +646,12 @@ def main(argv: list[str] | None = None) -> int:
     dc.add_argument("action", choices=["build"], nargs="?", default="build", help="build: regenerate reference pages and TUTORIALS.md")
     dc.add_argument("--check", action="store_true", help="only report whether generated pages are up to date")
     dc.set_defaults(fn=cmd_docs)
+
+    asst = sub.add_parser("assistant", help="change experiments by describing them (Claude, OpenAI-compatible, "
+                                            "Ollama or LM Studio)")
+    from .assistant.cli import add_arguments as assistant_arguments
+    assistant_arguments(asst)
+    asst.set_defaults(fn=cmd_assistant)
 
     m = sub.add_parser("mcp", help="run the MCP server (natural-language control from Claude / VS Code)")
     m.add_argument("--root", default=".", help="workspace folder the server may read and write")

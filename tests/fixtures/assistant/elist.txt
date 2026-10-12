@@ -1,0 +1,4 @@
+Weight	Nested	Procedure	Stimulus	CorrectResponse
+1		TrialProc	cat.png	1
+1		TrialProc	dog.png	2
+1		TrialProc	bird.png	1

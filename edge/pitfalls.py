@@ -23,7 +23,7 @@ BIG_FILE = 15_000_000
 
 
 def image_size(path: Path) -> tuple[int, int] | None:
-    """Width and height of a PNG, GIF, BMP or JPEG from its header (no image library needed)."""
+    """Width and height of a PNG, GIF, BMP, JPEG, WebP, TIFF or SVG from its header (no image library needed)."""
     try:
         with open(path, "rb") as f:
             head = f.read(32)
@@ -33,6 +33,11 @@ def image_size(path: Path) -> tuple[int, int] | None:
                 return int.from_bytes(head[6:8], "little"), int.from_bytes(head[8:10], "little")
             if head[:2] == b"BM":
                 return int.from_bytes(head[18:22], "little"), abs(int.from_bytes(head[22:26], "little", signed=True))
+            if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+                return _webp_size(head)
+            if head[:4] in (b"II*\x00", b"MM\x00*"):
+                f.seek(0)
+                return _tiff_size(f.read(65536))
             if head[:2] == b"\xff\xd8":
                 f.seek(2)
                 while True:
@@ -44,8 +49,75 @@ def image_size(path: Path) -> tuple[int, int] | None:
                         d = f.read(5)
                         return int.from_bytes(d[3:5], "big"), int.from_bytes(d[1:3], "big")
                     f.seek(length - 2, 1)
+            f.seek(0)
+            text = f.read(4096)
+            if b"<svg" in text.lower():
+                return _svg_size(text.decode("utf-8", errors="replace"))
     except OSError:
         return None
+    return None
+
+
+def _webp_size(head: bytes) -> tuple[int, int] | None:
+    chunk = head[12:16]
+    if chunk == b"VP8 " and len(head) >= 30 and head[23:26] == b"\x9d\x01\x2a":
+        return int.from_bytes(head[26:28], "little") & 0x3FFF, int.from_bytes(head[28:30], "little") & 0x3FFF
+    if chunk == b"VP8L" and len(head) >= 25 and head[20] == 0x2F:
+        b = int.from_bytes(head[21:25], "little")
+        return (b & 0x3FFF) + 1, ((b >> 14) & 0x3FFF) + 1
+    if chunk == b"VP8X" and len(head) >= 30:
+        return int.from_bytes(head[24:27], "little") + 1, int.from_bytes(head[27:30], "little") + 1
+    return None
+
+
+def _tiff_size(data: bytes) -> tuple[int, int] | None:
+    order = "little" if data[:2] == b"II" else "big"
+    try:
+        ifd = int.from_bytes(data[4:8], order)
+        n = int.from_bytes(data[ifd:ifd + 2], order)
+        found: dict[int, int] = {}
+        for i in range(n):
+            e = data[ifd + 2 + 12 * i: ifd + 14 + 12 * i]
+            if len(e) < 12:
+                break
+            tag, typ = int.from_bytes(e[0:2], order), int.from_bytes(e[2:4], order)
+            if tag in (256, 257):
+                found[tag] = int.from_bytes(e[8:10], order) if typ == 3 else int.from_bytes(e[8:12], order)
+        if 256 in found and 257 in found:
+            return found[256], found[257]
+    except (IndexError, ValueError):
+        return None
+    return None
+
+
+def _svg_size(text: str) -> tuple[int, int] | None:
+    import re
+    m = re.search(r"<svg\b[^>]*>", text, re.I | re.S)
+    if not m:
+        return None
+    tag = m.group(0)
+
+    def attr(name: str) -> str | None:
+        a = re.search(rf"\b{name}\s*=\s*[\"']([^\"']*)[\"']", tag, re.I)
+        return a.group(1).strip() if a else None
+
+    def num(v: str | None) -> float | None:
+        if not v or v.endswith("%"):
+            return None
+        n = re.match(r"^\s*([\d.]+)\s*(px)?\s*$", v)
+        return float(n.group(1)) if n else None
+
+    w, h = num(attr("width")), num(attr("height"))
+    if w and h:
+        return int(round(w)), int(round(h))
+    vb = attr("viewBox")
+    if vb:
+        parts = re.split(r"[\s,]+", vb.strip())
+        try:
+            if len(parts) == 4:
+                return int(round(float(parts[2]))), int(round(float(parts[3])))
+        except ValueError:
+            return None
     return None
 
 

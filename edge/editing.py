@@ -17,14 +17,24 @@ from __future__ import annotations
 
 import copy
 import csv
+import inspect
+import io
 import re
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 from .model import SCHEDULE_KEYS, Experiment, deep_merge
 from .storage import FORMAT_VERSION, load_document, save_document
 
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# operations that apply_operations (the MCP server's edit_experiment and the builder's assistant) may run
+ALLOWED_OPS: frozenset[str] = frozenset({
+    "add_routine", "update_routine", "rename_routine", "remove_routine", "duplicate_routine", "add_component",
+    "update_component", "remove_component", "move_component", "insert_flow", "remove_from_flow", "move_in_flow",
+    "add_loop", "update_loop", "set_conditions", "add_branch", "add_device", "update_device", "remove_device",
+    "update_settings", "set_variables", "set_info", "add_state_machine", "update_state", "remove_state", "add_rule",
+    "remove_rule", "set_measures", "add_survey"})
 
 
 class EditError(ValueError):
@@ -49,6 +59,9 @@ class ExperimentDoc:
         self.path = path
         self.fingerprint = fingerprint
         self.changes: list[str] = []
+        # who writes conditions files: None = straight to disk (MCP, scripts); the assistant sets a ledger
+        # that refuses to overwrite files and can take its own files back
+        self.file_writer: Callable[[Path, str], None] | None = None
         self.doc.setdefault("name", path.stem if path else "experiment")
         for key, default in (("settings", {}), ("devices", []), ("variables", {}), ("routines", {}), ("flow", [])):
             if self.doc.get(key) is None:
@@ -675,16 +688,70 @@ class ExperimentDoc:
             raise EditError("conditions files must be inside the experiment folder")
         cols: list[str] = []
         for r in rows:
+            if not isinstance(r, dict):
+                raise EditError("each row must be a mapping of column -> value, e.g. {\"word\": \"RED\"}")
             cols += [k for k in r if k not in cols]
-        target.parent.mkdir(parents=True, exist_ok=True)
         delim = "\t" if target.suffix.lower() == ".tsv" else ","
-        with target.open("w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=cols, delimiter=delim)
-            w.writeheader()
-            for r in rows:
-                w.writerow({k: r.get(k, "") for k in cols})
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=cols, delimiter=delim)
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: r.get(k, "") for k in cols})
+        if self.file_writer is not None:
+            self.file_writer(target, buf.getvalue())
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open("w", newline="", encoding="utf-8") as f:
+                f.write(buf.getvalue())
         self.changes.append(f"wrote {filename} ({len(rows)} rows)")
         return target
+
+    # ------------------------------------------------------------------ measures and surveys
+    def set_measures(self, measures: list[dict[str, Any]], replace: bool = True) -> int:
+        """Declare what the experiment measures (see set_measures in the MCP docs). ``replace=False`` appends
+        (a measure with the same id is replaced). Returns the number of measures."""
+        if not isinstance(measures, list) or not all(isinstance(m, dict) for m in measures):
+            raise EditError("measures must be a list of objects like {\"id\": \"rt\", \"column\": \"resp.rt\"}")
+        cur = [] if replace else list(self.doc.get("measures") or [])
+        for m in measures:
+            cur = [x for x in cur if not (isinstance(x, dict) and x.get("id") and x.get("id") == m.get("id"))] + [m]
+        if cur:
+            self.doc["measures"] = cur
+        else:
+            self.doc.pop("measures", None)
+        self.changes.append(f"measures: {len(cur)} declared")
+        return len(cur)
+
+    def add_survey(self, questions: list[dict[str, Any]], routine: str = "questionnaire", title: str = "",
+                   intro: str = "", position: str = "end", scores: dict[str, Any] | None = None,
+                   language: str = "") -> str:
+        """Add a questionnaire screen (library instruments like {"instrument": "phq9"} and/or own questions).
+        ``position``: "end", "start" or "after:<routine>". Creates the routine if needed; returns the component id."""
+        if not isinstance(questions, list):
+            raise EditError("questions must be a list")
+        if routine not in self.routines:
+            self.add_routine(routine, description="questionnaire")
+            if position == "start":
+                self.insert_flow(routine, position=0)
+            elif isinstance(position, str) and position.startswith("after:"):
+                target = position.split(":", 1)[1]
+                idx = next((i for i, n in enumerate(self.doc["flow"]) if self._node_name(n) == target), None)
+                if idx is None:
+                    raise EditError(f"no top-level flow item '{target}'")
+                self.insert_flow(routine, position=idx + 1)
+            else:
+                self.insert_flow(routine)
+        props: dict[str, Any] = {"questions": questions, "end_routine": True}
+        if title:
+            props["title"] = title
+        if intro:
+            props["intro"] = intro
+        if scores:
+            props["scores"] = scores
+        if language:
+            props["language"] = language
+        taken = {c.get("id") for c in self.routine(routine)["components"]}
+        return self.add_component(routine, "survey", props, routine if routine not in taken else None)  # columns: <routine>.<answer>
 
     # ------------------------------------------------------------------ devices
     def add_device(self, dtype: str, did: str | None = None, options: dict[str, Any] | None = None,
@@ -819,3 +886,62 @@ def _short(v: Any, n: int = 40) -> str:
 
 def _drop_none(d: dict[str, Any]) -> dict[str, Any]:
     return {k: (_drop_none(v) if isinstance(v, dict) else v) for k, v in d.items() if v is not None}
+
+
+def op_signature(name: str, fn: Callable | None = None) -> str:
+    fn = fn or getattr(ExperimentDoc, name, None)
+    if fn is None:
+        return f"{name}(…)"
+    params = [p for p in inspect.signature(fn).parameters.values() if p.name not in ("self", "doc")]
+    return f"{name}(" + ", ".join(p.name if p.default is inspect.Parameter.empty else f"{p.name}={p.default!r}"
+                                  for p in params) + ")"
+
+
+def apply_operations(doc: ExperimentDoc, operations: list[dict[str, Any]], *,
+                     extra: dict[str, Callable[..., Any]] | None = None, ledger: Any = None) -> dict[str, Any]:
+    """Apply ``[{"op": name, ...arguments}]`` all-or-nothing.
+
+    On any failure the document, ``doc.changes`` and the files written by these operations (through
+    ``ledger``) are restored, and the result names the failing operation:
+    ``{"ok": False, "failed_index": 3, "op": "add_component", "error": "operation 3 (add_component): …"}``.
+    ``extra`` adds operations ``fn(doc, **arguments)`` (the assistant's add_image_component)."""
+    extra = extra or {}
+    if not isinstance(operations, list):
+        return {"ok": False, "failed_index": None, "op": None, "applied": 0,
+                "error": "operations must be a list like [{\"op\": \"add_routine\", \"rid\": \"trial\"}]"}
+    snapshot = copy.deepcopy(doc.doc)
+    n_changes = len(doc.changes)
+    cp = ledger.checkpoint() if ledger is not None else None
+
+    def fail(i: int, name: Any, msg: str, **more: Any) -> dict[str, Any]:
+        doc.doc.clear()
+        doc.doc.update(snapshot)
+        del doc.changes[n_changes:]
+        if ledger is not None:
+            ledger.rollback_to(cp)
+        return {"ok": False, "failed_index": i, "op": name, "error": msg, "applied": 0, **more}
+
+    results = []
+    for i, op in enumerate(operations):
+        if not isinstance(op, dict):
+            return fail(i, None, f"operation {i}: must be an object like {{\"op\": \"add_routine\", \"rid\": \"trial\"}}")
+        args = dict(op)
+        name = args.pop("op", None)
+        if name in extra:
+            fn: Callable[..., Any] = extra[name]
+            call = (lambda f=fn, a=args: f(doc, **a))
+        elif name in ALLOWED_OPS:
+            fn = getattr(doc, name)
+            call = (lambda f=fn, a=args: f(**a))
+        else:
+            return fail(i, name, f"operation {i}: unknown op '{name}'", allowed=sorted(ALLOWED_OPS | set(extra)))
+        try:
+            results.append(call())
+        except TypeError as e:
+            return fail(i, name, f"operation {i} ({name}): bad arguments: {e}. Use {op_signature(name, extra.get(name))}")
+        except EditError as e:
+            return fail(i, name, f"operation {i} ({name}): {e}")
+        except Exception as e:  # noqa: BLE001 - any failure must leave the document as it was
+            return fail(i, name, f"operation {i} ({name}): {type(e).__name__}: {e}")
+    return {"ok": True, "applied": len(operations), "changes": doc.changes[n_changes:],
+            "results": [r for r in results if r is not None]}

@@ -75,6 +75,7 @@ def make_bundle(path: str | Path, out: str | Path | None = None, include_data: b
             secrets = [session.name] + [v for v in vals if len(v) >= 3 and not v.replace(".", "").isdigit()]
         except (OSError, ValueError):
             secrets = [session.name]
+    scrub_keys = _key_redactor()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         def put(arc: str, data: str | bytes) -> None:
             if secrets:      # the session folder is named after the participant; never let it out
@@ -82,6 +83,12 @@ def make_bundle(path: str | Path, out: str | Path | None = None, include_data: b
                 for sec in sorted(secrets, key=len, reverse=True):
                     text = text.replace(sec, "<session>" if sec == session.name else REMOVED)
                 data = text
+            if scrub_keys is not None:     # never an assistant API key (config or environment)
+                try:
+                    text = data.decode("utf-8") if isinstance(data, bytes) else data
+                    data = scrub_keys(text)
+                except UnicodeDecodeError:
+                    pass
             z.writestr(arc, data)
             contents.append(arc)
 
@@ -154,6 +161,19 @@ def make_bundle(path: str | Path, out: str | Path | None = None, include_data: b
             "\n\nParticipant information has been replaced by <removed>. "
             + ("Trial data is included without participant columns." if include_data else "No trial data is included."))
     return {"bundle": str(out), "contents": contents, "session": str(session) if session else None}
+
+
+def _key_redactor() -> Any:
+    """The assistant's key remover, aware of the stored and environment keys (None if unavailable).
+    The bundle never includes the assistant's settings file itself."""
+    try:
+        from .assistant.config import CLOUD, load_config, redact, resolve_key
+        cfg = load_config()
+        for name in CLOUD:
+            resolve_key(cfg, name)
+        return lambda text: redact(text, cfg)
+    except Exception:
+        return None
 
 
 def _scrub_events(text: str, fields: set[str]) -> str:

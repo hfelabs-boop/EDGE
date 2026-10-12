@@ -27,6 +27,8 @@
   (next participant ID, hardware, full screen), plain-language errors with "did you mean", a static check for names
   that aren't defined where they're used, one-command installers, desktop shortcut, `edge` with no arguments
 
+- Experiment assistant: build and change experiments by describing them, with attached trial lists (CSV, Excel,
+  JSON), pictures, pages and text; Claude, OpenAI-compatible services, Ollama or LM Studio; preview, one-step undo
 - Surveys: 35 question types (the professional catalogue incl. side by side, form fields, pick-group-rank, hot spot,
   heat map, drill down, highlight, signature, timing, meta info, file upload, captcha, autocomplete, tree testing,
   video response, screen capture, location), full right-to-left support with translated messages
