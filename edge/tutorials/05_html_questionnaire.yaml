@@ -1,9 +1,9 @@
 id: html_questionnaire
 order: 5
-title: Questionnaires and consent with HTML pages
+title: Questionnaires and consent with web pages
 level: beginner
 minutes: 7
-learn: html component, forms, saved answers, placeholders
+learn: web page / form items, forms, saved answers, placeholders
 description: >
   Put a real HTML form inside your experiment: every answer is saved as a data column, and test runs
   fill the form in automatically.
@@ -12,18 +12,22 @@ mode: simple
 steps:
   - title: Create a screen for the questionnaire
     body: |
-      Click **+ screen** and name it `survey`.
+      Click **Add screen**, type `survey` and press **Add screen**.
     target: ".rtab.add"
     check: {routine_exists: survey}
-  - title: Add an HTML page
+  - title: Add a web page
     body: |
-      Click **Web page / form** on the left. HTML pages can show consent forms, questionnaires, rich
-      instructions, or even complete JavaScript tasks.
+      Click **Web page / form** under **Add** on the left. Web pages can show consent forms,
+      questionnaires, rich instructions, or even complete JavaScript tasks.
+
+      (For ready-made questionnaires with scoring, use **Survey / questionnaire** instead: see the
+      tutorial *Questionnaires like a pro*.)
     target: ".pal-item[data-type=html]"
     check: {component: {routine: survey, type: html}}
   - title: Write the form
     body: |
-      In Properties, paste this into **html** (or use **file** to point at an `.html` file):
+      In Properties, paste this into **Page content (HTML)** and press Tab (or use **Choose…** to pick
+      an `.html` file):
 
       ```html
       <h2>How do you feel?</h2>
@@ -36,24 +40,23 @@ steps:
       </form>
       ```
 
-      The preview shows the real page.
-    target: "#props"
+      The preview shows the real page. **Ends the screen** is already on: the experiment moves on when
+      the form is sent.
+    target: "#props [data-prop=html]"
     check: {component: {routine: survey, type: html, prop: html, contains: "<form"}}
-  - title: Move on when the form is sent
+  - title: It's already in the experiment
     body: |
-      Tick **ends the screen** in the **When** section.
-    target: "#props"
-    check: {component: {routine: survey, type: html, prop: end_routine, value: true}}
-  - title: Put it in the flow
-    body: |
-      In the **Flow** strip click **+** and choose **Screen: survey**.
-    target: "#flow"
-    check: {flow_has: survey}
+      Click **Storyboard** at the top of the canvas (in a narrow window, the button with four squares).
+      New screens join the experiment where you make them, so `survey` is already in the order: its card
+      shows a thumbnail of the page.
+    target: "#view-switch [data-view=story]"
+    check: {view: story, flow_has: survey}
   - title: Test run and see the answers
     body: |
-      Click **▶ Test run**. The virtual participant fills in the form, and the data preview has the columns
-      `html.mood` and `html.age`. In real sessions, answers land in exactly the same place.
+      Open **Test** and click **Start test run**. The virtual participant fills in the form, and the data
+      preview has the columns `page.mood` and `page.age` (the item is called `page`). In real sessions,
+      answers land in exactly the same place.
 
-      Tip: write `{{participant}}` or any trial variable in the HTML to show it on the page.
+      Tip: write `{{participant}}` or any trial-list column in the HTML to show it on the page.
     target: "#btn-dryrun"
     check: {dry_run: true}

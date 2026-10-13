@@ -26,7 +26,7 @@ const OUT_WORDS = {keys: "key pressed", rt: "response time", corr: "correct? 1/0
 const SUMMARY_WORDS = {mean: "Mean", median: "Median", sd: "Spread (SD) of", min: "Smallest", max: "Largest", sum: "Total", count: "Number of",
   proportion: "Proportion of", first: "First", last: "Last", none: ""};
 const _autoIds = new WeakSet();   // measures whose id should follow their name
-const MS = {R: null, key: "", loading: null, q: "", only: "all", open: new Set(["participant", "loops", "screens", "devices", "always"]), prev: null, back: null, err: null};
+const MS = {R: null, key: "", loading: null, q: "", only: "all", open: new Set(["participant", "loops", "screens", "devices", "always"]), prev: null, back: null, err: null, exDraft: {}};
 
 /* Kept name: open the Measures page. */
 async function openMeasures() { EDGE.go("measures"); }
@@ -165,13 +165,26 @@ function measureCard(m, i, plan, loops, line, R) {
       onchange: (e) => setTimeout(() => { let v = e.target.value.trim(); if (v && !v.startsWith("$")) v = "$" + v; set("trials", v); }, 0)});
     const say = m.trials ? inspInWords(m.trials) : "";
     card.append(row(fld("Use", uid, loopSel), h("div", {class: "ms-f wide"}, h("label", {for: oid}, "Only when"), only, say && say !== m.trials ? h("span", {class: "say"}, `In words: ${say}.`) : null)));
+    // a range needs both ends: the first one typed waits (it is not dropped) until the other one is there
     const ex = m.expect || [];
-    const lo = h("input", {class: "input num", id: `ms-${i}-lo`, inputmode: "decimal", value: ex[0] ?? "", placeholder: "min", "aria-label": "Expected at least", "data-fkey": `ms:${i}:lo`});
-    const hi = h("input", {class: "input num", inputmode: "decimal", value: ex[1] ?? "", placeholder: "max", "aria-label": "Expected at most", "data-fkey": `ms:${i}:hi`});
-    const setEx = () => setTimeout(() => set("expect", lo.value.trim() !== "" && hi.value.trim() !== "" ? [+lo.value.replace(",", "."), +hi.value.replace(",", ".")] : null), 0);
+    const dk = m.id || `#${i}`, draft = MS.exDraft[dk];
+    const lo = h("input", {class: "input num", id: `ms-${i}-lo`, inputmode: "decimal", value: draft ? draft[0] : ex[0] ?? "", placeholder: "min", "aria-label": "Expected at least", "data-fkey": `ms:${i}:lo`});
+    const hi = h("input", {class: "input num", inputmode: "decimal", value: draft ? draft[1] : ex[1] ?? "", placeholder: "max", "aria-label": "Expected at most", "data-fkey": `ms:${i}:hi`});
+    const exHelp = h("div", {class: "help ms-ex-help", hidden: draft ? null : ""}, "Type both values: the lowest and the highest you expect.");
+    const setEx = () => {
+      const a = lo.value.trim().replace(",", "."), b = hi.value.trim().replace(",", ".");
+      if (a !== "" && b !== "") {
+        if (isNaN(+a) || isNaN(+b)) { exHelp.textContent = "Type numbers, e.g. 0.15 and 2.5."; exHelp.hidden = false; return; }
+        delete MS.exDraft[dk];
+        setTimeout(() => set("expect", [Math.min(+a, +b), Math.max(+a, +b)]), 0);
+      } else if (a === "" && b === "") {
+        delete MS.exDraft[dk]; exHelp.hidden = true;
+        if (m.expect) setTimeout(() => set("expect", null), 0);
+      } else { MS.exDraft[dk] = [lo.value, hi.value]; exHelp.textContent = "Type both values: the lowest and the highest you expect."; exHelp.hidden = false; }
+    };
     lo.onchange = setEx; hi.onchange = setEx;
     const units = h("input", {class: "input ms-units", value: m.units || "", placeholder: "units", "aria-label": "Units", "data-fkey": `ms:${i}:units`, onchange: (e) => setTimeout(() => set("units", e.target.value.trim()), 0)});
-    card.append(row(h("div", {class: "ms-f"}, h("label", {for: `ms-${i}-lo`}, "Expected between"), h("div", {class: "ms-range"}, lo, h("span", {class: "t-2"}, "and"), hi, units))));
+    card.append(row(h("div", {class: "ms-f"}, h("label", {for: `ms-${i}-lo`}, "Expected between"), h("div", {class: "ms-range"}, lo, h("span", {class: "t-2"}, "and"), hi, units), exHelp)));
   }
   const sentence = measureSentence(m, plan);
   if (sentence && m.column) card.append(h("p", {class: "ms-say"}, icon("chev-right"), sentence));
@@ -515,7 +528,7 @@ function crashBox(rep) {
     row("Trial", trial),
     rep.user_code ? row("Code", h("code", {class: "mono"}, `line ${rep.user_code.line} of ${rep.user_code.where}: ${rep.user_code.code}`)) : null,
     row("State", vars),
-    rep.hint ? h("div", {class: "crash-hint"}, icon("info"), h("span", {}, rep.hint)) : null,
+    rep.hint ? h("div", {class: "crash-hint"}, icon("info"), h("span", {}, typeof builderWords === "function" ? builderWords(rep.hint) : rep.hint)) : null,
     h("p", {class: "t-caption"}, "Everything recorded until then is saved."),
     rep.routine && typeof openScreen === "function" ? h("button", {type: "button", class: "btn sm", onclick: () => {
       closeModal?.(); ui.closeMenus?.();
@@ -534,8 +547,20 @@ function preflightBox(onVerdict) {
   const ICON = {ok: "success", info: "dot", warning: "warning", error: "error"};
   const draw = async () => {
     let r;
-    try { r = await api("/api/preflight", {path: S.path}); }
+    // code the assistant wrote and nobody has read yet: the server skips the test run (it would run that code)
+    const A = window.Assistant;
+    let unreviewed = 0, reviewed = [];
+    try { unreviewed = A?.unreviewedCode?.()?.length || 0; reviewed = EDGE.prefs.get("assistant.reviewed", []) || []; } catch { /* no assistant */ }
+    try { r = await api("/api/preflight", {path: S.path, unreviewed, reviewed_code: Array.isArray(reviewed) ? reviewed.slice(-500) : []}); }
     catch (e) { box.replaceChildren(h("div", {class: "alert warning"}, icon("warning"), h("div", {}, "The check couldn't run: " + e.message))); onVerdict("go with warnings"); return; }
+    // its test run ran the saved file: when that is what's open, it counts as tested (status bar, Test page, Next steps)
+    const tr = (r.sections || []).find((x) => x.id === "test_run");
+    const fin = tr && tr.items.find((i) => /finished the whole experiment/.test(i.text));
+    if (fin && !S.dirty && !S.proposal) {
+      S.tested = {snapshot: JSON.stringify(S.exp), rev: S.rev, at: Date.now(), ok: tr.status === "ok", trials: +((fin.text.match(/\((\d+) trials?\)/) || [])[1]) || null};
+      if (typeof renderShell === "function") renderShell();
+      EDGE.emit("tested", {ok: tr.status === "ok", preflight: true});
+    }
     const tone = {"go": "success", "go with warnings": "warning", "no-go": "danger"}[r.verdict] || "info";
     const word = {"go": "GO: ready for participants", "go with warnings": "GO, with something to check", "no-go": "NO-GO: not ready yet"}[r.verdict] || r.verdict;
     const out = [h("div", {class: "pf-verdict alert " + tone, role: "status"}, icon(tone === "success" ? "success" : tone === "danger" ? "error" : "warning"),
@@ -548,8 +573,15 @@ function preflightBox(onVerdict) {
         h("span", {class: "pf-s t-caption"}, (bad[0] || s.items[0])?.text || ""), icon("chev-right", "chev"));
       const sec = h("details", {class: "pf-sec s-" + status, open: s.status === "error" || s.status === "warning" ? "" : null}, summary);
       for (const it of (bad.length ? bad : s.items)) {
-        const row = h("div", {class: "pf-item l-" + it.level}, h("div", {}, it.text,
-          it.detail ? h("div", {class: "t-caption"}, it.detail) : null, it.hint ? h("div", {class: "t-small pf-hint"}, it.hint) : null,
+        // device and computer errors in plain words (§4.4); the exception text only in Expert mode
+        const bw = (x) => {
+          let t = typeof builderWords === "function" ? builderWords(x) : String(x ?? "");
+          const m = S.mode !== "expert" && typeof runStartWords === "function" ? t.match(/\(?\b(\w+(?:Error|Exception)):\s*(.*)$/) : null;
+          if (m) t = (t.slice(0, m.index).replace(/[\s:(]+$/, "") ? t.slice(0, m.index).replace(/[\s:(]+$/, "") + ": " : "") + runStartWords(`${m[1]}: ${m[2]}`);
+          return t;
+        };
+        const row = h("div", {class: "pf-item l-" + it.level}, h("div", {}, bw(it.text),
+          it.detail ? h("div", {class: "t-caption"}, bw(it.detail)) : null, it.hint ? h("div", {class: "t-small pf-hint"}, bw(it.hint)) : null,
           it.crash && typeof crashBox === "function" ? crashBox(it.crash) : null));
         if (it.fixable) row.append(h("button", {type: "button", class: "btn sm", onclick: async (e) => { e.currentTarget.disabled = true; e.currentTarget.textContent = "Fixing…";
           const res = await api("/api/system_fix", {id: it.check_id}).catch((err) => ({ok: false, error: err.message}));

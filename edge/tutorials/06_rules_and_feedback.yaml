@@ -1,51 +1,53 @@
 id: rules_and_feedback
 order: 6
-title: Rules, hints and conditional components
+title: Rules, hints and items shown only sometimes
 level: intermediate
 minutes: 7
-learn: when → do rules, component if, variables
+learn: rules (when … do …), items shown only if a condition holds, In words
 description: >
   Make screens react while they run: show a hint if the participant is slow, and show feedback
-  only during practice.
+  only during the first practice trials.
 start: tutorial_practice
 mode: expert
 steps:
-  - title: Open the trial
+  - title: Select the trial
     body: |
-      Click **trial** in the Flow strip. It has a **hint** text that never starts by itself
-      (`start_if` is `$False`). You'll start it with a rule.
+      Click the **trial** card in the Storyboard. Properties shows the screen. It has a **hint** text
+      that never starts by itself (its *starts when* is `$False`). You'll start it with a rule.
     target: "#flow"
     check: {selected: routine}
   - title: Add a rule
     body: |
-      In the screen's Properties (click an empty part of the timeline header if a component is
-      selected), find **Rules (when → do)** and click **+ Rule**.
+      In Properties, find **Rules · react while the screen runs** and click **Add a rule**.
     target: "#props"
     check: {rule: {routine: trial}}
   - title: Say when
     body: |
-      Set the rule's **When** to `$t > 1.5 and resp.keys is None`: 1.5 s into the trial, if no key
-      has been pressed yet.
+      Set the rule's **When** to `$t > 1.5 and resp.keys is None` and press Tab: 1.5 s into the trial,
+      if no key has been pressed yet. The line under it says the same in words.
     target: "#props"
     check: {rule: {routine: trial, when_contains: "resp.keys"}}
   - title: Say what to do
     body: |
-      Change the action from *end the screen* to **start component**, and pick **hint**. Slow
-      participants now see the key reminder.
+      Under **Do**, change **End the screen** to **Start an item**, then pick **hint** in the menu next
+      to it. Slow participants now see the key reminder.
 
-      Other actions: stop a component, set a variable, send a marker, or jump to another workflow state.
+      Other actions: stop an item, set variables, send a marker, go to a workflow phase, or write to the
+      log.
     target: "#props"
     check: {rule: {routine: trial, action: start}}
   - title: Feedback only in practice
     body: |
-      Open the **feedback** screen and select the **fb** text. In its **When** section set **only if** to
-      `$practice.n < 6`, so feedback is shown only for the first six practice trials.
-      Any expression works, for example `$practice_mode` or `$word == 'RED'`.
+      First make sure the rule's item is **hint** (not `fix`). Then double-click the **feedback** card,
+      click **fb** on the timeline, and set **Only if** (`if`) to `$practice.n < 6`, so feedback is shown
+      only for the first six practice trials. Any formula works, for example `$word == 'RED'`.
     target: "#props"
+    avoid: "#flow .scard[data-rid=feedback]"
     check: {component: {routine: feedback, type: text, prop: if, exists: true}}
   - title: Check the summary
     body: |
-      Read the grey summary above the timeline. EDGE describes each screen in plain language,
-      including the rules, so you can check the logic at a glance. Click **▶ Test run** to finish.
+      Read **In words** above the timeline: EDGE describes each screen in plain language, including when
+      its items start, so you can check the logic at a glance. Then open **Test** and click
+      **Start test run** to finish.
     target: "#btn-dryrun"
     check: {dry_run: true}

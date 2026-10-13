@@ -25,7 +25,11 @@ what it trusts, what it does not, and what that means for the people who share e
 
 What it serves from the experiments folder (pictures, sounds, HTML pages of `html` and `survey`
 components) is sent with a Content Security Policy that **sandboxes** it: a page you downloaded into
-the folder cannot call the builder's API or read its storage. Uploads through the builder cannot
+the folder cannot call the builder's API or read its storage. The preview of a page loads it by path
+(`/api/page/<key>/<folder>/<page>.html`), so its own stylesheets, scripts and pictures load from the
+same folder. A sandboxed page has no origin, so the browser labels those reads cross-site: the builder
+allows them only for read-only file requests whose path carries `<key>`, a random value of this builder
+process that only the builder's own page can read. Every such path must stay inside the folder too. Uploads through the builder cannot
 create executable files (`.py`, `.bat`, `.sh`, `.exe` …) or hidden files, and every path a request
 names must stay inside the folder the builder was started in. Sessions started from the builder run
 with `PYTHONSAFEPATH`, so a file in the experiments folder can never shadow a Python module.

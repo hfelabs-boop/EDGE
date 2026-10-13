@@ -324,7 +324,9 @@ class Agent:
             if turn.stop == "refusal":
                 cat = (turn.refusal or {}).get("category")
                 raise error("refused", provider=self.provider.name, label=self.provider.label,
-                            category=f" ({cat})" if cat else "", detail=(turn.refusal or {}).get("explanation"))
+                            # a raw safety category ("cyber") means nothing to a researcher: it stays in detail
+                            category="", detail="; ".join(x for x in ((turn.refusal or {}).get("explanation"),
+                                                                      f"category: {cat}" if cat else None) if x) or None)
             if conv.tool_mode == "json":
                 env = extract_envelope(turn.text)
                 if env is None:

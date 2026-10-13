@@ -86,7 +86,7 @@ function surveySummary(value, onChange) {
     box.append(ul);
   }
   box.append(h("div", {class: "sv-btns"},
-    h("button", {type: "button", class: "btn sm primary", onclick: () => openSurveyEditor(0)}, icon("survey"), "Edit questions"),
+    h("button", {type: "button", class: "btn sm primary", "data-fkey": "sv:edit", onclick: () => openSurveyEditor(0)}, icon("survey"), "Edit questions"),
     h("button", {type: "button", class: "btn sm", onclick: () => openLibrary((ins) => { onChange([...qs, {instrument: ins.id}]); toast(`Added ${ins.title}.`); })},
       icon("plus"), "Add a questionnaire")));
   return box;
@@ -122,6 +122,8 @@ function openSurveyEditor(index = 0) {
   SV.off = EDGE.on("doc:changed", () => svScheduleRedraw());
   ui.dialog({title: `Survey “${c.id}”`, icon: "survey", size: "full", body: SV.root,
     buttons: [{label: "Done", value: null, kind: "primary"}],
+    initialFocus: ".sv-pick[aria-current='true'], .sv-pick",       // the selected question, not the footer's Done
+    returnFocus: () => document.querySelector('#props [data-fkey="sv:edit"]'),
     onOpen: (dlg, close) => {
       SV.dlg = dlg; SV.close = close;
       dlg.classList.add("survey-dialog");
@@ -131,6 +133,7 @@ function openSurveyEditor(index = 0) {
     if (S.ws === "build") renderAll();
   });
   renderSurveyEditor();
+  SV.dlg?.querySelector(".sv-pick[aria-current='true'], .sv-pick")?.focus();     // start at the selected question
 }
 
 /* Commit a change; the editor redraws after the browser has moved focus (Tab), then gives focus back. */
@@ -399,8 +402,17 @@ function renderShowIf(q, qs) {
   const vinp = opts.length
     ? h("select", {class: "input", "aria-label": "Value", "data-fkey": "sv:showif:v"}, opts.map((o) => { const e = h("option", {value: String(o.value)}, o.label); if (String(o.value) === String(val)) e.selected = true; return e; }))
     : h("input", {class: "input", "aria-label": "Value", "data-fkey": "sv:showif:v", value: op === "answered" ? "" : (val ?? ""), placeholder: "value"});
+  const optsOf = (x) => (x && x.options ? x.options.map((o) => (typeof o === "object" ? o : {value: o, label: o})) : x && x.scale ? SCALES()[x.scale].options : []);
   const apply = () => {
     const k = qsel.value; if (!k) { delete q.show_if; return svCommit("Always show a question"); }
+    if (k !== key) {       // another question: start from its first answer, so what is stored is what is shown
+      const nq = (earlier.find(([id]) => id === k) || [])[2];
+      const first = optsOf(nq)[0];
+      const o2 = nq && nq.type === "multiple" ? "contains" : "=";
+      const v2 = first ? first.value : "";
+      q.show_if = first ? (o2 === "=" ? {[k]: v2} : {[k]: {[o2]: v2}}) : {[k]: {answered: true}};
+      return svCommit("Change when a question is shown");
+    }
     const o = osel.value; let v = vinp.value; v = numOrBlank(v) ?? v;
     const match = opts.find((x) => String(x.value) === String(vinp.value)); if (match) v = match.value;
     q.show_if = o === "answered" ? {[k]: {answered: true}} : o === "=" ? {[k]: v} : {[k]: {[o]: v}};

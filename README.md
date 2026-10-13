@@ -9,6 +9,7 @@ every device as part of the experiment, not something bolted on afterwards.
 ```
 edge                               # open the builder on your experiments folder (or double-click the EDGE icon)
 edge wizard                        # answer a few questions in the terminal, get a finished experiment
+edge assistant setup               # describe experiments in plain words: Claude, OpenAI-compatible, Ollama or LM Studio
 edge mcp                           # let Claude / VS Code build experiments from plain-language requests
 edge run study.yaml --dry-run      # simulated devices + virtual participant, takes seconds
 edge run study.yaml -p 012         # the real thing
@@ -19,8 +20,8 @@ edge report data/012_1_study_…     # timing, data-integrity and sync report
 
 | | E-Prime 3 | PsychoPy | **EDGE** |
 |---|---|---|---|
-| Visual builder | ✓ (Windows only) | ✓ | ✓ in the browser: storyboard of every screen, live preview, undo, Simple and Expert modes, YAML view |
-| New users | tutorials | tutorials | **design wizard** (a finished experiment from a few questions), **Try it** (do the experiment inside the builder), plain-language checks with "did you mean", interactive tutorials, one-command installer with a desktop icon |
+| Visual builder | ✓ (Windows only) | ✓ | ✓ in the browser: Build · Measures · Test · Run · Data workspaces, a storyboard of every screen that is also the flow editor, live preview, spreadsheet-like trial lists, undo, Simple and Expert modes, YAML view |
+| New users | tutorials | tutorials | **assistant** (describe the experiment, attach your files, review a preview), **design wizard** (a finished experiment from a few questions), **Try it** (do the experiment inside the builder), plain-language checks with "did you mean", interactive tutorials, one-command installer with a desktop icon |
 | Experiment file | binary `.es3` | `.psyexp` XML → generated script | plain YAML or JSON: diffable, reviewable, scriptable |
 | Eye trackers | Tobii/EyeLink via add-ons | ioHub | Tobii Pro, Gazepoint (no SDK), any LSL gaze stream, mouse stand-in |
 | EEG / physiology | via TTL | via TTL / plugins | g.tec (LSL, Unicorn, g.NEEDaccess), MindWare, any LSL stream, TTL |
@@ -32,7 +33,7 @@ edge report data/012_1_study_…     # timing, data-integrity and sync report
 | Adaptive procedures | scripting | staircase loops | staircase loops plus constrained randomization (`max_repeat`), Williams Latin squares |
 | Data tables | one row per trial (E-DataAid) | one row per loop iteration | one row per trial, ordered columns, **automatic per-condition summary and data dictionary**, Excel/BIDS/Parquet/MATLAB exports, multi-participant merge |
 | Saving | single file | single file | atomic saves, automatic version history with undo, conflict detection, crash recovery, `.edgez` bundles |
-| Natural language | — | — | **MCP server**: Claude or VS Code builds, edits, dry-runs and analyzes experiments, and edits appear live in the builder |
+| Natural language | — | — | **the assistant** in the builder (Claude, any OpenAI-compatible service, or Ollama / LM Studio on this computer): describe a change, attach files, see a preview, apply or undo; plus an **MCP server** so Claude Code or VS Code builds, edits, dry-runs and analyzes experiments, with edits appearing live in the builder |
 | Workflow logic | E-Basic scripting | code components | **visual state machines** (repeat until criterion, adaptive paths, screening), "when → do" routine rules, per-component `if`, live loop accuracy/RT |
 | HTML | — | Forms component | **HTML pages as experiment steps**: consent, questionnaires, custom JS tasks, with every field saved |
 | Questionnaires | — | Forms component | **survey component**: 35 question types covering the professional catalogue (choice, matrix, side by side, form fields, sliders, NPS, rank, constant sum, pick-group-rank, hot spot, heat map, drill down, highlight, signature, file upload, timing, meta info, tree testing, video response, screen capture, location …), display logic, piped text, randomization, **full right-to-left support** for Hebrew with translated messages, and a library of 20 validated, self-scoring instruments (PHQ-9, GAD-7, PSS-10, WHO-5, SWLS, Rosenberg, TIPI, Mini-IPIP, NASA-TLX, SUS, AUDIT-C …) |
@@ -45,22 +46,52 @@ edge report data/012_1_study_…     # timing, data-integrity and sync report
 1. Install with one command (it adds an **EDGE** icon to your desktop):
    macOS/Linux `curl -fsSL https://raw.githubusercontent.com/hfelabs-boop/edge/main/install/install_edge.sh | sh`,
    Windows (PowerShell) `irm https://raw.githubusercontent.com/hfelabs-boop/edge/main/install/install_edge.ps1 | iex`.
-2. Open EDGE and click **✨ Make a new experiment: answer a few questions**: what participants see,
-   how they respond, timing, practice ("until 80% correct"), blocks. You get a finished experiment,
-   already checked by a virtual participant: *"64 trials, about 6 minutes"*.
-3. Look at the **storyboard**, press **▶ Try it** to do the task yourself, change what you like (the
-   value menu next to each property turns any value into a trial-list column), and press **Run with a
-   participant**.
+2. Open EDGE. On **Home**, click **Answer a few questions**: what participants see, how they respond,
+   timing, practice ("until 80% correct"), blocks. You get a finished experiment, already checked by a
+   virtual participant: *"64 trials, about 6 minutes"*. Or **Describe it** to the [assistant](#describe-it-the-assistant).
+3. Look at the **storyboard**, press **Try it** to do the task yourself, change what you like (the button next
+   to each property turns any value into a trial-list column), test it on the **Test** page and run a
+   participant on the **Run** page.
 
 The builder starts in **Simple** mode with only the essentials; **Expert** shows everything.
 [Getting started](docs/GETTING_STARTED.md) walks through it in 15 minutes.
 
+## Describe it: the assistant
+
+![The assistant previewing a Stroop task it built](docs/assistant.png)
+
+Click **Assistant** (or press Ctrl+I), describe what you want in your own words and attach the files you already
+have: a trial list in Excel or CSV, pictures, a consent page. The assistant changes the open experiment, checks
+it and test-runs it with a virtual participant. The result opens as a **preview** (new and changed screens are
+marked; *nothing is changed until you apply*); **Apply** makes it one step that **Undo** reverts, **Discard**
+throws it away.
+
+> *"Build a Stroop task from this list, 2 blocks, feedback after each trial."*
+> *"Add a practice block of 6 trials that repeats until 80 % are correct."*
+> *"Make the words bigger."* (with the word selected)
+
+Set it up once in **Assistant settings** (⋯ in the Assistant panel, or `edge assistant setup` in a terminal):
+
+* **Claude (Anthropic)**, the best results: create an API key at [console.anthropic.com](https://console.anthropic.com)
+  (**API keys**), paste it, **Test connection**, **Save**. The key stays on this computer.
+* **Ollama**, free and offline: install [Ollama](https://ollama.com/download), run `ollama pull qwen2.5:14b`, then
+  choose **Ollama** and the model.
+* **LM Studio**, free and offline: download and load a model that supports tool use, switch on the local server
+  (Developer tab), then choose **LM Studio**.
+* **OpenAI-compatible**: OpenAI, OpenRouter or another service, with its API key.
+
+Attached files are copied into the experiment's folder (`conditions/`, `images/`, `pages/` …) so the experiment can
+use them. With Ollama or LM Studio nothing leaves the computer; with an online service, what you type, the
+experiment and the attached files are sent to that company, never your participants' data. The assistant is
+optional: everything else works without it. See [docs/ASSISTANT.md](docs/ASSISTANT.md).
+
 ## Learn EDGE
 
-* **Interactive tutorials** run inside the builder: a coach highlights what to click and moves on when
-  you've done each step. Start with `edge tutorial first_experiment`, or pick one on the welcome screen.
-* **Help Center:** press **?** in the builder for every guide, search, and the tutorials. Look for
-  **📖 docs** links next to components, devices, loops and workflows.
+* **Interactive tutorials** run inside the builder: a coach points at what to click and moves on when
+  you've done each step. Start with `edge tutorial first_experiment`, or pick one under **Learn by doing** on Home.
+* **Help:** press **?** in the builder for every guide, search, help about what you're looking at, and the
+  tutorials, in a column next to your work. The book buttons next to items, devices, trial lists and workflows
+  open their reference.
 * **In the terminal:** `edge help` lists the guides, and `edge help jitter isi` searches them.
 * **Documentation:** [docs/README.md](docs/README.md) has [Getting started](docs/GETTING_STARTED.md),
   [Tutorials](docs/TUTORIALS.md), the [Builder guide](docs/BUILDER_GUIDE.md), a [Cookbook](docs/COOKBOOK.md)
@@ -165,10 +196,11 @@ routines:
       - {when: "$resp.keys == 'q'", do: [{goto: end}]}
 ```
 
-![Workflow editor](docs/workflow.png)
+![A workflow in the storyboard, with the routes of its first phase](docs/workflow.png)
 
-In the builder, selecting a workflow shows its live diagram. States, routes and rules are edited
-with forms, and every expression field suggests the variables available there.
+In the builder, a workflow is a purple frame in the storyboard with one box per phase; **Open diagram** shows
+the phases and routes as a diagram. Phases, routes and rules are edited with forms, and every formula field
+suggests the variables available there and says what it means in words.
 
 ### Questionnaires
 
@@ -182,7 +214,7 @@ with forms, and every expression field suggests the variables available there.
     - {instrument: phq9}                           # phq9_total, phq9_total_band, phq9_item9_flag
 ```
 
-The builder's survey editor shows the real page live next to the questions; **+ From library** adds a
+The builder's survey editor shows the real page live next to the questions; **From the library** adds a
 validated questionnaire with its citation and scoring. Write the questions in Hebrew and the
 page lays itself out right to left. See [docs/SURVEYS.md](docs/SURVEYS.md).
 
@@ -230,7 +262,7 @@ every session's data and in experiment locks, so `edge verify` notices when EDGE
 | No hardware yet | `sim_eyetracker`, `sim_eeg`, `sim_physio`, `mouse_gaze`, `ttl_loopback`, `sim_inputs` | realistic simulators on drifting clocks; a virtual participant that presses box buttons and speaks |
 
 `edge scan` finds LSL streams, serial ports, Tobii trackers and Gazepoint Control, and suggests a
-config for each. The builder's **Hardware** tab does the same with one-click "add".
+config for each. The builder's **Find connected devices** (Devices tab) does the same with one-click **Add**.
 
 See [docs/DEVICES.md](docs/DEVICES.md) for setup, wiring and how the synchronization works.
 

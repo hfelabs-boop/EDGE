@@ -3,67 +3,75 @@ order: 3
 title: Practice until criterion (workflows)
 level: intermediate
 minutes: 10
-learn: state machines, routes with conditions, live loop accuracy, max_visits
+learn: workflows, phases, routes with conditions, live trial-list accuracy, repeat a phase at most N times
 description: >
-  Turn two loops into a workflow: participants repeat the practice block until they reach 80%
+  Turn two trial lists into a workflow: participants repeat the practice block until they reach 80%
   correct (at most three times), then continue to the main task.
 start: tutorial_practice
 mode: simple
 steps:
   - title: The plan
     body: |
-      The flow has a **practice** loop (with feedback) and a **main** loop. You want:
-      *practice → if accuracy ≥ 80% go to main, otherwise practice again (at most 3 times)*.
+      The storyboard has a **practice** trial list (with feedback) and a **main** trial list. You want:
+      *practice → if accuracy ≥ 80 % go to main, otherwise practice again (at most 3 times)*.
 
-      That's a **workflow** (a state machine). Press **Next**.
+      That's a **workflow**: **phases** with "then go to…" **routes**. Press **Next**.
   - title: Add a workflow
     body: |
-      In the **Flow** strip, click the first round **+** (far left) and choose **Workflow (state machine)**.
-      A purple box appears with one state called `start`.
-    target: "#flow"
-    check: {statemachine: {}}
-  - title: Rename the state
+      In the **Storyboard**, click the round **+** at the far left, *outside* the practice list (the
+      highlighted one), and choose **Workflow (practice until good, screening…)**. A purple frame
+      appears with one phase called `start`.
+    target: "#flow .ins[data-coach=flow-start]"
+    check: {statemachine: {top: true}}
+  - title: Rename the phase
     body: |
-      Click the state name **start** inside the purple box. In Properties, click the **name**
-      field and rename it to `practice`.
+      Click the phase name **start** inside the purple frame. In Properties, change **Name** to
+      `practice` and press Tab.
     target: ".sm-state"
     check: {statemachine: {state: practice}}
-  - title: Move the practice loop into it
+  - title: Move the practice list into it
     body: |
-      **Drag** the green *practice* loop header and drop it on the **+** inside the `practice` state.
-      (Every item in the flow can be dragged onto any + button.)
+      **Drag** the green **Trial list “practice”** by its title and drop it on the **+** inside the
+      `practice` phase. (Every screen and trial list can be dragged onto any **+**.)
     target: "#flow"
     check: {statemachine: {state_contains: {state: practice, item: practice}}}
-  - title: Add the main state
+  - title: Add the main phase
     body: |
-      Click **+ state** in the workflow box, name it `main`, and drag the *main* loop into it.
-    target: ".sm-states"
+      Click **Add a phase** at the bottom of the workflow, name it `main`, then drag the
+      **Trial list “main”** onto the **+** inside the new phase.
+    target: ".sm-add"
     check: {statemachine: {state_contains: {state: main, item: main}}}
   - title: Route by accuracy
     body: |
-      Select the **practice** state. Under **Routes**, the first route has a condition and a target:
+      Click the **practice** phase name to select it. Under **Then go to…**, click **Add a route**, then:
 
-      * condition: `$practice.accuracy >= 0.8` and go to **main**
-      * click **+ Route** and make the second one go to **practice** with an empty condition (that means "otherwise").
+      * route 1: **When** `$practice.accuracy >= 0.8`, **go to** **main**;
+      * route 2: leave **When** empty (that means *otherwise*), **go to** **practice (again)**.
 
-      Loops measure accuracy live: `$practice.accuracy` is the proportion correct in the practice block.
+      Trial lists measure accuracy while they run: `$practice.accuracy` is the proportion correct in
+      the practice block. The line under the formula says it in words. Press **Next** when both routes
+      are set.
     target: "#props"
     check: {statemachine: {route_contains: "accuracy"}}
+    advance: manual
   - title: Limit the repetitions
     body: |
-      Set **max_visits** to `3`. After three practice rounds the participant moves on even if they
-      haven't reached the criterion, so nobody gets stuck.
-    target: "#props"
+      Set **Repeat this phase at most** to `3`. After three practice rounds the participant moves on
+      even if they haven't reached the criterion, so nobody gets stuck. (In the file this is `max_visits: 3`.)
+    target: "#props [data-prop=max_visits]"
     check: {statemachine: {max_visits: true}}
   - title: See the diagram
     body: |
-      Click the workflow's header (**⚙ … workflow**). The top panel turns into a live diagram of the
-      states and routes. Solid arrows have conditions; dashed ones are the defaults.
+      Click **Open diagram** in the workflow's header. The canvas shows the phases and their routes:
+      solid arrows have conditions, dashed ones are the *otherwise* routes. Click a phase there to edit
+      it; **Done** goes back to the Storyboard. Press **Next** when you've had a look.
     target: ".fl-box.sm > .fl-head"
-    check: {selected: machine}
+    check: {view: diagram}
+    advance: manual
   - title: Test run
     body: |
-      Click **▶ Test run**. The virtual participant answers 90% correctly, so they usually pass first time.
-      In the session data, the `workflow.state` and `workflow.visit` columns show the path taken.
+      Open **Test** and click **Start test run**. The virtual participant answers about 90 % correctly,
+      so they usually pass the first time. In the session's data (**Data** › **Tests & tries**), the
+      `workflow.state` and `workflow.visit` columns show the path taken.
     target: "#btn-dryrun"
     check: {dry_run: true}

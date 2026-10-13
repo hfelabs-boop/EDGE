@@ -264,7 +264,11 @@ def build_experiment(answers: dict[str, Any] | None = None, notes: list[str] | N
     if has_correct:
         bad = sorted({i["correct"] for i in items} - set(keys) - {""})
         if bad:
-            raise WizardError(f"correct answer(s) {', '.join(bad)} are not among the response keys ({', '.join(keys)})")
+            def _and(xs: list[str]) -> str:
+                return xs[0] if len(xs) == 1 else ", ".join(xs[:-1]) + " and " + xs[-1]
+            raise WizardError(f"The correct key{'s' if len(bad) > 1 else ''} {_and(bad)} "
+                              f"{'are' if len(bad) > 1 else 'is'} not among the keys participants may press "
+                              f"({', '.join(keys)}). Add {'them' if len(bad) > 1 else 'it'} in step 2, How they respond.")
         nogo = [_text(i["stimulus"]) for i in items if not i["correct"]]
         if nogo:
             notes.append(f"No correct key for {', '.join(nogo[:5])}{' …' if len(nogo) > 5 else ''}: not pressing "
@@ -705,7 +709,8 @@ def estimate_experiment(exp) -> dict[str, Any]:
                     cols = loop_columns(n, exp.base_dir)
                     rows = _row_count(n, exp.base_dir) if cols is not None else 1
                     r = n.repeats if isinstance(n.repeats, (int, float)) else 1
-                    reps = max(rows, 1) * r
+                    empty = isinstance(n.conditions, list) and not n.conditions    # `conditions: []` runs 0 times
+                    reps = (0 if empty else max(rows, 1)) * r
                 t, s = count(n.children, mult * reps, worst)
                 has_inner_loop = any(isinstance(c, Loop) for c in n.children)
                 trials += t if has_inner_loop or t else 0
@@ -769,7 +774,8 @@ def _row_count(loop, base_dir) -> int:
 
 def _minutes(secs: float) -> str:
     if secs < 90:
-        return f"{max(int(round(secs)), 1)} seconds"
+        n = max(int(round(secs)), 1)
+        return f"{n} second" + ("" if n == 1 else "s")
     if secs >= 2 * 3600:
         return f"{secs / 3600:.1f} hours"
     return f"{round(secs / 60):.0f} minutes"

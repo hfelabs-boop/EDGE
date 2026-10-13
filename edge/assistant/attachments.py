@@ -1057,10 +1057,18 @@ PARTICIPANT_COLUMNS = re.compile(r"^(participant|subject|subj|session|sub|pid|pa
                                  r"\.(rt|corr|keys|onset|response)$", re.I)
 
 
+_IDENTITY_COLUMNS = re.compile(r"^(participant|subject|subj|sub|pid|participant_id|subject_id|session)$", re.I)
+_RESPONSE_COLUMNS = re.compile(r"(^|[._])(rt|corr|correct|accuracy|acc|keys?|response|resp|answer|rating|choice)$", re.I)
+
+
 def looks_like_participant_data(columns: list[str], rows: int) -> bool:
-    """A table that looks like recorded data (participant / session columns, *.rt, *.corr) with more than 20 rows:
-    the builder asks before sending it to an online service."""
-    return rows > 20 and sum(1 for c in columns if PARTICIPANT_COLUMNS.search(str(c))) >= 1
+    """A table that looks like recorded data: the builder asks before sending it to an online service.
+    A participant/subject column next to response-style columns (rt, response, correct …) is recorded data at any
+    length (a two-row export too); otherwise such columns with more than 20 rows."""
+    cols = [str(c) for c in columns]
+    if rows >= 1 and any(_IDENTITY_COLUMNS.search(c) for c in cols) and any(_RESPONSE_COLUMNS.search(c) for c in cols):
+        return True
+    return rows > 20 and sum(1 for c in cols if PARTICIPANT_COLUMNS.search(c)) >= 1
 
 
 def _structure(v: Any, depth: int = 0) -> str:

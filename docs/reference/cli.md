@@ -268,7 +268,7 @@ edge new [-h] template [directory]
 
 | argument | description |
 |---|---|
-| `template` | blank, freeview_eyetracking, eeg_oddball, timing_test, staircase, online_questionnaire |
+| `template` | blank, stroop, freeview_eyetracking, eeg_oddball, timing_test, staircase, online_questionnaire |
 | `directory` | where to create it |
 
 ## edge builder

@@ -23,7 +23,9 @@ function wizardDefaults() {
 }
 
 function openWizard() {
-  W.step = 0; W.a = wizardDefaults(); W.name = ""; W.nameTouched = false; W.paste = false;
+  // answers of a wizard closed without creating are kept until the page reloads
+  const kept = W.kept; W.kept = null; W.created = false; W.err = null;
+  W.step = kept ? kept.step : 0; W.a = kept ? kept.a : wizardDefaults(); W.name = kept ? kept.name : ""; W.nameTouched = !!kept?.name; W.paste = false;
   const stepper = h("ol", {class: "wiz-stepper", "aria-label": "Steps"});
   const page = h("div", {class: "wiz-page", role: "region", "aria-live": "polite"});
   const thumb = h("canvas", {class: "wiz-thumb", width: 480, height: 270, role: "img", "aria-label": "Preview of one trial"});
@@ -40,8 +42,10 @@ function openWizard() {
   Object.assign(W, {stepperEl: stepper, pageEl: page, thumb, est, nameIn, nameHint, backBtn: back, nextBtn: next, createBtn: createNow, preview});
   const p = ui.dialog({title: "New experiment: answer a few questions", icon: "checklist", size: "lg", body: root, buttons: [],
     initialFocus: "#wiz-name", onOpen: (dlg, close) => { W.dlg = dlg; W.close = close; dlg.classList.add("wizard-dialog"); }});
+  if (kept?.name) nameIn.value = kept.name;
   renderWizard();
-  p.then(() => { W.dlg = null; W.close = null; });
+  if (kept) { wizNameHint(); toast("Your answers from before are still here.", {action: {label: "Start over", run: () => { W.a = wizardDefaults(); W.step = 0; W.name = ""; nameIn.value = ""; renderWizard(); wizPreview(); wizNameHint(); }}}); }
+  p.then(() => { if (!W.created && W.a) W.kept = {a: W.a, name: W.name, step: W.step}; W.dlg = null; W.close = null; });
 }
 function wizSlug() { return ui.slug(W.name || W.a?.name || "") || "my_experiment"; }
 async function wizNameHint() {
@@ -82,6 +86,8 @@ function renderWizard() {
   };
   const title = h("h3", {class: "t-title-s wiz-title"}, ["What do participants see?", "How do participants respond?", "Timing", "Practice and feedback", "Blocks and texts", "Questionnaires and devices"][W.step]);
   els.push(title);
+  if (W.err) els.push(h("div", {class: "alert danger wiz-err", role: "alert"}, icon("error"), h("div", {}, W.err.text,
+    W.err.step !== undefined && W.err.step !== W.step ? h("div", {class: "actions"}, h("button", {type: "button", class: "btn sm", onclick: () => { W.step = W.err.step; W.err = null; renderWizard(); }}, `Go to step ${W.err.step + 1}, ${WIZ_STEPS[W.err.step]}`)) : null)));
   if (W.step === 0) {
     els.push(group("What participants see",
       radio("kind", () => { a.stimulus.kind = "word"; }, "Words", "Text on the screen", a.stimulus.kind === "word", "text"),
@@ -106,12 +112,21 @@ function renderWizard() {
         setTimeout(() => W.pageEl.querySelector("tbody tr:last-child input")?.focus(), 0); }}, icon("plus"), "Row"),
       h("button", {type: "button", class: "btn sm ghost", "aria-expanded": W.paste ? "true" : "false", onclick: () => { W.paste = !W.paste; renderWizard(); }}, icon("table"), "Paste rows from a spreadsheet")));
     if (W.paste) {
-      const ta = h("textarea", {class: "input mono", rows: 5, id: "wiz-paste", placeholder: "RED\tr\tcongruent\nGREEN\tg\tincongruent"});
+      const ta = h("textarea", {class: "input mono", rows: 5, id: "wiz-paste", placeholder: "RED\tr\tcongruent\nGREEN\tg\tincongruent",
+        // Escape cancels the paste only, never the whole wizard and its answers
+        onkeydown: (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); W.paste = false; renderWizard(); setTimeout(() => W.pageEl.querySelector("[aria-expanded]")?.focus(), 0); } }});
       els.push(h("div", {class: "field wiz-paste"}, h("label", {for: "wiz-paste"}, "Paste rows: stimulus, correct key, condition (tab or comma separated), one per line"), ta,
         h("div", {class: "wiz-btns"}, h("button", {type: "button", class: "btn sm primary", onclick: () => {
-          const rows = ta.value.split(/\r?\n/).filter((l) => l.trim()).map((l) => { const c = l.split(/\t|,/).map((x) => x.trim()); return {stimulus: c[0], correct: c[1] || "", condition: c[2] || ""}; });
+          let rows = ta.value.split(/\r?\n/).filter((l) => l.trim()).map((l) => { const c = l.split(/\t|,/).map((x) => x.trim()); return {stimulus: c[0], correct: c[1] || "", condition: c[2] || ""}; });
+          // a header row copied with the data ("stimulus  correct key  condition") is not a trial
+          const head = rows[0] && rows.length > 1 && (/^(stim(ulus|uli)?|words?|pictures?|images?|files?|sounds?|texts?|items?)$/i.test(rows[0].stimulus)
+            || /^(correct( ?key| ?answer| ?response)?|keys?|answers?|responses?)$/i.test(rows[0].correct)
+            || /^(conditions?|cond|types?|category|categories|groups?)$/i.test(rows[0].condition));
+          if (head) rows = rows.slice(1);
           if (!rows.length) { ta.focus(); return; }
-          a.stimulus.items = rows; W.paste = false; renderWizard(); toast(`Used ${countWord(rows.length, "row")}.`);
+          const before = a.stimulus.items.filter((it) => String(it.stimulus ?? "").trim()).length;
+          a.stimulus.items = rows; W.paste = false; W.err = null; renderWizard(); wizPreview();
+          toast(`${before ? `Replaced the ${countWord(before, "row")} with ` : "Used "}${countWord(rows.length, "pasted row")}${head ? " (left out the header row)" : ""}.`);
         }}, "Use these rows"), h("button", {type: "button", class: "btn sm ghost", onclick: () => { W.paste = false; renderWizard(); }}, "Cancel"))));
       setTimeout(() => $("#wiz-paste")?.focus(), 0);
     }
@@ -124,7 +139,7 @@ function renderWizard() {
       radio("resp", () => { r.kind = "rating"; }, "Rate on a scale", "e.g. 1 to 7", r.kind === "rating", "rating"),
       radio("resp", () => { r.kind = "none"; }, "No response", "Just watch or listen", r.kind === "none", "eye")));
     if (r.kind === "keys") {
-      const chips = typeof inspKeyChips === "function" ? inspKeyChips(r.keys || [], (v) => { r.keys = v; renderWizard(); wizPreview(); }, "wiz-keys")
+      const chips = typeof inspKeyChips === "function" ? inspKeyChips(r.keys || [], (v) => { r.keys = v; renderWizard(); wizPreview(); setTimeout(() => $("#wiz-keys")?.focus({preventScroll: true}), 0); }, "wiz-keys")
         : h("input", {class: "input", id: "wiz-keys", value: (r.keys || []).join(" "), oninput: (e) => { r.keys = e.target.value.split(/[\s,]+/).filter(Boolean); wizPreview(); }});
       els.push(h("div", {class: "field"}, h("label", {for: "wiz-keys"}, "Keys participants may press"), chips,
         h("div", {class: "help"}, "Click the box and press the keys. Key names: letters, digits, space, left, right, up, down, return.")));
@@ -271,7 +286,14 @@ async function createFromWizard() {
   let r;
   try { r = await api("/api/wizard", {answers: a, save_as: `${name}/${name}.yaml`}); }
   catch (e) { if (btn) { btn.removeAttribute("aria-busy"); btn.disabled = false; } return toast(e.message, {tone: "danger", ms: 8000}); }
-  if (!r.ok) { if (btn) { btn.removeAttribute("aria-busy"); btn.disabled = false; } return toast(r.error, {tone: "danger", ms: 8000}); }
+  if (!r.ok) {
+    if (btn) { btn.removeAttribute("aria-busy"); btn.disabled = false; }
+    // said inside the wizard, next to the answers (a toast would cover the buttons), with a way to the step that fixes it
+    W.err = {text: r.error, step: /keys participants may press|response keys/i.test(r.error || "") ? 1 : undefined};
+    renderWizard(); W.pageEl.querySelector(".wiz-err")?.scrollIntoView({block: "nearest"});
+    return;
+  }
+  W.created = true;
   W.close?.(null);
   clearDraft();
   await openFile(r.path, {silent: true});
@@ -318,11 +340,12 @@ async function startPlay(routine) {
   const frame = h("iframe", {id: "play-page", class: "hidden", title: "Web page of the experiment"});
   let est = null;
   try { est = !routine && typeof storyEstimate === "function" ? storyEstimate(() => {}) : null; } catch { est = null; }
-  const scope = routine ? ` · only “${routine}”, 5 trials` : est && est.trials ? ` · ${countWord(est.trials, "trial")}` : "";
+  P.inLoop = !!routine && typeof loopsAround === "function" && loopsAround(routine).length > 0;
+  const scope = routine ? ` · only “${routine}”${P.inLoop ? ", 5 trials" : ""}` : est && est.trials ? ` · ${countWord(est.trials, "trial")}` : "";
   const stop = h("button", {type: "button", class: "btn sm play-stop", onclick: stopPlay}, icon("stop"), "Stop");
   put(el, h("div", {class: "play-bar"},
     h("span", {class: "play-title"}, h("b", {}, `Trying “${S.exp.name || docName()}”`), h("span", {class: "play-scope"}, scope)),
-    h("span", {class: "play-hint"}, "Respond like a participant · Esc stops"), h("span", {class: "grow"}), stop),
+    h("span", {class: "play-hint"}, ((S.exp.devices || []).some((d) => ["tobii", "gazepoint", "sim_eyetracker", "mouse_gaze"].includes(d.type)) ? "Your mouse is your gaze · " : "") + "Respond like a participant · Esc stops"), h("span", {class: "grow"}), stop),
   h("div", {class: "play-stage"}, cv, frame),
   h("div", {class: "play-end", id: "play-end", hidden: ""}));
   const fit = () => {
@@ -338,6 +361,9 @@ async function startPlay(routine) {
   cv.addEventListener("mousemove", (e) => { if (!P._mv || Date.now() - P._mv > 40) { P._mv = Date.now(); playMouse(e, cv, null); } });
   document.addEventListener("keydown", playKey, true);
   document.addEventListener("keyup", playKey, true);
+  // a web page or survey screen has the keys: its bridge reports Esc (edge: "escape") from inside the frame
+  P.onMsg = (e) => { if (P.on && e.source === frame.contentWindow && e.data && e.data.edge === "escape") stopPlay(); };
+  window.addEventListener("message", P.onMsg);
   cv.focus({preventScroll: true});
   ui.announce(`Trying ${S.exp.name || docName()}. Respond like a participant. Escape stops.`);
   playLoop(cv, frame);
@@ -362,17 +388,35 @@ function playKey(e) {
 }
 
 async function playLoop(cv, frame) {
+  let fails = 0;
   while (P.on) {
     let f;
-    try { f = await api(`/api/play/frame?sound=${P.sound}`); } catch (e) { await new Promise((r) => setTimeout(r, 200)); continue; }
+    try { f = await api(`/api/play/frame?sound=${P.sound}`); fails = 0; }
+    catch (e) {
+      // a frame that carries the experiment's error ({running: false, error}) is the end, not a hiccup
+      if (e.data && e.data.running === false) f = e.data;
+      else if (++fails > 50) f = {running: false, error: "The builder stopped answering. Is it still running?"};
+      else { await new Promise((r) => setTimeout(r, 200)); continue; }
+    }
     if (!P.on) return;
     if (f.drawn) { P.last = f; drawPlayFrame(cv, f); }
+    if (f.trial !== undefined) playCounter(f);
     for (const snd of f.sounds || []) { P.sound = Math.max(P.sound, snd.id); playTrySound(snd); }
     if (f.page) { if (frame.dataset.src !== f.page) { frame.src = f.page; frame.dataset.src = f.page; } frame.classList.remove("hidden"); }
     else if (!frame.classList.contains("hidden")) { frame.classList.add("hidden"); frame.dataset.src = ""; cv.focus?.(); }
     if (!f.running) { finishPlay(f); return; }
     await new Promise((r) => requestAnimationFrame(r));
   }
+}
+
+/* The Try-it bar: "· trial 3 of 18" while a trial runs (the server counts them), the plan before and between. */
+function playCounter(f) {
+  const el = document.querySelector("#play .play-scope"); if (!el) return;
+  const total = f.trials || (P.routine && P.inLoop ? 5 : null), n = f.trial || 0;
+  const counter = f.in_trial && n ? (total && n <= total ? `trial ${n} of ${total}` : `trial ${n}`) : null;
+  const text = P.routine ? ` · only “${P.routine}”` + (P.inLoop ? `, ${counter || countWord(total || 5, "trial")}` : "")
+    : counter ? ` · ${counter}` : total ? ` · ${countWord(total, "trial")}` : "";
+  if (el.textContent !== text) el.textContent = text;
 }
 
 function cssColor(c, fallback) {
@@ -467,7 +511,9 @@ function finishPlay(f) {
   if (!P.on) return;
   P.on = false;
   document.removeEventListener("keydown", playKey, true); document.removeEventListener("keyup", playKey, true);
+  if (P.onMsg) { window.removeEventListener("message", P.onMsg); P.onMsg = null; }
   S.triedAt = Date.now();
+  EDGE.emit("tried", {at: S.triedAt, routine: P.routine, error: !!f.error});
   const el = $("#play");
   el.classList.add("ended");
   el.querySelector(".play-stop")?.remove();
@@ -492,9 +538,8 @@ function finishPlay(f) {
   end.replaceChildren(
     h("div", {class: "pe-main"},
       h("div", {class: "pe-head " + (f.error ? "bad" : res.aborted ? "stopped" : "ok")}, icon(f.error ? "error" : res.aborted ? "stop" : "success", "m"), h("b", {}, title), facts.length ? h("span", {class: "pe-facts"}, facts.join(" · ")) : null),
-      f.error ? h("pre", {class: "pe-err mono"}, f.error) : null,
-      f.error ? h("p", {class: "pe-note"}, "The Problems list and the documentation explain most messages. The last lines of the log:") : null,
-      f.error && (f.log || []).length ? h("details", {class: "pe-log"}, h("summary", {}, "Log"), h("pre", {class: "mono"}, (f.log || []).join("\n"))) : null,
+      f.error ? stoppedBox(f.problem, f.error, {bare: true, before: () => closePlay(false)}) : null,
+      f.error && S.mode === "expert" && (f.log || []).length ? h("details", {class: "pe-log"}, h("summary", {}, "Log"), h("pre", {class: "mono"}, (f.log || []).join("\n"))) : null,
       !f.error && res.note ? h("p", {class: "pe-note"}, "Times measured in a browser are approximate. Use Run with a participant for real data.") : null),
     h("div", {class: "pe-btns"}, again, res.data_dir ? data : null, back));
   end.hidden = false;
@@ -502,7 +547,7 @@ function finishPlay(f) {
   end.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closePlay(true); } });
   P.release = ui.trapFocus(el);
   setTimeout(() => again.focus(), 0);
-  ui.announce(`${title}${facts.length ? ". " + facts.join(", ") : ""}`);
+  ui.announce(`${title}${facts.length ? (/[.!?]$/.test(title) ? " " : ". ") + facts.join(", ") + "." : ""}`);
 }
 /* Close the overlay; "Back to editing" returns to the workspace, screen and selection you started from. */
 function closePlay(restore) {
@@ -561,7 +606,7 @@ function runDataDir() { return (RUN.info?.data_dir || (S.path ? S.path.replace(/
 function runBeforeView() {
   const exp = S.exp;
   if (!RUN.form || RUN.form.path !== S.path) {
-    RUN.form = {path: S.path, pid: "", ses: "1", simulate: false, fullscreen: (exp.settings?.window?.fullscreen ?? true) !== false, extra: {}};
+    RUN.form = {path: S.path, pid: "", ses: "1", simulate: false, fullscreen: !!(exp.settings?.window?.fullscreen ?? S.schema?.default_settings?.window?.fullscreen ?? false), extra: {}};
     RUN.info = null; RUN.anyway = false; RUN.verdict = null;
     if (S.path) api(`/api/next_participant?path=${encodeURIComponent(S.path)}`).then((info) => {
       RUN.info = info;
@@ -693,14 +738,15 @@ async function runStartSession() {
   if (S.proposal) return toast("Apply or discard the assistant's changes first");
   const F = RUN.form;
   if (!F.pid.trim()) { toast("Type a participant ID first."); $("#run-pid")?.focus(); return; }
-  if (!S.path || S.dirty) { if (!(await save())) return; }
   S.strict = true;
+  try { if (typeof validate === "function") await validate(); } catch { /* the last check stands */ }   // fresh, e.g. right after Undo
   if (typeof renderIssues === "function") renderIssues();
   const errors = (S.issues || []).filter((i) => i.level === "error");
-  if (errors.length && !RUN.anyway) {
+  if (errors.length && !RUN.anyway) {      // refuse before saving: a version that can't run is not written over the file
     if (typeof openProblems === "function") openProblems({reason: `Can't start yet: ${countWord(errors.length, "thing")} to fix.`});
     return;
   }
+  if (!S.path || S.dirty) { if (!(await save())) return; }
   RUN.starting = true; renderRunPage();
   try { await startRun(F.pid.trim(), F.ses.trim() || "1", !!F.simulate, F.fullscreen, F.extra); }
   finally { RUN.starting = false; if (S.ws === "run") renderRunPage(); }
@@ -799,8 +845,11 @@ function runAfterView() {
   const secs = r.endedAt && r.startedAt ? Math.max(1, Math.round((r.endedAt - r.startedAt) / 1000)) : null;
   const facts = [`participant ${r.participant}`, secs ? (secs < 90 ? `${secs} s` : `${Math.round(secs / 60)} min`) : null, trials != null ? countWord(trials, "trial") : null,
     saved ? runShortPath(saved.replace(/^Saved to /, "")) : null].filter(Boolean).join(" · ");
+  // it never started (no window, a device missing…): nothing was recorded, so no data to see and the same participant next time
+  const neverStarted = !saved && !(trials > 0) && (!!why || crash?.phase === "setup");
+  if (neverStarted) return runNotStartedView(why, crash, out);
   let banner;
-  if (why) banner = h("div", {class: "alert danger"}, icon("error"), h("div", {}, h("b", {}, "The session couldn't start"), why.replace("EDGE could not run the experiment: ", "")));
+  if (why) banner = h("div", {class: "alert danger"}, icon("error"), h("div", {}, h("b", {}, "The session couldn't start"), cap(builderWords(why.replace("EDGE could not run the experiment: ", "")))));
   else if (st.returncode === 0 && !stopped) banner = h("div", {class: "alert success"}, icon("success"), h("div", {}, h("b", {}, "Session saved"), facts));
   else if (stopped) banner = h("div", {class: "alert warning"}, icon("warning"), h("div", {}, h("b", {}, "Stopped early; the data so far is saved"), facts));
   else if (st.returncode !== undefined && st.returncode !== null) banner = h("div", {class: "alert danger"}, icon("error"), h("div", {}, h("b", {}, `The session ended with a problem (code ${st.returncode})`), facts));
@@ -809,13 +858,44 @@ function runAfterView() {
   const next = RUN.info?.suggestion && RUN.info.suggestion !== String(r.participant) ? RUN.info.suggestion : (/^\d+$/.test(String(r.participant)) ? String(+r.participant + 1).padStart(String(r.participant).length, "0") : "");
   const card = h("section", {class: "card pad run-after"}, banner,
     crash && typeof crashBox === "function" ? crashBox(crash) : null,
-    Array.isArray(checks) && checks.length ? h("p", {class: "t-small"}, "Measures vs expected: ", checks.map((c) => icon(c.ok === false ? "warning" : "check", c.ok === false ? "c-warn" : "c-ok"))) : null,
+    Array.isArray(checks) && checks.length ? h("div", {class: "run-checks t-small"}, h("span", {}, "Measures vs expected:"),
+      checks.map((c) => h("span", {class: "chip " + (c.ok === false ? "warning" : "success"), "data-tip": c.ok === false ? (c.notes || []).join("; ") : `${c.label || c.id}: as expected`},
+        icon(c.ok === false ? "warning" : "check"), c.label || c.id,
+        h("span", {class: "sr-only"}, c.ok === false ? `: ${(c.notes || []).join("; ")}` : ": as expected")))) : null,
     h("div", {class: "run-afterbtns"},
       h("button", {type: "button", class: "btn primary", "data-fkey": "run:data", onclick: () => { if (typeof D !== "undefined") { D.filter = "participants"; D.sel = null; D.pick = saved ? saved.replace(/^Saved to /, "").replace(/\\/g, "/").split("/").filter(Boolean).pop() : null; } runClear(); EDGE.go("data"); }}, icon("results"), "See the data"),
       h("button", {type: "button", class: "btn", "data-fkey": "run:next", onclick: () => { runClear(); RUN.form = null; renderRunPage(); }}, `Next participant${next ? ` (${next})` : ""}`),
       h("button", {type: "button", class: "btn ghost", onclick: () => { runClear(); EDGE.go("build"); }}, "Back to Build")),
     out.length ? h("details", {class: "run-logbox", open: why ? "" : null}, h("summary", {}, "Log"), h("pre", {class: "run-log mono"}, out.slice(-60).join("\n"))) : null);
   return h("div", {class: "run-page"}, runHead("Run with a participant"), card);
+}
+/* A session that failed before anything was recorded: one message in plain words, Try again with the same participant. */
+function runNotStartedView(why, crash, out) {
+  const raw = crash ? `${crash.type}: ${crash.message}` : String(why || "").replace("EDGE could not run the experiment: ", "");
+  const text = runStartWords(raw, crash);
+  const card = h("section", {class: "card pad run-after"},
+    h("div", {class: "alert danger", role: "alert"}, icon("error"), h("div", {}, h("b", {}, "The session couldn't start"), h("p", {}, text),
+      h("p", {class: "t-small t-2"}, "Nothing was recorded, so the next try uses the same participant."),
+      S.mode === "expert" ? h("details", {}, h("summary", {}, "Details"), h("pre", {class: "mono errtext"}, builderWords(raw))) : null)),
+    h("div", {class: "run-afterbtns"},
+      h("button", {type: "button", class: "btn primary", "data-fkey": "run:again", onclick: () => { runClear(); renderRunPage(); }}, icon("refresh"), "Try again"),
+      h("button", {type: "button", class: "btn", onclick: () => (typeof supportBundle === "function" ? supportBundle() : null)}, icon("package"), "Make a support bundle"),
+      h("button", {type: "button", class: "btn ghost", onclick: () => { runClear(); EDGE.go("build"); }}, "Back to Build")),
+    S.mode === "expert" && out.length ? h("details", {class: "run-logbox"}, h("summary", {}, "Log"), h("pre", {class: "run-log mono"}, out.slice(-60).join("\n"))) : null);
+  return h("div", {class: "run-page"}, runHead("Run with a participant"), card);
+}
+/* Why a session (or a device) couldn't start, as a sentence (§4.1 #6): the raw text only in Expert mode. */
+function runStartWords(raw, crash) {
+  const t = String(raw || "");
+  if (/NoSuchDisplay|cannot connect to "?None|no screen is available|xlib|\bDISPLAY\b/i.test(t))
+    return "No screen is available to open the experiment window on (for example over a remote connection). Run it on the computer with the monitor, or check it here with Test run or Try it.";
+  if (/Gazepoint|tobii|eye ?tracker/i.test(t) && /refused|cannot reach|not found|no .*found|timed? ?out/i.test(t))
+    return "The eye tracker isn't answering. Is its software running (for example Gazepoint Control) and the tracker connected?";
+  if (/serial|ttyS|ttyUSB|COM\d/i.test(t))
+    return "The trigger box (serial port) can't be opened. Is it plugged in, and is the port in Devices the right one?";
+  if (/permission/i.test(t)) return "EDGE isn't allowed to open something it needs (a file or a device). " + cap(builderWords(t.replace(/^\w+Error:\s*/, "")));
+  const hint = crash?.hint && !/edge validate|support-bundle/.test(crash.hint) ? " " + cap(builderWords(crash.hint)) : "";
+  return cap(builderWords(t.replace(/^\w+(Error|Exception):\s*/, ""))) + hint;
 }
 /* "/home/…/stroop/data/007_1_…" -> "stroop/data/007_1_…" (the folder next to the experiment, as people know it). */
 function runShortPath(p) {

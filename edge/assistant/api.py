@@ -20,7 +20,7 @@ from .errors import AssistantError, error
 from .jobs import AssistantService, Busy
 
 GET_ROUTES = {"status", "models", "preview", "suggest_path", "job", "conversation"}
-POST_ROUTES = {"config", "consent", "test", "attach", "detach", "ask", "cancel", "discard", "applied"}
+POST_ROUTES = {"config", "consent", "test", "list_models", "attach", "detach", "ask", "cancel", "discard", "applied"}
 
 
 _SERVICE_LOCK = threading.Lock()
@@ -108,6 +108,29 @@ def r_models(app: Any, q: dict[str, str], body: Any) -> tuple[Any, int]:
         return {"provider": name, "models": models, "error": None}, 200
     except AssistantError as e:
         return {"provider": name, "models": [], "error": e.to_dict()}, 200
+
+
+def r_list_models(app: Any, q: dict[str, str], body: Any) -> tuple[Any, int]:
+    """The models at the address and with the key typed in the settings dialog, before they are saved (Refresh
+    must list what the researcher is setting up, not the saved provider). Same key rule as Test connection."""
+    from .config import validate_patch
+    from .providers import get_provider
+    if not isinstance(body, dict):
+        raise BadRequest("the request body must be a JSON object")
+    name = _provider_name(body)
+    settings = body.get("settings") or {}
+    if settings:
+        settings = validate_patch({name: settings})[name]
+    cfg = load_config()
+    try:
+        prov = get_provider(cfg, name, settings=settings)
+        if name in CLOUD and not prov.key and resolve_key(cfg, name)[0]:
+            raise error("not_configured", provider=name, message="Type the API key again to list the models at this address.",
+                        hint="A stored key is only ever sent to the address it was saved with.")
+        models = [m.to_dict() for m in prov.list_models()]
+        return _redacted({"provider": name, "models": models, "error": None}), 200
+    except AssistantError as e:
+        return _redacted({"provider": name, "models": [], "error": e.to_dict()}), 200
 
 
 def _redacted(obj: Any) -> Any:

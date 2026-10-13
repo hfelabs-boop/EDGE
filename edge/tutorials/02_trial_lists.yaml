@@ -3,58 +3,85 @@ order: 2
 title: Trial lists, randomization and counterbalancing
 level: beginner
 minutes: 8
-learn: conditions tables, factorial designs, order types, sequence constraints
+learn: trial lists, every combination (factorial designs), order, limits on runs in a row
 description: >
-  Control which trials participants see and in what order: random vs full random, limits on
-  repetitions in a row, factorial designs and counterbalancing by participant.
+  Control which trials participants see and in what order: shuffled each time or across repeats,
+  limits on the same value in a row, every combination of your factors, and counterbalancing by
+  participant number.
 start: tutorial_loops
 mode: simple
 steps:
-  - title: Select the loop
+  - title: Select the trial list
     body: |
-      This experiment already has a Stroop trial inside a loop called **trials**. Click the loop's
-      green header in the **Flow** strip to select it.
+      This experiment already has a Stroop screen inside a trial list called **trials** (the green
+      frame in the **Storyboard**). Click the frame's title, **Trial list “trials”**, to select it.
+      Properties now shows how the list runs.
     target: "#flow"
     check: {selected: loop}
   - title: Shuffle across repeats
     body: |
-      Set **repeats** to `3` and **order** to `fullrandom`.
+      In Properties, set **Repeat the list** to `3`, then choose **Shuffled across repeats** under
+      **Order**.
 
-      * `random` shuffles each repeat separately (you see all rows once before any repeats).
-      * `fullrandom` shuffles all repeats together.
-      * `latin_square` and `counterbalance` order the rows by participant number.
-    target: "#props"
+      * **Shuffled each time** shuffles each repeat separately: every row is shown once before any row
+        comes back.
+      * **Shuffled across repeats** shuffles all repeats together.
+      * **Latin square by participant number** and **Counterbalanced by participant number** give each
+        participant a different, planned order.
+    target: "#props [data-prop=order]"
     check: {loop: {order: fullrandom}}
   - title: Avoid long runs of the same colour
     body: |
-      Random orders sometimes put the same ink colour five times in a row. Set **max_repeat** to
+      A random order sometimes puts the same ink colour five times in a row. Open **More options** at
+      the bottom of Properties and, under **No more than N in a row**, type `2` next to **ink**.
 
-      `{"ink": 2}`
-
-      and EDGE builds orders where the same ink never appears more than twice in a row.
-      (Per value works too: `{"kind": {"deviant": 1}}` keeps deviants apart.)
+      EDGE now builds orders where the same ink never comes more than twice in a row.
     target: "#props"
     check: {loop: {has: max_repeat}}
-  - title: Try a factorial design
+  - title: Open the trial list
     body: |
-      Change **conditions source** to `factorial`. Instead of typing every row, you list each factor
-      with its levels, and EDGE builds every combination. For example
-      `{"word": ["RED", "GREEN"], "ink": ["red", "green"]}` gives 4 rows.
+      Click **Open list** (in Properties or in the frame's header). The trial list fills the canvas:
+      one row per trial, one column per value that changes.
+    target: "#flow"
+    check: {view: list}
+  - title: Every combination
+    body: |
+      Instead of typing every row, you can list each factor with its levels and let EDGE build every
+      combination. Choose **Every combination** under **Rows come from**: each column becomes a factor
+      with its levels as chips, and the line under them counts the rows (3 × 3 × 3 = 27).
 
-      (For this Stroop you'd also need a `key` column, so switch back to `table` afterwards if you like.)
-    target: "#props"
+      Have a look, then press **Next**.
+    target: "#list-editor"
     check: {loop: {conditions_kind: factorial}}
-  - title: Conditions from a spreadsheet
+    advance: manual
+  - title: Back to your typed rows
     body: |
-      For real studies, trial lists usually live in a file. Choose **conditions source** = `file`
-      and type a CSV, TSV or XLSX name next to your experiment. The builder shows a preview of the
-      rows.
+      In this Stroop the right key depends on the ink colour, so not every combination makes sense
+      (RED in red ink with the key for blue would be scored wrong). Press **Undo** (Ctrl+Z) to go
+      back to your typed rows.
+
+      Don't remove the `key` column instead: the key press item reads its correct answer from it.
+    target: "#list-editor"
+    check: {loop: {id: trials, conditions_kind: list, columns: [key]}}
+  - title: Trial lists from a spreadsheet
+    body: |
+      For real studies, trial lists usually live in a file. **A file** under **Rows come from** picks a
+      CSV, TSV or Excel file from the experiment's folder (or uploads one); the grid shows its rows,
+      read-only. **Copy into the experiment** turns a file's rows into typed rows you can edit here.
 
       Press **Next** when you've had a look.
-  - title: Check what participants will see
+    target: "#list-editor"
+  - title: Test run
     body: |
-      Click **▶ Test run**, then open the **Data** tab and tick *include test runs*. The trial table shows
-      the order this virtual participant got, and the `trials.row` column tells you which row of the
-      list each trial used.
+      Open **Test** and click **Start test run**. A virtual participant does every trial in a few
+      seconds.
     target: "#btn-dryrun"
     check: {dry_run: true}
+  - title: See the order participants got
+    body: |
+      Open **Data**, choose **Tests & tries** and click the newest session. The **Trials** table shows
+      the order this virtual participant got; the `trials.row` column says which row of the list each
+      trial used.
+    target: "[data-tab=data]"
+    check: {workspace: data}
+    advance: manual

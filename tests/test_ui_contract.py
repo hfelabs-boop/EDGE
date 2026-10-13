@@ -11,8 +11,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 STATIC = Path(__file__).resolve().parent.parent / "edge" / "builder" / "static"
 HTML = (STATIC / "index.html").read_text()
 
@@ -163,9 +161,8 @@ NATIVE = re.compile(r"(?<![\w.$])(prompt|confirm|alert)\s*\(|\bwindow\s*\.\s*(pr
 EMOJI = re.compile("[\U0001F300-\U0001FAFF☀-➿]")
 
 
-@pytest.mark.xfail(reason="P1, P4a and P4b replace the remaining native dialogs; the lead makes this required (SPEC §7.8)",
-                   strict=False)
 def test_no_native_dialogs():
+    """Required since integration (SPEC §7.8): every package uses ui.dialog / ui.confirm / ui.prompt."""
     hits = []
     for f in _js_files():
         for n, line in enumerate(f.read_text().splitlines(), 1):
@@ -174,15 +171,14 @@ def test_no_native_dialogs():
     assert not hits, hits
 
 
-@pytest.mark.xfail(reason="the owning packages replace emoji with icons; the lead makes this required (SPEC §7.8)",
-                   strict=False)
 def test_no_emoji_in_static_files():
+    """Required since integration (SPEC §7.8): icons come from icons.js, never emoji or dingbat glyphs."""
     hits = [f"{f.name}:{n}" for f in sorted(STATIC.iterdir()) if f.suffix in (".js", ".css", ".html")
             for n, line in enumerate(f.read_text().splitlines(), 1) if EMOJI.search(line)]
     assert not hits, hits
 
 
-# P1 makes its own files pass the native-dialog and emoji checks now (the lead makes the whole-folder checks required)
+# P1's own files (kept as a narrower check; the whole-folder checks above are required too)
 P1_FILES = ["app.js", "ui.js", "icons.js", "index.html", "style.css", "components.css", "tokens.css"]
 
 
@@ -211,3 +207,66 @@ def test_shell_keeps_the_redesign_hooks():
     for item in ("btn-import", "btn-versions", "btn-bundle", "btn-new", "btn-open"):
         tag = re.search(rf'<button id="{item}"[^>]*>', menu).group(0)
         assert "expert-only" not in tag, item
+
+
+def test_every_tutorial_check_of_the_builder_is_a_known_check_type():
+    """A tutorial step may only use checks the builder evaluates (TUTORIAL_CHECKS) and that
+    edge.help.validate_tutorial accepts (CHECK_TYPES): the two lists name the same keys (UI spec §6.2)."""
+    from edge.help import CHECK_TYPES
+    app = (STATIC / "app.js").read_text()
+    block = app[app.index("const TUTORIAL_CHECKS = {"):]
+    block = block[:block.index("\n};")]
+    keys = set(re.findall(r"^  ([a-z_]+):", block, re.M))
+    assert keys == CHECK_TYPES, (keys ^ CHECK_TYPES)
+
+
+# ---------------------------------------------------------------- P5: tutorials, docs, screenshots (SPEC §6.1, §7.2)
+ROOT = STATIC.parents[2]
+DOCS = ROOT / "docs"
+
+
+def _tutorials():
+    from edge.help import tutorials
+    return tutorials()
+
+
+def test_every_tutorial_target_names_the_redesigned_ui():
+    """Targets point at the new UI (§6.1): no retired container (#console, #left, #right, #routine-tabs, the old
+    tabs), and an id the coach cannot reveal must be one the page always shows or one a step before it opens."""
+    retired = ["#console", "#left", "#right", "#layout", "#topbar", "#routine-tabs", "#routine-area", "#flow-area",
+               "#tab-issues", "#tab-results", "#tab-hardware", "#tab-data", "#btn-run", "#issue-count"]
+    for tut in _tutorials():
+        for st in tut["steps"]:
+            target = st.get("target") or ""
+            assert not any(re.search(re.escape(r) + r"(?![\w-])", target) for r in retired), (tut["id"], target)
+
+
+def test_the_assistant_tutorial_works_without_a_model():
+    """§7.2 P5: tutorial 10's required steps only open the panel, the settings and the privacy note; the one step
+    that needs a model (assistant_applied) says to skip it, so the tutorial can be finished offline."""
+    tut = next(t for t in _tutorials() if t["id"] == "assistant_basics")
+    checks = [st.get("check") or {} for st in tut["steps"]]
+    assert {"assistant_open": True} in checks
+    needs_model = [st for st in tut["steps"] if "assistant_applied" in (st.get("check") or {})]
+    assert len(needs_model) == 1 and "skip" in needs_model[0]["body"].lower()
+    assert all(set(c) <= {"assistant_open", "assistant_applied"} for c in checks), "a step needs more than the panel"
+    targets = " ".join(st.get("target") or "" for st in tut["steps"])
+    for stable in ("#assistant-toggle", "#assistant-settings", "#assistant-input"):     # §7.4 stable ids
+        assert stable in targets, stable
+
+
+def test_every_tutorial_has_a_playwright_run():
+    """tools/ui_check/tutorials.js plays every tutorial end to end; it must know each one (by id)."""
+    runner = (ROOT / "tools" / "ui_check" / "tutorials.js").read_text()
+    for tut in _tutorials():
+        assert re.search(rf"^  {tut['id']}: \[", runner, re.M), f"tools/ui_check/tutorials.js doesn't play {tut['id']}"
+
+
+def test_documentation_screenshots_are_1440_by_900():
+    """§7.2 P5: docs/*.png are taken by tools/ui_check/screenshots.js at 1440 × 900 (light)."""
+    import struct
+    for name in ("builder", "wizard", "workflow", "survey_editor", "assistant"):
+        data = (DOCS / f"{name}.png").read_bytes()[:24]
+        assert data[:8] == b"\x89PNG\r\n\x1a\n", name
+        assert struct.unpack(">II", data[16:24]) == (1440, 900), name
+        assert name in (ROOT / "tools" / "ui_check" / "screenshots.js").read_text(), name

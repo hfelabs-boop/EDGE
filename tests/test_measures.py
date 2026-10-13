@@ -199,6 +199,10 @@ def test_monitor_reports_progress_measures_and_devices(tmp_path, monkeypatch, ca
     assert max(t["n"] for t in trials) == 18 == end["trials"]
     assert any("rt" in t["values"] for t in trials) and any(t["factors"].get("congruent") is not None for t in trials)
     assert end["running"]["accuracy"]["n"] == 18 and not end["aborted"]
+    # the after-session "Measures vs expected": one entry per measure (factors left out), with what was off
+    assert [m["id"] for m in end["measures"]] == ["rt", "accuracy"]
+    assert all({"ok", "notes", "value", "n", "label"} <= set(m) for m in end["measures"])
+    assert all(m["ok"] == (not m["notes"]) for m in end["measures"])
 
 
 def test_monitor_device_health_flags_silent_streams(tmp_path):
@@ -221,6 +225,28 @@ def test_monitor_device_health_flags_silent_streams(tmp_path):
     Sess.devices["amp"].n_samples["s"] = 500
     h = m.device_health()["amp"]["streams"]["s"]
     assert h["samples"] == 500 and h["status"] in ("ok", "low")
+
+
+def test_monitor_end_says_which_measures_were_not_as_expected():
+    from edge.monitor import Monitor
+
+    class Sess:
+        devices = {}
+        data = None
+        exp = type("E", (), {"measures": [
+            {"id": "rt", "column": "resp.rt", "role": "outcome", "summary": "mean", "expect": [0.1, 2.0]},
+            {"id": "acc", "column": "resp.corr", "role": "outcome", "summary": "mean"},
+            {"id": "cond", "column": "cond", "role": "factor"}]})()
+
+    events = []
+    m = Monitor(Sess(), emit=events.append)
+    for i, rt in enumerate([0.5, 0.6, 3.5]):
+        m.trial({"trial_key": f"t={i}", "routine": "trial", "loop": "t", "cond": "a", "resp.rt": rt, "resp.corr": 1})
+    m.end({"aborted": False})
+    got = {c["id"]: c for c in events[-1]["measures"]}
+    assert set(got) == {"rt", "acc"}                          # factors are not checked
+    assert got["acc"]["ok"] and not got["acc"]["notes"]
+    assert not got["rt"]["ok"] and "outside the expected" in got["rt"]["notes"][0]
 
 
 def test_stop_file_ends_the_session_and_keeps_the_data(tmp_path, monkeypatch):

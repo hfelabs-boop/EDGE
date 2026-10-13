@@ -3,53 +3,58 @@ order: 4
 title: Eye tracking, gaze areas and event markers
 level: intermediate
 minutes: 10
-learn: devices, gaze_roi components, markers, synchronization report
+learn: devices, gaze areas of interest, event markers, the synchronisation report
 description: >
   Add an eye tracker, measure where people look with gaze areas of interest, mark stimulus onsets
-  for every device, and read the synchronization report.
+  for every device, and read the synchronisation report.
 start: tutorial_gaze
 mode: expert
 steps:
   - title: Add an eye tracker
     body: |
-      Click **+** next to **Devices** (left panel) and choose **sim_eyetracker**: a simulated tracker,
-      perfect for building at your desk. For real hardware you'd pick **tobii** or **gazepoint**; the
-      rest of the experiment stays the same.
+      In the **Devices** tab on the left, click **Add device**. Choose **Simulated (for testing)** ›
+      **Simulated eye tracker** (`sim_eyetracker`) and press **Add device**: a simulated tracker, perfect
+      for building at your desk. For real hardware you'd pick **Tobii Pro** or **Gazepoint** under
+      **Eye tracker**; the rest of the experiment stays the same.
     target: "#btn-add-device"
     check: {device: sim_eyetracker}
-  - title: Open the trial
+  - title: Open the screen
     body: |
-      Click the **look** screen in the Flow strip. It shows a red and a blue square for 4 seconds.
+      Double-click the **look** card in the Storyboard (or click it and press Enter). It shows a red and
+      a blue square for 4 seconds.
     target: "#flow"
+    avoid: "#flow .scard[data-rid=look]"
     check: {selected: routine}
   - title: Add a gaze area of interest
     body: |
-      Click **Where they look** on the left (under *Eye tracking*). In Properties, set **target** to
-      `left_box`. EDGE now records whether, when and how long the participant looked at the left square.
+      Click **Where they look** under **Eye tracking** on the left (`gaze_roi`). In Properties, set
+      **Area of** (`target`) to `left_box`. EDGE now records whether, when and how long the participant
+      looked at the left square.
     target: ".pal-item[data-type=gaze_roi]"
     check: {component: {routine: look, type: gaze_roi, prop: target, value: left_box}}
   - title: A second area
     body: |
-      Add another **Where they look** with **target** `right_box`.
+      Add another **Where they look** with **Area of** `right_box`.
     target: ".pal-item[data-type=gaze_roi]"
     check: {component: {routine: look, type: gaze_roi, prop: target, value: right_box}}
   - title: Mark the stimulus onset
     body: |
-      Select **left_box** and set **marker** to `squares_on`. At the exact screen flip that shows the
-      squares, EDGE sends this event to every device: TTL triggers, LSL, the eye tracker's own data
-      file. It's written to the event log too.
-    target: "#props"
+      Click **left_box** on the timeline and set **Event marker** (`marker`) to `squares_on`. At the
+      exact screen refresh that shows the squares, EDGE sends this event to every device: TTL triggers,
+      LSL, the eye tracker's own data file. It's written to the event log too.
+    target: "#timeline"
     check: {component: {routine: look, type: shape, prop: marker, exists: true}}
   - title: Send markers to LabRecorder too
     body: |
-      Add a device of type **lsl_markers**. Anything recording Lab Streaming Layer (LabRecorder, an EEG
-      system) then receives the same markers with matching timestamps.
+      **Add device** again and choose **Marker stream** › **LSL marker stream (LabRecorder)**
+      (`lsl_markers`). Anything recording Lab Streaming Layer (LabRecorder, an EEG system) then receives
+      the same markers with matching timestamps.
     target: "#btn-add-device"
     check: {device: lsl_markers}
-  - title: Test run and read the sync report
+  - title: Test run and read the synchronisation report
     body: |
-      Click **▶ Test run** and look at **Streams & synchronization** in the results. The simulated tracker
-      runs on its own drifting clock, and EDGE recovers the drift. The *triggers* column shows that
-      every marker arrived, and *alignment* shows how precisely.
+      Open **Test** and click **Start test run**, then look at **Streams & synchronisation** under
+      **Last test run**. The simulated tracker runs on its own drifting clock, and EDGE recovers the
+      drift. The *triggers* column shows that every marker arrived, and *alignment* shows how precisely.
     target: "#btn-dryrun"
     check: {dry_run: true}

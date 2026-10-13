@@ -26,7 +26,7 @@ const FIELD_LABELS = {start: "Starts at", duration: "Lasts", end_routine: "Ends 
 
 const SCHED_FIELDS = {
   start: {type: "float", default: 0, unit: "s", help: "Seconds after the screen appears."},
-  duration: {type: "float", default: null, unit: "s", placeholder: "until the end", help: "Empty: until the screen ends."},
+  duration: {type: "float", default: null, unit: "s", placeholder: "to the end", help: "Empty: until the screen ends."},
   start_after: {type: "component", default: null, help: "Start when this item stops."},
   start_if: {type: "expr", default: null, help: "Start when this becomes true."},
   stop_if: {type: "expr", default: null, help: "Stop when this becomes true."},
@@ -95,7 +95,7 @@ const inspCatClass = (type) => {
 const inspTypeIcon = (type) => (typeof TYPE_ICON !== "undefined" && TYPE_ICON[type]) || "screen";
 const inspDeviceIcon = (d) => (typeof deviceIcon === "function" ? deviceIcon(d) : (typeof DEVICE_ICON !== "undefined" && DEVICE_ICON[d?.type]) || "device");
 const inspDeviceWords = (d) => (typeof deviceLabel === "function" ? deviceLabel(d) : d.type);
-const inspInWords = (v) => { try { return typeof exprInWords === "function" ? exprInWords(v) : ""; } catch { return ""; } };
+const inspInWords = (v, kind) => { try { return typeof exprInWords === "function" ? exprInWords(v, kind) : ""; } catch { return ""; } };
 const inspPlural = (n, one, many) => `${n} ${n === 1 ? one : many || one + "s"}`;
 /* Deletions happen at once, with an undo toast (SPEC §2.9). */
 function inspUndoToast(msg) {
@@ -167,8 +167,8 @@ function renderSettings(el) { inspOverview(el || $("#props")); }
 function inspHead({tile, ic, over, overClass = "", key = "", name, rename = null, help = null, menu = null}) {
   const title = $("#props-title");
   const nameEl = rename
-    ? h("button", {type: "button", class: "insp-name t-title-m", title: `Rename (F2)`, "aria-label": `${name}. Rename`, "data-fkey": "head:rename", onclick: rename}, name)
-    : h("div", {class: "insp-name t-title-m"}, name);
+    ? h("button", {type: "button", class: "insp-name t-title-m", title: `${name} · Rename (F2)`, "aria-label": `${name}. Rename`, "data-fkey": "head:rename", onclick: rename}, name)
+    : h("div", {class: "insp-name t-title-m", title: name}, name);
   const menuBtn = menu ? h("button", {type: "button", class: "btn ghost icon sm", "aria-label": "More actions", "data-tip": "More actions", "data-tip-pos": "end",
     "aria-haspopup": "menu", "aria-expanded": "false", "data-fkey": "head:menu", onclick: (e) => ui.menu(e.currentTarget, menu(), {placement: "bottom-end"})}, icon("more")) : null;
   title.replaceChildren(...[
@@ -224,7 +224,7 @@ function parseVal(type, raw) {
   if (typeof raw === "string" && isExpr(raw)) return raw;
   switch (type) {
     case "float": { const n = Number(String(raw).replace(",", ".")); return isNaN(n) ? raw : n; }
-    case "int": { const n = parseInt(raw, 10); return isNaN(n) ? raw : n; }
+    case "int": { const n = Number(String(raw).trim().replace(",", ".")); return Number.isInteger(n) ? n : raw; }
     case "list": {
       const s = String(raw).trim();
       if (s.startsWith("[")) { try { return JSON.parse(s); } catch { return s; } }
@@ -271,7 +271,7 @@ function field(name, p, value, onChange, opts = {}) {
   const cols = sourceable ? columnsForScreen(rid) : [];
   const col = inspBoundColumn(value, cols);
   const pendingFormula = INSP.formulaFor === `${JSON.stringify(S.sel)}|${prop}`;
-  let source = type === "expr" || type === "code" ? "formula" : !isExpr(value) ? (pendingFormula ? "formula" : "fixed") : col ? "column" : "formula";
+  let source = type === "expr" || type === "code" ? "formula" : !isExpr(value) ? (pendingFormula ? "formula" : "fixed") : col && !pendingFormula ? "column" : "formula";
   if (type === "bool" && !isExpr(value)) source = "fixed";
   const commitValue = (v) => { INSP.formulaFor = null; if (JSON.stringify(v ?? null) !== JSON.stringify(value ?? null)) inspLater(() => onChange(v)); };
   const baseVal = opts.baseValue;
@@ -300,6 +300,12 @@ function field(name, p, value, onChange, opts = {}) {
   const commitText = (raw) => {
     if (type === "expr" && raw && !raw.trim().startsWith("$")) raw = "$" + raw.trim();
     const v = source === "formula" && type !== "expr" && type !== "code" ? (raw.trim() ? (raw.trim().startsWith("$") ? raw.trim() : "$" + raw.trim()) : null) : parseVal(type, raw);
+    // a number field never stores text: "0,3s" or "half a second" would only fail when the experiment runs
+    if ((type === "float" || type === "int") && typeof v === "string" && !isExpr(v)) {
+      toast(`“${raw.trim()}” isn't ${type === "int" ? "a whole number" : "a number"}. Type ${type === "int" ? "e.g. 3" : "e.g. 0.3"}, or choose Formula ($…) for a value that changes.`, {tone: "warning", ms: 7000});
+      inspLater(() => renderProps());
+      return;
+    }
     commitValue(v);
   };
   if (type === "survey" && typeof surveySummary === "function") {
@@ -316,9 +322,17 @@ function field(name, p, value, onChange, opts = {}) {
         onchange: (e) => commitText(e.target.value)});
     if (type !== "code") {
       const say = h("div", {class: "say"});
-      const upd = () => { const v = input.value.trim(); const w = v ? inspInWords(v.startsWith("$") ? v : "$" + v) : ""; say.textContent = w && w !== v ? `In words: ${w}.` : ""; say.hidden = !say.textContent; };
-      input.addEventListener("input", upd); upd();
-      input = h("div", {class: "expr-wrap"}, input, say);
+      const field = input;     // the real <input>/<textarea>: `input` becomes the wrapper below
+      const kind = type === "expr" ? "condition" : "value";
+      const upd = () => {
+        const v = String(field.value || "").trim();
+        let w = v ? inspInWords(v.startsWith("$") ? v : "$" + v, kind) : "";
+        if (w === "a computed value") w = "";
+        if (w && kind === "value") w = `${name === "text" ? "Shows" : "Uses"} ${w}`;
+        say.textContent = w && w !== v ? `In words: ${w}.` : ""; say.hidden = !say.textContent;
+      };
+      field.addEventListener("input", upd); upd();
+      input = h("div", {class: "expr-wrap"}, field, say);
     }
   } else if (!opts.readonlyClick && typeof stageInput === "function" && (input = stageInput(name, p, value, onChange, {...opts, id}))) {
     // a picker, slider, colour swatches, X/Y or the file card (widgets.js)
@@ -366,7 +380,7 @@ function field(name, p, value, onChange, opts = {}) {
 
 /* The value-source token and its menu (W8): same on every trial · from the trial list ▸ · new column… · formula. */
 function inspSourceButton({name, prop, label, type, p, value, col, cols, source, rid, onChange, commitValue}) {
-  const words = {fixed: "Fixed", column: "Trial list", formula: "Formula"}[source];
+  const words = {fixed: "Same on every trial", column: "Trial list", formula: "Formula"}[source];
   const b = h("button", {type: "button", class: "srcbtn " + source, "aria-haspopup": "menu", "aria-expanded": "false", "data-fkey": "src:" + prop,
     "aria-label": `${label}: ${source === "fixed" ? "the same on every trial" : source === "column" ? `from the trial list column “${col}”` : "a formula"}. Change where the value comes from`,
     title: "Where the value comes from"},
@@ -383,14 +397,36 @@ function inspSourceButton({name, prop, label, type, p, value, col, cols, source,
         const c = await addTrialColumn(name, isExpr(value) ? "" : value);
         if (c) onChange("$" + c);
       }},
+      ...inspFeedbackPreset({name, type, rid, commitValue}),
       {label: "Formula ($…)", checked: source === "formula", run: () => {
         if (source === "formula") return;
-        if (value === null || value === undefined || value === "") { INSP.formulaFor = `${JSON.stringify(S.sel)}|${prop}`; renderProps(); return; }
+        // empty, or already a formula such as $word (a column): edit it as a formula, nothing changes until typed
+        if (value === null || value === undefined || value === "" || isExpr(value)) { INSP.formulaFor = `${JSON.stringify(S.sel)}|${prop}`; renderProps(); return; }
         commitValue(typeof value === "number" ? "$" + value : "$" + JSON.stringify(typeof value === "string" ? value : value));
       }}];
     ui.menu(b, items, {placement: "bottom-end"});
   };
   return b;
+}
+/* The response that a feedback screen is about: the last response with a correct answer at or before this screen. */
+function inspScoredResponse(rid) {
+  const order = typeof routineInFlowOrder === "function" ? routineInFlowOrder() : Object.keys(S.exp.routines);
+  const upto = order.includes(rid) ? order.slice(0, order.indexOf(rid) + 1) : order;
+  let hit = null;
+  for (const r of upto) for (const c of S.exp.routines[r]?.components || [])
+    if (["keyboard", "mouse", "device_response"].includes(c.type) && c.correct !== undefined && c.correct !== null && c.correct !== "") hit = c.id;
+  return hit;
+}
+/* "Depends on whether the response was correct": Correct!/Wrong! feedback without typing a formula. */
+function inspFeedbackPreset({name, type, rid, commitValue}) {
+  const isText = name === "text" && (type === "str" || type === "text");
+  const isColour = type === "color" || /colou?r$|^fill$/.test(name);
+  if (!isText && !isColour) return [];
+  const resp = inspScoredResponse(rid);
+  if (!resp) return [];
+  const v = isText ? `$"Correct!" if ${resp}.corr else "Wrong!"` : `$"#55dd55" if ${resp}.corr else "#ff5555"`;
+  return [{label: `Depends on whether “${resp}” was correct`, icon: "check", title: isText ? "Shows “Correct!” or “Wrong!”: change the words in the formula" : "Green when correct, red when wrong",
+    run: () => commitValue(v)}];
 }
 /* Back to "the same on every trial": a bound column keeps the current row's value. */
 function inspToFixed({col, rid, p, onChange}) {
@@ -423,7 +459,9 @@ function inspKeyChips(value, onChange, id) {
     }});
   return h("label", {class: "keychips input", for: id},
     keys.map((k, i) => h("span", {class: "chip"}, h("span", {class: "mono"}, k),
-      h("button", {type: "button", class: "x", "aria-label": `Remove the key ${k}`, onclick: () => onChange(keys.filter((_, j) => j !== i))}, icon("close")))),
+      h("button", {type: "button", class: "x", tabindex: "-1", "aria-label": `Remove the key ${k}`,
+        // focus stays in the key box (not <body>), so a following Backspace removes a key, never the whole item
+        onclick: () => { add.focus({preventScroll: true}); onChange(keys.filter((_, j) => j !== i)); }}, icon("close")))),
     add);
 }
 /* A small two-column table for {name: value} settings (variables, keys, marker codes). */
@@ -520,13 +558,41 @@ function renderComponentProps(el, sel) {
   inspFoot(h("button", {type: "button", class: "btn sm", "data-fkey": "foot:dup", onclick: () => inspDuplicateItem(c)}, icon("duplicate"), "Duplicate"),
     h("button", {type: "button", class: "btn sm ghost danger-quiet", "data-fkey": "foot:del", onclick: () => inspDeleteItem(c)}, icon("trash"), "Delete"));
 }
-function renameComp(c, v) {
+/* Rename an item or a trial list and everything that refers to it: formulas ($resp.corr, $trials.accuracy),
+ * measures, "starts after", gaze-area targets, clickable items, rule actions. The server does it with the same
+ * code as MCP (editing.py), so a rename means the same thing from every entry point. → true when renamed */
+async function renameWithRefs(kind, old, nu, routine = null) {
+  const rev = S.rev;
+  let r = null;
+  try { r = await api("/api/rename", {experiment: S.exp, kind, old, new: nu, routine}); }
+  catch (e) { toast(`Not renamed: ${e.message}`, {tone: "danger"}); return false; }
+  if (S.rev !== rev) { toast("The experiment changed meanwhile: rename it again."); return false; }
+  S.exp = normalize(r.experiment);
+  const where = ((r.changes || []).join(" ").match(/updated the references in (.*)$/) || [])[1];
+  const nPlaces = where ? where.split(", ").length : 0;
+  if (nPlaces) INSP.renameNote = `Renamed “${old}” to “${nu}” and updated ${nPlaces === 1 ? "the place" : `${nPlaces} places`} that used it (formulas, measures, targets).`;
+  return true;
+}
+async function renameComp(c, v) {
   if (!v || v === c.id) return;
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(v)) return toast("Use letters, digits and _ only.");
-  if (findComp(S.sel.routine, v)) return toast("Another item on this screen has that name.");
+  const rid = Object.keys(S.exp.routines).find((k) => comps(k).includes(c));
+  if (!rid) return;
+  if (findComp(rid, v)) return toast("Another item on this screen has that name.");
   const old = c.id;
-  c.id = v; if (S.sel?.id === old) S.sel.id = v;
+  if (!(await renameWithRefs("component", old, v, rid))) return;
+  if (S.sel?.kind === "component" && S.sel.routine === rid && S.sel.id === old) S.sel = {...S.sel, id: v};
   commit(`Rename “${old}”`);
+  if (INSP.renameNote) { toast(INSP.renameNote); INSP.renameNote = null; }
+}
+async function renameLoop(n, v) {
+  const old = n.loop;
+  if (!v || v === old) return;
+  const path = S.sel?.path;
+  if (!(await renameWithRefs("loop", old, v))) { return; }
+  if (S.sel && path && ["loop"].includes(S.sel.kind)) S.sel = {...S.sel};
+  commit(`Rename the trial list “${old}”`);
+  if (INSP.renameNote) { toast(INSP.renameNote); INSP.renameNote = null; }
 }
 async function inspRenameItem(c) {
   if (!inspEditable()) return;
@@ -622,7 +688,11 @@ function inspHowItEnds(rid) {
     parts.push(`When ${what}`);
     if (typeof resp.duration === "number") parts.push(`or after ${inspFmtSec(numOr(resp.start, 0) + resp.duration)} at most`);
   }
-  if (typeof r.duration === "number") parts.push(resp ? `or after ${inspFmtSec(r.duration)} at most` : `After ${inspFmtSec(r.duration)}`);
+  const early = !resp && !r.end_if && typeof r.duration === "number" && typeof itemsEnd === "function" ? itemsEnd(rid) : null;
+  if (early !== null && early < r.duration) {
+    parts.push(`When everything on it has finished, after ${inspFmtSec(early)}: before its ${inspFmtSec(r.duration)}, which is only a maximum. To show it for ${inspFmtSec(r.duration)}, give an item that length or add a Pause / blank`);
+    tone = "warn"; ic = "warning";
+  } else if (typeof r.duration === "number") parts.push(resp ? `or after ${inspFmtSec(r.duration)} at most` : `After ${inspFmtSec(r.duration)}`);
   else if (isExpr(r.duration)) parts.push(`${resp ? "or after" : "After"} a length computed on each trial`);
   if (r.end_if) parts.push(`${parts.length ? "or when" : "When"} ${inspInWords(r.end_if) || "its condition is true"}`);
   if (!parts.length) {
@@ -864,7 +934,7 @@ async function inspRenameLoop(n) {
   const taken = loopIds(); taken.delete(n.loop);
   const v = await ui.prompt({title: "Rename the trial list", label: "Name", value: n.loop, ok: "Rename", transform: (x) => ui.slug(x),
     validate: (x) => (!x ? "Type a name first." : taken.has(x) ? `There is already something called “${x}”.` : null)});
-  if (v && v !== n.loop) { const old = n.loop; n.loop = v; commit(`Rename the trial list “${old}”`); }
+  if (v && v !== n.loop) await renameLoop(n, v);
 }
 function inspUnwrapLoop(path) {
   if (!inspEditable()) return;
@@ -951,6 +1021,12 @@ async function renameState(path, old, given = null) {
   for (const st of Object.values(states)) st.next = (st.next || []).map((t) => (t === old ? nn : t));
   m.states = states;
   if (m.start === old) m.start = nn;
+  // rules "go to a workflow phase" on the screens of this workflow
+  let rules = 0;
+  const inMachine = new Set(); walkFlow((x) => { const r = routineOfNode(x); if (typeof r === "string") inMachine.add(r); }, Object.values(states).flatMap((st) => st.run || []));
+  for (const rid of inMachine) for (const rule of S.exp.routines[rid]?.rules || [])
+    for (const a of Array.isArray(rule?.do) ? rule.do : [rule?.do]) if (a && typeof a === "object" && a.goto === old) { a.goto = nn; rules++; }
+  if (rules) toast(`Also updated ${rules === 1 ? "the rule" : `${rules} rules`} that go${rules === 1 ? "es" : ""} to “${old}”.`);
   S.sel = {kind: "state", path, name: nn};
   commit(`Rename the phase “${old}”`);
 }
@@ -1027,10 +1103,12 @@ function renderStateProps(el) {
   el.append(sec);
   // routes
   const routes = inspSec("Then go to…", {caption: "checked top to bottom"});
-  st.next = (st.next || []).map((t) => (typeof t === "string" ? {goto: t} : t));
+  // viewing a phase changes nothing in the file: routes written as plain names are only normalised when present
+  if (Array.isArray(st.next) && st.next.some((t) => typeof t === "string")) st.next = st.next.map((t) => (typeof t === "string" ? {goto: t} : t));
+  const nexts = Array.isArray(st.next) ? st.next : [];
   const targets = [...Object.keys(m.states), "end"];
   const tWord = (x) => (x === "end" ? "The end of the workflow" : x === name ? `${x} (again)` : x);
-  st.next.forEach((t, i) => {
+  nexts.forEach((t, i) => {
     const gid = `route-${i}-goto`, cid = `route-${i}-if`;
     const goto = h("select", {class: "input", id: gid, "data-fkey": `route:${i}:goto`, onchange: (e) => inspLater(() => { t.goto = e.target.value; commit("Change a route"); })},
       targets.map((x) => { const o = h("option", {value: x}, tWord(x)); if (t.goto === x) o.selected = true; return o; }));
@@ -1050,7 +1128,7 @@ function renderStateProps(el) {
   });
   routes.append(field("max_visits", {type: "int"}, st.max_visits, (v) => setProp(st, "max_visits", v, `Change the phase “${name}”`), {label: "Repeat this phase at most", unit: "times", noExpr: true,
     placeholder: "no limit", help: "After this many visits it stops repeating and takes the first route elsewhere."}));
-  routes.append(h("button", {type: "button", class: "btn sm ghost", "data-fkey": "route:add", onclick: () => { if (inspEditable()) { st.next.push({goto: name === m.start ? "end" : name}); commit("Add a route"); } }}, icon("plus"), "Add a route"));
+  routes.append(h("button", {type: "button", class: "btn sm ghost", "data-fkey": "route:add", onclick: () => { if (inspEditable()) { (st.next ||= []).push({goto: "end"}); INSP.focus = `route:${st.next.length - 1}:if`; commit("Add a route"); } }}, icon("plus"), "Add a route"));
   routes.append(h("p", {class: "t-caption"}, "Example: when ", h("code", {class: "mono"}, "$practice.accuracy >= 0.8"), " go to main; otherwise go to practice again, at most 3 times."));
   el.append(routes);
   inspFoot(m.start !== name ? h("button", {type: "button", class: "btn sm", onclick: () => { if (inspEditable()) { m.start = name; commit("Change the first phase"); } }}, icon("play"), "Make it the first phase") : null,
@@ -1099,12 +1177,13 @@ function renderRulesEditor(el, r) {
       const kind = Object.keys(a)[0] || "end_routine";
       const sel = h("select", {class: "input", "aria-label": `Rule ${i + 1}, action ${j + 1}`, "data-fkey": `rule:${i}:do:${j}`, onchange: (e) => inspLater(() => {
         const k = e.target.value;
-        rule.do[j] = {[k]: k === "end_routine" ? true : k === "set" ? {x: 1} : (k === "start" || k === "stop") ? compIds[0] || "" : k === "goto" ? [...states][0] : "event"};
+        rule.do[j] = {[k]: k === "end_routine" ? true : k === "set" ? {x: 1} : (k === "start" || k === "stop") ? "" : k === "goto" ? [...states][0] : "event"};
         commit("Change a rule"); })},
       Object.entries(RULE_ACTIONS).map(([k, d]) => { const o = h("option", {value: k}, d.label); if (k === kind) o.selected = true; return o; }));
       let param = null;
       const pt = RULE_ACTIONS[kind]?.param;
-      if (pt === "component") param = h("select", {class: "input", "aria-label": "Which item", onchange: (e) => inspLater(() => { rule.do[j] = {[kind]: e.target.value}; commit("Change a rule"); })},
+      if (pt === "component") param = h("select", {class: "input" + (a[kind] ? "" : " invalid"), "aria-label": "Which item", "aria-invalid": a[kind] ? null : "true", onchange: (e) => inspLater(() => { rule.do[j] = {[kind]: e.target.value}; commit("Change a rule"); })},
+        a[kind] && compIds.includes(a[kind]) ? null : h("option", {value: "", selected: "", disabled: ""}, a[kind] ? `${a[kind]} (missing)` : "Choose an item…"),
         compIds.map((c) => { const o = h("option", {value: c}, c); if (a[kind] === c) o.selected = true; return o; }));
       else if (pt === "state") param = h("select", {class: "input", "aria-label": "Which phase", onchange: (e) => inspLater(() => { rule.do[j] = {goto: e.target.value}; commit("Change a rule"); })},
         [...states].map((c) => { const o = h("option", {value: c}, c === "end" ? "The end" : c); if (a.goto === c) o.selected = true; return o; }));
@@ -1262,6 +1341,7 @@ function deviceTestBox(index) {
     // redraw every box of this device (the inspector and the Test page can both show it)
     document.querySelectorAll(`.dtb[data-device="${CSS.escape(d.id)}"]`).forEach((b) => b._draw?.());
     if (typeof renderDevices === "function" && S.ws === "build") renderDevices();
+    if (typeof renderReadiness === "function" && S.ws === "test") renderReadiness();   // "Devices to test" counts it
   };
   box._draw = draw;
   draw();
@@ -1337,7 +1417,8 @@ function openSettings(section = "general") {
   const drawNav = () => {
     nav.replaceChildren(...SETTINGS_SECTIONS.filter(([, , exp]) => !exp || !isSimple()).map(([k, label]) => h("button", {type: "button", role: "tab", id: "set-tab-" + k,
       "aria-selected": k === SETTINGS_UI.section ? "true" : "false", tabindex: k === SETTINGS_UI.section ? "0" : "-1", "aria-controls": "set-panel",
-      onclick: () => { SETTINGS_UI.section = k; drawNav(); settingsDraw(); }}, label)));
+      // the clicked tab is replaced: focus the new one, so focus stays in the dialog (Esc still closes it)
+      onclick: () => { SETTINGS_UI.section = k; drawNav(); settingsDraw(); nav.querySelector(`#set-tab-${k}`)?.focus(); }}, label)));
   };
   nav.addEventListener("keydown", (e) => {
     const tabs = [...nav.querySelectorAll("[role=tab]")]; const i = tabs.indexOf(document.activeElement);
@@ -1512,3 +1593,8 @@ function updateExprVars() {
 }
 
 EDGE.on("doc:loaded", () => { INSP.formulaFor = null; INSP.lastSel = ""; DEVTEST.clear(); });
+/* the overview's Next steps follow saves and test runs (also the assistant's auto-save) */
+const inspOverviewRefresh = () => { if (S.exp && !S.sel && S.ws === "build" && !S.noDoc && typeof renderProps === "function") renderProps(); };
+EDGE.on("doc:saved", () => setTimeout(inspOverviewRefresh, 0));
+EDGE.on("tested", () => setTimeout(inspOverviewRefresh, 0));
+EDGE.on("tried", () => setTimeout(inspOverviewRefresh, 0));

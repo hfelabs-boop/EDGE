@@ -36,6 +36,16 @@ def _expr_sources(value: Any, *, bare: bool = False) -> Iterable[str]:
             yield from _expr_sources(v)
 
 
+def _attr_uses(src: str) -> list[tuple[str, str]]:
+    """``resp.corr`` → [("resp", "corr")]: results of a component read by name in an expression."""
+    try:
+        tree = ast.parse(src.strip(), mode="eval")
+    except SyntaxError:
+        return []
+    return [(n.value.id, n.attr) for n in ast.walk(tree)
+            if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)]
+
+
 def _compared(src: str) -> set[str]:
     """Bare names compared with something ($ink == red): usually text that lost its quotes."""
     try:
@@ -223,11 +233,31 @@ def scope_issues(exp) -> list:
             all_columns.setdefault(c, lp.id)
 
     seen: set[tuple[str, str]] = set()
+    ctypes = {c.id: c.type for r in exp.routines.values() for c in r.components}
+
+    def check_attrs(src: str, where: str, scope: set[str]) -> None:
+        """A component result that doesn't exist, and is close to one that does: resp.cor → resp.corr."""
+        from .diagnostics import TYPE_WORDS, _outputs_of
+        for obj, attr in _attr_uses(src):
+            if obj in scope or obj not in ctypes:
+                continue
+            outs = _outputs_of(ctypes[obj])
+            if not outs or attr in outs:
+                continue
+            close = difflib.get_close_matches(attr, outs, n=1, cutoff=0.6)
+            if not close or (where, f"{obj}.{attr}") in seen:
+                continue
+            seen.add((where, f"{obj}.{attr}"))
+            thing = TYPE_WORDS.get(str(ctypes[obj]), f"'{obj}'")
+            issues.append(Issue("warning", where,
+                                f"this uses {obj}.{attr}, but {thing} has no '{attr}'. Did you mean {obj}.{close[0]}?",
+                                hint=f"the results of '{obj}': {', '.join(outs)}"))
 
     def report(src: str, where: str, scope: set[str], unknown_scope: str | None, enclosing: list[str],
                kind: str = "condition") -> None:
         """kind: 'text' (a property value: '$' makes it an expression), 'number' (a time or a count) or
         'condition' (if / when / end_if: always an expression); it picks the hint."""
+        check_attrs(src, where, scope)
         for name in sorted(expressions.names_in(src)):
             if name in scope or name in glob:
                 continue

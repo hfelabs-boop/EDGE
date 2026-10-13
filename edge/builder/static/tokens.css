@@ -35,6 +35,8 @@
   --workflow:var(--assistant-text); --workflow-border:rgba(91,59,176,.55);
   /* the stage (participant screen preview; the experiment keeps its own colours) */
   --stage-matte:#E3E7EC; --stage-ring:rgba(22,25,29,.22); --stage-sel:#4D8DFF; --play-chrome:#0B0E12;
+  --thumb-pad:0px; --thumb-bg:#000; --thumb-frame:transparent;     /* storyboard thumbnails: framed in dark mode */
+  --select-chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235F6B7A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   /* typography: system fonts only (offline) */
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -92,7 +94,7 @@
     --cat-hw-tint:rgba(60,194,178,.16); --cat-logic-tint:rgba(154,164,178,.16);
     --loop-border:rgba(60,194,178,.55); --loop-tint:rgba(60,194,178,.08);
     --branch-border:rgba(242,181,74,.55); --workflow-border:rgba(196,181,253,.55);
-    --stage-matte:#0B0E12; --stage-ring:rgba(232,236,241,.18);
+    --stage-matte:#0B0E12; --stage-ring:rgba(232,236,241,.32); --thumb-pad:4px; --thumb-bg:var(--stage-matte); --thumb-frame:var(--border-default); --select-chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238D98A7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     --e1:0 1px 2px rgba(0,0,0,.4);
     --e2:0 6px 16px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.04);
     --e3:0 20px 48px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06);
@@ -117,7 +119,7 @@
   --cat-hw-tint:rgba(60,194,178,.16); --cat-logic-tint:rgba(154,164,178,.16);
   --loop-border:rgba(60,194,178,.55); --loop-tint:rgba(60,194,178,.08);
   --branch-border:rgba(242,181,74,.55); --workflow-border:rgba(196,181,253,.55);
-  --stage-matte:#0B0E12; --stage-ring:rgba(232,236,241,.18);
+  --stage-matte:#0B0E12; --stage-ring:rgba(232,236,241,.32); --thumb-pad:4px; --thumb-bg:var(--stage-matte); --thumb-frame:var(--border-default); --select-chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238D98A7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   --e1:0 1px 2px rgba(0,0,0,.4);
   --e2:0 6px 16px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.04);
   --e3:0 20px 48px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06);

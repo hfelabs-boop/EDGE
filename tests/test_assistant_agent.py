@@ -328,7 +328,8 @@ def test_refusal_ends_the_job_and_rolls_back(ws):
     conv = Conversation(id="c", provider="anthropic", model="claude-opus-5-5", base_url=fake.url, experiment_path=EXP)
     with pytest.raises(AssistantError) as e:
         ask(ws, prov, "something", conv=conv)
-    assert e.value.code == "refused" and "(bio)" in e.value.message
+    # the raw safety category means nothing to a researcher: not in the message, kept in the detail (QA round 1)
+    assert e.value.code == "refused" and "bio" not in e.value.message and "bio" in (e.value.detail or "")
     assert conv.transcript.native == []                                  # the failed job's tail is rolled back
     fake.close()
 

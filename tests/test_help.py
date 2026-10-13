@@ -220,3 +220,47 @@ def test_cookbook_workflow_and_counterbalance_recipes(tmp_path):
     assert summary["loops"]["session"]["path"] == ["practice", "main"]
     words = [r.get("word") for r in session.data.trial_rows if r["routine"] == "main_trial" and r.get("word")]
     assert sorted(words) == ["easy1", "easy2", "hard1"]
+
+
+# ------------------------------------------------------------------ the guides use the redesigned builder's words
+OLD_UI_WORDS = ["Flow strip", "+ screen", "Help Center", "welcome screen", "the console", "Console", "📖", "✨", "▶",
+                "Scan for hardware", "Source (YAML)", "include test runs", "Test results tab", "**Versions**",
+                "**Bundle**", "Make a new experiment: answer a few questions", "Dry-run results", "**Validate**"]
+
+
+@pytest.mark.parametrize("name", ["BUILDER_GUIDE.md", "GETTING_STARTED.md", "FAQ.md", "README.md", "TUTORIALS.md",
+                                  "../README.md"])
+def test_guides_use_the_words_of_the_builder(name):
+    """UI spec §4: the guides and tutorials name places and buttons as the builder does now."""
+    text = (DOCS / name).read_text(encoding="utf-8")
+    found = [w for w in OLD_UI_WORDS if w in text]
+    assert not found, f"{name} still says {found}"
+
+
+def test_tutorials_use_the_words_of_the_builder():
+    for tut in hp.tutorials():
+        text = tut["title"] + "\n" + "\n".join(st["title"] + "\n" + st["body"] for st in tut["steps"])
+        found = [w for w in OLD_UI_WORDS if w in text]
+        assert not found, f"{tut['id']} still says {found}"
+
+
+def test_learn_group_lists_the_assistant():
+    """UI spec W15: Start here = Getting started, Builder guide, Tutorials, FAQ, Assistant (the Learn group)."""
+    learn = [t["id"] for t in hp.topics() if t["group"] == "Learn"]
+    assert learn == ["README", "GETTING_STARTED", "TUTORIALS", "BUILDER_GUIDE", "ASSISTANT", "FAQ"]
+
+
+def test_builder_help_context_links_point_to_real_sections():
+    """The Help tab's "About what you're looking at" links (app.js helpContext) open real guide sections."""
+    js = _builder_js()
+    pairs = re.findall(r'add\("[^"]*", "([A-Z_]+)", "([a-z0-9-]+)"\)', js)
+    assert pairs
+    for topic, anchor in pairs:
+        assert anchor in {s.anchor for s in hp.sections() if s.topic == topic}, (topic, anchor)
+
+
+def test_new_tutorial_checks_are_known():
+    for key in ("workspace", "view", "assistant_open", "assistant_applied"):
+        assert key in hp.CHECK_TYPES
+    bad = {"id": "x", "title": "x", "steps": [{"title": "t", "body": "b", "check": {"no_such_check": 1}}]}
+    assert hp.validate_tutorial(bad) == ["step 1: unknown check no_such_check"]

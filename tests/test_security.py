@@ -140,6 +140,35 @@ def test_served_user_files_cannot_script_against_the_api(server):
     assert headers["X-Content-Type-Options"] == "nosniff"
 
 
+def test_page_route_resolves_relative_links_and_keeps_the_sandbox(server):
+    """/api/page/<key>/<path> serves the experiment's files by path, so a previewed page's relative links
+    (style.css, pictures, CSS url()) stay in its folder. Its sandboxed (opaque-origin) reads are cross-site and
+    carry no Referer: only the per-process key, readable by the builder's own page, lets them through."""
+    from edge.builder.server import request_allowed
+    base, root = server
+    (root / "s" / "style.css").write_text("body { color: red }")
+    pb = _req(base + "/api/files")
+    page_base = json.loads(pb[2])["page_base"]
+    assert page_base.startswith("/api/page/") and page_base.endswith("/") and len(page_base) > len("/api/page/x/")
+    code, headers, _ = _req(base + page_base + "s/page.html")
+    assert code == 200 and headers["Content-Security-Policy"].startswith("sandbox")   # still sandboxed
+    sandboxed_read = {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "style"}
+    code, headers, body = _req(base + page_base + "s/style.css", headers=sandboxed_read)
+    assert code == 200 and body == b"body { color: red }" and "Content-Security-Policy" not in headers
+    # another site can't: without the key, with a wrong key, or anywhere else in the API
+    assert _req(base + "/api/page/wrong-key/s/style.css")[0] == 404
+    assert _req(base + "/api/page/wrong-key/s/style.css", headers=sandboxed_read)[0] == 403
+    assert _req(base + "/api/file?path=s/style.css", headers=sandboxed_read)[0] == 403
+    key = page_base.split("/")[3]
+    assert request_allowed({"Host": "127.0.0.1:8765", "Sec-Fetch-Site": "cross-site"}, "GET", f"/api/page/{key}/a.css", key) is None
+    assert request_allowed({"Host": "127.0.0.1:8765", "Sec-Fetch-Site": "cross-site"}, "POST", f"/api/page/{key}/a.css", key)
+    assert request_allowed({"Host": "127.0.0.1:8765", "Sec-Fetch-Site": "cross-site"}, "GET", "/api/page/a.css", "")
+    assert request_allowed({"Host": "evil.example", "Sec-Fetch-Site": "cross-site"}, "GET", f"/api/page/{key}/a.css", key)
+    # and paths stay inside the builder folder
+    code, _, _ = _req(base + page_base + "..%2F..%2F..%2Fetc%2Fpasswd")
+    assert code in (400, 403, 404)
+
+
 def test_uploads_cannot_plant_code_and_conditions_stay_inside(server):
     base, root = server
     for name in ("s/evil.py", "s/edge/__main__.py", "s/x.pyw", "s/go.cmd", "s/.hidden", "s/a.pth"):

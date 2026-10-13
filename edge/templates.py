@@ -19,8 +19,8 @@ _INSTR = lambda text: {  # noqa: E731
 TEMPLATES: dict[str, dict[str, Any]] = {
     "blank": {
         "name": "my_experiment",
-        "description": "An empty starting point: one screen that says hello. Add your own screens (routines) "
-                       "and put them in the order they should run (the flow).",
+        "description": "An empty starting point with one screen that says hello. Add your own screens and put "
+                       "them in the order they should run on the Storyboard.",
         "settings": {"window": {"size": [1280, 720], "background": "#000000"}},
         "devices": [],
         "routines": {"hello": _INSTR("Hello! Press SPACE to finish.")},
@@ -29,10 +29,10 @@ TEMPLATES: dict[str, dict[str, Any]] = {
     "freeview_eyetracking": {
         "name": "freeview",
         "description": "Free viewing with an eye tracker: two coloured rectangles side by side stand in for your "
-                       "pictures, with a gaze check before each trial and a gaze area (AOI) on each side. To show "
-                       "pictures, replace each rectangle with an image component (image: $left_picture) and put "
-                       "the picture file names in the trial list. Replace the simulated eye tracker (sim_eyetracker) with "
-                       "yours (tobii or gazepoint).",
+                       "pictures, with a gaze check before each trial and a gaze area on each side. To show "
+                       "pictures, replace each rectangle with a picture whose file comes from the trial list "
+                       "(a column with the file names). In Devices, replace the simulated eye tracker with yours "
+                       "(Tobii or Gazepoint).",
         "settings": {"window": {"size": [1280, 720], "background": "#808080"}},
         "devices": [{"id": "et", "type": "sim_eyetracker", "calibrate": True},
                     {"id": "lsl", "type": "lsl_markers", "required": False}],
@@ -61,8 +61,8 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         "name": "auditory_oddball",
         "description": "Auditory oddball for EEG: a frequent low tone and a rare high tone; participants press "
                        "SPACE for the high one. Each tone sends an event code to the EEG through a trigger box "
-                       "(TTL) and Lab Streaming Layer (LSL). Replace the simulated EEG (sim_eeg) with your "
-                       "amplifier (gtec or lsl_inlet) and the virtual trigger box (ttl_loopback) with yours.",
+                       "and Lab Streaming Layer (LSL). In Devices, replace the simulated EEG and the virtual "
+                       "trigger box with your amplifier and trigger box.",
         "settings": {"window": {"size": [1280, 720], "background": "#000000"},
                      "markers": {"codes": {"standard": 1, "deviant": 2, "response": 10}}},
         "devices": [{"id": "eeg", "type": "sim_eeg"},
@@ -182,6 +182,26 @@ _STROOP_ROWS = [{"word": "RED", "ink": "red", "key": "r"}, {"word": "RED", "ink"
                 {"word": "BLUE", "ink": "blue", "key": "b"}, {"word": "BLUE", "ink": "red", "key": "r"}]
 
 TEMPLATES.update({
+    "stroop": {
+        "name": "stroop",
+        "description": "The classic Stroop task: a colour word (RED, GREEN, BLUE) printed in a coloured ink; "
+                       "participants press the key of the ink colour (r, g or b) as fast as they can. Instructions, "
+                       "18 trials in a random order with feedback after each, and a thank-you screen.",
+        "settings": {"window": {"size": [1280, 720], "background": "#111111"}},
+        "routines": {
+            "instructions": _INSTR("Name the INK colour of each word.\n\nr = red    g = green    b = blue\n\n"
+                                   "Press SPACE to begin"),
+            "trial": _TRIAL,
+            "feedback": {"duration": 0.6, "components": [
+                {"id": "fb", "type": "text", "text": "$'Correct!' if resp.corr else 'Wrong'",
+                 "color": "$'#55dd55' if resp.corr else '#ff5555'"}]},
+            "thanks": _INSTR("Thank you!\n\nPress SPACE to finish."),
+        },
+        "flow": ["instructions",
+                 {"loop": "trials", "conditions": _STROOP_ROWS, "order": "random", "repeats": 3,
+                  "children": ["trial", "feedback"]},
+                 "thanks"],
+    },
     "tutorial_empty": {"name": "my_first_experiment", "settings": {"window": {"size": [1280, 720], "background": "#000000"}},
                        "devices": [], "variables": {}, "routines": {}, "flow": []},
     "tutorial_loops": {"name": "stroop_lists", "settings": {"window": {"size": [1280, 720], "background": "#111111"}},
@@ -222,6 +242,8 @@ TEMPLATES.update({
 # templates reuse definitions (the tutorials' trial); give every routine its own copy, so a copy of a template
 # is plain YAML and editing one routine never changes another
 TEMPLATES = {k: unshare(v) for k, v in TEMPLATES.items()}
+# the examples gallery lists them in this order: Stroop (the first tutorial's task) right after Blank
+TEMPLATES = {k: TEMPLATES[k] for k in ["blank", "stroop", *[k for k in TEMPLATES if k not in ("blank", "stroop")]]}
 
 
 def public_templates() -> dict[str, dict[str, Any]]:

@@ -5,7 +5,7 @@ level: beginner
 minutes: 5
 learn: importing, import reports, checking a converted experiment
 description: >
-  Convert an existing experiment, read the import report, and verify the result with a test run.
+  Convert an existing experiment, read the import report, and check the result with a test run.
 start: keep
 mode: expert
 steps:
@@ -15,22 +15,29 @@ steps:
       * **E-Prime:** in E-Studio press *Generate* to get the `.ebs3` script; also save each List as `<ListName>.txt`.
       * **OpenSesame:** the `.osexp` file.
       * **jsPsych:** the `.html` (or `.js`) file with the timeline.
+      * **EDGE:** a shared `.edgez` file opens as it is.
 
       Press **Next**.
   - title: Import
     body: |
-      Click **Import** in the top bar and select *all* the files at once (experiment, conditions,
-      images, list exports). EDGE converts them and shows a summary.
+      Click the experiment's name at the top left to open the **Experiment menu** and choose
+      **Import…** (on Home, **Import** is a button). Then **Choose a folder…** (the experiment's whole
+      folder, with its pictures, sounds and condition files) or **Choose files…** and select *all* the
+      files at once. EDGE converts them and shows a summary.
     target: "#btn-import"
   - title: Read the report
     body: |
-      The summary lists what **needs manual work** (e.g. movies or custom code) and what was
-      **converted approximately**. The full list is in `IMPORT_REPORT.md` next to the new experiment.
+      The summary counts what **needs work by hand** (e.g. movies or custom code) and what was converted
+      **approximately: please check**. **View the report** shows the full list, which is also saved as
+      `IMPORT_REPORT.md` next to the new experiment.
 
-      Click **Open and dry-run** to load the converted experiment and test it straight away.
-  - title: Verify
+      Click **Open and test** to load the converted experiment and test-run it straight away. (No files
+      to import right now? **Skip step**.)
+    check: {dry_run: true}
+  - title: Check it
     body: |
-      Compare the test run with the original: number of trials, timing per screen (read the plain-language
-      summary above each timeline), response keys and correct answers. Fix anything flagged, then save.
+      Compare the test run with the original: the number of trials, the timing of each screen (read
+      **In words** above each timeline), the response keys and the correct answers. Fix anything the
+      report flagged, then save.
 
       Command-line alternative: `edge import my_task.psyexp`.

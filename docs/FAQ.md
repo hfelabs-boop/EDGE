@@ -3,13 +3,13 @@
 ## General
 
 **Do I need to know Python or any programming?**
-No. **New → Make a new experiment: answer a few questions** builds a complete, tested task, and the
-builder covers nearly everything else with menus: the value menu next to each property picks a trial-list
-column, or makes one, so you rarely type a formula. Formulas (`$resp.rt < 0.5`) are there when you want
-them, and Python `code` components (Expert mode) for anything beyond that.
+No. **Answer a few questions** (on Home) builds a complete, tested task, the [assistant](ASSISTANT.md) builds
+one from a description in your own words, and the builder covers nearly everything else with menus: the button
+next to each property picks a trial-list column, or makes one, so you rarely type a formula. Formulas
+(`$resp.rt < 0.5`) are there when you want them, and Python code items (Expert mode) for anything beyond that.
 
 **Is this computer good enough for precise timing?**
-Run `edge doctor` (or open **Run with a participant**, which runs the same check). It looks for the
+Run `edge doctor` (or **⋯** › **Check this computer** in the builder; the **Run** page runs the same check before a session). It looks for the
 known culprits: a laptop on battery, a generic display driver, several monitors with Windows
 fullscreen optimizations, USB power saving that puts response boxes to sleep, slow USB-serial
 adapters, input method editors. It explains each one and fixes what it can (`edge doctor --fix`).
@@ -31,11 +31,28 @@ a failure shows a message box with the reason, and everything is written to `~/.
 4. Make the icon again with `edge desktop-shortcut`, or run the installer again; it also checks that
    EDGE really installed (a missing `git` or no internet connection are the usual causes).
 
-**What's the difference between Test run, Try it and Run with a participant?**
-**Test run**: a virtual participant does the whole experiment in seconds with simulated hardware, to
-catch mistakes and show the data you'll get. **Try it**: *you* do the experiment inside the builder, to
-see and feel it. **Run with a participant**: the real session in the experiment window, with real
-hardware and precise timing.
+**What's the difference between a test run, Try it and Run?**
+A **test run** (Test page): a virtual participant does the whole experiment in seconds with simulated hardware,
+to catch mistakes and show the data you'll get. **Try it**: *you* do the experiment inside the builder, to
+see and feel it. **Run**: the real session with a participant in the experiment window, with real hardware and
+precise timing.
+
+**Do I need the assistant? Does it send my data anywhere?**
+No, it is optional: everything else works without it. With **Ollama** or **LM Studio** it runs on this computer
+and nothing leaves it. With an online service (Claude by Anthropic, OpenAI, OpenRouter …), what you type, the
+experiment you are editing and the files you attach are sent to that company; your participants' data (the data
+folders) never is, and your API key stays on this computer. The line under the box you type in always says which.
+See [The assistant](ASSISTANT.md#what-is-sent-where).
+
+**Which model should I use for the assistant?**
+Claude (with an API key) gives the best results. Locally, use a model that can call tools, e.g. `qwen2.5:14b` in
+Ollama: small models (7–8 B) manage single changes; for building whole experiments from a description use 14 B or
+more. See [Set up Ollama](ASSISTANT.md#set-up-ollama).
+
+**The assistant says Ollama isn't running, or the model isn't downloaded.**
+Start the Ollama app (or run `ollama serve`), and download the model with `ollama pull <model>`. Then press **Test
+connection** in **Assistant settings**. Other messages and what to do are in
+[When something goes wrong](ASSISTANT.md#when-something-goes-wrong).
 
 **Can I open my PsychoPy / E-Prime experiments?**
 Yes, see [Importing](IMPORT.md). PsychoPy converts most completely. For E-Prime, import the
@@ -63,7 +80,8 @@ and usually what to do. The most common ones:
 
 **"The trial list has no column called 'ink'. Did you mean 'colour'?"**
 A property uses `$ink`, but the trial list around this screen has no such column. Fix the spelling,
-pick the column from the value menu (⟳), or add it with **+ New trial-list column…**.
+pick the column with the button next to the field (**From the trial list**), or add it with **New trial-list
+column…**.
 
 **"'word' comes from the trial list of loop 'trials', but this screen also runs outside that loop"**
 The same screen is in the flow twice, once outside the trial list, where `$word` has no value. Use a
@@ -84,7 +102,7 @@ computer, or use Test run / Try it, which need no window.
 **"test run: routine 'X' did not end after 600 s"** (also "dry run: …")
 Nothing ends that routine. Give it a `duration`, tick `end_routine` on a response, or add `end_if`.
 A component without a duration runs until the routine ends, so a routine made only of such components
-never ends. (In the builder: tick **ends the screen** on the response, or set **lasts at most** on the screen.)
+never ends. (In the builder: switch on **Ends the screen** on the response, or set **Lasts at most** on the screen.)
 
 **"'x' isn't defined here (in '…'). Did you mean 'y'? Names available: …"** (while running)
 The formula uses a name that doesn't exist at that moment. The message lists what does exist and
@@ -121,9 +139,9 @@ without them.
 `wait_for_consumers` is set and nothing is recording the marker stream. Start LabRecorder and select
 `EDGE-Markers`.
 
-**"This file was changed outside the builder"**
-Another window, an editor, or Claude (via MCP) saved the same file. Choose whose version to keep. The
-other one is still available under **Versions**.
+**"This experiment was changed elsewhere"**
+Another window, an editor, or Claude (via MCP) saved the same file. Choose **Keep my version** or **Load the other
+version**. The other one is still available under **History…** in the Experiment menu.
 
 **"E-Prime .es3/.es2 files are a closed binary format"**
 In E-Studio press *Generate* (Ctrl+F7) and import the `.ebs3` it writes. Also save each List as
@@ -131,12 +149,13 @@ In E-Studio press *Generate* (Ctrl+F7) and import the `.ebs3` it writes. Also sa
 
 ## How do I …
 
-**… make a value change from trial to trial?** In the value menu next to the property choose
-**+ New trial-list column…** (or an existing **⟳ column**), then fill in the trial list: one row per trial.
+**… make a value change from trial to trial?** Click the button next to the property's label (*Fixed*) and
+choose **New trial-list column…** (or **From the trial list** › an existing column), then fill in the trial
+list: one row per trial.
 In the file that's `$column` in the property and the column in the loop's `conditions`.
 
-**… show something only sometimes?** Component `if: "$condition"`; for a whole routine, a flow entry
-`{routine: name, if: "$condition"}`.
+**… show something only sometimes?** An item's **Only if** (under More options; `if: "$condition"` in the file);
+for a whole screen, **Show only if…** on its card or an **If / otherwise** frame (`{routine: name, if: "$condition"}`).
 
 **… repeat practice until people get it?** A workflow; see the
 [Cookbook](COOKBOOK.md#practice-until-80-correct-at-most-three-times) and the interactive tutorial.
@@ -156,27 +175,29 @@ See [Surveys](SURVEYS.md#right-to-left-hebrew).
 **… score a questionnaire?** Library questionnaires score themselves. For your own, add `scores` (sum, mean,
 reverse items, bands); see [Surveys](SURVEYS.md#scores).
 
-**… undo a change from yesterday?** **Versions** in the builder (Expert mode), or `edge backups study.yaml`.
+**… undo a change from yesterday?** **History…** in the Experiment menu, or `edge backups study.yaml`.
 
-**… see every option?** Switch to **Expert** (top right). Simple mode folds rare options under **More options**.
+**… see every option?** Switch to **Expert** (bottom right, in the status bar). Simple mode folds rare options
+under **More options**; **Ctrl+K** finds everything in both modes.
 
-**… share an experiment?** **Bundle** (or `edge bundle study.yaml`) makes one `.edgez` file with
-everything it needs.
+**… share an experiment?** **Share as one file (.edgez)** in the Experiment menu (or `edge bundle study.yaml`)
+makes one `.edgez` file with everything it needs.
 
-**… let Claude build it for me?** See [MCP](MCP.md).
+**… let Claude build it for me?** In the builder, the [assistant](ASSISTANT.md) (Claude, an OpenAI-compatible
+service, Ollama or LM Studio); from Claude Code or VS Code, [MCP](MCP.md).
 
 ## Glossary
 
 | term | meaning |
 |---|---|
 | **screen** / **routine** | one step: a trial, instructions, feedback. The builder says *screen*; the file says `routines` |
-| **component** / **thing on a screen** | an element of a screen: stimulus, response, eye-tracking area, marker, logic step |
-| **flow** | the order in which routines run, with loops, branches and workflows |
-| **loop** | repeats routines once per row of a trial list |
-| **trial list / conditions** | the table a loop iterates over; each column can be used as a value (⟳ in the value menu, `$column` in a formula) |
-| **workflow / state machine** | states (blocks) with conditional routes between them |
-| **route** | a rule saying which state comes next ("if accuracy ≥ 0.8 go to main") |
-| **rule** | inside a routine: "when this becomes true, do that" |
+| **item** / **component** | a thing on a screen: stimulus, response, eye-tracking area, marker, logic step. The builder says *item*; the file says `components` |
+| **storyboard** / **flow** | the order in which screens run, with trial lists, if / otherwise and workflows |
+| **trial list** / **loop** | repeats screens once per row of a table; each column can be used as a value (**From the trial list** next to a field, `$column` in a formula) |
+| **conditions** | the rows of a trial list in the file |
+| **workflow** / **state machine** | **phases** (states) with conditional routes between them |
+| **route** | a rule saying which phase comes next ("when accuracy ≥ 0.8 go to main") |
+| **rule** | inside a screen: "when this becomes true, do that" |
 | **formula / expression** | a value starting with `$`, computed while the experiment runs |
 | **marker** | an event sent to every device (TTL code, LSL sample, eye-tracker message) at a stimulus onset |
 | **flip** | the moment a new frame appears on screen; all onsets are stamped with flip times |
@@ -186,7 +207,8 @@ everything it needs.
 | **survey** | a questionnaire page built from questions (choice, Likert, matrix, slider, text, rank …), with scoring |
 | **instrument** | a validated questionnaire from the library, added with `{instrument: phq9}` |
 | **display logic** | `show_if`: show a question only for certain earlier answers |
-| **design wizard** | **New → answer a few questions**, or `edge wizard`: a finished experiment from plain answers |
+| **design wizard** | **Answer a few questions** on Home, or `edge wizard`: a finished experiment from plain answers |
+| **assistant** | builds and changes experiments from a description in your own words, with a preview you apply or discard |
 | **Simple / Expert mode** | how much of the builder is shown |
 | **session** | one run of the experiment for one participant; one data folder |
 | **bundle** | a `.edgez` file containing an experiment and all its files |

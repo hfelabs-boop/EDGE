@@ -1,89 +1,105 @@
 # Tutorials
 
-Hands-on lessons. Each one also runs **interactively** in the builder (Help → Tutorials, or
-`edge tutorial <name>`): the coach highlights the part of the screen to use, waits until you've done
-the step, then moves on. Tutorials start from a fresh copy, so you can't break anything.
+Hands-on lessons. Each one also runs **interactively** in the builder (**Help** › *Learn by doing*,
+**All tutorials** on Home, or `edge tutorial <name>`): the coach points at the part of the screen to use,
+waits until you've done the step, then moves on. Tutorials start from a fresh copy, so you can't break
+anything.
 
 | Tutorial | Level | Time | You will learn |
 |---|---|---|---|
-| [Your first experiment (a Stroop task)](#your-first-experiment-a-stroop-task) | beginner | 12 min | screens, things on a screen, timing, trial lists, test runs, Try it |
-| [Trial lists, randomization and counterbalancing](#trial-lists-randomization-and-counterbalancing) | beginner | 8 min | conditions tables, factorial designs, order types, sequence constraints |
-| [Practice until criterion (workflows)](#practice-until-criterion-workflows) | intermediate | 10 min | state machines, routes with conditions, live loop accuracy, max_visits |
-| [Eye tracking, gaze areas and event markers](#eye-tracking-gaze-areas-and-event-markers) | intermediate | 10 min | devices, gaze_roi components, markers, synchronization report |
-| [Questionnaires and consent with HTML pages](#questionnaires-and-consent-with-html-pages) | beginner | 7 min | html component, forms, saved answers, placeholders |
-| [Rules, hints and conditional components](#rules-hints-and-conditional-components) | intermediate | 7 min | when → do rules, component if, variables |
-| [Your data: tables, summaries and exports](#your-data-tables-summaries-and-exports) | beginner | 6 min | Data tab, trial tables, summaries, data dictionary, Excel/BIDS exports |
+| [Your first experiment (a Stroop task)](#your-first-experiment-a-stroop-task) | beginner | 12 min | screens, items, timing, trial lists, test runs, saving |
+| [Trial lists, randomization and counterbalancing](#trial-lists-randomization-and-counterbalancing) | beginner | 8 min | trial lists, every combination (factorial designs), order, limits on runs in a row |
+| [Practice until criterion (workflows)](#practice-until-criterion-workflows) | intermediate | 10 min | workflows, phases, routes with conditions, live trial-list accuracy, repeat a phase at most N times |
+| [Eye tracking, gaze areas and event markers](#eye-tracking-gaze-areas-and-event-markers) | intermediate | 10 min | devices, gaze areas of interest, event markers, the synchronisation report |
+| [Questionnaires and consent with web pages](#questionnaires-and-consent-with-web-pages) | beginner | 7 min | web page / form items, forms, saved answers, placeholders |
+| [Rules, hints and items shown only sometimes](#rules-hints-and-items-shown-only-sometimes) | intermediate | 7 min | rules (when … do …), items shown only if a condition holds, In words |
+| [Your data: tables, summaries and exports](#your-data-tables-summaries-and-exports) | beginner | 6 min | the Data page, trial tables, summaries, what each column means, Excel/BIDS exports |
 | [Bring an experiment from PsychoPy, E-Prime, OpenSesame or jsPsych](#bring-an-experiment-from-psychopy-e-prime-opensesame-or-jspsych) | beginner | 5 min | importing, import reports, checking a converted experiment |
-| [Questionnaires like a pro (surveys)](#questionnaires-like-a-pro-surveys) | beginner | 8 min | survey component, question types, validated questionnaires, display logic, scores |
+| [Questionnaires like a pro (surveys)](#questionnaires-like-a-pro-surveys) | beginner | 8 min | survey / questionnaire items, question types, validated questionnaires, display logic, scores |
+| [Build with the assistant](#build-with-the-assistant) | beginner | 6 min | the assistant panel, where it runs (Claude, OpenAI-compatible, Ollama, LM Studio), privacy, preview, Apply and Undo |
 
 ## Your first experiment (a Stroop task)
 
 *Beginner · about 12 minutes* · interactive version: `edge tutorial first_experiment`
 
-Build a colour-word Stroop task from an empty file: a fixation cross, a coloured word and a key press, repeated over a trial list in random order, then test it and try it yourself.
+Build a colour-word Stroop task from an empty experiment: a fixation cross, a coloured word and a key press, repeated over a trial list in random order, then test it and save it.
 
 **1. Welcome**
 
 This is the EDGE builder. You will build a complete Stroop experiment in about 12 minutes.
 
-* **Left:** the things you can put on a screen (text, pictures, key presses …) and devices.
-* **Centre:** the storyboard or one screen's timeline with a live preview, the **flow** (the order
-  things happen in), and the console.
-* **Right:** the properties of whatever you select.
+* **Top:** the five workspaces, **Build · Measures · Test · Run · Data**, in the order you use them.
+* **Left:** **Add** (the items you can put on a screen: text, pictures, key presses …), **Files**
+  and **Devices**.
+* **Centre:** the **Storyboard** (every screen in order) or one **Screen** with its live preview
+  and timeline.
+* **Right:** the **Properties** of whatever you select.
 
-(In a hurry? **New → Make a new experiment: answer a few questions** builds a task like this
-for you. Here you'll build it by hand to see how it works.)
+(In a hurry? **Answer a few questions** builds a task like this for you, and the **Assistant**
+builds one from a description. Here you'll build it by hand to see how it works.)
 
-Press **Next** to start. The coach waits for you at each step and moves on by itself when
-the step is done.
+Press **Next** to start. The coach waits for you at each step and moves on by itself when the
+step is done.
 
 **2. Create a screen**
 
-A **screen** is one step of the experiment, like a single trial (in the file it's called a
-*routine*). Click **+ screen** at the top and name it `trial`.
+A **screen** is one step of the experiment, like a single trial. Click **Add screen** at the
+top of the canvas, type `trial` and press **Add screen**.
+
+The new screen joins the experiment at once and opens in the **Screen** view.
 
 **3. Show a word**
 
-Things go *on* a screen. Click **Text** in the list on the left. It appears on the timeline as a
-bar (shown for 1 s for now) and in the preview on the right.
+Things go *on* a screen. Click **Text** under **Add** on the left. It appears on the screen and
+on the timeline as a bar (shown for 1 s for now), and Properties shows it.
 
-**4. Make the word come from the trial list**
+**4. A different word on every trial**
 
-In **Properties**, type `$word` into **text**.
+In **Properties**, point at **Text**: a small **Fixed** button appears at the right of the label.
+It says where the value comes from. Click it, choose **New trial-list column…**, type `word` and
+press **Add column**.
 
-A value that starts with `$` is a *formula*, computed while the experiment runs. Here `word` will
-be a column of the trial list you'll create shortly. (Once a trial list exists, you can also pick
-its columns from the small value menu next to each property: **Fixed**, **⟳ a column**, or
-**+ New trial-list column…**.)
+EDGE puts the screen into a **trial list** (one row per trial) with a column `word`, and the text
+now shows that column's value on each trial.
 
 **5. Colour the word**
 
-Still in Properties, type `$ink` into **color**. Each trial will now draw the word in the ink
-colour from the trial list (red, green, blue…).
+Do the same for **Colour**: **Fixed** › **New trial-list column…**, name it `ink`. Each trial will
+draw the word in the colour from the trial list (red, green, blue …).
+
+The word disappears from the preview for now: the new column is still empty. You'll fill it in
+shortly.
 
 **6. Collect a response**
 
-Click **Key press** on the left. In its properties, set **keys** to `r, g, b` and
-**correct** to `$key`. **ends the screen** is already ticked, so a key press ends the trial, and the
-word now stays on screen until the key press.
+Click **Key press** on the left. In its Properties:
+
+* **Keys**: click the box, press Backspace to remove `space`, then press **R**, **G** and **B**.
+* **Correct answer**: **Fixed** › **New trial-list column…**, name it `key`.
+
+**Ends the screen** is already on, so a key press moves on to the next trial, and the word now
+stays on the screen until the key press.
 
 **7. Add a fixation cross first**
 
-Click **Fixation cross** on the left, then set **lasts (s)** to `0.5`.
+Click **Fixation cross** on the left, then set **Lasts** to `0.5` under **Timing**.
 
-Then select the text (click **text** on the timeline) and set **starts at (s)** to `0.5`, so the
-word appears right after the cross. You can also drag the bars on the timeline, and press ▶
-under the preview to play the screen at real speed.
+Then select the text (click **text** on the timeline) and set **Starts at** to `0.5`, so the word
+appears right after the cross. You can also drag the bars on the timeline, and press the play
+button under the preview to play the screen at real speed.
 
-**8. Repeat the trial with a loop**
+**8. Open the trial list**
 
-In the **Flow** strip, click the round **+** and choose **Repeat with a trial list (loop)**. Then
-click the **+** *inside* the green box and choose **Screen: trial**.
+The **Storyboard** shows the whole experiment: your screen sits inside the green frame
+**Trial list “trials”**. Click **Open list** in its header.
 
 **9. Fill in the trial list**
 
-With the loop selected, the Properties panel shows its **trial list**: one row per trial. Rename
-the first column to `word`, and add columns `ink` and `key`. Then add at least 3 rows, for example:
+This is the trial list: one row per trial, one column per value that changes. It works like a
+spreadsheet: click a cell and type, **Tab** moves right, **Enter** moves down, **+ Row** adds a
+row, and **Ctrl+V** pastes rows copied from Excel.
+
+Make at least 3 rows, for example:
 
 | word | ink | key |
 |---|---|---|
@@ -91,25 +107,31 @@ the first column to `word`, and add columns `ink` and `key`. Then add at least 3
 | RED | green | g |
 | BLUE | blue | b |
 
-**10. Randomize**
+**10. Shuffle and repeat**
 
-Set the loop's **order** to `random` and **repeats** to `2`. Every participant now gets each row
-twice, in a new random order.
+With the trial list open, Properties shows how it runs. **Order** is already **Shuffled each
+time**: every participant gets the rows in a new random order. Set **Repeat the list** to `2` to
+show each row twice; the line next to it counts the trials.
+
+Press **Done** at the top right of the list to go back to the Storyboard, then **Next**.
 
 **11. Test it**
 
-Click **▶ Test run**. EDGE runs the whole experiment in a few seconds with a *virtual participant*
-who presses keys with realistic reaction times. Look at the **Test results** tab: the number of
-trials, the verdict, then the data preview.
+Open **Test** (top) and click **Start test run**. EDGE runs the whole experiment in a few seconds
+with a *virtual participant* who presses keys with realistic response times. The **Last test run**
+card shows the number of trials, the verdict and a data preview.
 
-Then press **▶ Try it** to do the task yourself, right in the builder.
+Then press **Try it** (top right) to do the task yourself, right in the builder. **Esc** stops.
+Press **Next** when you're done.
 
 **12. Save**
 
-Press **Save** (or Ctrl/⌘+S) and give your experiment a file name. Every later save keeps the
-previous version, so you can always go back (**Versions**).
+Click the save button at the top, **Unsaved changes** (in a narrow window it is the disk icon with a
+dot), or press Ctrl/⌘+S. Give your experiment a name and press
+**Save**. It gets its own folder. Every later save keeps the previous version, so you can always
+go back (**History…** in the Experiment menu).
 
-That's it: you built a complete experiment. To collect data, press **Run with a participant**.
+That's it: you built a complete experiment. To collect data, open **Run**.
 
 
 ---
@@ -118,51 +140,71 @@ That's it: you built a complete experiment. To collect data, press **Run with a 
 
 *Beginner · about 8 minutes* · interactive version: `edge tutorial trial_lists`
 
-Control which trials participants see and in what order: random vs full random, limits on repetitions in a row, factorial designs and counterbalancing by participant.
+Control which trials participants see and in what order: shuffled each time or across repeats, limits on the same value in a row, every combination of your factors, and counterbalancing by participant number.
 
-**1. Select the loop**
+**1. Select the trial list**
 
-This experiment already has a Stroop trial inside a loop called **trials**. Click the loop's
-green header in the **Flow** strip to select it.
+This experiment already has a Stroop screen inside a trial list called **trials** (the green
+frame in the **Storyboard**). Click the frame's title, **Trial list “trials”**, to select it.
+Properties now shows how the list runs.
 
 **2. Shuffle across repeats**
 
-Set **repeats** to `3` and **order** to `fullrandom`.
+In Properties, set **Repeat the list** to `3`, then choose **Shuffled across repeats** under
+**Order**.
 
-* `random` shuffles each repeat separately (you see all rows once before any repeats).
-* `fullrandom` shuffles all repeats together.
-* `latin_square` and `counterbalance` order the rows by participant number.
+* **Shuffled each time** shuffles each repeat separately: every row is shown once before any row
+  comes back.
+* **Shuffled across repeats** shuffles all repeats together.
+* **Latin square by participant number** and **Counterbalanced by participant number** give each
+  participant a different, planned order.
 
 **3. Avoid long runs of the same colour**
 
-Random orders sometimes put the same ink colour five times in a row. Set **max_repeat** to
+A random order sometimes puts the same ink colour five times in a row. Open **More options** at
+the bottom of Properties and, under **No more than N in a row**, type `2` next to **ink**.
 
-`{"ink": 2}`
+EDGE now builds orders where the same ink never comes more than twice in a row.
 
-and EDGE builds orders where the same ink never appears more than twice in a row.
-(Per value works too: `{"kind": {"deviant": 1}}` keeps deviants apart.)
+**4. Open the trial list**
 
-**4. Try a factorial design**
+Click **Open list** (in Properties or in the frame's header). The trial list fills the canvas:
+one row per trial, one column per value that changes.
 
-Change **conditions source** to `factorial`. Instead of typing every row, you list each factor
-with its levels, and EDGE builds every combination. For example
-`{"word": ["RED", "GREEN"], "ink": ["red", "green"]}` gives 4 rows.
+**5. Every combination**
 
-(For this Stroop you'd also need a `key` column, so switch back to `table` afterwards if you like.)
+Instead of typing every row, you can list each factor with its levels and let EDGE build every
+combination. Choose **Every combination** under **Rows come from**: each column becomes a factor
+with its levels as chips, and the line under them counts the rows (3 × 3 × 3 = 27).
 
-**5. Conditions from a spreadsheet**
+Have a look, then press **Next**.
 
-For real studies, trial lists usually live in a file. Choose **conditions source** = `file`
-and type a CSV, TSV or XLSX name next to your experiment. The builder shows a preview of the
-rows.
+**6. Back to your typed rows**
+
+In this Stroop the right key depends on the ink colour, so not every combination makes sense
+(RED in red ink with the key for blue would be scored wrong). Press **Undo** (Ctrl+Z) to go
+back to your typed rows.
+
+Don't remove the `key` column instead: the key press item reads its correct answer from it.
+
+**7. Trial lists from a spreadsheet**
+
+For real studies, trial lists usually live in a file. **A file** under **Rows come from** picks a
+CSV, TSV or Excel file from the experiment's folder (or uploads one); the grid shows its rows,
+read-only. **Copy into the experiment** turns a file's rows into typed rows you can edit here.
 
 Press **Next** when you've had a look.
 
-**6. Check what participants will see**
+**8. Test run**
 
-Click **▶ Test run**, then open the **Data** tab and tick *include test runs*. The trial table shows
-the order this virtual participant got, and the `trials.row` column tells you which row of the
-list each trial used.
+Open **Test** and click **Start test run**. A virtual participant does every trial in a few
+seconds.
+
+**9. See the order participants got**
+
+Open **Data**, choose **Tests & tries** and click the newest session. The **Trials** table shows
+the order this virtual participant got; the `trials.row` column says which row of the list each
+trial used.
 
 
 ---
@@ -171,57 +213,63 @@ list each trial used.
 
 *Intermediate · about 10 minutes* · interactive version: `edge tutorial workflow_practice`
 
-Turn two loops into a workflow: participants repeat the practice block until they reach 80% correct (at most three times), then continue to the main task.
+Turn two trial lists into a workflow: participants repeat the practice block until they reach 80% correct (at most three times), then continue to the main task.
 
 **1. The plan**
 
-The flow has a **practice** loop (with feedback) and a **main** loop. You want:
-*practice → if accuracy ≥ 80% go to main, otherwise practice again (at most 3 times)*.
+The storyboard has a **practice** trial list (with feedback) and a **main** trial list. You want:
+*practice → if accuracy ≥ 80 % go to main, otherwise practice again (at most 3 times)*.
 
-That's a **workflow** (a state machine). Press **Next**.
+That's a **workflow**: **phases** with "then go to…" **routes**. Press **Next**.
 
 **2. Add a workflow**
 
-In the **Flow** strip, click the first round **+** (far left) and choose **Workflow (state machine)**.
-A purple box appears with one state called `start`.
+In the **Storyboard**, click the round **+** at the far left, *outside* the practice list (the
+highlighted one), and choose **Workflow (practice until good, screening…)**. A purple frame
+appears with one phase called `start`.
 
-**3. Rename the state**
+**3. Rename the phase**
 
-Click the state name **start** inside the purple box. In Properties, click the **name**
-field and rename it to `practice`.
+Click the phase name **start** inside the purple frame. In Properties, change **Name** to
+`practice` and press Tab.
 
-**4. Move the practice loop into it**
+**4. Move the practice list into it**
 
-**Drag** the green *practice* loop header and drop it on the **+** inside the `practice` state.
-(Every item in the flow can be dragged onto any + button.)
+**Drag** the green **Trial list “practice”** by its title and drop it on the **+** inside the
+`practice` phase. (Every screen and trial list can be dragged onto any **+**.)
 
-**5. Add the main state**
+**5. Add the main phase**
 
-Click **+ state** in the workflow box, name it `main`, and drag the *main* loop into it.
+Click **Add a phase** at the bottom of the workflow, name it `main`, then drag the
+**Trial list “main”** onto the **+** inside the new phase.
 
 **6. Route by accuracy**
 
-Select the **practice** state. Under **Routes**, the first route has a condition and a target:
+Click the **practice** phase name to select it. Under **Then go to…**, click **Add a route**, then:
 
-* condition: `$practice.accuracy >= 0.8` and go to **main**
-* click **+ Route** and make the second one go to **practice** with an empty condition (that means "otherwise").
+* route 1: **When** `$practice.accuracy >= 0.8`, **go to** **main**;
+* route 2: leave **When** empty (that means *otherwise*), **go to** **practice (again)**.
 
-Loops measure accuracy live: `$practice.accuracy` is the proportion correct in the practice block.
+Trial lists measure accuracy while they run: `$practice.accuracy` is the proportion correct in
+the practice block. The line under the formula says it in words. Press **Next** when both routes
+are set.
 
 **7. Limit the repetitions**
 
-Set **max_visits** to `3`. After three practice rounds the participant moves on even if they
-haven't reached the criterion, so nobody gets stuck.
+Set **Repeat this phase at most** to `3`. After three practice rounds the participant moves on
+even if they haven't reached the criterion, so nobody gets stuck. (In the file this is `max_visits: 3`.)
 
 **8. See the diagram**
 
-Click the workflow's header (**⚙ … workflow**). The top panel turns into a live diagram of the
-states and routes. Solid arrows have conditions; dashed ones are the defaults.
+Click **Open diagram** in the workflow's header. The canvas shows the phases and their routes:
+solid arrows have conditions, dashed ones are the *otherwise* routes. Click a phase there to edit
+it; **Done** goes back to the Storyboard. Press **Next** when you've had a look.
 
 **9. Test run**
 
-Click **▶ Test run**. The virtual participant answers 90% correctly, so they usually pass first time.
-In the session data, the `workflow.state` and `workflow.visit` columns show the path taken.
+Open **Test** and click **Start test run**. The virtual participant answers about 90 % correctly,
+so they usually pass the first time. In the session's data (**Data** › **Tests & tries**), the
+`workflow.state` and `workflow.visit` columns show the path taken.
 
 
 ---
@@ -230,48 +278,52 @@ In the session data, the `workflow.state` and `workflow.visit` columns show the 
 
 *Intermediate · about 10 minutes* · interactive version: `edge tutorial eyetracking`
 
-Add an eye tracker, measure where people look with gaze areas of interest, mark stimulus onsets for every device, and read the synchronization report.
+Add an eye tracker, measure where people look with gaze areas of interest, mark stimulus onsets for every device, and read the synchronisation report.
 
 **1. Add an eye tracker**
 
-Click **+** next to **Devices** (left panel) and choose **sim_eyetracker**: a simulated tracker,
-perfect for building at your desk. For real hardware you'd pick **tobii** or **gazepoint**; the
-rest of the experiment stays the same.
+In the **Devices** tab on the left, click **Add device**. Choose **Simulated (for testing)** ›
+**Simulated eye tracker** (`sim_eyetracker`) and press **Add device**: a simulated tracker, perfect
+for building at your desk. For real hardware you'd pick **Tobii Pro** or **Gazepoint** under
+**Eye tracker**; the rest of the experiment stays the same.
 
-**2. Open the trial**
+**2. Open the screen**
 
-Click the **look** screen in the Flow strip. It shows a red and a blue square for 4 seconds.
+Double-click the **look** card in the Storyboard (or click it and press Enter). It shows a red and
+a blue square for 4 seconds.
 
 **3. Add a gaze area of interest**
 
-Click **Where they look** on the left (under *Eye tracking*). In Properties, set **target** to
-`left_box`. EDGE now records whether, when and how long the participant looked at the left square.
+Click **Where they look** under **Eye tracking** on the left (`gaze_roi`). In Properties, set
+**Area of** (`target`) to `left_box`. EDGE now records whether, when and how long the participant
+looked at the left square.
 
 **4. A second area**
 
-Add another **Where they look** with **target** `right_box`.
+Add another **Where they look** with **Area of** `right_box`.
 
 **5. Mark the stimulus onset**
 
-Select **left_box** and set **marker** to `squares_on`. At the exact screen flip that shows the
-squares, EDGE sends this event to every device: TTL triggers, LSL, the eye tracker's own data
-file. It's written to the event log too.
+Click **left_box** on the timeline and set **Event marker** (`marker`) to `squares_on`. At the
+exact screen refresh that shows the squares, EDGE sends this event to every device: TTL triggers,
+LSL, the eye tracker's own data file. It's written to the event log too.
 
 **6. Send markers to LabRecorder too**
 
-Add a device of type **lsl_markers**. Anything recording Lab Streaming Layer (LabRecorder, an EEG
-system) then receives the same markers with matching timestamps.
+**Add device** again and choose **Marker stream** › **LSL marker stream (LabRecorder)**
+(`lsl_markers`). Anything recording Lab Streaming Layer (LabRecorder, an EEG system) then receives
+the same markers with matching timestamps.
 
-**7. Test run and read the sync report**
+**7. Test run and read the synchronisation report**
 
-Click **▶ Test run** and look at **Streams & synchronization** in the results. The simulated tracker
-runs on its own drifting clock, and EDGE recovers the drift. The *triggers* column shows that
-every marker arrived, and *alignment* shows how precisely.
+Open **Test** and click **Start test run**, then look at **Streams & synchronisation** under
+**Last test run**. The simulated tracker runs on its own drifting clock, and EDGE recovers the
+drift. The *triggers* column shows that every marker arrived, and *alignment* shows how precisely.
 
 
 ---
 
-## Questionnaires and consent with HTML pages
+## Questionnaires and consent with web pages
 
 *Beginner · about 7 minutes* · interactive version: `edge tutorial html_questionnaire`
 
@@ -279,16 +331,20 @@ Put a real HTML form inside your experiment: every answer is saved as a data col
 
 **1. Create a screen for the questionnaire**
 
-Click **+ screen** and name it `survey`.
+Click **Add screen**, type `survey` and press **Add screen**.
 
-**2. Add an HTML page**
+**2. Add a web page**
 
-Click **Web page / form** on the left. HTML pages can show consent forms, questionnaires, rich
-instructions, or even complete JavaScript tasks.
+Click **Web page / form** under **Add** on the left. Web pages can show consent forms,
+questionnaires, rich instructions, or even complete JavaScript tasks.
+
+(For ready-made questionnaires with scoring, use **Survey / questionnaire** instead: see the
+tutorial *Questionnaires like a pro*.)
 
 **3. Write the form**
 
-In Properties, paste this into **html** (or use **file** to point at an `.html` file):
+In Properties, paste this into **Page content (HTML)** and press Tab (or use **Choose…** to pick
+an `.html` file):
 
 ```html
 <h2>How do you feel?</h2>
@@ -301,64 +357,65 @@ In Properties, paste this into **html** (or use **file** to point at an `.html` 
 </form>
 ```
 
-The preview shows the real page.
+The preview shows the real page. **Ends the screen** is already on: the experiment moves on when
+the form is sent.
 
-**4. Move on when the form is sent**
+**4. It's already in the experiment**
 
-Tick **ends the screen** in the **When** section.
+Click **Storyboard** at the top of the canvas (in a narrow window, the button with four squares).
+New screens join the experiment where you make them, so `survey` is already in the order: its card
+shows a thumbnail of the page.
 
-**5. Put it in the flow**
+**5. Test run and see the answers**
 
-In the **Flow** strip click **+** and choose **Screen: survey**.
+Open **Test** and click **Start test run**. The virtual participant fills in the form, and the data
+preview has the columns `page.mood` and `page.age` (the item is called `page`). In real sessions,
+answers land in exactly the same place.
 
-**6. Test run and see the answers**
-
-Click **▶ Test run**. The virtual participant fills in the form, and the data preview has the columns
-`html.mood` and `html.age`. In real sessions, answers land in exactly the same place.
-
-Tip: write `{{participant}}` or any trial variable in the HTML to show it on the page.
+Tip: write `{{participant}}` or any trial-list column in the HTML to show it on the page.
 
 
 ---
 
-## Rules, hints and conditional components
+## Rules, hints and items shown only sometimes
 
 *Intermediate · about 7 minutes* · interactive version: `edge tutorial rules_and_feedback`
 
-Make screens react while they run: show a hint if the participant is slow, and show feedback only during practice.
+Make screens react while they run: show a hint if the participant is slow, and show feedback only during the first practice trials.
 
-**1. Open the trial**
+**1. Select the trial**
 
-Click **trial** in the Flow strip. It has a **hint** text that never starts by itself
-(`start_if` is `$False`). You'll start it with a rule.
+Click the **trial** card in the Storyboard. Properties shows the screen. It has a **hint** text
+that never starts by itself (its *starts when* is `$False`). You'll start it with a rule.
 
 **2. Add a rule**
 
-In the screen's Properties (click an empty part of the timeline header if a component is
-selected), find **Rules (when → do)** and click **+ Rule**.
+In Properties, find **Rules · react while the screen runs** and click **Add a rule**.
 
 **3. Say when**
 
-Set the rule's **When** to `$t > 1.5 and resp.keys is None`: 1.5 s into the trial, if no key
-has been pressed yet.
+Set the rule's **When** to `$t > 1.5 and resp.keys is None` and press Tab: 1.5 s into the trial,
+if no key has been pressed yet. The line under it says the same in words.
 
 **4. Say what to do**
 
-Change the action from *end the screen* to **start component**, and pick **hint**. Slow
-participants now see the key reminder.
+Under **Do**, change **End the screen** to **Start an item**, then pick **hint** in the menu next
+to it. Slow participants now see the key reminder.
 
-Other actions: stop a component, set a variable, send a marker, or jump to another workflow state.
+Other actions: stop an item, set variables, send a marker, go to a workflow phase, or write to the
+log.
 
 **5. Feedback only in practice**
 
-Open the **feedback** screen and select the **fb** text. In its **When** section set **only if** to
-`$practice.n < 6`, so feedback is shown only for the first six practice trials.
-Any expression works, for example `$practice_mode` or `$word == 'RED'`.
+First make sure the rule's item is **hint** (not `fix`). Then double-click the **feedback** card,
+click **fb** on the timeline, and set **Only if** (`if`) to `$practice.n < 6`, so feedback is shown
+only for the first six practice trials. Any formula works, for example `$word == 'RED'`.
 
 **6. Check the summary**
 
-Read the grey summary above the timeline. EDGE describes each screen in plain language,
-including the rules, so you can check the logic at a glance. Click **▶ Test run** to finish.
+Read **In words** above the timeline: EDGE describes each screen in plain language, including when
+its items start, so you can check the logic at a glance. Then open **Test** and click
+**Start test run** to finish.
 
 
 ---
@@ -371,34 +428,57 @@ See what EDGE saves, read the automatic per-condition summary, and export to Exc
 
 **1. Collect some data**
 
-Click **▶ Test run**. It writes a session folder exactly like a real participant would.
+Open **Test** and click **Start test run**. It writes a session folder exactly like a real
+participant would.
 
-**2. Open the Data tab**
+**2. Open Data**
 
-Open the **Data** tab in the console and tick *include test runs*. Every session in this folder is
-listed. Click the newest one.
+Open **Data** (top). Sessions with participants are listed under **Participants**; test runs and
+your own tries under **Tests & tries**. Choose **Tests & tries** and click the newest session,
+then press **Next**.
 
 **3. One row per trial**
 
-**Trials** shows one row per trial with columns in a sensible order: participant, design,
-conditions, responses (`resp.keys`, `resp.rt`, `resp.corr`), timing.
+**Trials** shows one row per trial with the columns in a sensible order: participant, design,
+trial-list columns, responses (`resp.keys`, `resp.rt`, `resp.corr`), timing.
 
-**Summary** shows accuracy and RT per condition (correct trials only, outliers removed), and
-**Data dictionary** explains every column. Press **Next** when you've looked around.
+**Summary** shows accuracy and response times per condition (correct trials only, outliers
+removed), and **What each column means** explains every column. Press **Next** when you've
+looked around.
 
 **4. Export**
 
-Click **↓ Excel** for a workbook with all three tables. **↓ BIDS** writes a BIDS-style folder.
-**Export all** (left) merges every participant into one dataset.
+**Export** (top right of the session) writes this session as CSV, Excel, TSV, JSON or BIDS.
+**Export all sessions** (under the list) merges every participant into one table (CSV + Excel) or
+one BIDS folder. A message says where the files went, with **Show the files**.
 
 Press **Next**.
 
-**5. Export automatically after every session**
+**5. Back to Build**
 
-Click **Settings** (top bar) and, under the data settings, edit the experiment file so it reads
-`data: {exports: [csv, xlsx]}`. The easiest way is the **Source (YAML)** tab: add `xlsx` to `exports`
-and click **Apply YAML**.
-From then on, every session also gets an Excel file automatically.
+Exports can also happen by themselves after every session. That is a setting of the experiment:
+open **Build**.
+
+**6. Export automatically after every session**
+
+Click **Experiment settings** (the sliders button at the right of the Build toolbar, or
+**Experiment settings…** in the Experiment menu). Under **Data files** › **Also save as**, tick
+**Excel (.xlsx)**, then **Done**. From now on, every session also gets an Excel file automatically.
+Press **Next** once the dialog is closed.
+
+**7. The same setting in the file**
+
+In Expert mode the Build view switch has **YAML**: the experiment file itself. Click it and find,
+under `settings:` › `data:`, the lines
+
+```
+exports:
+- csv
+- xlsx
+```
+
+You can edit the file there and press
+**Apply YAML**; everything you do in the builder ends up in this file.
 
 
 ---
@@ -407,7 +487,7 @@ From then on, every session also gets an Excel file automatically.
 
 *Beginner · about 5 minutes* · interactive version: `edge tutorial import_existing`
 
-Convert an existing experiment, read the import report, and verify the result with a test run.
+Convert an existing experiment, read the import report, and check the result with a test run.
 
 **1. What can be imported**
 
@@ -415,25 +495,31 @@ Convert an existing experiment, read the import report, and verify the result wi
 * **E-Prime:** in E-Studio press *Generate* to get the `.ebs3` script; also save each List as `<ListName>.txt`.
 * **OpenSesame:** the `.osexp` file.
 * **jsPsych:** the `.html` (or `.js`) file with the timeline.
+* **EDGE:** a shared `.edgez` file opens as it is.
 
 Press **Next**.
 
 **2. Import**
 
-Click **Import** in the top bar and select *all* the files at once (experiment, conditions,
-images, list exports). EDGE converts them and shows a summary.
+Click the experiment's name at the top left to open the **Experiment menu** and choose
+**Import…** (on Home, **Import** is a button). Then **Choose a folder…** (the experiment's whole
+folder, with its pictures, sounds and condition files) or **Choose files…** and select *all* the
+files at once. EDGE converts them and shows a summary.
 
 **3. Read the report**
 
-The summary lists what **needs manual work** (e.g. movies or custom code) and what was
-**converted approximately**. The full list is in `IMPORT_REPORT.md` next to the new experiment.
+The summary counts what **needs work by hand** (e.g. movies or custom code) and what was converted
+**approximately: please check**. **View the report** shows the full list, which is also saved as
+`IMPORT_REPORT.md` next to the new experiment.
 
-Click **Open and dry-run** to load the converted experiment and test it straight away.
+Click **Open and test** to load the converted experiment and test-run it straight away. (No files
+to import right now? **Skip step**.)
 
-**4. Verify**
+**4. Check it**
 
-Compare the test run with the original: number of trials, timing per screen (read the plain-language
-summary above each timeline), response keys and correct answers. Fix anything flagged, then save.
+Compare the test run with the original: the number of trials, the timing of each screen (read
+**In words** above each timeline), the response keys and the correct answers. Fix anything the
+report flagged, then save.
 
 Command-line alternative: `edge import my_task.psyexp`.
 
@@ -458,12 +544,13 @@ Press **Next**.
 
 **2. Add a survey**
 
-Click **Survey / questionnaire** on the left. Because the task screen already has something on
-it, EDGE gives the survey its own screen, **questionnaire**, right after the task in the flow.
+Double-click the **task** card to open the screen, then click **Survey / questionnaire** under
+**Add** on the left. Because the task screen already has something on it, EDGE gives the survey
+its own screen, **questionnaire**, right after the task.
 
 **3. Open the survey editor**
 
-In **Properties**, click **✎ Edit questions**. The editor has three columns: the questions on the
+In **Properties**, click **Edit questions**. The editor has three columns: the questions on the
 left, the selected question in the middle, and on the right the **real page** participants will
 see. You can click through it.
 
@@ -471,35 +558,111 @@ Press **Next** when you've had a look.
 
 **4. Add a validated questionnaire**
 
-Click **+ From library**, search for `life` and **Add** the *Satisfaction With Life Scale (SWLS)*.
-Its five items, the 7-point scale and the scoring (`swls_total`, with interpretive bands) come with it.
+Click **From the library**, search for `life` and press **Add** on the *Satisfaction With Life
+Scale (SWLS)*. Its five items, the 7-point scale and the scoring (`swls_total`, with interpretive
+bands) come with it.
 
 **5. Your own multiple-choice question**
 
-Click **+ Question → Multiple choice (checkboxes)**. In the middle column set the question to
-*Which of these do you do at least once a week?* and the options (one per line) to
-`Sport`, `Music`, `Reading`, `None of these`. Set **Exclusive option** to *None of these* and
-the **Data name** to `weekly`.
+Click **Add a question** › **Multiple choice (checkboxes)**. In the middle column set **Question**
+to *Which of these do you do at least once a week?* and **Options (one per line)** to `Sport`,
+`Music`, `Reading`, `None of these`. Set **Exclusive option** to *None of these* and the
+**Data name** to `weekly`.
 
 **6. A follow-up with display logic**
 
-Add **+ Question → Number**, data name `sport_hours`, question *How many hours of sport per week?*.
-Under **Display logic** choose *only if weekly* and **includes** *Sport*.
+Click **Add a question** › **Number**: data name `sport_hours`, question *How many hours of sport
+per week?*. Under **Show it** choose **Only if weekly: …**, then **includes** and **Sport**.
 
-In the preview, tick *Sport* in the earlier question and watch the follow-up appear.
+In the preview, tick *Sport* in the earlier question and watch the follow-up appear. Then press
+**Next**.
 
 **7. Test it**
 
-Click **Done**, then **▶ Test run**. The virtual participant fills in the survey; in the data
-preview you'll find `survey.weekly`, one 0/1 column per option (`weekly_sport` …),
-`sport_hours` (empty when Sport wasn't ticked), the five SWLS items, `swls_total` and
-`swls_total_band`.
+Click **Done**, then open **Test** and click **Start test run**. The virtual participant fills in
+the survey; in the data preview you'll find `survey.weekly`, one 0/1 column per option
+(`weekly_sport` …), `sport_hours` (empty when Sport wasn't ticked), the five SWLS items,
+`swls_total` and `swls_total_band`.
 
 **8. Try it yourself**
 
-Press **▶ Try it** to fill in the survey yourself. Leave a required question empty and press
-**Next** to see the plain-language check.
+Press **Try it** (top right) to fill in the survey yourself. Leave a required question empty and
+press **Next** to see the plain-language check.
 
 The [Surveys guide](SURVEYS.md) lists every question type, display logic, scores and the
 whole questionnaire library.
+
+
+---
+
+## Build with the assistant
+
+*Beginner · about 6 minutes* · interactive version: `edge tutorial assistant_basics`
+
+Meet the assistant: describe an experiment or a change in your own words, see it as a preview, and apply it (or undo it). Learn where the assistant can run and what is sent where. Works without a model: only the last steps need one.
+
+**1. What the assistant does**
+
+The **assistant** builds and changes experiments from a description in your own words, for
+example *"Add a practice block of 6 trials that repeats until 80 % are correct"*. You can attach
+the files you already have (a trial list in Excel or CSV, pictures, a consent page). It checks and
+test-runs what it made, and you see every change as a preview before anything happens.
+
+It is optional: everything else in EDGE works without it. Press **Next**.
+
+**2. Open the assistant**
+
+Click **Assistant** at the top right, the sparkle button (or press **Ctrl+I**). The assistant opens in a column next
+to your work, so the experiment stays visible.
+
+**3. Open the assistant settings**
+
+Click the chip under the panel's title: it says **Not set up**, or which service the assistant
+uses. It opens **Assistant settings** (also in the panel's **⋯** menu).
+
+**4. Where should the assistant run?**
+
+Choose one of four services:
+
+* **Claude (Anthropic)**: the best results. Online; paste an API key from console.anthropic.com.
+* **OpenAI-compatible**: OpenAI, OpenRouter or another online service, with its API key.
+* **Ollama** or **LM Studio**: free, run a model on this computer, nothing leaves it. Install the
+  app and download a model first (for Ollama: `ollama pull qwen2.5:14b`).
+
+Fill in the fields, press **Test connection**, then **Save**. The [Assistant guide](ASSISTANT.md)
+has the details for each service.
+
+**5. What is sent where**
+
+For an online service, open **What is sent where** under its fields and read it: what you type, the
+experiment you are editing and the files you attach go to that company; your participants' data
+never does, and your API key stays on this computer. For Ollama or LM Studio the settings say
+*On this computer: nothing is sent anywhere.* The panel repeats this in one line under the box you
+type in.
+
+Then press **Save** (or **Cancel** if you are not setting it up now) and **Next**. For an online
+service EDGE asks once, *Before EDGE sends anything online*: press **Continue**.
+
+**6. Describe an experiment**
+
+*Skip this step if you haven't set up a model yet.*
+
+Type a description in **Describe a change, or ask a question…** and press Enter, for example:
+*A Stroop task: the words RED, GREEN and BLUE in red, green or blue ink; the participant presses
+r, g or b for the ink colour.* The panel shows each step while it works.
+
+The result opens as a **preview**: new screens are marked, and the bar at the top says "Nothing is
+changed until you apply". Read the list of changes, then press **Apply**.
+
+**7. Undo, attach, and more**
+
+* **Apply** is one step: **Undo** (in the panel, or Ctrl+Z) brings back the experiment exactly as
+  it was. **Discard** throws a preview away.
+* **Attach files** (the paper clip, or drop files on the panel): they are copied into this
+  experiment's folder, so the experiment can use them.
+* Select a screen or an item first to ask about it (*"make this bigger"*).
+* **Ask the assistant** also appears next to problems, and Home has a **Describe it** box for new
+  experiments.
+
+That's it. Press **Finish**.
 

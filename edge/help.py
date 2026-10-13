@@ -23,7 +23,9 @@ TUTORIAL_DIR = PACKAGE_DIR / "tutorials"
 
 # Check types the builder's tutorial runner understands (see app.js: TUTORIAL_CHECKS).
 CHECK_TYPES = {"routine_exists", "component", "loop", "flow_has", "statemachine", "device", "rule", "dry_run",
-               "tab_open", "saved", "selected", "variable", "routine_prop", "setting"}
+               "tab_open", "saved", "selected", "variable", "routine_prop", "setting",
+               # the redesigned builder (UI spec §6.2): workspace and Build view, the assistant panel and its Apply
+               "workspace", "view", "assistant_open", "assistant_applied"}
 
 
 class HelpNotFound(KeyError):
@@ -58,10 +60,14 @@ def slug(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", s).strip("-")
 
 
+# The "Learn" group of the help (Start here): what a new user reads first, in this order (UI spec W15).
+LEARN = ("README", "GETTING_STARTED", "TUTORIALS", "BUILDER_GUIDE", "ASSISTANT", "FAQ")
+
+
 def topics() -> list[dict[str, str]]:
     """All guides: {"id", "title", "summary", "group"}."""
-    order = ["README", "GETTING_STARTED", "TUTORIALS", "BUILDER_GUIDE", "EXPERIMENT_FORMAT", "SURVEYS", "COOKBOOK", "DATA",
-             "DEVICES", "IMPORT", "MCP", "FAQ", "ARCHITECTURE"]
+    order = ["README", "GETTING_STARTED", "TUTORIALS", "BUILDER_GUIDE", "ASSISTANT", "FAQ", "EXPERIMENT_FORMAT", "SURVEYS",
+             "COOKBOOK", "DATA", "DEVICES", "IMPORT", "MCP", "ARCHITECTURE"]
     out = []
     base = docs_dir()
     files = sorted(base.glob("*.md")) + sorted((base / "reference").glob("*.md"))
@@ -70,7 +76,7 @@ def topics() -> list[dict[str, str]]:
         text = f.read_text(encoding="utf-8")
         title = next((l[2:].strip() for l in text.splitlines() if l.startswith("# ")), f.stem)
         para = next((l.strip() for l in text.split("\n\n")[1:] if l.strip() and not l.lstrip().startswith(("#", "|", "```", "!", "-", "<"))), "")
-        group = "Reference" if tid.startswith("reference/") else ("Learn" if tid in ("README", "GETTING_STARTED", "TUTORIALS", "BUILDER_GUIDE", "FAQ") else "Guides")
+        group = "Reference" if tid.startswith("reference/") else ("Learn" if tid in LEARN else "Guides")
         out.append({"id": tid, "title": title, "summary": re.sub(r"\s+", " ", para)[:180], "group": group})
     rank = {k: i for i, k in enumerate(order)}
     out.sort(key=lambda t: ({"Learn": 0, "Guides": 1, "Reference": 2}[t["group"]], rank.get(t["id"], 99), t["id"]))
@@ -181,9 +187,16 @@ def tutorials() -> list[dict[str, Any]]:
 
 
 def tutorial(tid: str) -> dict[str, Any]:
-    for t in tutorials():
-        if t["id"] == tid:
+    """By id, as the builder resolves it: exact, then 'Trial lists'/'trial-lists' → trial_lists, then a unique
+    prefix ('import' → import_existing)."""
+    all_ = tutorials()
+    norm = re.sub(r"[-\s]+", "_", str(tid or "").strip().lower())
+    for t in all_:
+        if t["id"] == tid or t["id"] == norm:
             return t
+    hits = [t for t in all_ if norm and t["id"].startswith(norm)]
+    if len(hits) == 1:
+        return hits[0]
     raise HelpNotFound(f"no tutorial '{tid}'; available: {', '.join(t['id'] for t in tutorials())}")
 
 
@@ -201,6 +214,8 @@ def validate_tutorial(t: dict[str, Any]) -> list[str]:
     for i, st in enumerate(t.get("steps", [])):
         if not st.get("title") or not st.get("body"):
             problems.append(f"step {i + 1}: needs a title and a body")
+        if st.get("advance") not in (None, "manual"):
+            problems.append(f"step {i + 1}: advance must be 'manual'")
         chk = st.get("check")
         if chk:
             bad = set(chk) - CHECK_TYPES
@@ -220,9 +235,10 @@ def tutorial_markdown(t: dict[str, Any]) -> str:
 
 def build_tutorials_doc() -> str:
     head = ["# Tutorials", "",
-            "Hands-on lessons. Each one also runs **interactively** in the builder (Help → Tutorials, or",
-            "`edge tutorial <name>`): the coach highlights the part of the screen to use, waits until you've done",
-            "the step, then moves on. Tutorials start from a fresh copy, so you can't break anything.", "",
+            "Hands-on lessons. Each one also runs **interactively** in the builder (**Help** › *Learn by doing*,",
+            "**All tutorials** on Home, or `edge tutorial <name>`): the coach points at the part of the screen to use,",
+            "waits until you've done the step, then moves on. Tutorials start from a fresh copy, so you can't break",
+            "anything.", "",
             "| Tutorial | Level | Time | You will learn |", "|---|---|---|---|"]
     for t in tutorials():
         head.append(f"| [{t['title']}](#{slug(t['title'])}) | {t.get('level', 'beginner')} | {t.get('minutes', 10)} min | "

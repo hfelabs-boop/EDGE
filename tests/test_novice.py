@@ -131,7 +131,7 @@ def test_wizard_practice_until_criterion_uses_a_workflow(tmp_path):
 
 
 def test_wizard_rejects_bad_answers():
-    with pytest.raises(WizardError, match="not among the response keys"):
+    with pytest.raises(WizardError, match="not among the keys participants may press"):
         build_experiment({"stimulus": {"items": [{"stimulus": "A", "correct": "x"}]}, "response": {"kind": "keys", "keys": ["f"]}})
     with pytest.raises(WizardError, match="at least one stimulus"):
         build_experiment({"stimulus": {"items": [{"stimulus": ""}]}})
@@ -166,11 +166,14 @@ def test_play_manager_runs_with_browser_input(tmp_path):
     pm = PlayManager(tmp_path)
     assert pm.start(doc, tmp_path)["ok"]
     seen = set()
+    seen_trials = set()
     deadline = time.time() + 20
     while time.time() < deadline:
         f = pm.frame()
         if not f["running"]:
             break
+        if f.get("in_trial"):
+            seen_trials.add(f["trial"])
         texts = [p.get("text", "") for k, p in f["drawn"] if k == "text"]
         seen.update(texts)
         if any("Press SPACE" in t for t in texts):
@@ -183,6 +186,8 @@ def test_play_manager_runs_with_browser_input(tmp_path):
     assert not f["running"] and f["error"] is None, f
     assert f["result"]["trials"] == 2 and f["result"]["responses"] == 2
     assert {"LEFT", "RIGHT"} & seen
+    # the Try-it bar says "trial 2 of 2": the frame carries the current trial and the expected total
+    assert seen_trials >= {1, 2} and f["trials"] == 2 and f["trial"] == 2
 
 
 def test_play_escape_stops_and_html_pages_are_shown_in_place(tmp_path):
@@ -240,7 +245,7 @@ def test_builder_wizard_estimate_play_and_participants(server):
     pre = _post(url + "/api/wizard", {"answers": {"blocks": {"count": 2}}})
     assert pre["ok"] and "path" not in pre and pre["estimate"]["trials"] == 4
     bad = _post(url + "/api/wizard", {"answers": {"response": {"kind": "keys", "keys": ["q"]}}})   # examples use f/j
-    assert bad["ok"] is False and "not among the response keys" in bad["error"]
+    assert bad["ok"] is False and "not among the keys participants may press" in bad["error"]
     made = _post(url + "/api/wizard", {"answers": {"name": "demo", "stimulus": {"kind": "picture"}}, "save_as": "demo/demo.yaml"})
     assert made["path"] == "demo/demo.yaml" and (root / "demo" / "images").is_dir()
     assert _post(url + "/api/wizard", {"answers": {}, "save_as": "demo/demo.yaml"})["ok"] is False   # never overwrites

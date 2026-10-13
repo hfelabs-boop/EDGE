@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import re
 import subprocess
 import sys
 import threading
@@ -18,7 +19,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from .. import storage
 
@@ -29,6 +30,110 @@ BLOCKED_UPLOAD_SUFFIXES = {".py", ".pyw", ".pyc", ".pth", ".sh", ".bat", ".cmd",
                            ".dylib", ".vbs", ".scr", ".desktop", ".command", ".app", ".lnk"}
 ACTIVE_CONTENT = {"text/html", "image/svg+xml", "application/xhtml+xml", "text/xml", "application/xml"}
 MAX_JSON_BODY = 50 * 1024 * 1024
+
+
+def looks_like_experiment(d: Any) -> bool:
+    """An EDGE document: routines is a mapping of screens and flow a list (BIDS sidecars and other JSON files
+    that happen to have a "routines" or "flow" key are not)."""
+    if not isinstance(d, dict):
+        return False
+    routines, flow = d.get("routines"), d.get("flow")
+    return (routines is None or (isinstance(routines, dict) and all(isinstance(r, dict) or r is None
+                                                                      for r in routines.values()))) \
+        and (flow is None or isinstance(flow, list))
+
+
+IMPORT_ORDER = {"psychopy": 0, "eprime": 1, "opensesame": 2, "jspsych": 3}
+_ASSET_REF = re.compile(r"""["'(]\s*((?:\./)?[\w\- .]+(?:/[\w\- .]+)+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff?|wav|mp3|ogg|flac|"""
+                        r"""m4a|aiff?|mp4|webm|mov|avi|csv|tsv|xlsx|txt))\s*["')]""", re.I)
+
+
+def import_candidates(folder: Path) -> list[Path]:
+    """The experiment files in an uploaded folder, the most specific first (see BuilderApp.import_source)."""
+    from ..importers import SUPPORTED_EXTENSIONS, _recognize
+    found = []
+    for f in sorted(folder.rglob("*")):
+        if not f.is_file() or f.suffix.lower() not in SUPPORTED_EXTENSIONS or f.stat().st_size > 20 * 1024 * 1024:
+            continue
+        try:
+            platform = _recognize(f)
+        except Exception:
+            platform = None
+        if platform:
+            found.append((IMPORT_ORDER.get(platform, 9), f.suffix.lower() == ".js", len(f.relative_to(folder).parts), f))
+    return [f for *_, f in sorted(found, key=lambda x: x[:3])]
+
+
+def place_flat_assets(folder: Path) -> list[str]:
+    """Files chosen one by one arrive side by side, although the experiment names them in sub-folders
+    ("img/blue.png"). Put a copy where the experiment looks for it, when exactly one uploaded file has that name."""
+    import shutil
+    files = [f for f in folder.rglob("*") if f.is_file()]
+    by_name: dict[str, list[Path]] = {}
+    for f in files:
+        by_name.setdefault(f.name.lower(), []).append(f)
+    placed = []
+    for f in files:
+        if f.suffix.lower() not in (".html", ".htm", ".js", ".psyexp", ".osexp", ".opensesame", ".ebs", ".ebs2",
+                                    ".ebs3", ".csv", ".tsv", ".txt", ".json") or f.stat().st_size > 5 * 1024 * 1024:
+            continue
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for ref in set(_ASSET_REF.findall(text)):
+            rel = ref[2:] if ref.startswith("./") else ref
+            target = (f.parent / rel).resolve()
+            hits = by_name.get(Path(rel).name.lower(), [])
+            if target.exists() or len(hits) != 1 or folder.resolve() not in target.parents:
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(hits[0], target)
+            placed.append(rel)
+    return placed
+
+
+def rename_in(doc: dict[str, Any], kind: str, old: str, new: str, routine: str | None = None) -> dict[str, Any]:
+    """Rename an item (component) or a trial list (loop) the way MCP does: formulas that use it ($resp.corr,
+    $trials.accuracy), measures, start-after / target / clickable, rule actions and summary settings follow."""
+    from ..editing import EditError, ExperimentDoc
+    d = ExperimentDoc(doc)
+    try:
+        if kind == "component":
+            if not routine:
+                raise BadRequest("the request needs 'routine'")
+            d.update_component(routine, old, new_id=new)
+        elif kind == "loop":
+            d.update_loop(old, {"id": new})
+        else:
+            raise BadRequest("kind must be 'component' or 'loop'")
+    except EditError as e:
+        raise BadRequest(str(e)) from e
+    return {"experiment": d.doc, "changes": d.changes}
+
+
+GAZE_DEVICES = ("tobii", "gazepoint", "sim_eyetracker")
+
+
+def mouse_is_gaze(doc: Any) -> Any:
+    """For Try it: eye trackers are simulated, and the simulated gaze follows the mouse (unless the experiment
+    says otherwise), so a fixation check or a gaze area can be passed on purpose."""
+    if not isinstance(doc, dict) or not isinstance(doc.get("devices"), list):
+        return doc
+    import copy
+    doc = copy.deepcopy(doc)
+    for d in doc["devices"]:
+        if isinstance(d, dict) and d.get("type") in GAZE_DEVICES:
+            opts = d.get("options") if isinstance(d.get("options"), dict) else {}
+            d["options"] = {**opts, "follow_mouse": opts.get("follow_mouse", True)}
+    return doc
+
+
+class AlreadyExists(storage.ConflictError):
+    """Saving under a new name that another experiment already has (answered 409, like a conflict)."""
+
+    def __init__(self, message: str):
+        RuntimeError.__init__(self, message)
 
 
 class BadRequest(ValueError):
@@ -43,13 +148,21 @@ class Query(dict):
         raise BadRequest(f"the request needs ?{key}=…")
 
 
-def request_allowed(headers: Any, method: str) -> str | None:
+PAGE_PREFIX = "/api/page/"     # /api/page/<key>/<path>: a file by path, so a page's relative links stay in its folder
+
+
+def request_allowed(headers: Any, method: str, path: str = "", page_key: str = "") -> str | None:
     """Why a request must be refused, or None.
 
     The builder listens on 127.0.0.1 only, but a web page in the same browser can still send requests to it
     (CSRF) or, with DNS rebinding, read its answers. So: the Host header must name this computer, and a
     browser request that changes anything must come from the builder's own page (Origin / Sec-Fetch-Site).
-    Non-browser clients (tests, scripts, the MCP server) send neither header and are allowed."""
+    Non-browser clients (tests, scripts, the MCP server) send neither header and are allowed.
+
+    One exception: a page of the experiment, shown sandboxed (no origin) from ``/api/page/<key>/…``, loads its
+    own stylesheets, scripts and pictures from there too. The browser labels those reads cross-site (and sends
+    no Referer), so they are allowed by the key in the path: a random key of this builder process that only the
+    builder's own page can read (from ``/api/files``), never another site. Only GETs of files, read-only."""
     host = (headers.get("Host") or "").strip().lower()
     hostname = host.rsplit(":", 1)[0] if host.count(":") == 1 or host.startswith("[") and "]:" in host else host
     if hostname.startswith("[") and hostname.endswith("]"):
@@ -74,6 +187,8 @@ def request_allowed(headers: Any, method: str) -> str | None:
     if site and site not in ("same-origin", "none") and method != "GET":
         return f"refused: cross-site request ({site})"
     if site and site not in ("same-origin", "none", "same-site") and method == "GET" and not origin:
+        if page_key and path.startswith(f"{PAGE_PREFIX}{page_key}/"):
+            return None
         return f"refused: cross-site request ({site})"
     return None
 
@@ -98,7 +213,8 @@ def schema() -> dict[str, Any]:
         "devices": {k: v.describe() for k, v in device_registry().items()},
         "loop_orders": list(LOOP_ORDERS),
         "templates": {k: {"name": v["name"], "description": v.get("description", "")} for k, v in public_templates().items()},
-        "import_extensions": [".psyexp", ".ebs3", ".ebs2", ".ebs", ".osexp", ".opensesame", ".html", ".htm", ".js"],
+        "import_extensions": [".psyexp", ".ebs3", ".ebs2", ".ebs", ".es3", ".es2", ".es", ".osexp", ".opensesame", ".html",
+                              ".htm", ".js", ".edgez"],
         "default_settings": DEFAULT_SETTINGS,
         "survey": survey_schema(),
     }
@@ -120,6 +236,8 @@ class BuilderApp:
         self.runs: dict[str, Any] = {}
         self.play = PlayManager(self.root)
         self.assistant: Any = None            # edge.assistant.jobs.AssistantService, created on first use
+        import secrets
+        self.page_key = secrets.token_urlsafe(18)  # in /api/page/<key>/… (see request_allowed)
 
     def safe_path(self, rel: str) -> Path:
         if not isinstance(rel, str) or "\0" in rel or len(rel) > 4096:
@@ -134,12 +252,16 @@ class BuilderApp:
         out = []
         for p in sorted(self.root.rglob("*")):
             parts = p.relative_to(self.root).parts
+            # exports/ holds BIDS sidecars (.json files describing a "routines" column), never experiments
             if p.suffix.lower() in (".yaml", ".yml", ".json") and "data" not in parts[:-1] \
+                    and "exports" not in parts[:-1] \
                     and not (p.parent / "session.json").exists() \
                     and not any(part.startswith(".") for part in parts):
                 try:
                     d = storage.loads(p.read_text(encoding="utf-8"), storage.fmt_of(p), str(p))
                 except Exception:
+                    continue
+                if not looks_like_experiment(d):
                     continue
                 if "routines" in d or "flow" in d:
                     row: dict[str, Any] = {"path": str(p.relative_to(self.root)), "name": d.get("name", p.stem)}
@@ -201,16 +323,81 @@ class BuilderApp:
         return {"assets": out, "folder": ASSET_FOLDERS[kind]}
 
     def load(self, rel: str) -> dict[str, Any]:
-        loaded = storage.load_document(self.safe_path(rel))
+        p = self.safe_path(rel)
+        try:
+            loaded = storage.load_document(p)
+        except (AttributeError, TypeError) as e:   # e.g. a BIDS sidecar: JSON, but routines/flow of another shape
+            raise storage.DocumentError(f"{rel} isn't an EDGE experiment (its routines or flow have another shape)") from e
+        if loaded.doc is not None and not looks_like_experiment(loaded.doc):
+            raise storage.DocumentError(f"{rel} isn't an EDGE experiment (its routines or flow have another shape)")
         return {"experiment": loaded.doc, "fingerprint": loaded.fingerprint, "migrations": loaded.migrations}
 
     def save(self, rel: str, data: dict[str, Any], expected: str | None, force: bool,
-             label: str | None = None) -> dict[str, Any]:
+             label: str | None = None, new: bool = False) -> dict[str, Any]:
         p = self.safe_path(rel)
+        if new and not force and p.exists():     # "Save as" a name that is taken: never replace the other file silently
+            raise AlreadyExists(f"{rel} already exists: choose another name")
         label = " ".join(str(label or "").split())[:60] or "builder"
         fp = storage.save_document(p, data, expected_fingerprint=None if force or not expected else expected,
                                    label=label)
         return {"saved": str(p.relative_to(self.root)), "fingerprint": fp}
+
+    # --------------------------------------------------------------- import
+    def import_source(self, source: str, out: str | None = None) -> dict[str, Any]:
+        """Import an experiment from another platform, or open a .edgez bundle.
+
+        ``source`` is a file, or the folder the builder uploaded the chosen files into (keeping their sub-folders
+        when a folder was chosen or dropped). In a folder the experiment file is found by what it is, not by the
+        order of the files: PsychoPy, E-Prime, OpenSesame, then jsPsych (an HTML page that only loads its
+        timeline from a script is imported from that script)."""
+        from ..importers import ImportError_, import_experiment
+        src = self.safe_path(source)
+        dest = self.safe_path(out) if out else None
+        if src.is_file() and src.suffix.lower() == ".edgez":
+            return self.open_bundle(src)
+        if src.is_dir():
+            bundles = sorted(src.rglob("*.edgez"))
+            if bundles:
+                return self.open_bundle(bundles[0])
+            place_flat_assets(src)
+            candidates = import_candidates(src)
+            if not candidates:
+                closed = sorted(f for f in src.rglob("*") if f.suffix.lower() in (".es3", ".es2", ".es"))
+                if closed:      # the importer explains how to get a script E-Prime can generate
+                    import_experiment(closed[0], dest)
+                raise ImportError_("None of these files is a PsychoPy (.psyexp), E-Prime (.ebs3/.ebs2), OpenSesame "
+                                   "(.osexp) or jsPsych (.html/.js) experiment.")
+            first: Exception | None = None
+            for f in candidates:
+                try:
+                    path, res = import_experiment(f, dest)
+                    break
+                except ImportError_ as e:
+                    first = first or e
+            else:
+                raise first  # type: ignore[misc]
+        else:
+            path, res = import_experiment(src, dest)
+        out_dir = path.parent
+        return {"path": str(path.relative_to(self.root)), "platform": res.platform, "source": Path(str(res.source)).name, "notes": res.notes, "stats": res.stats, "report": res.report_markdown(),
+                "report_path": str((out_dir / "IMPORT_REPORT.md").relative_to(self.root))
+                if (out_dir / "IMPORT_REPORT.md").is_file() else None}
+
+    def open_bundle(self, bundle: Path) -> dict[str, Any]:
+        """Unpack a .edgez bundle (made with Share as one file) into a new folder next to the others."""
+        import zipfile
+        try:
+            with zipfile.ZipFile(bundle) as z:
+                manifest = json.loads(z.read("manifest.json"))
+        except (zipfile.BadZipFile, KeyError, ValueError) as e:
+            raise storage.DocumentError(f"{bundle.name} is not an EDGE bundle (.edgez): it can't be opened") from e
+        stem = re.sub(r"[^\w-]+", "_", Path(str(manifest.get("source") or bundle.stem)).stem).strip("_") or "experiment"
+        dest, n = self.root / stem, 2
+        while dest.exists():
+            dest, n = self.root / f"{stem}_{n}", n + 1
+        path = storage.import_bundle(bundle, dest)
+        return {"path": str(path.relative_to(self.root)), "platform": "EDGE bundle", "bundle": True, "notes": [],
+                "stats": {}, "report": ""}
 
     # --------------------------------------------------------------- data
     def sessions(self, include_dry_runs: bool) -> list[dict[str, Any]]:
@@ -219,7 +406,11 @@ class BuilderApp:
         for root in find_sessions(self.root, include_dry_runs):
             try:
                 row = timing_row(SessionTables(root))
-                row["path"] = str(root.relative_to(self.root))
+                rel = root.relative_to(self.root)
+                row["path"] = str(rel)
+                if "dry_runs" in rel.parts:          # test runs and Try-it sessions, never a participant's
+                    row["dry_run"] = True
+                    row["kind"] = "try" if root.parent.name == "try" else "test"
                 out.append(row)
             except Exception as e:
                 out.append({"path": str(root.relative_to(self.root)), "error": str(e)})
@@ -274,8 +465,15 @@ class BuilderApp:
         if errors:
             return {"ok": False, "issues": [i.to_dict() for i in errors]}
         logs: list[str] = []
-        summary = run_experiment(exp, dry_run=True, participant=participant or None,
-                                 data_dir=str(self.root / "data" / "dry_runs"), log=lambda *a: logs.append(" ".join(map(str, a))))
+        data_dir = self.dry_runs_dir(data, rel)
+        try:
+            summary = run_experiment(exp, dry_run=True, participant=participant or None,
+                                     data_dir=str(data_dir), log=lambda *a: logs.append(" ".join(map(str, a))))
+        except Exception as e:      # the experiment itself failed while running: an answer, not a server error
+            from ..diagnostics import format_report, plain_error
+            rep = getattr(e, "report", None) or {"type": type(e).__name__, "message": str(e)}
+            return {"ok": False, "stopped": True, "problem": plain_error(rep, data),
+                    "raw": format_report(rep) if rep.get("phase") else f"{type(e).__name__}: {e}", "log": logs[-20:]}
         rep = analyze_session(summary["data_dir"])
         trials_path = Path(summary["data_dir"]) / "trials.jsonl"
         rows = [json.loads(l) for l in trials_path.read_text().splitlines()[:200] if l.strip()]
@@ -285,6 +483,55 @@ class BuilderApp:
         except Exception:
             n_trials = None
         return {"ok": True, "summary": summary, "report": rep, "trials": rows, "n_trials": n_trials, "log": logs}
+
+    def dry_runs_dir(self, data: dict[str, Any], rel: str | None) -> Path:
+        """Where test runs and Try-it sessions go: <experiment folder>/<data dir>/dry_runs, as `edge run --dry-run`
+        and MCP dry_run do, so Data › Tests & tries lists them; <root>/data/dry_runs for a never-saved experiment."""
+        if rel:
+            try:
+                base = self.safe_path(rel).parent
+                ddir = str(((data.get("settings") or {}).get("data") or {}).get("dir") or "data")
+                d = (base / ddir / "dry_runs").resolve()
+                if self.root in d.parents:
+                    return d
+            except Exception:
+                pass
+        return self.root / "data" / "dry_runs"
+
+    def last_test(self, data: dict[str, Any], rel: str, saved: bool = False) -> dict[str, Any]:
+        """The newest test run of exactly this document (by its fingerprint in session.json), so a reload, the
+        assistant's test run or `edge run --dry-run` count as "tested" in the builder.
+        → {"found": False} or {"found": True, "ok", "at", "trials", "path"}"""
+        import hashlib
+        from ..export import SessionTables, wide_trials
+
+        def sha(doc: Any) -> str:
+            return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).hexdigest()
+        want = {sha(data)}
+        if saved:            # the open document is the file on disk: a run of the file counts too
+            try:
+                want.add(sha(storage.load_document(self.safe_path(rel)).doc))
+            except Exception:
+                pass
+        folder = self.dry_runs_dir(data, rel)
+        if not folder.is_dir():
+            return {"found": False}
+        runs = sorted((p for p in folder.glob("*/session.json")), key=lambda p: p.stat().st_mtime, reverse=True)
+        for sj in runs[:40]:
+            try:
+                info = json.loads(sj.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if info.get("experiment_sha256") not in want:
+                continue
+            try:
+                n = sum(1 for r in wide_trials(SessionTables(sj.parent))[1] if r.get("loop"))
+            except Exception:
+                n = None
+            ok = not info.get("aborted") and not info.get("errors") and not info.get("crash")
+            return {"found": True, "ok": ok, "at": info.get("ended") or info.get("started"), "trials": n,
+                    "path": str(sj.parent.relative_to(self.root))}
+        return {"found": False}
 
     # --------------------------------------------------------------- guided design
     def wizard(self, answers: dict[str, Any], save_as: str | None) -> dict[str, Any]:
@@ -340,6 +587,9 @@ class BuilderApp:
                         used.append(str(pid))
                 except Exception:
                     continue
+        here = str(p.relative_to(self.root))
+        used += [str(st.get("participant")) for st in self.runs.values()
+                 if st.get("path") == here and st.get("participant") is not None and st["proc"].poll() is None]
         nums = [int(u) for u in used if u.isdigit()]
         width = max([len(u) for u in used if u.isdigit()] + [3])
         suggestion = str((max(nums) + 1) if nums else 1).zfill(width)
@@ -349,6 +599,12 @@ class BuilderApp:
     def run_real(self, rel: str, participant: dict[str, Any], simulate: bool,
                  fullscreen: bool | None = None) -> dict[str, Any]:
         from ..launcher import edge_command
+        busy = [st for st in self.runs.values() if st["proc"].poll() is None]
+        if busy:
+            st = busy[0]
+            raise BadRequest(f"a session is already running (participant {st.get('participant')}, {st.get('path')}): "
+                             "stop it on the Run page first. Two sessions at once would take each other's keyboard "
+                             "and screen")
         cmd = edge_command() + ["run", str(self.safe_path(rel)), "--report"]
         for k, v in (participant or {}).items():
             cmd += ["-f", f"{k}={v}"]
@@ -433,8 +689,9 @@ POST_FIELDS: dict[str, dict[str, tuple[type | tuple[type, ...], bool]]] = {
     "/api/recording": {"experiment": (dict, True), "path": (str, False)},
     "/api/validate": {"experiment": (dict, True), "path": (str, False)},
     "/api/dryrun": {"experiment": (dict, True), "path": (str, False), "participant": (dict, False)},
+    "/api/last_test": {"experiment": (dict, True), "path": (str, True), "saved": (bool, False)},
     "/api/device_test": {"experiment": (dict, True), "path": (str, False), "id": (str, True), "seconds": ((int, float), False)},
-    "/api/preflight": {"path": (str, True)},
+    "/api/preflight": {"path": (str, True), "reviewed_code": (list, False), "unreviewed": (int, False)},
     "/api/lock": {"path": (str, True)},
     "/api/system_fix": {"id": (str, False)},
     "/api/run_stop": {"id": (str, False)},
@@ -444,6 +701,8 @@ POST_FIELDS: dict[str, dict[str, tuple[type | tuple[type, ...], bool]]] = {
     "/api/play/start": {"experiment": (dict, True), "path": (str, False), "routine": (str, False), "max_trials": ((int, float), False)},
     "/api/survey/render": {"spec": (dict, False), "path": (str, False)},
     "/api/survey/instrument": {"id": (str, True)},
+    "/api/rename": {"experiment": (dict, True), "kind": (str, True), "old": (str, True), "new": (str, True),
+                    "routine": (str, False)},
     "/api/to_yaml": {},
     "/api/from_yaml": {"yaml": (str, True)},
     # the experiment assistant (edge/assistant/api.py)
@@ -494,6 +753,12 @@ def make_handler(app: BuilderApp):
         def log_message(self, fmt: str, *args: Any) -> None:  # quiet
             pass
 
+        def handle(self) -> None:
+            try:
+                super().handle()
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                pass      # the browser reloaded or closed the page mid-request: nothing to report
+
         def _send(self, code: int, body: bytes, ctype: str = "application/json", sandbox: bool = False) -> None:
             self.send_response(code)
             self.send_header("Content-Type", ctype)
@@ -502,11 +767,14 @@ def make_handler(app: BuilderApp):
             self.send_header("X-Content-Type-Options", "nosniff")
             if sandbox:   # a user's file (page, svg …): shown in its own origin, so it can't call this API
                 self.send_header("Content-Security-Policy", "sandbox allow-scripts allow-forms")
-            self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.end_headers()
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                pass      # the page went away (reloaded or closed) before the answer arrived
 
         def _guard(self) -> bool:
-            why = request_allowed(self.headers, self.command)
+            why = request_allowed(self.headers, self.command, urlparse(self.path).path, app.page_key)
             if why:
                 self._json({"error": why}, 403)
                 return False
@@ -557,7 +825,9 @@ def make_handler(app: BuilderApp):
                 if u.path == "/api/schema":
                     return self._json(schema())
                 if u.path == "/api/files":
-                    return self._json({"root": str(app.root), "files": app.list_files(q.get("status") == "1")})
+                    from .. import __version__
+                    return self._json({"root": str(app.root), "version": __version__, "page_base": f"{PAGE_PREFIX}{app.page_key}/",
+                                       "files": app.list_files(q.get("status") == "1")})
                 if u.path == "/api/runs":
                     return self._json({"runs": app.list_runs()})
                 if u.path.startswith("/api/assistant/"):
@@ -613,6 +883,15 @@ def make_handler(app: BuilderApp):
                     return self._json({"sessions": app.sessions(q.get("dry_runs") == "1")})
                 if u.path == "/api/session_tables":
                     return self._json(app.session_tables(q["path"]))
+                if u.path.startswith(PAGE_PREFIX):     # same as /api/file, by path: relative links resolve in the folder
+                    key, _, rel = u.path[len(PAGE_PREFIX):].partition("/")
+                    if key != app.page_key:
+                        return self._json({"error": "not found"}, 404)
+                    p = app.safe_path(unquote(rel))
+                    if not p.is_file():
+                        return self._json({"error": "file not found"}, 404)
+                    ctype = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
+                    return self._send(200, p.read_bytes(), ctype, sandbox=ctype in ACTIVE_CONTENT)
                 if u.path == "/api/file":
                     p = app.safe_path(q["path"])
                     if not p.is_file():
@@ -634,7 +913,14 @@ def make_handler(app: BuilderApp):
                     spec: Any = json.loads(q["spec"])
                     if isinstance(spec, str) and not spec.startswith("$") and app.root not in (base / spec).resolve().parents:
                         raise PermissionError("a conditions file must be inside the experiments folder")
-                    return self._json({"rows": load_conditions(spec, base)[:500]})
+                    try:
+                        return self._json({"rows": load_conditions(spec, base)[:500]})
+                    except FileNotFoundError:
+                        name = spec if isinstance(spec, str) else (spec.get("file") if isinstance(spec, dict) else "")
+                        folder = str(base.relative_to(app.root)).replace("\\", "/") if base != app.root else ""
+                        return self._json({"error": f"{name} isn't in the experiment's folder"
+                                           + (f" ({folder}/)" if folder and folder != "." else "")
+                                           + ": choose the file again, or upload it (Change file…)"}, 400)
                 if u.path.startswith("/api/help/"):
                     from .. import help as hp
                     what = u.path[len("/api/help/"):]
@@ -705,18 +991,15 @@ def make_handler(app: BuilderApp):
                     return self._json({"saved": str(dest.relative_to(app.root))})
                 body = self._body_cached()
                 if u.path == "/api/import":
-                    from ..importers import ImportError_, import_experiment
+                    from ..importers import ImportError_
                     try:
-                        path, res = import_experiment(app.safe_path(body["source"]),
-                                                      app.safe_path(body["out"]) if body.get("out") else None)
-                    except ImportError_ as e:
+                        return self._json(app.import_source(body["source"], body.get("out")))
+                    except (ImportError_, storage.DocumentError) as e:
                         return self._json({"error": str(e)}, 400)
-                    return self._json({"path": str(path.relative_to(app.root)), "platform": res.platform,
-                                       "notes": res.notes, "stats": res.stats, "report": res.report_markdown()})
                 if u.path == "/api/experiment":
                     try:
                         return self._json(app.save(q["path"], body, q.get("fingerprint"), q.get("force") == "1",
-                                                   q.get("label")))
+                                                   q.get("label"), new=q.get("new") == "1"))
                     except storage.ConflictError as e:
                         return self._json({"error": str(e), "conflict": True}, 409)
                 if u.path == "/api/restore":
@@ -731,14 +1014,20 @@ def make_handler(app: BuilderApp):
                     return self._json({"issues": app.validate(body["experiment"], body.get("path"))})
                 if u.path == "/api/dryrun":
                     return self._json(app.dry_run(body["experiment"], body.get("path"), body.get("participant") or {}))
+                if u.path == "/api/last_test":
+                    return self._json(app.last_test(body["experiment"], body["path"], bool(body.get("saved"))))
                 if u.path == "/api/device_test":
                     from ..devtest import test_experiment_device
                     exp = app.experiment(body["experiment"], body.get("path"))
                     return self._json(test_experiment_device(exp, body["id"], float(body.get("seconds", 3)),
                                                              bool(body.get("simulate"))))
                 if u.path == "/api/preflight":
-                    from ..preflight import run_preflight
-                    return self._json(run_preflight(app.safe_path(body["path"]), golden=body.get("golden", True)))
+                    from ..preflight import run_preflight, unread_assistant_code
+                    pp = app.safe_path(body["path"])
+                    unread = unread_assistant_code(pp, body.get("reviewed_code") or ())
+                    if not unread and int(body.get("unreviewed") or 0) > 0:      # written in this browser, not applied yet
+                        unread = ["code by the assistant"]
+                    return self._json(run_preflight(pp, golden=body.get("golden", True), skip_code=unread or None))
                 if u.path == "/api/lock":
                     from ..reproduce import lock
                     return self._json(lock(app.safe_path(body["path"])))
@@ -761,8 +1050,9 @@ def make_handler(app: BuilderApp):
                     rel = body.get("path")
                     base = app.safe_path(rel).parent if rel else app.root
                     try:
-                        return self._json(app.play.start(body["experiment"], base, body.get("routine"),
-                                                         int(body.get("max_trials") or 5)))
+                        return self._json(app.play.start(mouse_is_gaze(body["experiment"]), base, body.get("routine"),
+                                                         int(body.get("max_trials") or 5),
+                                                         data_root=app.dry_runs_dir(body["experiment"], rel) / "try"))
                     except (ValueError, KeyError) as e:     # the message itself (a KeyError's str() adds quotes)
                         msg = e.args[0] if e.args and isinstance(e.args[0], str) else str(e)
                         return self._json({"ok": False, "error": msg})
@@ -774,7 +1064,7 @@ def make_handler(app: BuilderApp):
                         return self._json({"problems": problems})
                     rel = body.get("path")
                     folder = (str(Path(rel).parent).replace("\\", "/") + "/") if rel and str(Path(rel).parent) != "." else ""
-                    page, flat, _ = render_html(spec, asset_prefix=f"/api/file?path={folder}")
+                    page, flat, _ = render_html(spec, asset_prefix=f"{PAGE_PREFIX}{app.page_key}/" + quote(folder))
                     # preview: answers go nowhere, the last button just says so
                     page = page.replace("</body>", "<script>window.edge={vars:{},marker:function(){},submit:function(d){"
                                         "document.body.innerHTML='<pre style=\"padding:20px;font:13px monospace\">'+"
@@ -787,6 +1077,9 @@ def make_handler(app: BuilderApp):
                     return self._json(app.play.input(body))
                 if u.path == "/api/play/stop":
                     return self._json(app.play.stop())
+                if u.path == "/api/rename":
+                    return self._json(rename_in(body["experiment"], body["kind"], body["old"], body["new"],
+                                                body.get("routine")))
                 if u.path == "/api/to_yaml":
                     return self._json({"yaml": storage.dumps(body)})
                 if u.path == "/api/from_yaml":
@@ -811,8 +1104,7 @@ def make_handler(app: BuilderApp):
                 msg = e.args[0] if e.args and isinstance(e.args[0], str) else str(e)
                 return self._json({"error": msg if " " in msg else f"not found: {msg}"}, 404)
             if isinstance(e, (TypeError, AttributeError, ValueError)):
-                return self._json({"error": f"the request was not understood: {type(e).__name__}: {e}",
-                                   "trace": traceback.format_exc()}, 400)
+                return self._json({"error": f"the request was not understood: {type(e).__name__}: {e}"}, 400)
             return self._json({"error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()}, 500)
 
     return Handler

@@ -100,9 +100,27 @@ def device_items(exp, timeout: float = 6.0) -> list[dict[str, Any]]:
     return items
 
 
+def unread_assistant_code(path: str | Path, reviewed: Any = ()) -> list[str]:
+    """Code components written by the assistant (their hashes are in .edge/assistant/history.jsonl) that nobody has
+    marked as read: they must not run, not even in a test run, until a person has read them."""
+    try:
+        from .assistant.jobs import history_code
+        from .assistant.tools import code_hashes
+        from .storage import load_document
+        p = Path(path)
+        written = history_code(p.parent)
+        if not written:
+            return []
+        done = {str(x) for x in (reviewed or ())}
+        return [f"{rid}.{cid}" for (rid, cid), h in code_hashes(load_document(p).doc).items() if h in written and h not in done]
+    except Exception:
+        return []
+
+
 def run_preflight(path: str | Path, golden: bool = True, computer: bool = True, save: bool = True,
-                  devices: bool | None = None) -> dict[str, Any]:
-    """``devices`` (default: the same as ``computer``): briefly connect every device of the experiment."""
+                  devices: bool | None = None, skip_code: list[str] | None = None) -> dict[str, Any]:
+    """``devices`` (default: the same as ``computer``): briefly connect every device of the experiment.
+    ``skip_code``: code the assistant wrote that nobody has read yet: no test run (and no golden run) until it is."""
     from .model import Experiment
     t0 = time.monotonic()
     p = Path(path)
@@ -121,6 +139,12 @@ def run_preflight(path: str | Path, golden: bool = True, computer: bool = True, 
 
     if errors:
         sections.append(_section("test_run", "Test run", [_item("info", "skipped until the experiment's errors are fixed")]))
+    elif skip_code:
+        golden = False
+        sections.append(_section("test_run", "Test run", [_item(
+            "warning", "not run: the Python code the assistant wrote (" + ", ".join(skip_code[:4])
+            + ("…" if len(skip_code) > 4 else "") + ") hasn't been read yet",
+            "read it in the Assistant panel and press I've read it; then the test run runs here")]))
     else:
         sections.append(_section("test_run", "Test run (virtual participant)", test_run_items(exp)))
 

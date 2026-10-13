@@ -146,7 +146,7 @@ function loopsAround(rid, doc = S.exp) {
 }
 
 /* ================================================================== plain words for formulas (SPEC W4 "In words") */
-const FIELD_WORDS = {accuracy: "accuracy", mean_rt: "mean response time", rt: "response time", keys: "key", corr: "correct",
+const FIELD_WORDS = {n: "trial number", accuracy: "accuracy", mean_rt: "mean response time", rt: "response time", keys: "key", corr: "correct",
   total: "number of trials", state: "phase", visit: "visit", clicked: "clicked item", response: "answer", value: "value"};
 const OP_WORDS = {">=": "is at least", "<=": "is at most", ">": "is more than", "<": "is less than", "==": "is", "!=": "is not"};
 function responseIds() {
@@ -159,7 +159,7 @@ function termWords(t, resp) {
   t = t.trim();
   let m;
   if (/^-?\d+(\.\d+)?$/.test(t)) return t;
-  if ((m = t.match(/^(['"])(.*)\1$/))) return `“${m[2]}”`;
+  if ((m = t.match(/^'([^']*)'$|^"([^"]*)"$/))) return `“${m[1] ?? m[2]}”`;   // a quoted text, not 'a' if c else 'b'
   if (t === "True") return "true";
   if (t === "False") return "false";
   if (t === "None") return "nothing";
@@ -167,6 +167,7 @@ function termWords(t, resp) {
     const [, a, b] = m;
     if (b === "rt" && resp.has(a)) return "the response time";
     if (b === "keys" && resp.has(a)) return "the key pressed";
+    if (resp.has(a) && !FIELD_WORDS[b] && !["corr", "x", "y", "clicked", "button", "rating", "submitted"].includes(b)) return `the answer to “${b}”`;   // a survey question
     return `${a} ${FIELD_WORDS[b] || b}`;
   }
   if ((m = t.match(/^[A-Za-z_]\w*$/))) return `“${t}”`;
@@ -175,6 +176,10 @@ function termWords(t, resp) {
 function clauseWords(c, resp) {
   c = c.trim().replace(/^\((.*)\)$/, "$1").trim();
   let m;
+  if ((m = c.match(/^not\s+([A-Za-z_]\w*)\.last$/))) return `it isn't the last round of “${m[1]}”`;
+  if ((m = c.match(/^([A-Za-z_]\w*)\.last$/))) return `it is the last round of “${m[1]}”`;
+  // accuracy as a percentage: "practice accuracy is at least 80 %"
+  if ((m = c.match(/^([A-Za-z_]\w*)\.accuracy\s*(>=|<=|>|<)\s*(0?\.\d+|1(?:\.0+)?)$/))) return `“${m[1]}” accuracy ${OP_WORDS[m[2]]} ${Math.round(+m[3] * 100)} %`;
   if ((m = c.match(/^not\s+(.+)$/))) {
     const inner = c.slice(4).trim();
     if ((m = inner.match(/^([A-Za-z_]\w*)\.corr$/))) return resp.has(m[1]) ? "the response was wrong" : `${m[1]} was wrong`;
@@ -193,19 +198,63 @@ function clauseWords(c, resp) {
   const t = termWords(c, resp);
   return t ? `${t} is true` : null;
 }
-/* "$resp.corr == 1" -> "the response was correct"; "$word" -> "the trial list's “word”"; else "a computed value". */
-function exprInWords(v) {
+/* Split "A if C else B" at the top level (outside quotes and brackets) → [A, C, B] or null. */
+function splitTernary(s) {
+  let depth = 0, q = null, ifAt = -1;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (q) { if (ch === q) q = null; continue; }
+    if (ch === "'" || ch === '"') { q = ch; continue; }
+    if ("([{".includes(ch)) depth++;
+    else if (")]}".includes(ch)) depth--;
+    else if (!depth && ch === " ") {
+      if (ifAt < 0 && s.startsWith(" if ", i)) ifAt = i;
+      else if (ifAt >= 0 && s.startsWith(" else ", i)) return [s.slice(0, ifAt), s.slice(ifAt + 4, i), s.slice(i + 6)];
+    }
+  }
+  return null;
+}
+/* "(a if c else b)" → "a if c else b", only when the outer brackets belong together */
+function unwrapParens(t) {
+  t = t.trim();
+  while (t.startsWith("(") && t.endsWith(")")) {
+    let depth = 0, q = null, closesAtEnd = true;
+    for (let i = 0; i < t.length; i++) {
+      const ch = t[i];
+      if (q) { if (ch === q) q = null; continue; }
+      if (ch === "'" || ch === '"') q = ch;
+      else if (ch === "(") depth++;
+      else if (ch === ")") { depth--; if (!depth && i < t.length - 1) { closesAtEnd = false; break; } }
+    }
+    if (!closesAtEnd) break;
+    t = t.slice(1, -1).trim();
+  }
+  return t;
+}
+/* "$resp.corr == 1" -> "the response was correct"; "$word" -> "the trial list's “word”"; else "a computed value".
+   kind "value" (a text, colour or number from a formula): "$'Correct!' if resp.corr else 'Wrong!'" →
+   "“Correct!” when the response was correct, otherwise “Wrong!”". */
+function exprInWords(v, kind = "condition") {
   if (!isExpr(v)) return v === undefined || v === null ? "" : String(v);
   const s = String(v).slice(1).trim();
   const resp = responseIds();
   let m;
+  const tern = splitTernary(s);
+  if (tern) {
+    const [a, c, b] = tern.map(unwrapParens);
+    const va = exprInWords("$" + a, "value"), vc = exprInWords("$" + c, "condition"), vb = exprInWords("$" + b, "value");
+    if (vc === "a computed value") return "a computed value";
+    return `${va} when ${vc}, otherwise ${vb}`;
+  }
+  if (kind === "value") { const t = termWords(s, resp); if (t && /^[“\d-]/.test(t)) return t; }
   if ((m = s.match(/^([A-Za-z_]\w*)$/))) return s === "True" ? "always" : s === "False" ? "never" : `the trial list's “${s}”`;
   if ((m = s.match(/^f(['"])(.*)\1$/))) {
     const names = [...new Set([...m[2].matchAll(/\{([^}]*)\}/g)].flatMap((x) => (x[1].match(/[A-Za-z_]\w*/g) || [])
       .filter((w) => !["if", "else", "and", "or", "not", "True", "False", "None", "round", "int", "str", "len"].includes(w))))];
     return names.length ? `a label made from ${names.map((x) => `“${x}”`).join(", ")}` : `the text “${m[2]}”`;
   }
-  const parts = s.split(/\s+(and|or)\s+/);
+  // a guard like "practice.accuracy is not None and …" only keeps the formula from failing: leave it out of the words
+  const parts = s.replace(/^([A-Za-z_][\w.]*) is not None and (?=.*\b\1\b)/, "").split(/\s+(and|or)\s+/);
   const out = [];
   for (let i = 0; i < parts.length; i++) {
     if (i % 2) { out.push(parts[i]); continue; }
@@ -235,16 +284,8 @@ function diagramPathNow() {
   if (S.sel && ["machine", "state"].includes(S.sel.kind) && nodeAt(S.sel.path)?.statemachine !== undefined) return S.sel.path;
   return null;
 }
-/* Switch Build views through EDGE.setView (P1); a shim makes "list" and "diagram" work with the P0 version too. */
-function setBuildView(view, opts = {}) {
-  if (typeof EDGE?.setView === "function") EDGE.setView(view, opts);
-  if (S.view !== view) {
-    S.view = view;
-    if (S.ws !== "build") EDGE.go("build", {render: false});
-    EDGE.emit("view", {view});
-    renderAll();
-  }
-}
+/* Switch Build views through EDGE.setView (P1), which knows every view (story, screen, list, diagram, source). */
+function setBuildView(view, opts = {}) { EDGE.setView(view, opts); }
 
 function showBuildView(view) {
   for (const v of ["story", "screen", "list", "diagram", "source"]) { const el = $("#view-" + v); if (el) el.hidden = v !== view; }
@@ -272,6 +313,33 @@ function renderBuild() {
   else if (view === "list") renderListEditor($("#list-editor"));
   else if (view === "diagram") renderDiagram($("#diagram"));
   BUILD.focusKey = null;
+  buildFocusFallback(view);
+}
+/* Keyboard focus never drops to <body> when a view changes or the focused card goes away (open a screen, Esc back,
+   Delete, Undo): it goes to the matching place of the new view (§3.7). */
+document.addEventListener("pointerdown", () => { BUILD.focusIn = false; }, true);   // a click elsewhere: the mouse decides
+document.addEventListener("focusin", (e) => {
+  const ws = $("#ws-build");
+  BUILD.focusIn = !!ws && ws.contains(e.target);
+  if (BUILD.focusIn && e.target.dataset?.fkey) BUILD.lastFkey = e.target.dataset.fkey;
+}, true);
+function buildFocusFallback(view, later = false) {
+  // once more after the late re-renders (validation, a trial list being read), which can replace what got focus
+  if (!later) { clearTimeout(BUILD.focusT); BUILD.focusT = setTimeout(() => buildFocusFallback(currentBuildView(), true), 150); }
+  const a = document.activeElement;
+  if (!BUILD.focusIn || (a && a !== document.body && a.isConnected) || overlayOpen?.()) return;
+  const root = $("#ws-build"); if (!root) return;
+  const byKey = (k) => (k ? root.querySelector(`[data-fkey="${CSS.escape(k)}"]`) : null);
+  let t = null;
+  if (view === "story") {
+    const k = BUILD.lastFkey || "";
+    const m = k.match(/^(card|frame|row):(.*?)(\d+)$/);
+    t = byKey(k) || (m && +m[3] > 0 ? byKey(`${m[1]}:${m[2]}${+m[3] - 1}`) : null)
+      || (S.routine ? root.querySelector(`#flow .scard[data-rid="${CSS.escape(S.routine)}"]`) : null) || root.querySelector("#flow .scard, #flow [data-fkey^='row:']");
+  } else if (view === "list") t = root.querySelector("#list-editor .le-grid [tabindex='0']") || root.querySelector("#list-editor button");
+  if (!t) t = root.querySelector("#crumbs .crumb.here");
+  if (!t) t = root.querySelector("#view-switch [aria-checked='true'], #view-switch button");
+  t?.focus({preventScroll: true});
 }
 
 /* ---------------- toolbar parts: #est, #story-density, #crumbs, #btn-view-done */
@@ -291,20 +359,20 @@ function renderBuildToolbar(view) {
   const sep = () => icon("chev-right", "crumb-sep");
   const link = (label, run, ic2) => h("button", {type: "button", class: "crumb", title: label, onclick: run}, ic2 ? icon(ic2) : null, h("span", {class: "crumb-t"}, label));
   if (view === "screen" && S.routine) {
-    parts.push(link(S.exp.name || "experiment", () => setBuildView("story"), "storyboard"));
+    parts.push(link(typeof docName === "function" ? docName() : (S.exp.name || "experiment"), () => setBuildView("story"), "storyboard"));   // the name in the app bar, also after Save as
     for (const lp of loopsAround(S.routine)) {
       let p = null; walkFlow((n, pp) => { if (!p && n === lp) p = pp; });
       parts.push(sep(), link(lp.loop, () => p && openTrialList(p), "loop"));
     }
-    parts.push(sep(), h("b", {class: "crumb here", "aria-current": "location"}, S.routine));
+    parts.push(sep(), h("b", {class: "crumb here", "aria-current": "location", title: S.routine, tabindex: "-1", "data-fkey": "crumb:here"}, S.routine));
   } else if (view === "list") {
     const n = nodeAt(listPathNow());
-    parts.push(link("Storyboard", () => leaveSubView("story"), "storyboard"), sep(), h("b", {class: "crumb here", "aria-current": "location"}, icon("loop"), `Trial list “${n?.loop}”`));
+    parts.push(link("Storyboard", () => leaveSubView("story"), "storyboard"), sep(), h("b", {class: "crumb here", "aria-current": "location", title: `Trial list “${n?.loop}”`, tabindex: "-1", "data-fkey": "crumb:here"}, icon("loop"), `Trial list “${n?.loop}”`));
   } else if (view === "diagram") {
     const m = nodeAt(diagramPathNow());
-    parts.push(link("Storyboard", () => leaveSubView("story"), "storyboard"), sep(), h("b", {class: "crumb here", "aria-current": "location"}, icon("workflow"), `Workflow “${m?.statemachine}”`));
+    parts.push(link("Storyboard", () => leaveSubView("story"), "storyboard"), sep(), h("b", {class: "crumb here", "aria-current": "location", title: `Workflow “${m?.statemachine}”`, tabindex: "-1", "data-fkey": "crumb:here"}, icon("workflow"), `Workflow “${m?.statemachine}”`));
   }
-  cr.replaceChildren(...parts);
+  keepFocus(cr, () => cr.replaceChildren(...parts));
   fitToolbar();
 }
 /* The toolbar never wraps or scrolls: labels give way to icons (each button keeps its aria-label and tooltip). */
@@ -831,6 +899,27 @@ function thumbTime(rid, doc = S.exp) {
   return t + 0.01;
 }
 
+/* When everything on a screen has finished (seconds), or null when something lasts until the screen ends (or
+ * can't be known here). A screen's own length is a maximum: it ends earlier when all its items are done. */
+function itemsEnd(rid, doc = S.exp) {
+  const hz = 60;
+  let end = 0;
+  for (const c of doc.routines?.[rid]?.components || []) {
+    if (c.disabled === true) continue;
+    let st = c.start_after || c.start_if || c.if ? null : typeof c.start === "number" ? c.start : c.start == null ? 0 : null;
+    if (typeof c.start_frame === "number") st = c.start_frame / hz;
+    if (st === null) return null;
+    let e = null;
+    if (typeof c.duration === "number") e = st + c.duration;
+    else if (typeof c.duration_frames === "number") e = st + c.duration_frames / hz;
+    else if (c.stop_if) return null;
+    else if (c.type === "sound" && typeof c.sound === "number" && typeof c.tone_duration === "number") e = st + c.tone_duration;
+    else if (["variable", "marker"].includes(c.type)) e = st;
+    if (e === null) return null;
+    end = Math.max(end, e);
+  }
+  return end;
+}
 /* "How it ends", one line: "waits for space", "r / g / b · max 2 s", "0.6 s". */
 function screenSummary(rid) {
   const r = S.exp.routines[rid] || {};
@@ -844,7 +933,9 @@ function screenSummary(rid) {
     bits.push(what);
     if (typeof resp.duration === "number") bits.push(`max ${fmtS(numOr(resp.start, 0) + resp.duration)}`);
   }
-  if (typeof r.duration === "number") bits.push(resp ? `max ${fmtS(r.duration)}` : fmtS(r.duration));
+  const early = !resp && !r.end_if && typeof r.duration === "number" ? itemsEnd(rid) : null;
+  if (early !== null && early < r.duration) bits.push(`${fmtS(early)}, not ${fmtS(r.duration)}`);   // its items end first: the length is a maximum
+  else if (typeof r.duration === "number") bits.push(resp ? `max ${fmtS(r.duration)}` : fmtS(r.duration));
   else if (isExpr(r.duration)) { const m = String(r.duration).match(/^\$([A-Za-z_]\w*)$/); bits.push(m ? `lasts “${m[1]}” s` : "computed length"); }
   else if (!resp) {
     const end = Math.max(0, ...(r.components || []).map((c) => numOr(c.start, 0) + numOr(c.duration, 0)));
@@ -870,7 +961,7 @@ function renderStoryboard(el) {
     const removed = S.proposal?.marks?.removed || [];
     if (removed.length) out.push(h("div", {class: "alert danger story-removed"}, icon("trash"), h("div", {class: "msg"}, h("b", {}, "Removed by the assistant: "),
       removed.map((r) => r.id || r.kind).join(", "))));
-    if (!S.exp.flow.length) out.push(emptyFlow());
+    if (!S.exp.flow.length) { if (!ASST_CANVAS.busy) out.push(emptyFlow()); }   // while the assistant builds, its note shows instead
     else out.push(density === "list" ? storyList() : storySeq(S.exp.flow, [], true));
     const inFlow = new Set(routineInFlowOrder());
     const unused = Object.keys(S.exp.routines).filter((rid) => !inFlow.has(rid));
@@ -915,6 +1006,7 @@ function insItem(listPath, index, where, nodes, i) {
     : where === "first" ? "Add a step at the start" : where === "end" ? "Add a step at the end of this part"
       : `Add a step after “${nodeName(nodes?.[i])}”`;
   const target = h("button", {type: "button", class: "ins", "data-fkey": `ins:${listPath.join(".")}:${index}`, "aria-label": label, title: label,
+    "data-coach": !listPath.length && index === 0 ? "flow-start" : null,     // the outermost "+ at the start" (tutorials point at it)
     onclick: (e) => flowInsertMenu(e.currentTarget, listPath, index)}, icon("plus"));
   const item = h("div", {class: "ins-item " + where}, target,
     where === "top-end" ? h("button", {type: "button", class: "ins-text", tabindex: "-1", onclick: () => flowInsertMenu(target, listPath, index)}, "Add a step") : null);
@@ -984,7 +1076,7 @@ function storyCardItem(n, path) {
     title: "Click to select · double-click or Enter to open · right-click for more"},
   h("span", {class: "thumb"}, exists ? thumbCanvas(rid, path) : null),
   h("span", {class: "meta"},
-    h("span", {class: "name"}, h("span", {class: "nm"}, rid), n.if ? h("span", {class: "chip warning if-chip", title: "Shown only if " + exprInWords(n.if)}, "if") : null,
+    h("span", {class: "name"}, h("span", {class: "nm", title: rid}, rid), n.if ? h("span", {class: "chip warning if-chip", title: "Shown only if " + exprInWords(n.if)}, "if") : null,
       mark ? markBadge(mark) : null),
     h("span", {class: "cap"}, icon(capIc, "c-" + capCat), h("span", {class: "cap-txt"}, summary))));
   bindNodeControl(card, n, path, key);
@@ -1051,6 +1143,12 @@ function nodeKeys(e, n, path, ctl) {
   const arrows = {ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down"};
   if (e.altKey && arrows[e.key]) { e.preventDefault(); e.stopPropagation(); moveNodeBy(path, ["left", "up"].includes(arrows[e.key]) ? -1 : 1); return; }
   if (arrows[e.key] && !mod && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); moveStoryFocus(ctl, arrows[e.key]); return; }
+  if ((e.key === "Home" || e.key === "End") && !mod && !e.shiftKey) {        // the first or last step of the storyboard
+    const all = [...document.querySelectorAll("#flow [data-fkey^='card:'], #flow [data-fkey^='frame:'], #flow [data-fkey^='row:']")].filter((x) => x.offsetParent);
+    const t = e.key === "Home" ? all[0] : all[all.length - 1];
+    if (t) { e.preventDefault(); e.stopPropagation(); t.focus(); t.scrollIntoView({block: "nearest", inline: "nearest"}); }
+    return;
+  }
   if (e.key === "Enter" && !mod) { e.preventDefault(); e.stopPropagation(); openNode(n, path); return; }
   if ((e.key === "F10" && e.shiftKey) || e.key === "ContextMenu") { e.preventDefault(); e.stopPropagation(); nodeMenu(ctl, path); return; }
   if (e.key === "Delete" || (e.key === "Backspace" && !mod)) { e.preventDefault(); e.stopPropagation(); removeFromFlow(path); return; }
@@ -1072,8 +1170,9 @@ function loopDesc(n) {
     const k = Object.values(c.factorial).reduce((a, v) => a * (Array.isArray(v) ? v.length : 1), 1);
     bits.push(`every combination · ${plural(k, "row")}`);
   } else if (Array.isArray(c)) bits.push(plural(c.length, "row"));
-  else bits.push("no rows");
-  if (n.repeats != null && n.repeats !== 1) bits[bits.length - 1] += ` × ${n.repeats}`;
+  // no trial list: the screens inside just repeat ("repeats 2 times"), there is nothing "missing"
+  if (c === undefined || c === null) bits.push(n.repeats != null && n.repeats !== 1 ? `repeats ${n.repeats} times` : "runs once");
+  else if (n.repeats != null && n.repeats !== 1) bits[bits.length - 1] += ` × ${n.repeats}`;
   if (!n.staircase) bits.push(ORDER_WORDS[n.order || "sequential"] || n.order);
   if (n.stop_if) bits.push("stops early");
   return bits.join(" · ");
@@ -1418,6 +1517,7 @@ async function renameNode(n, path) {
   const v = await ui.prompt({title: "Rename the trial list", label: "Name", value: n.loop, ok: "Rename", transform: (x) => ui.slug(x),
     validate: (x) => !x ? "Type a name first." : taken.has(x) ? `There is already something called “${x}”.` : null});
   if (!v || v === n.loop) return;
+  if (typeof renameLoop === "function") return renameLoop(n, v);     // inspector.js: formulas and measures follow
   const old = n.loop; n.loop = v;
   commit(`Rename the trial list “${old}”`);
 }
@@ -1592,12 +1692,13 @@ function loopRows(spec, path = S.path) {
   const key = JSON.stringify(spec) + "|" + (path || "");
   const have = BUILD.rows[key];
   if (Array.isArray(have)) return have;
-  if (have && have.error) return [];
-  if (have === undefined) {
+  if (have && have.error && Date.now() - (have.at || 0) < 3000) return [];
+  if (have === undefined || (have && have.error)) {       // a file that was missing may have been added since
     BUILD.rows[key] = null;
     api(`/api/conditions?spec=${encodeURIComponent(JSON.stringify(spec))}&exp=${encodeURIComponent(path || "")}`)
-      .then((j) => { BUILD.rows[key] = j.rows || []; scheduleBuildRender(); if (typeof renderPreview === "function" && S.view === "screen") renderPreview(); })
-      .catch((e) => { BUILD.rows[key] = {error: e.message}; scheduleBuildRender(); });
+      .then((j) => { BUILD.rows[key] = j.rows || []; scheduleBuildRender(); if (typeof renderPreview === "function" && S.view === "screen") renderPreview();
+        if (typeof renderProps === "function" && S.ws === "build") renderProps(); })     // value sources: "from the trial list"
+      .catch((e) => { BUILD.rows[key] = {error: e.message, at: Date.now()}; scheduleBuildRender(); });
   }
   return null;
 }
@@ -1677,11 +1778,25 @@ function renderPreview() {
     frame.dataset.survey = "";
     if (page.file && !isExpr(page.file)) {
       const rel = (S.path ? S.path.replace(/[^/]*$/, "") : "") + page.file;
-      if (frame.dataset.src !== rel) {
-        frame.dataset.src = rel; frame.removeAttribute("src");
-        pagePreviewDoc(rel).then((doc) => { if (frame.dataset.src === rel) frame.srcdoc = doc; });
+      // {{name}} placeholders show this trial's values, as participants see them (participant: an example id)
+      const vals = {participant: "001", session: "1", ...sampleRowFor(S.routine)};
+      const key = rel + "|" + JSON.stringify(vals);
+      if (frame.dataset.src !== key) {      // by path, so the page's own stylesheets, scripts and pictures load
+        frame.dataset.src = key; frame.removeAttribute("srcdoc");
+        frame.src = pageUrl(rel);
+        fetch(pageUrl(rel)).then((r) => (r.ok ? r.text() : null)).then((txt) => {
+          if (!txt || frame.dataset.src !== key || !/\{\{\s*[\w.]+\s*\}\}/.test(txt)) return;
+          const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          const html = txt.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (m, k) => (vals[k] !== undefined && vals[k] !== null ? esc(vals[k]) : m));
+          const tag = `<base href="${pageUrl(rel.replace(/[^/]*$/, ""))}">`;
+          frame.removeAttribute("src");
+          frame.srcdoc = /<base\b/i.test(html) ? html : /<head\b[^>]*>/i.test(html) ? html.replace(/<head\b[^>]*>/i, (m) => m + tag) : tag + html;
+        }).catch(() => { /* the page as it is */ });
       }
-    } else if (page.html) { frame.dataset.src = ""; frame.srcdoc = page.html; }
+    } else if (page.html) {
+      const doc = pageWithBase(page.html);
+      if (frame.srcdoc !== doc || frame.dataset.src) { frame.dataset.src = ""; frame.removeAttribute("src"); frame.srcdoc = doc; }
+    }
     frame.classList.remove("hidden");
   } else frame.classList.add("hidden");
   const cv = $("#preview");
@@ -1697,49 +1812,14 @@ function renderPreview() {
   updatePlayhead();
 }
 
-/* A web page for the sandboxed preview: its own stylesheets, scripts and pictures are inlined, because a sandboxed
- * page has no origin and the builder refuses requests that come from one. */
-const _pageDocs = {};
-async function replaceAsync(str, re, fn) {
-  const parts = [], jobs = [];
-  let last = 0;
-  str.replace(re, (...m) => { const at = m[m.length - 2]; parts.push(str.slice(last, at)); jobs.push(fn(...m)); parts.push(null); last = at + m[0].length; return m[0]; });
-  parts.push(str.slice(last));
-  const done = await Promise.all(jobs);
-  let k = 0;
-  return parts.map((x) => (x === null ? done[k++] : x)).join("");
-}
-async function pagePreviewDoc(rel) {
-  const hit = _pageDocs[rel];
-  if (hit && Date.now() - hit.at < 4000) return hit.doc;
-  const url = (p) => `/api/file?path=${encodeURIComponent(p)}`;
-  const dir = rel.replace(/[^/]*$/, "");
-  const local = (u) => !!u && !/^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(u);
-  const join = (u) => { const out = []; for (const seg of (dir + u.split(/[?#]/)[0]).split("/")) { if (seg === "..") out.pop(); else if (seg && seg !== ".") out.push(seg); } return out.join("/"); };
-  const text = async (p) => { const r = await fetch(url(p)); if (!r.ok) throw new Error(r.statusText); return r.text(); };
-  let html;
-  try { html = await text(rel); } catch { return `<p style="font:14px sans-serif;padding:16px">The page ${rel.split("/").pop()} can't be found.</p>`; }
-  html = await replaceAsync(html, /<link\b[^>]*>/gi, async (tag) => {
-    if (!/\brel=["']?stylesheet/i.test(tag)) return tag;
-    const m = tag.match(/\bhref=["']([^"']+)["']/i);
-    if (!m || !local(m[1])) return tag;
-    try { return `<style>${(await text(join(m[1]))).replace(/<\/style/gi, "<\\/style")}</style>`; } catch { return ""; }
-  });
-  html = await replaceAsync(html, /<script\b([^>]*?)\bsrc=["']([^"']+)["']([^>]*)>\s*<\/script>/gi, async (all, a, src, b) => {
-    if (!local(src)) return all;
-    try { return `<script${a}${b}>${(await text(join(src))).replace(/<\/script/gi, "<\\/script")}</script>`; } catch { return ""; }
-  });
-  html = await replaceAsync(html, /(<(?:img|source|audio|video)\b[^>]*?\bsrc=)["']([^"']+)["']/gi, async (all, pre, src) => {
-    if (!local(src)) return all;
-    try {
-      const r = await fetch(url(join(src))); if (!r.ok) return all;
-      const blob = await r.blob(); if (blob.size > 4e6) return all;
-      const data = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
-      return `${pre}"${data}"`;
-    } catch { return all; }
-  });
-  _pageDocs[rel] = {at: Date.now(), doc: html};
-  return html;
+/* A page of the experiment by its path (/api/page/<key>/<folder>/<file>, S.pageBase from /api/files): its relative
+ * links resolve inside the experiment folder. The builder serves it sandboxed (no origin): it can't call the API. */
+function pageUrl(rel) { return (S.pageBase || "/api/page/-/") + String(rel).split("/").map(encodeURIComponent).join("/"); }
+/* A page written inline (html:) gets a <base> in the experiment folder, so its relative links resolve there too. */
+function pageWithBase(html) {
+  if (!S.path || /<base\b/i.test(html)) return html;
+  const tag = `<base href="${pageUrl(S.path.replace(/[^/]*$/, ""))}">`;
+  return /<head\b[^>]*>/i.test(html) ? html.replace(/<head\b[^>]*>/i, (m) => m + tag) : /^\s*<!doctype[^>]*>/i.test(html) ? html.replace(/^\s*<!doctype[^>]*>/i, (m) => m + tag) : tag + html;
 }
 
 /* The stage sits above the timeline: the preview is sized to fit the stage's width and height. */
@@ -1867,7 +1947,7 @@ function imgCache(src, base = S.path) {
 }
 /* A thumbnail of any experiment: its first screen in flow order at its main moment (Home, the wizard, examples).
  * Pass {path} (the experiment's file) so its pictures and file-based trial lists can be found. */
-function drawThumbnail(doc, canvas, {rid = null, path = null, row = null} = {}) {
+function drawThumbnail(doc, canvas, {rid = null, path = null, row = null, minText = 18} = {}) {
   if (!doc || !canvas) return null;
   doc = normalize(clone(doc));
   if (!rid) {
@@ -1878,7 +1958,7 @@ function drawThumbnail(doc, canvas, {rid = null, path = null, row = null} = {}) 
   }
   if (!canvas.width || canvas.width === 300) canvas.width = Math.round((canvas.clientWidth || 216) * 2);
   if (!rid) { const ctx = canvas.getContext("2d"); ctx.fillStyle = (doc.settings.window || {}).background || "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); return null; }
-  try { drawScreen(canvas, rid, thumbTime(rid, doc), {doc, path, row: row || sampleRowFor(rid, 0, doc, path), minText: 18}); } catch (e) { /* best effort */ }
+  try { drawScreen(canvas, rid, thumbTime(rid, doc), {doc, path, row: row || sampleRowFor(rid, 0, doc, path), minText}); } catch (e) { /* best effort */ }
   return rid;
 }
 
@@ -1986,7 +2066,7 @@ function timelineRow(rid, c, idx, span) {
   const mark = proposalMark("components", `${rid}/${c.id}`);
   const key = `tl:${rid}:${c.id}`;
   const label = h("button", {type: "button", class: "tl-label", "data-fkey": key, "aria-label": timelineAria(c), "aria-pressed": sel ? "true" : "false",
-    onclick: () => selectComp(rid, c.id)},
+    title: c.id, onclick: () => selectComp(rid, c.id)},
   icon(typeIcon(c.type), "c-" + cat), h("b", {}, c.id), h("span", {}, timelineSource(c)), mark ? markBadge(mark) : null);
   const bar = h("button", {type: "button", class: `tl-bar bg-${cat}` + (open ? " open" : "") + (conditional ? " cond" : "") + (c.end_routine ? " ends" : ""),
     "data-fkey": "bar:" + key, tabindex: "-1", "aria-label": timelineAria(c) + ". Arrow keys move it; Alt+arrows change its length.",
@@ -2054,7 +2134,8 @@ function timelineKeys(e, rid, c, el) {
     done();
     if (!(S.sel?.kind === "component" && S.sel.id === c.id)) selectComp(rid, c.id);
     setTimeout(() => {
-      const f = $('#props [data-prop="start"] input, #props [data-prop="start"] [tabindex], #props input');
+      // the first selector that matches, in this order (a selector list would return the first field in the panel)
+      const f = ['#props [data-prop="start"] input', '#props [data-prop="start"] [tabindex]', "#props input"].map((q) => $(q)).find(Boolean);
       f?.focus();
     }, 0);
     return;
@@ -2398,13 +2479,20 @@ function routinesInside(n) {
 }
 function columnUse(n, cols) {
   const use = Object.fromEntries(cols.map((c) => [c, []]));
-  for (const rid of routinesInside(n)) for (const c of S.exp.routines[rid]?.components || []) {
-    for (const [prop, v] of Object.entries(c)) {
-      if (!isExpr(v)) continue;
-      const src = String(v).slice(1).replace(/(['"])(?:(?!\1).)*\1/g, (m) => m.replace(/[^{}]/g, " ").replace(/\{([^}]*)\}/g, " $1 "));
-      for (const w of new Set(src.match(/[A-Za-z_]\w*/g) || [])) if (use[w]) use[w].push({rid, id: c.id, prop});
-    }
+  // the names an expression reads: quoted text is left out, except the {…} parts of an f-string
+  const names = (v) => String(v).slice(1).replace(/(['"])(?:(?!\1).)*\1/g, (m) => " " + [...m.matchAll(/\{([^}]*)\}/g)].map((x) => x[1]).join(" ") + " ")
+    .match(/[A-Za-z_]\w*/g) || [];
+  const scan = (v, at) => {
+    if (isExpr(v)) { for (const w of new Set(names(v))) if (use[w]) use[w].push(at); }
+    else if (v && typeof v === "object") for (const x of Object.values(v)) scan(x, at);
+  };
+  for (const rid of routinesInside(n)) {
+    const r = S.exp.routines[rid] || {};
+    for (const c of r.components || []) for (const [prop, v] of Object.entries(c)) scan(v, {rid, id: c.id, prop});
+    // the screen's own fields: how long it lasts, when it ends, its rules
+    for (const prop of ["duration", "end_if", "rules"]) if (r[prop] !== undefined) scan(prop === "end_if" && typeof r[prop] === "string" && !isExpr(r[prop]) ? "$" + r[prop] : r[prop], {rid, id: rid, prop});
   }
+  for (const prop of ["stop_if", "select"]) if (n[prop] !== undefined) scan(typeof n[prop] === "string" && !isExpr(n[prop]) ? "$" + n[prop] : n[prop], {rid: null, id: n.loop, prop});
   return use;
 }
 function knownNames(rid) {
@@ -2527,7 +2615,7 @@ async function pickDataFile(cur) {
 
 /* ---------------- Typed here: an editable grid */
 function tableEditor(n, path) {
-  const rows = Array.isArray(n.conditions) ? n.conditions : (n.conditions = []);
+  const rows = Array.isArray(n.conditions) ? n.conditions : [];   // drawing never changes the document (no rows = the screens just repeat)
   const cols = listCols(rows);
   if (!rows.length && !cols.length) return emptyListState(n, path);
   const use = columnUse(n, cols);
@@ -2610,12 +2698,8 @@ function gridKeys(e, table, n, rows, cols) {
   else if (e.key === "ArrowRight") { e.preventDefault(); go(r, c + 1); }
   else if (e.key === "Home") { e.preventDefault(); go(mod ? 0 : r, 0); }
   else if (e.key === "End") { e.preventDefault(); go(mod ? rows.length - 1 : r, cols.length - 1); }
-  else if (e.key === "Tab") {
-    const nc = c + (e.shiftKey ? -1 : 1);
-    if (nc >= 0 && nc < cols.length) { e.preventDefault(); go(r, nc); }
-    else if (!e.shiftKey && r < rows.length - 1) { e.preventDefault(); go(r + 1, 0); }
-    else if (e.shiftKey && r > 0) { e.preventDefault(); go(r - 1, cols.length - 1); }
-  }
+  // Tab and Shift+Tab leave the grid (APG grid: one Tab stop, arrows inside); only while a cell is being edited
+  // does Tab move to the next cell, spreadsheet style (editCell)
   else if (e.key === "Enter" || e.key === "F2") { e.preventDefault(); editCell(table, n, rows, cols, r, c); }
   else if ((e.key === "Delete" || e.key === "Backspace") && !mod) {
     e.preventDefault();
@@ -2698,12 +2782,13 @@ async function pasteDialog(n, replace = false) {
 function rebuildRows(rows, fn) { rows.forEach((r, i) => { rows[i] = fn(r); }); }
 async function addListColumn(n, at) {
   if (!bEditable()) return;
-  const rows = Array.isArray(n.conditions) ? n.conditions : (n.conditions = []);
+  const rows = Array.isArray(n.conditions) ? n.conditions : [];
   const cols = listCols(rows);
   const name = await ui.prompt({title: "New column", label: "Column name", value: uniqueId("column", new Set(cols)), ok: "Add column",
     help: "Something that changes from trial to trial: the word, its colour, the right key.",
     transform: (v) => ui.slug(v), validate: (v) => !v ? "Type a name first." : cols.includes(v) ? `There is already a column “${v}”.` : null});
   if (!name) return;
+  if (!Array.isArray(n.conditions)) n.conditions = rows;
   if (!rows.length) rows.push({});
   rebuildRows(rows, (r) => { const out = {}; const keys = cols; keys.forEach((k, i) => { if (i === at) out[name] = ""; out[k] = r[k] ?? ""; }); if (at >= keys.length) out[name] = ""; return out; });
   BUILD.focusKey = "col:" + name;
@@ -2978,12 +3063,20 @@ function renderDiagram(el) {
     btn("Add a phase", () => { if (bEditable() && typeof addState === "function") addState(path); }, {cls: "btn sm", ic: "plus"}),
     h("span", {class: "grow"}),
     iconBtn("minus", "Zoom out", () => zoomTo((BUILD.zoom || 1) / 1.2)), zl, iconBtn("plus", "Zoom in", () => zoomTo((BUILD.zoom || 1) * 1.2)),
-    btn("Fit", () => { BUILD.zoom = null; fit(); }, {cls: "btn sm ghost"}));
+    btn("Fit", () => { BUILD.zoom = null; fit(true); }, {cls: "btn sm ghost"}));
   keepFocus(el, () => el.replaceChildren(
     h("div", {class: "dg-top"}, h("p", {class: "t-2"}, "After a phase finishes, its routes are checked from top to bottom; the first one that is true is taken."), tools),
     vp,
     h("p", {class: "t-caption dg-foot"}, "Click a phase to edit it in Properties. Arrows are routes; dashed arrows mean “otherwise”. Ctrl + wheel zooms.")));
-  const fit = () => { if (BUILD.zoom == null) { const w = vp.clientWidth - 8; BUILD.zoom = Math.max(0.8, Math.min(1, w / W)); } applyZoom(); };
+  // Fit shows every phase and route (down to the 30 % zoomTo allows); on first open the width fits, down to 50 %
+  const fit = (all = false) => {
+    if (BUILD.zoom == null) {
+      const w = vp.clientWidth - 8, hh = vp.clientHeight - 8;
+      const k = all && hh > 40 ? Math.min(w / W, hh / H) : w / W;
+      BUILD.zoom = Math.max(all ? 0.3 : 0.5, Math.min(1, k));
+    }
+    applyZoom();
+  };
   fit();
 }
 
@@ -3023,6 +3116,57 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+/* ================================================================== the assistant on the canvas (W2) */
+/* EDGE.emit("assistant", {busy, path, status, phase}) from assistant.js: while a job runs for this document the canvas says
+ * so (a big note on an empty experiment, a slim strip otherwise); after the first Apply to an experiment, a one-time
+ * callout points at what to check. */
+const ASST_CANVAS = {busy: false, callout: null};
+function onAssistantEvent(d = {}) {
+  const mine = !d.path || !S.path || d.path === S.path;
+  ASST_CANVAS.busy = !!d.busy && mine;
+  if (!d.busy && d.phase === "applied" && mine && S.path) {
+    const seen = EDGE.prefs.get("assistant.madeBy", []) || [];
+    if (!seen.includes(S.path)) { ASST_CANVAS.callout = S.path; EDGE.prefs.set("assistant.madeBy", [...seen, S.path].slice(-200)); }
+  }
+  renderAssistantCanvas();
+  if (S.exp && !S.exp.flow.length && S.ws === "build" && currentBuildView() === "story") renderStoryboard($("#flow"));
+}
+function renderAssistantCanvas() {
+  const host = $("#canvas"); if (!host) return;
+  let el = $("#asst-canvas");
+  const callout = ASST_CANVAS.callout && ASST_CANVAS.callout === S.path && !ASST_CANVAS.busy && !S.proposal;
+  const refit = () => { if (S.ws === "build" && currentBuildView() === "screen") requestAnimationFrame(() => renderPreview()); };
+  if (!ASST_CANVAS.busy && !callout) { if (el) { el.remove(); refit(); } return; }
+  if (!el) { el = h("div", {id: "asst-canvas"}); host.prepend(el); refit(); }
+  // the big note: an empty experiment, or the first build of one just created from Home (W2: the blank "hello" screen)
+  const firstBuild = typeof EDGE.isFresh === "function" && EDGE.isFresh() && !(EDGE.prefs.get("assistant.madeBy", []) || []).includes(S.path);
+  const empty = S.exp && (!S.exp.flow.length || firstBuild);
+  if (ASST_CANVAS.busy) {
+    const key = "busy" + (empty ? ":empty" : "");
+    if (el.dataset.key === key) return;
+    el.dataset.key = key;
+    el.className = empty ? "asst-building big" : "asst-building";
+    el.setAttribute("role", "status");
+    el.replaceChildren(h("div", {class: "box"}, icon("assistant", empty ? "l" : "m"), h("div", {},
+      h("b", {}, empty ? "The assistant is building your experiment." : "The assistant is working on changes."),
+      h("p", {}, empty ? "It appears here when it's ready for you to check. Nothing is changed until you apply it." : "Nothing is changed until you apply them."))));
+    return;
+  }
+  if (el.dataset.key === "callout") return;
+  el.dataset.key = "callout";
+  el.className = "asst-callout";
+  el.setAttribute("role", "region"); el.setAttribute("aria-label", "Made by the assistant");
+  const firstList = (() => { let p = null; walkFlow((n, pp) => { if (!p && n && typeof n === "object" && n.loop !== undefined) p = pp; }); return p; })();
+  const firstScreen = (() => { const order = routineInFlowOrder(); return order.find((rid) => loopsAround(rid).length) || order[0] || null; })();
+  const close = () => { ASST_CANVAS.callout = null; renderAssistantCanvas(); };
+  el.replaceChildren(icon("assistant", "m"), h("div", {class: "msg"}, h("b", {}, "Made by the assistant. "), "Check these:"),
+    h("div", {class: "acts"},
+      btn("Try it yourself", () => { close(); tryNow("all"); }, {ic: "play"}),
+      firstList ? btn("Open the trial list", () => { close(); openTrialList(firstList); }, {ic: "table"}) : null,
+      firstScreen ? btn("See the timing", () => { close(); openScreen(firstScreen); }, {ic: "timeline"}) : null),
+    iconBtn("close", "Close", close));
+}
+
 /* ================================================================== wiring */
 window.addEventListener("mousemove", (e) => { const p = BUILD.pan; if (!p) return; p.vp.scrollLeft = p.l - (e.clientX - p.x); p.vp.scrollTop = p.t - (e.clientY - p.y); });
 window.addEventListener("mouseup", () => { if (BUILD.pan) { BUILD.pan.vp.classList.remove("panning"); BUILD.pan = null; } });
@@ -3042,6 +3186,10 @@ EDGE.on("doc:loaded", () => {
   scheduleBuildRender();
 });
 EDGE.on("doc:changed", () => { BUILD.assets.at = 0; });
+EDGE.on("doc:saved", () => { if (S.ws === "build" && S.exp) renderBuildToolbar(currentBuildView()); });     // Save as: the first crumb is the new name
+EDGE.on("assistant", onAssistantEvent);
+EDGE.on("doc:loaded", () => { if (ASST_CANVAS.callout && ASST_CANVAS.callout !== S.path) ASST_CANVAS.callout = null; renderAssistantCanvas(); });
+EDGE.on("proposal", () => renderAssistantCanvas());
 EDGE.on("companion", () => { setTimeout(() => { applyRail(); fitToolbar(); }, 0); if (S.exp && S.ws === "build") requestAnimationFrame(() => { if (currentBuildView() === "screen") renderPreview(); }); });
 EDGE.on("mode", () => { BUILD.thumbs.clear(); });
 window.addEventListener("DOMContentLoaded", () => {

@@ -3,10 +3,10 @@ order: 1
 title: Your first experiment (a Stroop task)
 level: beginner
 minutes: 12
-learn: screens, things on a screen, timing, trial lists, test runs, Try it
+learn: screens, items, timing, trial lists, test runs, saving
 description: >
-  Build a colour-word Stroop task from an empty file: a fixation cross, a coloured word and a
-  key press, repeated over a trial list in random order, then test it and try it yourself.
+  Build a colour-word Stroop task from an empty experiment: a fixation cross, a coloured word and a
+  key press, repeated over a trial list in random order, then test it and save it.
 start: tutorial_empty
 mode: simple
 steps:
@@ -14,98 +14,118 @@ steps:
     body: |
       This is the EDGE builder. You will build a complete Stroop experiment in about 12 minutes.
 
-      * **Left:** the things you can put on a screen (text, pictures, key presses …) and devices.
-      * **Centre:** the storyboard or one screen's timeline with a live preview, the **flow** (the order
-        things happen in), and the console.
-      * **Right:** the properties of whatever you select.
+      * **Top:** the five workspaces, **Build · Measures · Test · Run · Data**, in the order you use them.
+      * **Left:** **Add** (the items you can put on a screen: text, pictures, key presses …), **Files**
+        and **Devices**.
+      * **Centre:** the **Storyboard** (every screen in order) or one **Screen** with its live preview
+        and timeline.
+      * **Right:** the **Properties** of whatever you select.
 
-      (In a hurry? **New → Make a new experiment: answer a few questions** builds a task like this
-      for you. Here you'll build it by hand to see how it works.)
+      (In a hurry? **Answer a few questions** builds a task like this for you, and the **Assistant**
+      builds one from a description. Here you'll build it by hand to see how it works.)
 
-      Press **Next** to start. The coach waits for you at each step and moves on by itself when
-      the step is done.
+      Press **Next** to start. The coach waits for you at each step and moves on by itself when the
+      step is done.
   - title: Create a screen
     body: |
-      A **screen** is one step of the experiment, like a single trial (in the file it's called a
-      *routine*). Click **+ screen** at the top and name it `trial`.
+      A **screen** is one step of the experiment, like a single trial. Click **Add screen** at the
+      top of the canvas, type `trial` and press **Add screen**.
+
+      The new screen joins the experiment at once and opens in the **Screen** view.
     target: ".rtab.add"
     check: {routine_exists: trial}
   - title: Show a word
     body: |
-      Things go *on* a screen. Click **Text** in the list on the left. It appears on the timeline as a
-      bar (shown for 1 s for now) and in the preview on the right.
+      Things go *on* a screen. Click **Text** under **Add** on the left. It appears on the screen and
+      on the timeline as a bar (shown for 1 s for now), and Properties shows it.
     target: ".pal-item[data-type=text]"
     check: {component: {routine: trial, type: text}}
-  - title: Make the word come from the trial list
+  - title: A different word on every trial
     body: |
-      In **Properties**, type `$word` into **text**.
+      In **Properties**, point at **Text**: a small **Fixed** button appears at the right of the label.
+      It says where the value comes from. Click it, choose **New trial-list column…**, type `word` and
+      press **Add column**.
 
-      A value that starts with `$` is a *formula*, computed while the experiment runs. Here `word` will
-      be a column of the trial list you'll create shortly. (Once a trial list exists, you can also pick
-      its columns from the small value menu next to each property: **Fixed**, **⟳ a column**, or
-      **+ New trial-list column…**.)
-    target: "#props"
+      EDGE puts the screen into a **trial list** (one row per trial) with a column `word`, and the text
+      now shows that column's value on each trial.
+    target: "#props [data-prop=text]"
     check: {component: {routine: trial, type: text, prop: text, value: "$word"}}
   - title: Colour the word
     body: |
-      Still in Properties, type `$ink` into **color**. Each trial will now draw the word in the ink
-      colour from the trial list (red, green, blue…).
-    target: "#props"
+      Do the same for **Colour**: **Fixed** › **New trial-list column…**, name it `ink`. Each trial will
+      draw the word in the colour from the trial list (red, green, blue …).
+
+      The word disappears from the preview for now: the new column is still empty. You'll fill it in
+      shortly.
+    target: "#props [data-prop=color]"
     check: {component: {routine: trial, type: text, prop: color, value: "$ink"}}
   - title: Collect a response
     body: |
-      Click **Key press** on the left. In its properties, set **keys** to `r, g, b` and
-      **correct** to `$key`. **ends the screen** is already ticked, so a key press ends the trial, and the
-      word now stays on screen until the key press.
+      Click **Key press** on the left. In its Properties:
+
+      * **Keys**: click the box, press Backspace to remove `space`, then press **R**, **G** and **B**.
+      * **Correct answer**: **Fixed** › **New trial-list column…**, name it `key`.
+
+      **Ends the screen** is already on, so a key press moves on to the next trial, and the word now
+      stays on the screen until the key press.
     target: ".pal-item[data-type=keyboard]"
     check: {component: {routine: trial, type: keyboard, prop: correct, value: "$key"}}
   - title: Add a fixation cross first
     body: |
-      Click **Fixation cross** on the left, then set **lasts (s)** to `0.5`.
+      Click **Fixation cross** on the left, then set **Lasts** to `0.5` under **Timing**.
 
-      Then select the text (click **text** on the timeline) and set **starts at (s)** to `0.5`, so the
-      word appears right after the cross. You can also drag the bars on the timeline, and press ▶
-      under the preview to play the screen at real speed.
+      Then select the text (click **text** on the timeline) and set **Starts at** to `0.5`, so the word
+      appears right after the cross. You can also drag the bars on the timeline, and press the play
+      button under the preview to play the screen at real speed.
     target: ".pal-item[data-type=fixation]"
     check: {component: {routine: trial, type: text, prop: start, value: 0.5}}
-  - title: Repeat the trial with a loop
+  - title: Open the trial list
     body: |
-      In the **Flow** strip, click the round **+** and choose **Repeat with a trial list (loop)**. Then
-      click the **+** *inside* the green box and choose **Screen: trial**.
+      The **Storyboard** shows the whole experiment: your screen sits inside the green frame
+      **Trial list “trials”**. Click **Open list** in its header.
     target: "#flow"
-    check: {loop: {children_include: trial}}
+    check: {view: list}
   - title: Fill in the trial list
     body: |
-      With the loop selected, the Properties panel shows its **trial list**: one row per trial. Rename
-      the first column to `word`, and add columns `ink` and `key`. Then add at least 3 rows, for example:
+      This is the trial list: one row per trial, one column per value that changes. It works like a
+      spreadsheet: click a cell and type, **Tab** moves right, **Enter** moves down, **+ Row** adds a
+      row, and **Ctrl+V** pastes rows copied from Excel.
+
+      Make at least 3 rows, for example:
 
       | word | ink | key |
       |---|---|---|
       | RED | red | r |
       | RED | green | g |
       | BLUE | blue | b |
-    target: "#props"
+    target: "#list-editor"
     check: {loop: {columns: [word, ink, key], conditions_min: 3}}
-  - title: Randomize
+  - title: Shuffle and repeat
     body: |
-      Set the loop's **order** to `random` and **repeats** to `2`. Every participant now gets each row
-      twice, in a new random order.
-    target: "#props"
-    check: {loop: {order: random}}
+      With the trial list open, Properties shows how it runs. **Order** is already **Shuffled each
+      time**: every participant gets the rows in a new random order. Set **Repeat the list** to `2` to
+      show each row twice; the line next to it counts the trials.
+
+      Press **Done** at the top right of the list to go back to the Storyboard, then **Next**.
+    target: "#props [data-prop=repeats]"
   - title: Test it
     body: |
-      Click **▶ Test run**. EDGE runs the whole experiment in a few seconds with a *virtual participant*
-      who presses keys with realistic reaction times. Look at the **Test results** tab: the number of
-      trials, the verdict, then the data preview.
+      Open **Test** (top) and click **Start test run**. EDGE runs the whole experiment in a few seconds
+      with a *virtual participant* who presses keys with realistic response times. The **Last test run**
+      card shows the number of trials, the verdict and a data preview.
 
-      Then press **▶ Try it** to do the task yourself, right in the builder.
+      Then press **Try it** (top right) to do the task yourself, right in the builder. **Esc** stops.
+      Press **Next** when you're done.
     target: "#btn-dryrun"
     check: {dry_run: true}
+    advance: manual
   - title: Save
     body: |
-      Press **Save** (or Ctrl/⌘+S) and give your experiment a file name. Every later save keeps the
-      previous version, so you can always go back (**Versions**).
+      Click the save button at the top, **Unsaved changes** (in a narrow window it is the disk icon with a
+      dot), or press Ctrl/⌘+S. Give your experiment a name and press
+      **Save**. It gets its own folder. Every later save keeps the previous version, so you can always
+      go back (**History…** in the Experiment menu).
 
-      That's it: you built a complete experiment. To collect data, press **Run with a participant**.
+      That's it: you built a complete experiment. To collect data, open **Run**.
     target: "#btn-save"
     check: {saved: true}

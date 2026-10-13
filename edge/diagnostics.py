@@ -191,3 +191,93 @@ def format_report(rep: dict[str, Any]) -> str:
         lines += ["", f"  Hint:   {rep['hint']}"]
     lines += ["", "  Everything recorded until then is saved. 'edge support-bundle' packs what's needed to ask for help."]
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------- the same report, in a researcher's words
+TYPE_WORDS = {
+    "keyboard": "a key press", "mouse": "a mouse response", "slider": "a rating slider", "text": "a text",
+    "image": "a picture", "sound": "a sound", "shape": "a shape", "fixation": "a fixation cross",
+    "html": "a web page", "survey": "a questionnaire", "device_response": "a device response",
+    "gaze_roi": "a gaze area", "calibrate": "a calibration", "marker": "a marker",
+}
+
+
+def _find_component(doc: dict[str, Any] | None, cid: str | None) -> tuple[str | None, dict[str, Any] | None]:
+    for rid, r in ((doc or {}).get("routines") or {}).items():
+        for c in (r or {}).get("components") or []:
+            if isinstance(c, dict) and c.get("id") == cid:
+                return rid, c
+    return None, None
+
+
+def _outputs_of(ctype: str | None) -> list[str]:
+    """The results a component type always has; [] when they depend on its settings (a survey's questions, a web
+    page's fields, a marker's labels), where a name can't be called a typo."""
+    try:
+        from .components import component_registry
+        from .components.base import Component
+        cls = component_registry().get(str(ctype))
+        if not cls or getattr(cls.planned_outputs, "__func__", None) is not Component.planned_outputs.__func__:
+            return []
+        return sorted(cls.outputs)
+    except Exception:
+        return []
+
+
+def plain_error(rep: dict[str, Any], doc: dict[str, Any] | None = None) -> dict[str, Any]:
+    """What went wrong, in one plain sentence, and where to fix it.
+
+    → {"text", "routine", "component", "prop"}: e.g. 'On screen “feedback”, the text formula of “fb” uses
+    resp.cor, but a key press has no “cor”. Did you mean resp.corr?'. The raw report stays for Expert mode."""
+    import difflib
+
+    typ, msg = str(rep.get("type") or ""), str(rep.get("message") or "")
+    routine, comp = rep.get("routine"), rep.get("component")
+    out: dict[str, Any] = {"routine": routine, "component": comp, "prop": None}
+    src, etype, emsg = None, "", ""
+    m = re.search(r"error evaluating '(.+?)': (\w+): (.*)$", msg, re.S)
+    if m:
+        src, etype, emsg = m.group(1), m.group(2), m.group(3)
+    else:
+        m2 = re.search(r"\(in '(.+?)'\)", msg)
+        src = m2.group(1) if m2 else None
+    # which property holds the formula
+    if src and comp:
+        _, cdict = _find_component(doc, comp)
+        for k, v in (cdict or {}).items():
+            if isinstance(v, str) and src in v:
+                out["prop"] = k
+                break
+    where = f"On screen “{routine}”" if routine else "While the experiment ran"
+    what = (f"the {str(out['prop']).replace('_', ' ')} formula of “{comp}”" if out["prop"] else
+            f"“{comp}”" if comp else "a formula")
+    text = ""
+    if etype == "AttributeError" and src:
+        attr = (emsg.split() or [""])[0].strip("'\"(")
+        mm = re.search(r"\b([A-Za-z_]\w*)\s*\.\s*%s\b" % re.escape(attr), src) if attr else None
+        obj = mm.group(1) if mm else None
+        _, odict = _find_component(doc, obj)
+        ctype = (odict or {}).get("type")
+        thing = TYPE_WORDS.get(str(ctype), f"“{obj}”") if obj else "that value"
+        close = difflib.get_close_matches(attr, _outputs_of(ctype), n=1, cutoff=0.5)
+        text = (f"{where}, {what} uses {obj}.{attr}" if obj else f"{where}, {what} uses “{attr}”") \
+            + f", but {thing} has no “{attr}”." + (f" Did you mean {obj}.{close[0]}?" if close and obj else "")
+    elif "isn't defined here" in msg:
+        name = re.search(r"'(\w+)' isn't defined", msg)
+        dym = re.search(r"Did you mean ([^?]+)\?", msg)
+        text = f"{where}, {what} uses “{name.group(1) if name else '?'}”, which doesn't exist at that point." \
+            + (f" Did you mean {dym.group(1)}?" if dym else "")
+    elif etype in ("TypeError",) and "NoneType" in emsg:
+        text = (f"{where}, {what} used a value that was still empty (for example a response before any key "
+                "was pressed). Check for “no response” first.")
+    elif etype == "ZeroDivisionError":
+        text = f"{where}, {what} divided by zero (for example accuracy before any answer)."
+    elif typ == "ExpressionError" and "isn't a valid expression" in msg:
+        text = f"{where}, {what} isn't a valid formula: {msg.split('(syntax error', 1)[-1].split(').', 1)[-1].strip() or 'check the quotes and brackets.'}"
+    elif rep.get("user_code"):
+        uc = rep["user_code"]
+        text = f"{where}, the Python code of “{comp}” failed on line {uc.get('line')}: {typ}: {msg}"
+    else:
+        text = f"{where}, {what} stopped the experiment: {msg or typ}"
+    out["text"] = text.replace("  ", " ")
+    return out

@@ -1,0 +1,78 @@
+id: assistant_basics
+order: 10
+title: Build with the assistant
+level: beginner
+minutes: 6
+learn: the assistant panel, where it runs (Claude, OpenAI-compatible, Ollama, LM Studio), privacy, preview, Apply and Undo
+description: >
+  Meet the assistant: describe an experiment or a change in your own words, see it as a preview, and
+  apply it (or undo it). Learn where the assistant can run and what is sent where. Works without a
+  model: only the last steps need one.
+start: tutorial_empty
+mode: simple
+steps:
+  - title: What the assistant does
+    body: |
+      The **assistant** builds and changes experiments from a description in your own words, for
+      example *"Add a practice block of 6 trials that repeats until 80 % are correct"*. You can attach
+      the files you already have (a trial list in Excel or CSV, pictures, a consent page). It checks and
+      test-runs what it made, and you see every change as a preview before anything happens.
+
+      It is optional: everything else in EDGE works without it. Press **Next**.
+  - title: Open the assistant
+    body: |
+      Click **Assistant** at the top right, the sparkle button (or press **Ctrl+I**). The assistant opens in a column next
+      to your work, so the experiment stays visible.
+    target: "#assistant-toggle"
+    check: {assistant_open: true}
+  - title: Open the assistant settings
+    body: |
+      Click the chip under the panel's title: it says **Not set up**, or which service the assistant
+      uses. It opens **Assistant settings** (also in the panel's **⋯** menu).
+    target: "#assistant-provider-chip"
+  - title: Where should the assistant run?
+    body: |
+      Choose one of four services:
+
+      * **Claude (Anthropic)**: the best results. Online; paste an API key from console.anthropic.com.
+      * **OpenAI-compatible**: OpenAI, OpenRouter or another online service, with its API key.
+      * **Ollama** or **LM Studio**: free, run a model on this computer, nothing leaves it. Install the
+        app and download a model first (for Ollama: `ollama pull qwen2.5:14b`).
+
+      Fill in the fields, press **Test connection**, then **Save**. The [Assistant guide](ASSISTANT.md)
+      has the details for each service.
+    target: "#assistant-settings .prov-cards"
+  - title: What is sent where
+    body: |
+      For an online service, open **What is sent where** under its fields and read it: what you type, the
+      experiment you are editing and the files you attach go to that company; your participants' data
+      never does, and your API key stays on this computer. For Ollama or LM Studio the settings say
+      *On this computer: nothing is sent anywhere.* The panel repeats this in one line under the box you
+      type in.
+
+      Then press **Save** (or **Cancel** if you are not setting it up now) and **Next**. For an online
+      service EDGE asks once, *Before EDGE sends anything online*: press **Continue**.
+    target: "#assistant-settings :is(.privacy, .asst-privacy)"
+  - title: Describe an experiment
+    body: |
+      *Skip this step if you haven't set up a model yet.*
+
+      Type a description in **Describe a change, or ask a question…** and press Enter, for example:
+      *A Stroop task: the words RED, GREEN and BLUE in red, green or blue ink; the participant presses
+      r, g or b for the ink colour.* The panel shows each step while it works.
+
+      The result opens as a **preview**: new screens are marked, and the bar at the top says "Nothing is
+      changed until you apply". Read the list of changes, then press **Apply**.
+    target: "#assistant-input"
+    check: {assistant_applied: true}
+  - title: Undo, attach, and more
+    body: |
+      * **Apply** is one step: **Undo** (in the panel, or Ctrl+Z) brings back the experiment exactly as
+        it was. **Discard** throws a preview away.
+      * **Attach files** (the paper clip, or drop files on the panel): they are copied into this
+        experiment's folder, so the experiment can use them.
+      * Select a screen or an item first to ask about it (*"make this bigger"*).
+      * **Ask the assistant** also appears next to problems, and Home has a **Describe it** box for new
+        experiments.
+
+      That's it. Press **Finish**.

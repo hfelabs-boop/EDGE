@@ -70,6 +70,7 @@ const ui = (() => {
       initialFocus, onOpen} = opts || {};
     return new Promise((resolve) => {
       const opener = document.activeElement;
+      const openerId = opener?.id || "", openerKey = opener?.dataset?.fkey || "";
       const host = document.getElementById("dialogs") || document.body;
       const scrim = el("div", "scrim");
       const dlg = el("div", "dialog " + size);
@@ -88,7 +89,14 @@ const ui = (() => {
         done = true;
         release();
         scrim.remove();
+        if (typeof opts.returnFocus === "function") { const t = opts.returnFocus(); if (t && t.focus) { t.focus(); resolve(value); return; } }
         if (opener && opener.isConnected && typeof opener.focus === "function") opener.focus();
+        else setTimeout(() => {       // the opener was re-rendered meanwhile: the same control again, by its id or focus key
+          const a = document.activeElement;
+          if (a && a !== document.body && a.isConnected) return;
+          const t = (openerId && document.getElementById(openerId)) || (openerKey && document.querySelector(`[data-fkey="${CSS.escape(openerKey)}"]`));
+          if (t && typeof t.focus === "function") t.focus();
+        }, 0);
         resolve(value);
       };
       if (dismissible) {
@@ -249,7 +257,11 @@ const ui = (() => {
       for (const it of items || []) {
         if (!it) continue;
         if (it.sep || it === "-") { const hr = el("hr"); hr.setAttribute("role", "separator"); box.append(hr); continue; }
-        if (it.head) { const hd = el("div", "head", it.head); hd.setAttribute("role", "presentation"); box.append(hd); continue; }
+        if (it.head) {
+          const hd = el("div", "head", it.head); hd.setAttribute("role", "presentation");
+          if (it.name) { const nm = el("span", "head-name", `“${it.name}”`); hd.append(" ", nm); }   // a quoted name keeps its own case
+          box.append(hd); continue;
+        }
         const b = el("button", "item" + (it.danger ? " danger" : ""));
         b.type = "button";
         b.tabIndex = -1;

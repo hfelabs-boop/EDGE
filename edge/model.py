@@ -541,6 +541,11 @@ class Experiment:
                                 issues.append(Issue("warning", w + ".conditions", str(e)))
                             except Exception as e:
                                 issues.append(Issue("error", w + ".conditions", str(e)))
+                    elif isinstance(n.conditions, list) and not n.conditions and not n.staircase:
+                        issues.append(Issue("warning", w, f"trial list '{n.id}' has no rows, so its screens never run "
+                                                          "(0 trials)",
+                                            hint="type rows into the trial list, or remove 'conditions: []' so the "
+                                                 "screens just repeat"))
                     elif n.conditions is not None:
                         from .conditions import load_conditions
                         try:

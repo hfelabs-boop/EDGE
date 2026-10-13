@@ -31,6 +31,8 @@ const S = {
   noDoc: false,                  // Home without an open experiment (a placeholder document is loaded)
   files: null,                   // experiments in the builder folder (GET /api/files?status=1)
   root: "",
+  appVersion: "",               // edge.__version__ from /api/files (About EDGE)
+  pageBase: "",                  // "/api/page/<key>/": experiment files by path, for sandboxed page previews
 };
 
 /* Theme and density apply before the first paint (Preferences, §W14). */
@@ -90,6 +92,30 @@ async function api(path, body) {
   return j;
 }
 
+/* Messages written for the command line, in the builder's words: no commands to type, paths as people know them. */
+function builderWords(t) {
+  let s = String(t ?? "");
+  s = s.replace(/,?\s*or use '?edge run --dry-run'? to test\.?/gi, ". To test it here, use Test run or Try it.")
+    .replace(/\(test runs with '?edge run --dry-run'? work anywhere\)/gi, "(Test run and Try it work anywhere)")
+    .replace(/'?edge run --dry-run'?/gi, "a test run (Test, then Start test run)")
+    .replace(/'?edge unbundle'?/gi, "Import")
+    .replace(/'edge support-bundle' packs what's needed to ask for help\.?/gi, "Make a support bundle (Help menu) to ask for help.")
+    .replace(/\(\s*'?edge support-bundle'?\s*\)/gi, "(Help menu, Make a support bundle)")
+    .replace(/'?edge support-bundle'?/gi, "Make a support bundle")
+    .replace(/'?edge validate'?/gi, "the Problems list")
+    .replace(/'?edge doctor'?/gi, "Check this computer")
+    .replace(/:?\s*in the experiment file add\s+measures:\s*\[.*$/s, " on the Measures page.")
+    .replace(/\(edge lock \/ Lock in the builder\)/gi, "(the Lock button)")
+    .replace(/'?edge lock'?/gi, "Lock")
+    .replace(/fix them in the experiment file: settings: \{markers: \{codes: \{([^}]*)\}\}\}/gi, "give each one a fixed code in the experiment file (YAML, in Expert mode), e.g. $1");
+  return relPath(s);
+}
+/* An absolute path inside the experiments folder, relative to it ("stroop/data/001_1_…"). */
+function relPath(s) {
+  s = String(s ?? "");
+  const root = String(S.root || "").replace(/\\/g, "/").replace(/\/+$/, "");
+  return root ? s.replace(/\\/g, "/").split(root + "/").join("") : s;
+}
 function uniqueId(base, taken) {
   base = base.replace(/[^A-Za-z0-9_]/g, "_").replace(/^(\d)/, "_$1") || "item";
   if (!taken.has(base)) return base;
@@ -235,7 +261,7 @@ function setSaveState(state = null) {
   if (ic) ic.replaceWith(icon(state === "error" ? "warning" : state === "saving" ? "refresh" : fresh ? "save" : "success"));
   const lbl = $("#save-label"); if (lbl) lbl.textContent = word;
   const sb = $("#sb-saved");
-  if (sb) sb.textContent = d ? "Unsaved" : S.path && S.savedTime ? `Saved ${clock(S.savedTime)}` : "";
+  if (sb) sb.textContent = S.noDoc || S.ws === "home" ? "" : d ? "Unsaved" : S.path && S.savedTime ? `Saved ${clock(S.savedTime)}` : "";     // nothing open on Home
 }
 function fixSelection() {
   if (!S.exp.routines[S.routine]) S.routine = Object.keys(S.exp.routines)[0] || null;
@@ -307,8 +333,11 @@ async function boot() {
   restoreLayout();
   setInterval(pollExternalChanges, 1500);
   setInterval(tick, 1000);
-  watchTryIt();
-  if (params.get("tutorial")) { closeModal(); await startTutorial(params.get("tutorial")); }
+  EDGE.on("tried", onTried);
+  // a dialog opening or closing during a tutorial: the coach moves beside it (placeCoach), not over its buttons
+  new MutationObserver(() => { if (T.tut && !T.min) requestAnimationFrame(() => updateCoach()); })
+    .observe($("#dialogs") || document.body, {childList: true});
+  if (params.get("tutorial")) { closeModal(); await startTutorial(params.get("tutorial"), {fromUrl: true}); }
   else if (params.get("help")) { closeModal(); openHelp(params.get("help")); if (S.noDoc) EDGE.go("home"); else routeFromHash(); }
   else if (S.noDoc) EDGE.go("home", {replace: true});
   else routeFromHash(true);
@@ -326,8 +355,8 @@ async function loadPlaceholder() {
 }
 
 async function refreshFiles() {
-  try { const r = await api("/api/files?status=1"); S.files = r.files; S.root = r.root || S.root; }
-  catch { try { const r = await api("/api/files"); S.files = r.files; S.root = r.root || S.root; } catch { S.files = S.files || []; } }
+  try { const r = await api("/api/files?status=1"); S.files = r.files; S.root = r.root || S.root; S.appVersion = r.version || S.appVersion; S.pageBase = r.page_base || S.pageBase; }
+  catch { try { const r = await api("/api/files"); S.files = r.files; S.root = r.root || S.root; S.appVersion = r.version || S.appVersion; S.pageBase = r.page_base || S.pageBase; } catch { S.files = S.files || []; } }
   return S.files;
 }
 
@@ -345,7 +374,7 @@ function loadDoc(exp, path, fp = null, opts = {}) {
   S.exp = normalize(exp); S.history = []; S.future = []; S.historyLabels = []; S.futureLabels = [];
   S._snapshot = JSON.stringify(S.exp); S.rev = (S.rev || 0) + 1;
   if (!samePath) {               // document-scoped state resets when another document loads (§2.9)
-    S.tested = null; S.strict = false; S.rowIndex = 0; S.previewT = 0; S.triedAt = null; S.lastResults = null;
+    S.tested = null; S.strict = false; S.rowIndex = 0; S.previewT = 0; S.triedAt = null; S.lastResults = null; S.deviceTests = {};
     $("#tab-results")?.replaceChildren();
     S.dataSeen = null;
   }
@@ -410,7 +439,22 @@ function shortRoot() {
   return "…/" + parts.slice(-2).join("/");
 }
 
+/* A field the researcher is still typing in commits on "change" (blur) and then one tick later (inspLater):
+   finish that first, so Save and Ctrl+S never write the old value and report "Saved". */
+const nextTick = () => new Promise((r) => setTimeout(r, 0));
+async function flushPendingEdits() {
+  const a = document.activeElement;
+  if (a && a !== document.body && a.matches?.("input:not([type=checkbox]):not([type=radio]):not([type=button]), textarea, select")
+      && !a.closest("#companion, .dialog, #play")) {
+    const fkey = a.dataset.fkey; let start = null, end = null; try { start = a.selectionStart; end = a.selectionEnd; } catch { /* no caret */ }
+    a.blur();                               // fires "change" when the value was edited
+    await nextTick(); await nextTick();
+    const back = a.isConnected ? a : (fkey ? document.querySelector(`[data-fkey="${CSS.escape(fkey)}"]`) : null);
+    if (back && back.focus) { back.focus({preventScroll: true}); try { if (start != null) back.setSelectionRange(start, end); } catch { /* not a text field */ } }
+  } else await nextTick();
+}
 async function save(asNew = false, opts = {}) {
+  await flushPendingEdits();
   if (S.proposal) { toast("Apply or discard the assistant's changes first"); return false; }
   if (S.noDoc) return false;
   let path = S.path;
@@ -425,10 +469,13 @@ async function save(asNew = false, opts = {}) {
   const fp = newPath ? "" : (S.fingerprint || "");
   const label = encodeURIComponent(opts.label || S.saveLabel || "Saved by you");
   setSaveState("saving");
-  let r;
+  let r, rev0 = S.rev;                      // an edit made while the request is on its way stays unsaved
   try {
-    r = await api(`/api/experiment?path=${encodeURIComponent(path)}&fingerprint=${fp}&label=${label}`, S.exp);
+    r = await api(`/api/experiment?path=${encodeURIComponent(path)}&fingerprint=${fp}&label=${label}${newPath ? "&new=1" : ""}`, S.exp);
   } catch (e) {
+    if (e.status === 409 && newPath) {      // never replace another experiment by saving under its name
+      setSaveState(); toast(`There is already an experiment at ${path}: save it under another name.`, {tone: "warning", ms: 8000}); return false;
+    }
     if (e.status !== 409) { setSaveState("error"); toast(`Not saved: ${e.message}`, {tone: "danger", ms: 8000}); return false; }
     const choice = await ui.dialog({title: "This experiment was changed elsewhere", icon: "warning", size: "sm",
       body: h("div", {}, h("p", {}, "Someone or something changed it while you worked: another window, your editor, or Claude via MCP."),
@@ -436,14 +483,16 @@ async function save(asNew = false, opts = {}) {
       buttons: [{label: "Cancel", value: null, left: true, kind: "ghost"}, {label: "Load the other version", value: "theirs"}, {label: "Keep my version", value: "mine", kind: "primary"}]});
     if (choice === "theirs") { setSaveState(); await openFile(path, {silent: true, keepSelection: true}); clearAlert("external"); toast("Loaded the other version"); return false; }
     if (choice !== "mine") { setSaveState(); return false; }
+    rev0 = S.rev;
     try { r = await api(`/api/experiment?path=${encodeURIComponent(path)}&force=1&label=${label}`, S.exp); }
     catch (e2) { setSaveState("error"); toast(`Not saved: ${e2.message}`, {tone: "danger", ms: 8000}); return false; }
   }
   if (newPath) clearDraft();
   S.path = path; S.fingerprint = r.fingerprint; S.saveLabel = null;
-  clearDraft();
+  const later = S.rev !== rev0;             // edited while saving: those edits are not on disk yet
+  if (later) saveDraft(); else clearDraft();
   EDGE.prefs.set("last", path); rememberRecent(path);
-  renderDocName(); setDirty(false); clearAlert("external");
+  renderDocName(); setDirty(later); clearAlert("external"); clearAlert("draft");
   toast(opts.toast || (newPath ? `Saved as ${path}` : "Saved. The previous version is in History."), {tone: "success"});
   S.savedAt = Date.now(); if (!opts.keepFresh) S.fresh = null;
   refreshFiles().then(() => { if (S.ws === "home") renderHome(); renderShell(); });
@@ -585,13 +634,14 @@ function statusChip(f) {
   if (!f || !f.sessions) return null;
   if (f.locked) return h("span", {class: "chip"}, icon("lock"), "Locked");
   if (f.sessions.real) return h("span", {class: "chip success"}, "Has data");
-  return h("span", {class: "chip"}, "Draft");
+  return null;            // every new experiment is a draft: a chip on every row would say nothing
 }
 
 /* ---------------- new experiments: examples gallery, blank, wizard */
 const TEMPLATE_INFO = {
   blank: ["Blank", "One empty screen.", []],
   freeview_eyetracking: ["Free viewing (eye tracking)", "Pictures shown for 4 s while gaze is recorded. Works without an eye tracker (simulated); choose Tobii or Gazepoint later.", ["eye tracking"]],
+  stroop: ["Stroop task", "Name the ink colour of colour words; with feedback. The task of the first tutorial.", ["classic"]],
   eeg_oddball: ["Auditory oddball (EEG)", "Rare high tones among low tones; press space for the high ones. Sends triggers.", ["EEG"]],
   timing_test: ["Timing test for this computer", "Measures how late screens and sounds really are. Needs a light sensor and a microphone.", ["hardware"]],
   staircase: ["Contrast threshold (staircase)", "Finds the contrast where a person is right about 79 % of the time.", ["adaptive"]],
@@ -603,8 +653,9 @@ const templateInfo = (key) => TEMPLATE_INFO[key] || [key.replace(/_/g, " ").repl
 function thumbTile(doc, {w = 160, h: hh = 90, iconName = "screen"} = {}) {
   const box = h("span", {class: "thumb-tile", "aria-hidden": "true"});
   if (doc && typeof drawThumbnail === "function") {
-    const cv = h("canvas", {width: w * 2, height: hh * 2});
-    try { drawThumbnail(doc, cv); box.append(cv); box.classList.add("drawn"); return box; } catch { /* fall back to the icon */ }
+    // drawn larger and scaled down, with a small minimum text size, so a sentence fits its screen as on the storyboard
+    const cv = h("canvas", {width: w * 3, height: hh * 3});
+    try { drawThumbnail(doc, cv, {minText: 12}); box.append(cv); box.classList.add("drawn"); return box; } catch { /* fall back to the icon */ }
   }
   box.append(icon(iconName, "l"));
   return box;
@@ -615,14 +666,15 @@ async function examplesGallery() {
   const grid = h("div", {class: "ex-grid", role: "list"});
   for (const key of Object.keys(S.schema.templates)) {
     const [title, sentence, tags] = templateInfo(key);
-    const thumb = thumbTile(null, {iconName: key === "blank" ? "file" : "storyboard"});
+    const thumb = thumbTile(null, {iconName: key === "blank" ? "file" : key === "timing_test" ? "timeline" : "storyboard"});
     const card = h("button", {class: "ex-card card interactive", role: "listitem", onclick: async () => { closeIt(); await createFromTemplate(key); }},
       thumb, h("span", {class: "meta"}, h("b", {}, title), h("span", {class: "t-small t-2"}, sentence),
         tags.length ? h("span", {class: "tags"}, tags.map((t) => h("span", {class: "chip"}, t))) : null));
     grid.append(card);
-    if (key !== "blank" && typeof drawThumbnail === "function") api(`/api/template?name=${encodeURIComponent(key)}`).then((d) => thumb.replaceWith(thumbTile(normalize(d)))).catch(() => {});
+    // the timing test's first screen is a flash patch in a corner: its icon says more than a black box
+    if (!["blank", "timing_test"].includes(key) && typeof drawThumbnail === "function") api(`/api/template?name=${encodeURIComponent(key)}`).then((d) => thumb.replaceWith(thumbTile(normalize(d)))).catch(() => {});
   }
-  ui.dialog({title: "Start from an example", icon: "storyboard", size: "lg", body: grid, buttons: [{label: "Cancel", value: null}],
+  ui.dialog({title: "Start from an example", icon: "storyboard", size: "lg", body: h("div", {class: "ex-body"}, grid), buttons: [{label: "Cancel", value: null}],
     onOpen: (_d, close) => { closeIt = close; }});
 }
 async function createFromTemplate(key) {
@@ -643,40 +695,94 @@ async function startWizard() {
   if (typeof openWizard === "function") openWizard();
 }
 
-/* ---------------- Import (PsychoPy, E-Prime, OpenSesame, jsPsych) */
+/* ---------------- Import (PsychoPy, E-Prime, OpenSesame, jsPsych) and .edgez bundles */
+/* The experiment's folder keeps its sub-folders (img/blue.png stays img/blue.png); files chosen one by one are
+ * put where the experiment looks for them by the server. The server also decides which file is the experiment. */
 function chooseImportFiles() {
-  const inp = h("input", {type: "file", multiple: true, style: "display:none", onchange: (e) => { importFiles([...e.target.files]); inp.remove(); }});
-  document.body.append(inp); inp.click();
+  const pick = (folder) => {
+    const inp = h("input", {type: "file", multiple: true, style: "display:none", onchange: (e) => { importFiles([...e.target.files]); inp.remove(); }});
+    if (folder) { inp.webkitdirectory = true; inp.setAttribute("webkitdirectory", ""); }
+    document.body.append(inp); inp.click();
+  };
+  ui.dialog({title: "Import an experiment", icon: "import", size: "sm",
+    body: h("div", {class: "import-choose"},
+      h("p", {}, "From PsychoPy (.psyexp), E-Prime (.ebs3 or .ebs2, with its List .txt files), OpenSesame (.osexp) or jsPsych (.html), or an EDGE bundle (.edgez)."),
+      h("p", {class: "t-2 t-small"}, "Choose the experiment's folder: its pictures, sounds and condition files come with it, sub-folders such as img/ included. Or choose the files themselves. You can also drop the folder on Home.")),
+    buttons: [{label: "Cancel", value: null, left: true, kind: "ghost"}, {label: "Choose files…", value: "files"}, {label: "Choose a folder…", value: "folder", kind: "primary"}]})
+    .then((v) => { if (v) pick(v === "folder"); });
 }
+/* Files dropped on Home, folders included (walked, keeping their relative paths). → [{file, rel}] */
+async function droppedFiles(dt) {
+  const entries = [...(dt.items || [])].map((it) => (it.kind === "file" && it.webkitGetAsEntry ? it.webkitGetAsEntry() : null)).filter(Boolean);
+  if (!entries.length) return [...(dt.files || [])].map((f) => ({file: f, rel: f.name}));
+  const out = [];
+  const walk = async (entry, prefix) => {
+    if (out.length > 2000) return;
+    if (entry.isFile) { const f = await new Promise((res, rej) => entry.file(res, rej)).catch(() => null); if (f) out.push({file: f, rel: prefix + f.name}); return; }
+    if (!entry.isDirectory) return;
+    const reader = entry.createReader();
+    for (;;) {
+      const batch = await new Promise((res) => reader.readEntries(res, () => res([])));
+      if (!batch.length) break;
+      for (const e of batch) await walk(e, prefix + entry.name + "/");
+    }
+  };
+  for (const e of entries) await walk(e, "");
+  return out;
+}
+const IMPORT_RANK = [".edgez", ".psyexp", ".ebs3", ".ebs2", ".ebs", ".osexp", ".opensesame", ".html", ".htm", ".js", ".es3", ".es2", ".es"];
 async function importFiles(files) {
-  if (!files.length) return;
-  const exts = S.schema.import_extensions;
-  const main = files.find((f) => exts.some((x) => f.name.toLowerCase().endsWith(x)) && !f.name.toLowerCase().endsWith(".js")) ||
-    files.find((f) => exts.some((x) => f.name.toLowerCase().endsWith(x)));
-  if (!main) return toast("None of these files is a PsychoPy, E-Prime, OpenSesame or jsPsych experiment.", {tone: "warning", ms: 6000});
+  const items = (files || []).map((f) => (f && f.file ? f : {file: f, rel: f.webkitRelativePath || f.name}))
+    .filter((x) => x.file && !/(^|\/)(\.|node_modules\/|__pycache__\/)/.test(x.rel));
+  if (!items.length) return;
+  const ext = (x) => { const m = x.file.name.toLowerCase().match(/\.[^.]+$/); return m ? m[0] : ""; };
+  const ranked = items.filter((x) => IMPORT_RANK.includes(ext(x))).sort((a, b) => IMPORT_RANK.indexOf(ext(a)) - IMPORT_RANK.indexOf(ext(b)));
+  const main = ranked[0];
+  if (!main) return toast("None of these files is a PsychoPy, E-Prime, OpenSesame or jsPsych experiment, or an EDGE bundle (.edgez).", {tone: "warning", ms: 6000});
   if (!(await confirmLeaveDirty())) return;
-  const stem = main.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "_");
-  const base = `imports/${stem}`;
-  const busy = toast(`Importing ${main.name}…`, 60000);
+  const bundle = ext(main) === ".edgez";
+  const stem = main.file.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "_");
+  const base = bundle ? `.edge/uploads/${Date.now()}` : `imports/${stem}`;
+  const busy = toast(bundle ? `Opening ${main.file.name}…` : `Importing ${main.file.name}…`, 60000);
   let r;
   try {
-    for (const f of files) {
-      const rel = f.webkitRelativePath || f.name;
-      await fetch(`/api/upload?path=${encodeURIComponent(base + "/source/" + rel)}`, {method: "POST", body: await f.arrayBuffer()});
+    for (const x of bundle ? [main] : items) {
+      const up = await fetch(`/api/upload?path=${encodeURIComponent(base + "/source/" + x.rel)}`, {method: "POST", body: await x.file.arrayBuffer()});
+      if (!up.ok && x === main) throw new Error((await up.json().catch(() => ({}))).error || `${x.rel} could not be copied`);
     }
-    r = await api("/api/import", {source: `${base}/source/${main.name}`, out: base});
-  } catch (e) { busy.close(); return toast(`Import failed: ${e.message}`, {tone: "danger", ms: 8000}); }
+    r = await api("/api/import", {source: bundle ? `${base}/source/${main.rel}` : `${base}/source`, out: bundle ? undefined : base});
+  } catch (e) { busy.close(); return toast(`Import failed: ${e.message}`, {tone: "danger", ms: 10000}); }
   busy.close();
+  if (r.bundle) {
+    try { await openFile(r.path); } catch (e) { return toast(e.message, {tone: "danger"}); }
+    EDGE.go("build");
+    toast(`Opened the bundle as ${r.path}.`, {tone: "success"});
+    return;
+  }
   const n = (lvl) => r.notes.filter((x) => x.level === lvl);
   const kpi = (v, l) => h("div", {class: "kpi"}, h("b", {}, v), h("span", {}, l));
+  const note = (x, tone, ic) => h("li", {class: tone}, icon(ic), h("span", {},
+    h("b", {}, S.mode === "expert" ? x.where : friendlyWhere(x.where) || x.where), " ",
+    String(x.message).includes("\n") ? [String(x.message).split("\n")[0], h("pre", {class: "mono import-code"}, String(x.message).split("\n").slice(1).filter((l) => !/^\s*```/.test(l)).join("\n"))] : x.message));
+  const must = [...n("error"), ...n("unsupported")];
   const body = h("div", {class: "import-result"},
-    h("p", {}, "Converted: " + Object.entries(r.stats).map(([k, v]) => `${v} ${k}`).join(", ") + "."),
-    h("div", {class: "kpis"}, kpi(n("unsupported").length, "need work by hand"), kpi(n("approx").length, "approximate: please check"), kpi(n("info").length, "notes")),
-    h("ul", {class: "import-notes"}, ...["unsupported", "approx"].flatMap((lvl) => n(lvl).map((x) =>
-      h("li", {class: lvl === "unsupported" ? "danger" : "warning"}, icon(lvl === "unsupported" ? "error" : "warning"), h("span", {}, h("b", {}, S.mode === "expert" ? x.where : friendlyWhere(x.where)), " ", x.message.split("\n")[0]))))),
+    h("p", {}, `Converted from ${r.source || main.file.name}: ` + (Object.entries(r.stats).map(([k, v]) => `${v} ${k}`).join(", ") || "nothing") + "."),
+    h("div", {class: "kpis"}, kpi(must.length, "need work by hand"), kpi(n("approx").length, "approximate: please check"), kpi(n("info").length, "notes")),
+    h("ul", {class: "import-notes"}, ...must.map((x) => note(x, "danger", "error")), ...n("approx").map((x) => note(x, "warning", "warning"))),
+    r.notes.some((x) => /not (?:be )?found|copy it manually/i.test(x.message)) ? h("div", {class: "alert info"}, icon("info"), h("div", {},
+      "Some files the experiment uses were not among the files you chose. Import again and choose the experiment's whole folder (Import, then Choose a folder…), or select those files together with the experiment file.")) : null,
+    n("info").length ? h("details", {class: "res-more"}, h("summary", {}, `Notes (${n("info").length})`), h("ul", {class: "import-notes"}, ...n("info").map((x) => note(x, "", "info")))) : null,
     h("p", {class: "t-2 t-small"}, `Saved as ${r.path}, with IMPORT_REPORT.md next to it. Run a test run before collecting data.`));
-  const v = await ui.dialog({title: `Imported from ${r.platform}`, icon: "import", size: "md", body,
-    buttons: [{label: "Open", value: "open"}, {label: "Open and test", value: "test", kind: "primary"}]});
+  const showReport = () => ui.dialog({title: "Import report", icon: "file", size: "lg",
+    body: (() => { const d = h("div", {class: "help-body md"}); d.innerHTML = md(String(r.report || "").replace(/<!--[\s\S]*?-->/g, "")); return d; })(),
+    buttons: [{label: "Close", value: null}]});
+  let v;
+  for (;;) {
+    v = await ui.dialog({title: `Imported from ${r.platform}`, icon: "import", size: "md", body,
+      buttons: [{label: "View the report", value: "report", left: true, kind: "ghost"}, {label: "Open", value: "open"}, {label: "Open and test", value: "test", kind: "primary"}]});
+    if (v !== "report") break;
+    await showReport();
+  }
   if (!v) { refreshFiles().then(() => { if (S.ws === "home") renderHome(); }); return; }
   try { await openFile(r.path); } catch (e) { return toast(e.message, {tone: "danger"}); }
   EDGE.go(v === "test" ? "test" : "build");
@@ -714,7 +820,58 @@ function issueText(i) {
   if (/flow is empty/i.test(msg)) return {text: "Add a screen to the experiment.", rewritten: true,
     action: {label: "Add a screen", run: () => { closeProblems(); EDGE.go("build"); if (typeof newRoutine === "function") newRoutine(); }}};
   if (/nothing ends this routine/i.test(msg) && rid) return {text: `“${rid}” never ends. Add a response that ends it, or give it a length.`, rewritten: true};
+  if (/^no transitions: the state machine ends after this state/i.test(msg)) {     // §4.2 words: workflow, phase; and which one
+    const phase = String(i.where || "").split(".").pop();
+    return {text: `Phase “${phase}” has no routes: the workflow ends after it.`, rewritten: true};
+  }
+  if (S.mode !== "expert") return {text: cap(msg.replace(/\bstate machine\b/gi, "workflow").replace(/\bstates?\b(?= ')/g, "phase").replace(/\btransitions?\b/gi, (m) => (/s$/i.test(m) ? "routes" : "route")))};
   return {text: cap(msg)};
+}
+/* "flow[4].children[1].if", "flow[3].workflow.start.next[0]" → the node it names: {path, node, state}
+ * (state: a phase of the workflow at path), or null. */
+function flowTarget(w) {
+  const m = String(w || "").match(/^flow((?:\[\d+\]|\.\w+)*)/);
+  if (!m || !S.exp) return null;
+  let path = [], best = null, state = null;
+  const toks = m[1].match(/\[\d+\]|\.\w+/g) || [];
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    let node; try { node = path.length ? getNode(path) : S.exp.flow; } catch { break; }
+    if (t.startsWith("[")) {
+      if (!Array.isArray(node)) break;
+      path = [...path, +t.slice(1, -1)];
+      let n; try { n = getNode(path); } catch { n = undefined; }
+      if (n === undefined) break;
+      best = {path, node: n, state: null};
+      continue;
+    }
+    const k = t.slice(1);
+    if (node && typeof node === "object" && !Array.isArray(node)) {
+      if (["children", "then", "else"].includes(k) && Array.isArray(node[k])) { path = [...path, k]; continue; }
+      if (node.statemachine !== undefined) {
+        // "<workflow>.<phase>" (the validator's words) or "states.<phase>"
+        const name = k === "states" || k === node.statemachine ? (toks[i + 1] || "").slice(1) : k;
+        if (node.states && node.states[name]) {
+          state = name; best = {path, node, state};
+          if (k === "states" || k === node.statemachine) i++;
+          if (toks[i + 1] === ".run") { path = [...path, "states", name, "run"]; i++; continue; }
+          break;
+        }
+      }
+    }
+    break;
+  }
+  return best;
+}
+function flowTargetWords(t) {
+  if (!t) return "The order of the experiment";
+  const n = t.node;
+  if (t.state) return `Phase “${t.state}” of “${n.statemachine}”`;
+  if (typeof n === "string" || n?.routine) return `Screen “${typeof n === "string" ? n : n.routine}” in the order`;
+  if (n?.loop !== undefined) return `Trial list “${n.loop}”`;
+  if (n?.statemachine !== undefined) return `Workflow “${n.statemachine}”`;
+  if (n?.if !== undefined) return "“Only if…” in the order";
+  return "The order of the experiment";
 }
 function friendlyWhere(w) {
   w = String(w || "");
@@ -722,7 +879,7 @@ function friendlyWhere(w) {
   const label = (k) => (typeof FIELD_LABELS !== "undefined" && FIELD_LABELS[k]) || k;
   if (m) return `Screen “${m[1]}”` + (m[2] && m[2] !== "rules" ? ` › ${m[2]}` : "") + (m[3] ? ` › ${cap(label(m[3]))}` : "");
   if (w.startsWith("devices")) return `Device “${w.replace(/^devices[.[]?/, "").replace(/[\]].*$/, "").split(".")[0]}”`;
-  if (w.startsWith("flow")) return "The order of the experiment";
+  if (w.startsWith("flow")) return flowTargetWords(flowTarget(w));
   if (w.startsWith("settings")) return "Experiment settings";
   if (w.startsWith("measures")) return "Measures";
   if (w === "server") return "";
@@ -737,6 +894,7 @@ function gotoIssue(i) {
     S.routine = m[1];
     if (S.ws !== "build") EDGE.go("build", {render: false});
     S.view = "screen"; S.sel = cid ? {kind: "component", routine: m[1], id: cid} : {kind: "routine", routine: m[1]};
+    if (cid && typeof revealCompTime === "function") revealCompTime(findComp(m[1], cid));
     renderAll(); syncHash(); EDGE.pulse($("#inspector"));
     return;
   }
@@ -745,7 +903,17 @@ function gotoIssue(i) {
     const idx = /^\d+$/.test(d[1]) ? +d[1] : S.exp.devices.findIndex((x) => x.id === d[1]);
     if (idx >= 0 && S.exp.devices[idx]) return EDGE.select({kind: "device", index: idx}, {pulse: true});
   }
-  if (w.startsWith("flow")) { EDGE.go("build", {render: false}); return EDGE.setView("story"); }
+  if (w.startsWith("flow")) {
+    const t = flowTarget(w), n = t?.node;
+    EDGE.go("build", {render: false});
+    if (!t) return EDGE.setView("story");
+    if (t.state) return EDGE.select({kind: "state", path: t.path, name: t.state}, {pulse: true});
+    if (typeof n === "string" || n?.routine) { const rid = typeof n === "string" ? n : n.routine; if (S.exp.routines[rid]) return EDGE.select({kind: "routine", routine: rid}, {pulse: true}); return EDGE.setView("story"); }
+    if (n?.loop !== undefined) return EDGE.select({kind: "loop", path: t.path}, {pulse: true});
+    if (n?.statemachine !== undefined) return EDGE.select({kind: "machine", path: t.path}, {pulse: true});
+    if (n?.if !== undefined) return EDGE.select({kind: "branch", path: t.path}, {pulse: true});
+    return EDGE.setView("story");
+  }
   if (w.startsWith("settings")) return openExperimentSettings();
   if (w.startsWith("measures")) return EDGE.go("measures");
 }
@@ -843,21 +1011,10 @@ function tryNow(scope = "all") {
   const n = problemGroups().error.length;
   if (n) { openProblems({reason: `Can't start yet: ${countWord(n, "thing")} to fix.`}); return; }
   if (scope === "screen" && !S.routine) scope = "all";
-  if (typeof tryIt === "function") {
-    if (scope === "screen") { if (typeof startPlay === "function") return startPlay(S.routine); }
-    return tryIt(scope);
-  }
+  if (typeof tryIt === "function") return tryIt(scope);    // simple.js: starts at once, no chooser
 }
-/* A Try-it session ended (the #play overlay closed): the readiness checklist counts it (shim until P4b reports it). */
-function watchTryIt() {
-  const el = $("#play"); if (!el) return;
-  let wasOpen = !el.classList.contains("hidden");
-  new MutationObserver(() => {
-    const open = !el.classList.contains("hidden");
-    if (wasOpen && !open) { S.triedAt = Date.now(); if (S.ws === "test") renderReadiness(); renderShell(); }
-    wasOpen = open;
-  }).observe(el, {attributes: true, attributeFilter: ["class"]});
-}
+/* A Try-it session finished (simple.js finishPlay sets S.triedAt and emits "tried"): the readiness checklist counts it. */
+function onTried() { if (S.ws === "test") renderReadiness(); renderShell(); }
 
 function testState() {
   if (S.testing) return "testing";
@@ -869,6 +1026,18 @@ function testState() {
   return S.tested.ok ? "passed" : "failed";
 }
 
+/* "Tested" survives a reload: the newest test run of exactly this document (saved in its data/dry_runs folder,
+   from the builder, the assistant or `edge run --dry-run`) counts, so Test, the status bar and Next steps agree. */
+async function restoreTested() {
+  if (!S.path || S.noDoc || S.tested || S.testing || S.proposal) return;
+  const path = S.path, snap = JSON.stringify(S.exp);
+  let r;
+  try { r = await api("/api/last_test", {experiment: S.exp, path, saved: !S.dirty}); } catch { return; }
+  if (!r || !r.found || S.path !== path || S.tested || JSON.stringify(S.exp) !== snap) return;
+  S.tested = {snapshot: snap, rev: S.rev, at: Date.parse(r.at) || Date.now(), ok: !!r.ok, trials: r.trials, restored: true};
+  renderShell(); if (S.ws === "test") renderTestPage();
+  EDGE.emit("tested", {ok: !!r.ok, restored: true});
+}
 async function dryRun() {
   S.strict = true; renderIssues();
   if (S.testing) return;
@@ -879,7 +1048,14 @@ async function dryRun() {
   const snap = JSON.stringify(S.exp);
   try {
     const r = await api("/api/dryrun", {experiment: S.exp, path: S.path});
-    if (!r.ok) {
+    if (!r.ok && r.stopped) {           // it ran, and the experiment itself stopped with an error (§4.1 #6)
+      S.tested = {snapshot: snap, rev: S.rev, at: Date.now(), ok: false};
+      S.lastResults = {error: r.problem?.text || "stopped", stopped: r};
+      const el = $("#tab-results");
+      if (el) el.replaceChildren(h("section", {class: "card pad results"}, stoppedBox(r.problem, r.raw)));
+      if (S.ws !== "test") toast("The test run stopped with a problem.", {tone: "danger", action: {label: "See why", run: () => EDGE.go("test")}});
+      else ui.announce("The test run stopped with a problem.");
+    } else if (!r.ok) {
       S.tested = {snapshot: snap, rev: S.rev, at: Date.now(), ok: false};
       S.lastResults = {failed: r.issues || []};
       renderFailedRun(r.issues || []);
@@ -903,8 +1079,25 @@ async function dryRun() {
     const b = $("#btn-dryrun");
     if (b) { b.removeAttribute("aria-busy"); b.querySelector(".spin")?.remove(); b.lastChild.textContent = "Start test run"; b.style.minWidth = ""; }
     renderShell(); if (S.ws === "test") renderTestPage();
+    EDGE.emit("tested", {ok: !!S.tested?.ok});
     setTimeout(() => checkTutorial(), 0);
   }
+}
+/* The experiment stopped while running (test run, Try it, a session): the sentence in plain words, [Go there],
+   and the raw report only in Expert mode, behind Details. problem = {text, routine, component, prop} (server plain_error). */
+function stoppedBox(problem, raw, {title = "The test run stopped with a problem.", before = null, bare = false} = {}) {
+  const rid = problem?.routine && S.exp?.routines?.[problem.routine] ? problem.routine : null;
+  const where = rid ? `routines.${rid}${problem.component ? "." + problem.component : ""}${problem.prop ? "." + problem.prop : ""}` : "";
+  const firstLine = String(raw || "").split("\n").map((l) => l.trim()).find((l) => /^What:/.test(l))?.replace(/^What:\s*/, "") || "";
+  const text = problem?.text || builderWords(firstLine || String(raw || "").split("\n")[0]);
+  const inner = [title && !bare ? h("b", {}, title) : null, h("p", {class: "stopped-text"}, text)];
+  if (bare) return h("div", {class: "stopped bare"}, ...inner.filter(Boolean),
+    where ? h("div", {class: "actions"}, h("button", {type: "button", class: "btn sm", onclick: () => { before?.(); gotoIssue({where}); }}, "Go there")) : null,
+    raw && S.mode === "expert" ? h("details", {class: "stopped-raw"}, h("summary", {}, "Details"), h("pre", {class: "mono errtext"}, builderWords(raw))) : null);
+  return h("div", {class: "alert danger stopped", role: "alert"}, icon("error"), h("div", {},
+    ...inner.filter(Boolean),
+    where ? h("div", {class: "actions"}, h("button", {class: "btn sm", onclick: () => { before?.(); gotoIssue({where}); }}, "Go there")) : null,
+    raw && S.mode === "expert" ? h("details", {class: "stopped-raw"}, h("summary", {}, "Details"), h("pre", {class: "mono errtext"}, builderWords(raw))) : null));
 }
 function renderFailedRun(issues) {
   const el = $("#tab-results"); if (!el) return;
@@ -957,7 +1150,7 @@ function renderResults(r) {
     card.append(det);
   }
   const prev = h("details", {class: "res-more"}, h("summary", {}, `Data preview (${countWord(r.trials.length, "row")})`));
-  prev.append(h("p", {class: "t-caption"}, `Saved in ${r.summary.data_dir}`), rowsTable(r.trials.slice(0, 60)));
+  prev.append(h("p", {class: "t-caption data-path"}, "Saved in ", h("span", {class: "mono"}, relPath(r.summary.data_dir))), rowsTable(r.trials.slice(0, 60)));
   card.append(prev);
   el.replaceChildren(card);
 }
@@ -986,10 +1179,8 @@ function renderTestPage() {
     icon(S.tested.ok ? "success" : "warning", S.tested.ok ? "c-ok" : "c-warn")] : [h("span", {class: "t-caption"}, "Not run yet")]));
   const res = $("#tab-results");
   if (res && !res.childElementCount && !S.testing) {
-    res.append(h("div", {class: "empty dropzone test-empty"}, h("span", {class: "ic-wrap"}, icon("test")),
-      h("p", {}, "Try it yourself to see what participants see. A test run lets a virtual participant do the whole experiment in a few seconds."),
-      h("div", {class: "actions"}, h("button", {class: "btn", onclick: () => tryNow("all")}, icon("play"), "Try it"),
-        h("button", {class: "btn", onclick: () => dryRun()}, icon("test"), "Start test run"))));
+    // the cards above already offer Try it and Start test run: here only where the results will appear
+    res.append(h("p", {class: "t-small t-2 test-empty"}, icon("info"), " The results of your test run appear here."));
   }
   renderDeviceTests();
 }
@@ -999,6 +1190,8 @@ function renderReadiness() {
   const nMeasures = Array.isArray(S.exp.measures) ? S.exp.measures.length : Object.keys(S.exp.measures || {}).length;
   const f = (S.files || []).find((x) => x.path === S.path);
   const devs = S.exp.devices || [];
+  // a device counts as tested after a passing test with the real device (S.deviceTests, set by deviceTestBox)
+  const untested = devs.filter((d) => { const t = (S.deviceTests || {})[d.id]; return !(t && t.ok && !t.simulated); });
   const row = (state, text, act) => h("li", {class: "ready-row " + state},
     icon(state === "ok" ? "success" : state === "bad" ? "error" : state === "warn" ? "warning" : "dot", "st-ic"), h("span", {class: "txt"}, text),
     act ? h("button", {class: "btn sm ghost", onclick: act[1]}, act[0]) : null);
@@ -1013,7 +1206,8 @@ function renderReadiness() {
       : row("warn", `Test run: changed since ${at}`, ["Run it", () => dryRun()]),
     S.triedAt ? row("ok", "You tried it yourself", ["Try again", () => tryNow("all")]) : row("todo", "You tried it yourself", ["Try it", () => tryNow("all")]),
     nMeasures ? row("ok", `Measures declared (${nMeasures})`, ["Review", () => EDGE.go("measures")]) : row("todo", "Say what you measure", ["Add", () => EDGE.go("measures")]),
-    devs.length ? row("todo", `Devices to test: ${devs.map((d) => d.id).join(", ")}`, ["Test", () => $("#test-devices")?.scrollIntoView({behavior: "smooth", block: "start"})]) : null,
+    devs.length ? (untested.length ? row("todo", `Devices to test: ${untested.map((d) => d.id).join(", ")}`, ["Test", () => $("#test-devices")?.scrollIntoView({behavior: "smooth", block: "start"})])
+      : row("ok", `Devices tested (${devs.length})`, null)) : null,
     row("todo", "This computer's timing", ["Check", () => computerDialog()]),
     f?.locked ? row("ok", "Locked after piloting", null) : row("todo", "Locked after piloting", ["Lock…", () => lockExperiment()]),
   ];
@@ -1063,14 +1257,20 @@ const sessionDir = () => (S.path && S.path.includes("/") ? S.path.split("/").sli
 function sessionBelongs(s) {
   if (D.allExp || !S.path || S.noDoc) return true;
   const dir = sessionDir();
-  if (dir && String(s.path || "").startsWith(dir)) return true;
-  return s.experiment === S.exp.name && (!dir || !!s.dry_run);     // the builder's test runs live in <folder>/data/dry_runs
+  // by folder: another experiment with the same `name` must not show up here; test runs and tries live in <folder>/data/dry_runs
+  if (dir) return String(s.path || "").replace(/\\/g, "/").startsWith(dir);
+  return s.experiment === S.exp.name;
+}
+/* Test runs and tries are not participants: "Test run" / "Your try" instead of "001 · 1". */
+function sessionKind(s) {
+  if (!s || !s.dry_run) return "";
+  return s.kind === "try" || /(^|\/)try(\/|$)/.test(String(s.path || "").replace(/\\/g, "/").replace(/[^/]+$/, "")) ? "Your try" : "Test run";
 }
 function sessionStatus(s) {
   if (s.error) return ["danger", "error", "Can't read"];
   if (s.errors) return ["danger", "error", "Errors"];
   if (s.aborted) return ["warning", "warning", "Stopped early"];
-  if (s.dry_run) return ["", "test", "Test run"];
+  if (s.dry_run) return ["", "test", "Done"];
   return ["success", "success", "Complete"];
 }
 const sessionMinutes = (s) => { const a = Date.parse(s.started), b = Date.parse(s.ended); if (!a || !b || b < a) return ""; const m = (b - a) / 60000; return m < 1 ? "under 1 min" : `${Math.round(m)} min`; };
@@ -1099,10 +1299,11 @@ async function renderData() {
   const list = h("div", {class: "sess-list", role: "list", "aria-label": "Sessions"});
   for (const s of shown) {
     const [tone, ic, word] = sessionStatus(s);
+    const kind = sessionKind(s);
     list.append(h("button", {class: "sess-row" + (D.sel === s.path ? " sel" : ""), role: "listitem", "aria-current": D.sel === s.path ? "true" : null,
-      "aria-label": `Participant ${s.participant ?? "unknown"}, session ${s.session ?? 1}, ${dayTime(s.started)}, ${word}${sessionMinutes(s) ? ", " + sessionMinutes(s) : ""}`,
+      "aria-label": `${kind || `Participant ${s.participant ?? "unknown"}, session ${s.session ?? 1}`}, ${dayTime(s.started)}, ${word}${sessionMinutes(s) ? ", " + sessionMinutes(s) : ""}`,
       onclick: () => { D.sel = s.path; D.sub = D.sub || "trials"; renderData(); }},
-      h("span", {class: "who"}, h("b", {}, `${s.participant ?? "?"}`), h("span", {class: "t-caption"}, ` · ${s.session ?? 1}`)),
+      kind ? h("span", {class: "who"}, h("b", {}, kind)) : h("span", {class: "who"}, h("b", {}, `${s.participant ?? "?"}`), h("span", {class: "t-caption"}, ` · ${s.session ?? 1}`)),
       h("span", {class: "when t-caption"}, dayTime(s.started).replace(/^today /, "")),
       h("span", {class: `st ${tone}`, title: word}, icon(ic), h("span", {class: "w"}, word === "Complete" ? sessionMinutes(s) || word : word))));
   }
@@ -1130,17 +1331,24 @@ async function renderData() {
   D.tables = t;
   const [tone, ic, word] = sessionStatus(sess);
   const head = h("header", {class: "data-head"},
-    h("div", {class: "who"}, h("h2", {class: "t-title-m"}, `${sess.participant ?? "?"} · session ${sess.session ?? 1}`),
+    h("div", {class: "who"}, h("h2", {class: "t-title-m"}, sessionKind(sess) || `${sess.participant ?? "?"} · session ${sess.session ?? 1}`),
       h("span", {class: "t-caption"}, [dayTime(sess.started), sessionMinutes(sess)].filter(Boolean).join(" · ")),
       h("span", {class: `chip ${tone}`}, icon(ic), word)),
     h("span", {class: "grow"}),
     h("button", {class: "btn sm", "aria-haspopup": "menu", onclick: (e) => exportMenu(e.currentTarget, D.sel)}, icon("export"), "Export", icon("chev-down")));
   const alerts = h("div", {class: "data-alerts"});
+  const norm = (x) => String(x).replace(/^(OK|WARNING|ERROR):\s*/i, "").trim().toLowerCase();
+  const said = new Set();
   for (const v of t.report?.verdict || []) {
-    const ok = v.startsWith("OK");
-    alerts.append(h("div", {class: "alert " + (ok ? "success" : "warning")}, icon(ok ? "success" : "warning"), h("div", {}, cap(v.replace(/^OK:\s*/, "").replace(/synchronization/g, "synchronisation")) + (ok ? "." : ""))));
+    const ok = v.startsWith("OK"), bad = /^ERROR\b/.test(v);
+    said.add(norm(v));
+    alerts.append(h("div", {class: "alert " + (ok ? "success" : bad ? "danger" : "warning")}, icon(ok ? "success" : bad ? "error" : "warning"), h("div", {}, cap(v.replace(/^(OK|WARNING|ERROR):\s*/i, "").replace(/synchronization/g, "synchronisation")) + (ok ? "." : ""))));
   }
-  for (const w of t.report?.warnings || []) alerts.append(h("div", {class: "alert warning"}, icon("warning"), h("div", {}, cap(typeof w === "string" ? w : w.message || JSON.stringify(w)))));
+  for (const w of t.report?.warnings || []) {
+    const text = typeof w === "string" ? w : w.message || JSON.stringify(w);
+    if (said.has(norm(text))) continue;          // the verdict already says it
+    alerts.append(h("div", {class: "alert warning"}, icon("warning"), h("div", {}, cap(builderWords(text.replace(/^(WARNING|ERROR|COMPUTER|NOTE):\s*/i, "").replace(/\s*→\s*/g, ". "))))));
+  }
   const subs = [["trials", `Trials`, t.trials?.total], ["summary", "Summary"], ...(t.measures ? [["measures", "Measures"]] : []), ["dictionary", "What each column means"]];
   if (!subs.some(([k]) => k === D.sub)) D.sub = "trials";
   const tabs = h("div", {class: "tabs data-tabs", role: "tablist", "aria-label": "Tables"});
@@ -1181,7 +1389,10 @@ function exportMenu(anchor, path) {
   const run = (p, f) => () => exportData(p, f);
   const items = path ? [{head: "This session"}, {label: "CSV", run: run(path, ["csv"])}, {label: "Excel", run: run(path, ["xlsx"])},
     {label: "TSV", run: run(path, ["tsv"])}, {label: "JSON", run: run(path, ["json"])}, {label: "BIDS", run: run(path, ["bids"])}, {sep: true}] : [];
-  items.push({head: "All sessions"}, {label: "CSV + Excel", run: run(".", ["csv", "xlsx"])}, {label: "BIDS", run: run(".", ["bids"])});
+  // all sessions of the open experiment (its data folder), named after it; every experiment only when asked
+  const all = D.allExp || !S.path || S.noDoc ? "." : sessionDir() + String((S.exp.settings?.data || {}).dir || "data").replace(/^\.\/|\/+$/g, "");
+  items.push(all === "." ? {head: "All sessions, every experiment in this folder"} : {head: "All sessions of", name: docName()},
+    {label: "CSV + Excel", run: run(all, ["csv", "xlsx"])}, {label: "BIDS", run: run(all, ["bids"])});
   ui.menu(anchor, items, {placement: "bottom-end"});
 }
 function commonFolder(files) {
@@ -1285,7 +1496,7 @@ function renderHome() {
 function homeImportTarget(el) {
   el.addEventListener("dragover", (e) => { e.preventDefault(); el.classList.add("drop"); });
   el.addEventListener("dragleave", () => el.classList.remove("drop"));
-  el.addEventListener("drop", (e) => { e.preventDefault(); el.classList.remove("drop"); importFiles([...e.dataTransfer.files]); });
+  el.addEventListener("drop", async (e) => { e.preventDefault(); el.classList.remove("drop"); importFiles(await droppedFiles(e.dataTransfer)); });
   return el;
 }
 function renderHomeStart(returning, withDescribe) {
@@ -1363,10 +1574,10 @@ function homeRow(f, hasStatus) {
   const real = f.sessions?.real || 0;
   return h("div", {class: "xrow" + (isOpen ? " open" : ""), role: "listitem"},
     thumb,
-    h("button", {class: "xname", onclick: () => openExperiment(f.path, "build"), "aria-label": `Open ${nm}`},
-      h("b", {}, nm, isOpen ? h("span", {class: "chip accent"}, "Open now") : null), h("span", {class: "t-caption"}, f.path)),
+    h("button", {class: "xname", onclick: () => openExperiment(f.path, "build"), "aria-label": `Open ${nm}`, title: nm},
+      h("b", {}, h("span", {class: "xn"}, nm), isOpen ? h("span", {class: "chip accent"}, "Open now") : null), h("span", {class: "t-caption"}, f.path)),
     hasStatus ? h("span", {class: "xstatus"}, statusChip(f)) : null,
-    hasStatus ? h("span", {class: "xsess t-small"}, real ? countWord(real, "session") : "–", f.last_session ? h("span", {class: "t-caption"}, `last ${ago(f.last_session)}`) : null) : null,
+    hasStatus ? h("span", {class: "xsess t-small"}, real ? countWord(real, "session") : h("span", {class: "t-2"}, "No sessions"), f.last_session ? h("span", {class: "t-caption"}, `last ${ago(f.last_session)}`) : null) : null,
     hasStatus ? h("span", {class: "xwhen t-small t-2"}, f.modified ? ago(f.modified) : "") : null,
     h("span", {class: "xacts"},
       h("button", {class: "btn sm", onclick: () => openExperiment(f.path, "build")}, "Open"),
@@ -1403,7 +1614,7 @@ async function loadThumbs(files) {
     try {
       const j = await api(`/api/experiment?path=${encodeURIComponent(f.path)}`);
       const cv = h("canvas", {width: 320, height: 180});
-      drawThumbnail(normalize(j.experiment), cv);
+      drawThumbnail(normalize(j.experiment), cv, {path: f.path});   // the path resolves trial-list files and pictures
       HOME.thumbs.set(key, cv);
       const slot = document.querySelector(`.xthumb[data-path="${CSS.escape(f.path)}"]`);
       if (slot) slot.replaceChildren(copyCanvas(cv));
@@ -1443,11 +1654,15 @@ function mdInline(t) {
   t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, txt, href) => {
     if (/^https?:/.test(href)) return `<a href="${href}" target="_blank" rel="noopener">${txt}</a>`;
     const [file, anchor] = href.split("#");
+    // a file of the project outside docs/ (install/README.md): on the project's page, not a help topic
+    const outside = /^(\.\.\/)+(?!docs\/)/.test(file || "");
+    if (outside) return `<a href="https://github.com/hfelabs-boop/EDGE/blob/main/${file.replace(/^(\.\.\/)+/, "")}${anchor ? "#" + anchor : ""}" target="_blank" rel="noopener">${txt}</a>`;
     const topic = file ? file.replace(/^(\.\.\/|\.\/|docs\/)+/, "").replace(/\.md$/, "") : "";
     return `<a href="#" data-topic="${topic}" data-anchor="${anchor || ""}">${txt}</a>`;
   });
   t = t.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g, "$1<i>$2</i>");
-  return t.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[+i].replace(/&/g, "&amp;").replace(/</g, "&lt;")}</code>`);
+  // the code spans were escaped with the rest of the line above: put them back as they are (no second escape)
+  return t.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[+i]}</code>`);
 }
 function slugify(s) { return s.toLowerCase().replace(/[`*_]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 function md(src) {
@@ -1596,7 +1811,8 @@ async function showHelpTopic(id, anchor, {keepScroll = false} = {}) {
 async function showTopic(id, anchor, content, nav) {
   content.replaceChildren(h("p", {class: "t-caption"}, "Loading…"));
   let r;
-  try { r = await api(`/api/help/topic?id=${encodeURIComponent(id)}`); } catch (e) { content.textContent = e.message; return; }
+  try { r = await api(`/api/help/topic?id=${encodeURIComponent(id)}`); }
+  catch (e) { content.replaceChildren(h("div", {class: "alert info"}, icon("info"), h("div", {}, e.status === 404 ? `There is no help page called “${id}” in this version of EDGE. Search Help, or open All help.` : `This help page can't be shown: ${e.message}`))); return; }
   content.innerHTML = md(r.markdown);
   nav && nav.querySelectorAll(".help-item").forEach((x) => { const on = x.dataset.id === id; x.classList.toggle("sel", on); if (on) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current"); });
   content.querySelectorAll("a[data-topic]").forEach((a) => a.onclick = (e) => { e.preventDefault();
@@ -1660,10 +1876,29 @@ const T = {tut: null, i: 0, passed: false, min: false};
 function tutorialDone(id) { try { return (JSON.parse(localStorage.getItem("edge.tutorials.done") || "[]")).includes(id); } catch { return false; } }
 function markTutorialDone(id) { try { const d = new Set(JSON.parse(localStorage.getItem("edge.tutorials.done") || "[]")); d.add(id); localStorage.setItem("edge.tutorials.done", JSON.stringify([...d])); } catch {} }
 
-async function startTutorial(id, {resumeAt = null} = {}) {
+async function startTutorial(id, {resumeAt = null, fromUrl = false} = {}) {
   let r;
-  try { r = await api(`/api/help/tutorial?id=${encodeURIComponent(id)}`); } catch (e) { return toast(e.message, {tone: "danger"}); }
+  const known = (S.tutorials || []).map((t) => t.id);
+  const norm = String(id || "").trim().toLowerCase().replace(/[-\s]+/g, "_");
+  id = known.includes(id) ? id : known.find((k) => k === norm) || (known.filter((k) => k.startsWith(norm)).length === 1 ? known.find((k) => k.startsWith(norm)) : id);
+  try { r = await api(`/api/help/tutorial?id=${encodeURIComponent(id)}`); }
+  catch (e) {
+    return toast(e.status === 404 ? `There is no tutorial called “${id}”. Open Help to see the tutorials.` : `The tutorial can't start: ${e.message}`,
+      {tone: "warning", ms: 8000, action: {label: "Open Help", run: () => openHelp()}});
+  }
+  // the page was reloaded during this tutorial (?tutorial=… in the address): carry on where it was, with the work
+  const last = EDGE.prefs.get("tutorial.last", null);
+  if (fromUrl && resumeAt === null && last && last.id === id && last.i > 0 && last.i < last.n && Date.now() - (last.at || 0) < 86400000) {
+    resumeAt = last.i;
+    let draft = null;
+    try { draft = JSON.parse(localStorage.getItem("edge.draft.untitled") || "null"); } catch { draft = null; }
+    if (last.path && (S.files || []).some((f) => f.path === last.path)) { if (S.path !== last.path) await openFile(last.path, {silent: true}); }
+    else if (draft && draft.doc) { loadDoc(normalize(draft.doc), null, null, {silent: true}); setDirty(true); }
+    else if (r.start_doc) loadDoc(clone(r.start_doc), null, null, {silent: true});
+    toast(`Welcome back: the tutorial carries on at step ${resumeAt + 1}.`);
+  }
   const resume = resumeAt !== null && resumeAt !== undefined;
+  if (!T.tut) T.prevMode = S.mode;         // put back when the tutorial ends (a tutorial's mode is only for it)
   if (r.start_doc && !resume) {
     if (S.dirty && !S.noDoc) {
       const v = await ui.dialog({title: "Start the tutorial?", size: "sm", icon: "learn",
@@ -1675,16 +1910,23 @@ async function startTutorial(id, {resumeAt = null} = {}) {
     clearDraft(); loadDoc(clone(r.start_doc), null, null, {silent: true});
   } else if (S.noDoc) S.noDoc = false;
   S.lastDryRun = null; S.savedAt = null; S.tab = null;
-  if (r.tutorial.mode && r.tutorial.mode !== S.mode) setMode(r.tutorial.mode, {quiet: true});
+  if (r.tutorial.mode && r.tutorial.mode !== S.mode) setMode(r.tutorial.mode, {quiet: true, keep: false});
   if (r.start_doc && !resume) { S.view = "story"; EDGE.go("build", {render: false}); renderAll(); }
   else if (S.ws === "home") EDGE.go("build");
   T.tut = r.tutorial; T.i = resume ? Math.min(resumeAt, r.tutorial.steps.length - 1) : 0; T.passed = false; T.min = false; T.startedAt = Date.now();
-  EDGE.prefs.set("tutorial.last", null);
+  if (resume) T.startedAt = 0;      // checks such as "saved" and "test run" count what was done before the reload
+  rememberTutorialStep();
   renderCoach(true);
 }
+/* Where the tutorial is, so Help can offer "Continue" and a reload carries on (not back to step 1). */
+function rememberTutorialStep() {
+  if (T.tut && T.i < T.tut.steps.length) EDGE.prefs.set("tutorial.last", {id: T.tut.id, title: T.tut.title, i: T.i, n: T.tut.steps.length, at: Date.now(), path: S.path || null});
+}
 function stopTutorial() {
-  if (T.tut && T.i < T.tut.steps.length) EDGE.prefs.set("tutorial.last", {id: T.tut.id, title: T.tut.title, i: T.i, n: T.tut.steps.length});
+  if (T.tut && T.i < T.tut.steps.length) rememberTutorialStep();
   T.tut = null; T.min = false;
+  if (T.prevMode && T.prevMode !== S.mode) setMode(T.prevMode, {quiet: true});     // the mode the researcher had chosen
+  T.prevMode = null;
   clearCoachMarks();
   $("#coach")?.remove();
   renderTutorialPill();
@@ -1733,7 +1975,7 @@ const TOUR_REVEAL = [
   [/^#props|#inspector|#props-title/, (start) => needWs("build") || propsNeed(start)],
   [/#flow\b|\.sm-states?|\.fl-box|\.fl-head|\.scard|\.frame/, (start) => needWs("build") || viewNeed("story", start)],
   [/#timeline|#preview|#stage/, (start) => needWs("build") || viewNeed("screen", start)],
-  [/data-tab=source|#yaml|#btn-apply-yaml/, (start) => needWs("build") || (S.mode === "expert" ? viewNeed("source", false) : {place: "Expert mode", go: () => setMode("expert"), proxy: "#btn-mode"})],
+  [/data-tab=source|#yaml|#btn-apply-yaml/, (start) => needWs("build") || (S.mode === "expert" ? viewNeed("source", false) : {place: "Expert mode", go: () => setMode("expert", {keep: false}), proxy: "#btn-mode"})],
   [/#btn-dryrun|#test-|#tab-results/, () => needWs("test")],
   [/#ws-measures|#measures/, () => needWs("measures")],
   [/#ws-run/, () => needWs("run")],
@@ -1791,30 +2033,48 @@ function renderCoach(stepStart = true) {
     return;
   }
   const ok = st.check ? tutorialCheck(st.check) : true;
+  if (stepStart) { T.pre = !!(st.check && ok); rememberTutorialStep(); }
+  // a flyout (Add, Files, Devices) the previous step opened would hide this step's card: close it unless it is this step's place
+  if (stepStart && typeof flyoutOpen === "function" && flyoutOpen() && typeof BUILD !== "undefined" && !BUILD.pinned) {
+    const inSide = st.target && coachTargets(st.target).some((x) => x.closest?.("#sidebar"));
+    const sideRule = st.target && /\.pal-item|#palette|#btn-add-device|#devices|#btn-scan|#side-|#files/.test(st.target);
+    if (!inSide && !sideRule) closeFlyout(false);
+  }
   const c = h("div", {id: "coach", role: "dialog", "aria-label": `Tutorial: ${T.tut.title}, step ${T.i + 1} of ${steps.length}`});
   c.append(h("div", {class: "coach-bar"}, h("i", {style: `width:${(T.i / steps.length) * 100}%`})),
     h("div", {class: "coach-head"}, h("span", {class: "t-overline coach-name"}, T.tut.title), h("span", {class: "coach-step"}, `${T.i + 1} of ${steps.length}`),
+      h("button", {class: "btn ghost sm coach-more", onclick: () => { T.expanded = T.i; c.classList.remove("compact"); updateCoach(); }}, "Show the step"),
       h("button", {class: "btn ghost icon sm", "aria-label": "Minimise the tutorial", "data-tip": "Minimise", onclick: () => { T.min = true; renderCoach(false); }}, icon("minus")),
       h("button", {class: "btn ghost icon sm", "aria-label": "Exit the tutorial", "data-tip": "Exit the tutorial", "data-tip-pos": "end", onclick: stopTutorial}, icon("close"))));
   const title = h("h4", {class: "coach-title"}); title.innerHTML = mdInline(st.title);
   const bodyEl = h("div", {class: "coach-body"}); bodyEl.innerHTML = md(st.body);
+  // code to paste (HTML, a formula): a Copy button, so nobody retypes it from a narrow card
+  bodyEl.querySelectorAll("pre").forEach((pre) => {
+    const copy = h("button", {type: "button", class: "btn sm coach-copy", onclick: async () => {
+      try { await navigator.clipboard.writeText(pre.textContent); toast("Copied. Paste it with Ctrl/⌘+V."); }
+      catch { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); toast("Selected: press Ctrl/⌘+C to copy it."); }
+    }}, icon("duplicate"), "Copy");
+    pre.before(h("div", {class: "coach-pre"}, copy)); pre.previousSibling.append(pre);
+  });
   bodyEl.querySelectorAll("a[data-topic]").forEach((a) => a.onclick = (e) => { e.preventDefault(); openHelp(a.dataset.topic, a.dataset.anchor); });
   c.append(title, bodyEl, h("div", {class: "coach-reveal", hidden: true}));
   const last = T.i === steps.length - 1;
-  const next = h("button", {class: "btn sm coach-next" + (ok ? " primary" : ""), onclick: () => { T.i++; T.passed = false; renderCoach(true); }}, last ? "Finish" : "Next");
+  const next = h("button", {class: "btn sm coach-next" + (ok ? " primary" : ""), onclick: () => { T.i++; T.passed = false; T.back = false; renderCoach(true); }}, last ? "Finish" : "Next");
   if (st.check) c.append(h("div", {class: "coach-status" + (ok ? " ok" : ""), role: "status"}, ok ? [icon("success"), "Done"] : [h("span", {class: "spin"}), "Waiting for you…"]));
   c.append(h("div", {class: "coach-foot"},
-    h("button", {class: "btn sm ghost", disabled: T.i === 0 ? true : null, onclick: () => { T.i--; T.passed = false; renderCoach(true); }}, "Back"),
+    h("button", {class: "btn sm ghost", disabled: T.i === 0 ? true : null, onclick: () => { T.i--; T.passed = false; T.back = true; renderCoach(true); }}, "Back"),
     st.target ? h("button", {class: "btn sm", onclick: () => coachShowMe()}, "Show me") : null,
     st.check && !ok ? h("button", {class: "linkbtn t-small", onclick: () => { T.i++; T.passed = false; renderCoach(true); }}, "Skip step") : null,
     h("span", {class: "grow"}), next));
   c.append(h("span", {class: "coach-arrow", "aria-hidden": "true"}));
   document.body.append(c);
   if (st.target) markCoachTargets(st.target, stepStart);
+  else { T.need = null; T.target = null; }     // a step without a target keeps nothing of the previous one (hint, arrow)
   updateCoach();
   if (stepStart) for (const ms of [180, 420, 900]) setTimeout(() => { if (T.tut && T.tut.steps[T.i] === st) { if (st.target) markCoachTargets(st.target); updateCoach(); } }, ms);
   if (stepStart) ui.announce(`Step ${T.i + 1} of ${steps.length}: ${st.title.replace(/[*`]/g, "")}`);
-  if (stepStart && T.target && !isInView(T.target)) T.target.scrollIntoView({block: "nearest", inline: "nearest"});
+  // centred, so a sticky footer (Properties' Delete bar) or the fold doesn't hide it
+  if (stepStart && T.target && !isInView(T.target)) T.target.scrollIntoView({block: "center", inline: "nearest"});
 }
 const isInView = (x) => { const r = x.getBoundingClientRect(); return r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; };
 function coachShowMe() {
@@ -1842,40 +2102,85 @@ function updateCoach() {
   }
   placeCoach(c, T.target || (need && need.proxy ? $(need.proxy) : null));
 }
+/* What the coach must not cover, with a weight: the dialog's buttons, the step's own control, a preview or list the
+   step talks about, the session list (Data), Apply YAML. A step may name more with `avoid:` in its YAML. */
+const COACH_AVOID = [
+  [".scrim > .dialog > footer", 6], [".scrim > .dialog .wiz-foot", 6], [".sv-right", 4], [".sv-form", 2], [".sv-list", 1],
+  ["#data-sessions .sess-list", 4], ["#data-table", 2], ["#data-detail .data-tabs", 3], [".source-actions", 5],
+  ["#list-editor .le-head", 2], ["#list-editor .le-grid", 1], ["#list-editor .fac", 2], ["#props .insp-foot", 3],
+  [".dg-layer .dg-name", 3], [".dg-layer", 1], [".sm-add", 3], ["#assistant-settings .field", 2]];
+function coachAvoidRects(target, dlg) {
+  const out = [];
+  const st = T.tut?.steps?.[T.i];
+  const list = st?.avoid ? [...COACH_AVOID, ...[].concat(st.avoid).map((x) => [x, 5])] : COACH_AVOID;
+  for (const [sel, w] of list) for (const e of coachTargets(sel)) if (isShown(e)) out.push({r: e.getBoundingClientRect(), w});
+  if (target && target !== dlg) {
+    const r = target.getBoundingClientRect();
+    const big = r.width * r.height > innerWidth * innerHeight * 0.3;      // a whole area (#flow, #props): can't be avoided, only preferred
+    out.push({r, w: big ? 0.5 : 6});
+  }
+  if (dlg) out.push({r: dlg.getBoundingClientRect(), w: 0.5});
+  return out;
+}
 function placeCoach(c, target) {
   const vw = innerWidth, vh = innerHeight, m = 8, gap = 14;
   const top0 = 48 + m, bottom0 = vh - 28 - m;
-  const cw = c.offsetWidth, ch = Math.min(c.offsetHeight, bottom0 - top0);
-  let x, y, side = "none", arrow = 0;
+  // a dialog is open and the step's target isn't in it: the coach sits beside the dialog, never over its buttons
+  const dlg = [...document.querySelectorAll(".scrim > .dialog")].pop() || null;
+  const besideDialog = !!dlg && !(target && dlg.contains(target));
+  if (besideDialog) target = dlg;
   const visible = target && isShown(target) && isInView(target);
-  if (!visible) {
-    const right = S.ws === "build" && !document.body.classList.contains("shared-right") ? ($("#inspector")?.offsetWidth || 0) + 16 : 16;
-    x = Math.max(m, vw - cw - right); y = bottom0 - ch;
-  } else {
-    const r = target.getBoundingClientRect();
-    const room = {right: vw - m - r.right - gap, left: r.left - m - gap, bottom: bottom0 - r.bottom - gap, top: r.top - top0 - gap};
-    const need = {right: cw, left: cw, bottom: ch, top: ch};
-    // beside the target when it is in the work area; under it in the app bar; above it in the status bar
-    const order = r.top < top0 ? ["bottom", "right", "left", "top"] : r.bottom > bottom0 ? ["top", "right", "left", "bottom"] : ["right", "left", "bottom", "top"];
-    side = order.find((s) => room[s] >= need[s]) || order.slice().sort((a, b) => room[b] / need[b] - room[a] / need[a])[0];
-    const cy = r.top + r.height / 2, cx = r.left + r.width / 2;
-    if (side === "right" || side === "left") {
-      x = side === "right" ? r.right + gap : r.left - gap - cw;
-      y = Math.min(Math.max(top0, cy - ch / 2), bottom0 - ch);
-      arrow = Math.min(Math.max(16, Math.min(Math.max(cy, r.top + 8), r.bottom - 8) - y), ch - 16);
-    } else {
-      y = side === "bottom" ? r.bottom + gap : r.top - gap - ch;
-      x = Math.min(Math.max(m, cx - cw / 2), vw - m - cw);
-      arrow = Math.min(Math.max(16, cx - x), cw - 16);
+  const keepOpen = T.expanded === T.i;
+  const attempt = () => {
+    const cw = c.offsetWidth, ch = Math.min(c.offsetHeight, bottom0 - top0);
+    const avoid = coachAvoidRects(visible ? target : null, dlg);
+    const cand = [];
+    const clamp = (x, y) => [Math.min(Math.max(m, x), vw - m - cw), Math.min(Math.max(top0, y), Math.max(top0, bottom0 - ch))];
+    if (visible) {
+      const r = target.getBoundingClientRect();
+      const cy = r.top + r.height / 2, cx = r.left + r.width / 2;
+      const order = r.top < top0 ? ["bottom", "right", "left", "top"] : r.bottom > bottom0 ? ["top", "right", "left", "bottom"] : ["right", "left", "bottom", "top"];
+      const room = {right: vw - m - r.right - gap, left: r.left - m - gap, bottom: bottom0 - r.bottom - gap, top: r.top - top0 - gap};
+      order.forEach((side, i) => {
+        let x, y, arrow;
+        if (side === "right" || side === "left") {
+          x = side === "right" ? r.right + gap : r.left - gap - cw;
+          y = Math.min(Math.max(top0, cy - ch / 2), bottom0 - ch);
+          arrow = Math.min(Math.max(16, Math.min(Math.max(cy, r.top + 8), r.bottom - 8) - y), ch - 16);
+        } else {
+          y = side === "bottom" ? r.bottom + gap : r.top - gap - ch;
+          x = Math.min(Math.max(m, cx - cw / 2), vw - m - cw);
+          arrow = Math.min(Math.max(16, cx - x), cw - 16);
+        }
+        const fits = room[side] >= (side === "right" || side === "left" ? cw : ch);
+        [x, y] = clamp(x, y);
+        cand.push({x, y, side: fits ? side : "none", arrow, pref: i + (fits ? 0 : 4)});
+      });
     }
-    x = Math.min(Math.max(m, x), vw - m - cw);
-    y = Math.min(Math.max(top0, y), Math.max(top0, bottom0 - ch));
+    const right = S.ws === "build" && !document.body.classList.contains("shared-right") ? ($("#inspector")?.offsetWidth || 0) + 16 : 16;
+    [[vw - cw - right, bottom0 - ch], [vw - cw - m, bottom0 - ch], [m + 48, bottom0 - ch], [vw - cw - m, top0], [m + 48, top0]]
+      .forEach(([x, y], i) => { [x, y] = clamp(x, y); cand.push({x, y, side: "none", arrow: 0, pref: (visible ? 9 : 0) + i}); });
+    const overlap = (x, y) => avoid.reduce((sum, {r, w}) => {
+      const ox = Math.max(0, Math.min(x + cw, r.right) - Math.max(x, r.left)), oy = Math.max(0, Math.min(y + ch, r.bottom) - Math.max(y, r.top));
+      return sum + w * ox * oy;
+    }, 0);
+    for (const k of cand) k.score = overlap(k.x, k.y) + k.pref * 400;
+    cand.sort((a, b) => a.score - b.score);
+    return {best: cand[0], hard: overlap(cand[0].x, cand[0].y)};
+  };
+  c.classList.remove("compact");
+  let {best, hard} = attempt();
+  // nothing fits without covering what the step needs: shrink to the title and the buttons (Show the step expands it)
+  if (hard > 2000 && !keepOpen && !c.classList.contains("done")) {
+    c.classList.add("compact");
+    const again = attempt();
+    if (again.hard < hard) ({best} = again); else c.classList.remove("compact");
   }
-  const px = Math.round(x) + "px", py = Math.round(y) + "px";
+  const px = Math.round(best.x) + "px", py = Math.round(best.y) + "px";
   if (c.style.left !== px) c.style.left = px;
   if (c.style.top !== py) c.style.top = py;
-  c.dataset.side = side;
-  c.style.setProperty("--arrow", Math.round(arrow) + "px");
+  c.dataset.side = besideDialog ? "none" : best.side;     // no arrow pointing at a dialog that isn't the step's target
+  c.style.setProperty("--arrow", Math.round(best.arrow || 0) + "px");
   c.style.maxHeight = (bottom0 - top0) + "px";
 }
 
@@ -1888,9 +2193,21 @@ function checkTutorial() {
   if (!st.check || T.passed) return;
   if (tutorialCheck(st.check)) {
     T.passed = true; renderCoach(false);
-    setTimeout(() => { if (T.tut && T.passed && T.tut.steps[T.i] === st) { T.i++; T.passed = false; renderCoach(true); } }, 1100);
+    // already done when the step was shown, or reached with Back: the researcher reads it and presses Next.
+    // advance: manual — the step has more to do after the checked action (read on, then press Next)
+    if (T.pre || T.back || st.advance === "manual") return;
+    // otherwise move on once they pause (a step with several parts is not cut short while they are still at it)
+    const wait = () => {
+      if (!T.tut || !T.passed || T.tut.steps[T.i] !== st) return;
+      if (Date.now() - (T.lastInput || 0) < 1600) { setTimeout(wait, 400); return; }
+      if (!tutorialCheck(st.check)) { T.passed = false; renderCoach(false); return; }
+      T.i++; T.passed = false; renderCoach(true);
+    };
+    setTimeout(wait, 1100);
   }
 }
+for (const ev of ["pointerdown", "keydown", "input", "change"])
+  document.addEventListener(ev, (e) => { if (T.tut && !(e.target && e.target.closest && e.target.closest("#coach"))) T.lastInput = Date.now(); }, true);
 setInterval(() => checkTutorial(), 800);
 window.addEventListener("resize", () => { if (T.tut) updateCoach(); });
 
@@ -1917,7 +2234,7 @@ const TUTORIAL_CHECKS = {
     (!c.conditions_min || (Array.isArray(n.conditions) && n.conditions.filter((r) => Object.values(r).some((v) => v !== "" && v != null)).length >= c.conditions_min)) &&
     (!c.columns || (Array.isArray(n.conditions) && c.columns.every((col) => n.conditions.some((r) => col in r))))),
   flow_has: (rid) => _flowItems().some(({n}) => routineOfNode(n) === rid),
-  statemachine: (c) => _machines().some((m) => {
+  statemachine: (c) => (c.top ? (S.exp.flow || []).filter((n) => n && n.statemachine !== undefined) : _machines()).some((m) => {
     const states = m.states || {};
     if (c.state && !states[c.state]) return false;
     if (c.states_min && Object.keys(states).length < c.states_min) return false;
@@ -1931,7 +2248,9 @@ const TUTORIAL_CHECKS = {
   device: (type) => (S.exp.devices || []).some((d) => d.type === type),
   rule: (c) => Object.entries(S.exp.routines).some(([rid, r]) => (!c.routine || rid === c.routine) &&
     (r.rules || []).some((rule) => (!c.when_contains || (rule.when || "").includes(c.when_contains)) &&
-      (!c.action || (Array.isArray(rule.do) ? rule.do : [rule.do]).some((a) => (typeof a === "string" ? a : Object.keys(a || {})[0]) === c.action)))),
+      (!c.action || (Array.isArray(rule.do) ? rule.do : [rule.do]).some((a) => (typeof a === "string" ? a : Object.keys(a || {})[0]) === c.action
+        // an action that names an item counts once one is chosen (and, with target:, the right one)
+        && (typeof a !== "object" || !a || (a[c.action] !== "" && a[c.action] != null && (!c.target || a[c.action] === c.target))))))),
   dry_run: () => !!S.lastDryRun && S.lastDryRun >= (T.startedAt || 0),
   tab_open: (name) => S.tab === name,
   saved: () => !!S.savedAt && S.savedAt >= (T.startedAt || 0),
@@ -1961,8 +2280,9 @@ function decorateIcons(root = document) {
   });
 }
 
-function setMode(m, {quiet = false} = {}) {
-  S.mode = m; try { localStorage.setItem("edge.mode", m); } catch {}
+function setMode(m, {quiet = false, keep = true} = {}) {
+  S.mode = m; if (keep) { try { localStorage.setItem("edge.mode", m); } catch {} }
+  if (keep && T.tut) T.prevMode = null;      // chosen by the researcher during a tutorial: it stays
   applyMode(); renderAll(); renderIssues();
   if (!quiet) toast(m === "simple" ? "Simple mode: just the essentials" : "Expert mode: every option is visible");
   if (EDGE.companion.isOpen("help") && HELP.view === "index") renderHelpPanel();
@@ -1986,7 +2306,7 @@ function renderAll() {
 
 function renderDocName() {
   const name = docName();
-  $("#filename").replaceChildren(h("span", {class: "nm"}, name), icon("chev-down"));
+  $("#filename").replaceChildren(h("span", {class: "nm", title: name}, name), icon("chev-down"));
   $("#filepath").textContent = S.path || "Not saved yet";
   $("#docname").setAttribute("aria-label", `Experiment menu: ${name}${S.path ? ", " + S.path : ", not saved yet"}`);
   document.title = S.noDoc || S.ws === "home" ? "EDGE Builder" : `${name} · EDGE Builder`;
@@ -2226,15 +2546,22 @@ function renderProposalBar() {
   const bar = $("#proposal-bar");
   const p = S.proposal;
   if (!p) { if (!bar.hidden) { bar.hidden = true; bar.replaceChildren(); } return; }
-  const n = proposalCount(p.marks || {});
+  const n = p.count ?? proposalCount(p.marks || {});
   const key = `${n}|${p.label}|${p.conflict}`;
   if (bar.dataset.key === key && !bar.hidden) return;
   bar.dataset.key = key;
   const what = n ? `Previewing ${countWord(n, "change")} from the assistant.` : "Previewing changes from the assistant.";
-  bar.replaceChildren(icon("assistant", "m"),
+  if (p.conflict) {        // the researcher edited meanwhile: the same three choices as the assistant's card, never a plain Apply
+    bar.replaceChildren(icon("warning", "m"),
+      h("span", {class: "msg"}, h("b", {}, "You changed the experiment while the assistant worked."), " Applying its version replaces your changes since then."),
+      h("button", {class: "btn sm primary", onclick: () => EDGE.emit("assistant:askAgain", {jobId: p.jobId})}, icon("refresh"), "Ask again with my changes"),
+      h("button", {class: "btn sm", onclick: () => EDGE.proposal.apply({force: true})}, "Apply anyway"),
+      h("button", {class: "btn sm ghost", onclick: () => EDGE.proposal.discard(), "data-tip": "Esc"}, "Discard"));
+  } else bar.replaceChildren(icon("assistant", "m"),
     h("span", {class: "msg"}, h("b", {}, what), " Nothing is changed until you apply."),
     h("button", {class: "btn sm", onclick: () => EDGE.proposal.discard(), "data-tip": "Esc"}, "Discard"),
     h("button", {class: "btn sm primary", onclick: () => EDGE.proposal.apply(), "data-tip": `${MOD}+Enter`, "data-tip-pos": "end"}, "Apply changes"));
+  bar.classList.toggle("conflict", !!p.conflict);
   bar.setAttribute("role", "region"); bar.setAttribute("aria-label", "Assistant preview"); bar.tabIndex = -1;
   bar.hidden = false;
 }
@@ -2352,6 +2679,7 @@ function aboutDialog() {
   ui.dialog({title: "About EDGE", size: "sm", buttons: [{label: "Close", value: null}], onOpen: (_d, close) => { closeIt = close; }, body: h("div", {class: "about"},
     h("img", {src: "/assets/edge-128.png", alt: "", width: 56, height: 56}),
     h("div", {}, h("p", {}, h("b", {}, "EDGE experiment builder"), " for behavioural, eye-tracking, EEG and physiology experiments."),
+      h("p", {class: "t-small", id: "about-version"}, S.appVersion ? `Version ${S.appVersion}` : "Version unknown"),
       h("p", {class: "t-small t-2"}, `The builder runs on this computer${S.root ? ` and works in ${shortRoot()}` : ""}. Nothing leaves it unless you use an online assistant.`),
       h("p", {}, h("button", {class: "linkbtn", onclick: () => { closeIt(); openHelp("README"); }}, "Documentation"), " · ", h("button", {class: "linkbtn", onclick: () => { closeIt(); keyboardDialog(); }}, "Keyboard shortcuts"))))});
 }
@@ -2371,7 +2699,7 @@ function tryMenu() {
   const scr = S.ws === "build" && S.view === "screen" && S.routine;
   ui.menu($("#btn-try-menu"), [
     {label: S.proposal ? "Try the proposed version" : "Try the whole experiment", icon: "play", shortcut: `${MOD} Enter`, run: () => tryNow("all")},
-    scr ? {label: `Try only “${S.routine}” (5 trials)`, icon: "screen", run: () => tryNow("screen")} : null,
+    scr ? {label: `Try only “${S.routine}”${loopsAround(S.routine).length ? " (5 trials)" : ""}`, icon: "screen", run: () => tryNow("screen")} : null,
     {sep: true},
     {label: "Start a test run (virtual participant)", icon: "test", shortcut: `${MOD} Shift Enter`, run: () => dryRun()},
     {label: "Check for problems now", icon: "checklist", run: async () => { await validate(); openProblems(); }},
@@ -2677,7 +3005,7 @@ function wire() {
   $("#docname").onclick = () => experimentMenu();
   $("#btn-save").onclick = () => (S.proposal ? toast("Apply or discard the assistant's changes first") : save());
   $("#btn-undo").onclick = undo; $("#btn-redo").onclick = redo;
-  $("#btn-try").onclick = () => tryNow(S.ws === "build" && S.view === "screen" && S.routine ? "screen" : "all");
+  $("#btn-try").onclick = () => tryNow("all");    // the main button always tries the whole experiment (§2.3); "Try this screen" is in the toolbar and the ▾ menu
   $("#btn-try-menu").onclick = () => tryMenu();
   $("#assistant-toggle").onclick = () => { const A = assistantApi(); if (EDGE.companion.isOpen("assistant")) EDGE.companion.close(); else if (A?.open) A.open({focus: EDGE.focus()}); else EDGE.companion.open("assistant"); };
   $("#btn-help").onclick = () => { if (EDGE.companion.isOpen("help")) EDGE.companion.close(); else openHelp(); };
@@ -2724,7 +3052,7 @@ function wire() {
   $("#btn-try-test").onclick = () => tryNow("all");
   $("#btn-try-one").onclick = (e) => {
     const order = routineInFlowOrder();
-    ui.menu(e.currentTarget, order.length ? order.map((rid) => ({label: `“${rid}” (5 trials)`, icon: "screen", run: () => { S.routine = rid; tryNow("screen"); }}))
+    ui.menu(e.currentTarget, order.length ? order.map((rid) => ({label: `“${rid}”${loopsAround(rid).length ? " (5 trials)" : ""}`, icon: "screen", run: () => { S.routine = rid; tryNow("screen"); }}))
       : [{label: "No screens yet", disabled: true}]);
   };
   // companion column
@@ -2735,7 +3063,16 @@ function wire() {
     if (i < 0 || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
     e.preventDefault();
     const j = e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : (i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-    tabs[j].focus(); EDGE.companion.open(tabs[j].dataset.ctab);
+    EDGE.companion.open(tabs[j].dataset.ctab, {focus: false}); tabs[j].focus();     // arrows switch the panel; focus stays on the tabs (APG)
+  });
+  // Esc closes the companion (unless a request is running or a typed message would be lost) and returns to its button
+  $("#companion").addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || e.defaultPrevented || document.querySelector(".scrim") || S.proposal) return;
+    const t = e.target;
+    if (t && t.matches?.("textarea, input") && String(t.value || "").trim()) return;
+    if (EDGE.companion.isOpen("assistant") && assistantApi()?.busy?.()) return;
+    e.preventDefault(); e.stopPropagation();
+    EDGE.companion.close();
   });
   $("#companion-close").onclick = () => EDGE.companion.close();
   $("#proposal-bar").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); EDGE.proposal.discard(); } });
@@ -2760,7 +3097,8 @@ function wire() {
   document.addEventListener("keydown", onKey);
   window.addEventListener("beforeunload", (e) => { if (S.dirty && !S.noDoc) { e.preventDefault(); e.returnValue = ""; } });
   EDGE.on("run", () => { renderShell(); watchRun(); if (S.ws === "test") renderReadiness(); });
-  EDGE.on("doc:loaded", () => { if (S.ws === "data") { D.sel = null; renderData(); } });
+  EDGE.on("doc:loaded", () => { if (S.ws === "data") { D.sel = null; renderData(); } setTimeout(restoreTested, 0); });
+  EDGE.on("doc:saved", () => setTimeout(restoreTested, 0));
   registerActions();
 }
 
@@ -2837,6 +3175,7 @@ const EDGE = (() => {
     close({persist = true} = {}) {
       const comp = $("#companion");
       if (comp.hidden) return;
+      const was = S.companion;
       comp.hidden = true;
       $("#assistant-toggle").setAttribute("aria-expanded", "false");
       $("#btn-help").setAttribute("aria-pressed", "false");
@@ -2845,7 +3184,7 @@ const EDGE = (() => {
       refitStage();
       if (persist) saveLayout({companion: null});
       E.emit("companion", {open: false, tab: null});
-      if (comp.contains(document.activeElement) || document.activeElement === document.body) $("#btn-help")?.focus();
+      if (comp.contains(document.activeElement) || document.activeElement === document.body) (was === "assistant" ? $("#assistant-toggle") : $("#btn-help"))?.focus();
       if (T.tut) setTimeout(updateCoach, 0);
     },
     toggle(tab = "assistant") { if (companion.isOpen(tab)) companion.close(); else companion.open(tab); },
@@ -2867,6 +3206,8 @@ const EDGE = (() => {
       ui.closeMenus(); closeProblems();
       if (ws !== "home" && S.noDoc) { toast("Open or create an experiment first."); if (S.ws !== "home") E.go("home"); return; }
       const changed = S.ws !== ws;
+      // Home has its own Describe card: the companion's "about this experiment" panel doesn't belong there
+      if (ws === "home" && changed && E.companion.isOpen("assistant")) E.companion.close();
       S.ws = ws;
       S.tab = ws === "data" ? "data" : ws === "build" && S.view === "source" ? "source"
         : ws === "test" && S.lastResults && !S.lastResults.failed && !S.lastResults.error ? "results" : null;
@@ -2877,6 +3218,7 @@ const EDGE = (() => {
       renderAll();
       if (ws === "data") renderData();
       if (ws === "home") refreshFiles().then(() => { if (S.ws === "home") renderHome(); });
+      if (changed) setSaveState(S._saveState);       // the status bar's "Saved 10:42" only where a document is open
       if (changed) { const m = $(`#body > main.ws[data-ws="${ws}"]`); if (m) m.scrollTop = 0; }
     },
     ws() { return S.ws; },
@@ -2885,7 +3227,7 @@ const EDGE = (() => {
       if (S.noDoc) return;
       if (view === "source" && S.mode !== "expert") view = "story";
       if (view === "list" || view === "diagram") {
-        if (opts.path) S.sel = {kind: view === "list" ? "loop" : "machine", path: opts.path};
+        if (opts.path && JSON.stringify(S.sel?.path) !== JSON.stringify(opts.path)) S.sel = {kind: view === "list" ? "loop" : "machine", path: opts.path};
         if (!hasNewViews()) view = "story";      // until P4a's trial-list and diagram views: the list's properties show in the inspector
       } else if (S.sel && ["machine", "state"].includes(S.sel.kind) && view !== "story") S.sel = null;
       if (opts.routine && S.exp.routines[opts.routine]) S.routine = opts.routine;
@@ -2905,6 +3247,7 @@ const EDGE = (() => {
       if (sel?.kind === "settings") { openExperimentSettings(); return; }
       S.sel = sel || null;
       if (sel?.routine && S.exp.routines[sel.routine]) S.routine = sel.routine;
+      if (sel?.kind === "component" && typeof revealCompTime === "function") revealCompTime(findComp(sel.routine, sel.id));   // W4: the playhead follows
       if (reveal) {
         if (S.ws !== "build") E.go("build", {render: false});
         if (sel?.kind === "component" || sel?.kind === "routine") { if (sel.kind === "component" || S.view === "source") S.view = "screen"; }
@@ -2959,7 +3302,7 @@ const EDGE = (() => {
       d.name = slug;
       if (S.proposal) endProposal();
       if (doSave) {
-        const r = await api(`/api/experiment?path=${encodeURIComponent(path)}&fingerprint=&label=${encodeURIComponent("Created")}`, d);
+        const r = await api(`/api/experiment?path=${encodeURIComponent(path)}&fingerprint=&new=1&label=${encodeURIComponent("Created")}`, d);
         loadDoc(d, path, r.fingerprint, {silent: true});
         S.savedAt = Date.now();
         E.prefs.set("last", path); rememberRecent(path);
@@ -2988,10 +3331,11 @@ const EDGE = (() => {
     fmt,
     /* the assistant's preview */
     proposal: {
-      start({doc, marks = {}, label = "Assistant: changes", summary = "", conflict = false, jobId = null} = {}) {
+      start({doc, marks = {}, label = "Assistant: changes", summary = "", conflict = false, jobId = null, count = null, tested = null} = {}) {
         if (S.proposal) S.exp = JSON.parse(S._snapshot);      // a new preview replaces the old one; the base stays
         S.exp = normalize(clone(doc)); S.rev = (S.rev || 0) + 1;
-        S.proposal = {marks, label, summary, conflict, jobId, edited: false};
+        // count: the number of changes the assistant's card lists (the marks count a screen and its item twice)
+        S.proposal = {marks, label, summary, conflict, jobId, edited: false, count: Number.isFinite(count) ? count : null, tested};
         fixSelection();
         document.body.classList.add("proposal");
         clearAlert("assistant-external");
@@ -2999,11 +3343,20 @@ const EDGE = (() => {
         validate();
         E.emit("proposal", {active: true});
       },
-      apply() {
+      apply({force = false} = {}) {
         if (!S.proposal) return S.history.length;
-        const label = S.proposal.label;
+        // made while the researcher edited: Ctrl+Enter or a plain Apply must not silently undo their edit
+        if (S.proposal.conflict && !force) {
+          ui.announce("You changed the experiment while the assistant worked. Choose Ask again with my changes, Apply anyway or Discard.", {assertive: true});
+          toast("You changed the experiment meanwhile: choose Ask again, Apply anyway or Discard.", {tone: "warning"});
+          $("#proposal-bar")?.focus();
+          return null;
+        }
+        const label = S.proposal.label, tested = S.proposal.tested;
         endProposal(false);
         commit(label);                                       // pushes the base snapshot: ONE undo step
+        // the assistant test-ran exactly this version: it counts as tested (status bar, Test page, Next steps)
+        if (tested && typeof tested.ok === "boolean") S.tested = {snapshot: JSON.stringify(S.exp), rev: S.rev, at: Date.now(), ok: tested.ok, trials: tested.trials ?? null};
         S.saveLabel = label;
         const idx = S.history.length;
         E.emit("proposal", {active: false, applied: true});

@@ -42,7 +42,7 @@ MESSAGES: dict[str, tuple[str, str]] = {
                          "Attach fewer or smaller files, or start a new conversation."),
     "request_too_large": ("The request is too big to send.", "Attach fewer or smaller files."),
     "tools_unsupported": ("This model can't follow EDGE's instructions.", "Choose a model with tool support."),
-    "refused": ("The model declined this request{category}.", "Rephrase the request, or choose another model."),
+    "refused": ("The model declined this request{category}.", "Rephrase the request (your text is back in the box), or choose another model."),
     "bad_response": ("{provider} sent an answer EDGE couldn't read.",
                      "Try again; if it keeps happening choose another model."),
     "provider_error": ("{provider} reported an error: {short}", ""),

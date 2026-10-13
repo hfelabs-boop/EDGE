@@ -8,7 +8,8 @@ prints one JSON line per event to stdout, prefixed with ``@edge-monitor``:
   measure and the running summary so far;
 * ``devices`` (every second): samples per second of every stream against its nominal rate, and
   whether a stream has gone silent;
-* ``end``: whether the session finished or was stopped, and where the data is.
+* ``end``: whether the session finished or was stopped, where the data is, and each measure against what
+  was expected (``measures``: recorded, not too many missing values, inside its ``expect`` range).
 
 ``EDGE_STOP_FILE``: when this file appears the session stops at the next frame, exactly like
 pressing Esc (everything recorded so far is kept).
@@ -61,6 +62,7 @@ class Monitor:
         self.values: dict[str, list[Any]] = {m["id"]: [] for m in self.measures}
         self.n_trials = 0
         self.n_rows = 0
+        self.rows: list[dict[str, Any]] = []     # every row, for the after-session "Measures vs expected" checks
         self._last_key = ""
         self.t0 = time.monotonic()
         self._last_counts: dict[tuple[str, str], tuple[float, int]] = {}
@@ -92,7 +94,28 @@ class Monitor:
         self.emit({"type": "end", "aborted": bool(summary.get("aborted")), "errors": summary.get("errors") or [],
                    "crash": summary.get("crash"),
                    "trials": self.n_trials, "elapsed": round(time.monotonic() - self.t0, 1),
-                   "running": self._running(), "data_dir": str(self.session.data.root) if self.session.data else None})
+                   "running": self._running(), "measures": self.measure_checks(),
+                   "data_dir": str(self.session.data.root) if self.session.data else None})
+
+    def measure_checks(self) -> list[dict[str, Any]]:
+        """Each declared measure against what was expected (recorded, few missing values, inside ``expect``):
+        [{id, label, role, value, n, missing, units, expect, ok, notes}] (factors are left out)."""
+        from .measures import measure_checks
+        try:
+            notes = measure_checks({"measures": self.session.exp.measures}, self.rows)
+        except Exception:
+            return []
+        running = self._running()
+        out = []
+        for m in self.measures:
+            if m["role"] == "factor":
+                continue
+            mine = [n["message"] for n in notes if n.get("measure") == m["id"]]
+            r = running.get(m["id"], {})
+            out.append({"id": m["id"], "label": m.get("label") or m["id"], "role": m["role"], "value": r.get("value"),
+                        "n": r.get("n", 0), "missing": r.get("missing", 0), "units": m.get("units", ""),
+                        "expect": m.get("expect"), "ok": not mine, "notes": mine})
+        return out
 
     def stop_requested(self) -> bool:
         return bool(self.stop_file) and os.path.exists(self.stop_file)
@@ -101,6 +124,8 @@ class Monitor:
     def trial(self, row: dict[str, Any]) -> None:
         from .measures import _select
         self.n_rows += 1
+        if len(self.rows) < 100_000:
+            self.rows.append(row)
         key = row.get("trial_key") or ""
         if key and key != self._last_key:      # a new loop iteration = a new trial
             self.n_trials += 1

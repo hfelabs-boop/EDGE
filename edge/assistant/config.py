@@ -478,7 +478,15 @@ def remote_host(cfg: AssistantConfig, provider: str) -> str | None:
     return None if is_local_host(host) else (host or "?")
 
 
+def anthropic_host(cfg: AssistantConfig) -> str | None:
+    """The host of a Claude address that isn't Anthropic's own (a gateway or proxy), else None."""
+    host = (urlparse(cfg.provider_settings("anthropic").get("base_url") or ANTHROPIC_URL).hostname or "").lower()
+    return None if host in ("", DEFAULT_HOSTS["anthropic"]) else host
+
+
 def consent_key(cfg: AssistantConfig, provider: str) -> str:
+    if provider == "anthropic" and anthropic_host(cfg):     # another address is another company: ask again
+        return f"anthropic:custom:{anthropic_host(cfg)}"
     if provider == "openai":
         s = cfg.provider_settings("openai")
         preset = s.get("preset") or "openai"
@@ -513,7 +521,8 @@ def has_consent(cfg: AssistantConfig, provider: str) -> bool:
 
 def service_name(cfg: AssistantConfig, provider: str) -> str:
     if provider == "anthropic":
-        return "Anthropic"
+        host = anthropic_host(cfg)
+        return f"Claude at {host}" if host else "Anthropic"
     if provider == "openai":
         s = cfg.provider_settings("openai")
         preset = s.get("preset") or "openai"
@@ -569,6 +578,7 @@ def public_view(cfg: AssistantConfig) -> dict[str, Any]:
                                "base_url": s.get("base_url"), "model": s.get("model")}
         if name == "anthropic":
             row.update({k: s.get(k) for k in ("effort", "fallbacks", "progress_notes")})
+            row["service"] = service_name(cfg, "anthropic")
         if name == "openai":
             row["preset"] = s.get("preset")
             row["service"] = service_name(cfg, "openai")

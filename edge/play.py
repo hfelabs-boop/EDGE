@@ -147,6 +147,8 @@ class Player:
         else:
             doc = copy.deepcopy(doc)
             doc.setdefault("settings", {}).setdefault("data", {})["exports"] = []
+        self.doc = doc
+        self.problem: dict[str, Any] | None = None
         self.exp = Experiment.from_dict(doc, base_dir=base_dir)
         errors = [i for i in self.exp.validate() if i.level == "error"]
         if errors:
@@ -158,6 +160,15 @@ class Player:
         self.error: str | None = None
         self.logs: list[str] = []
         self.started = time.time()
+        self.runner: Any = None
+        self.total: int | None = None           # expected trials, for "trial 3 of 18" in the Try-it bar
+        try:
+            from .wizard import estimate_experiment
+            self.total = int(estimate_experiment(self.exp).get("trials") or 0) or None
+            if routine and self.total:
+                self.total = min(self.total, max(int(max_trials), 1))
+        except Exception:
+            self.total = None
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
         threading.Thread(target=self._watchdog, daemon=True).start()
@@ -169,11 +180,16 @@ class Player:
             session = Session(self.exp, self.backend, participant={"participant": "try", "session": "1"},
                               data_dir=str(self.data_root), simulate_devices=True,
                               log=lambda *a: self.logs.append(" ".join(map(str, a))))
-            self.summary = Runner(session).run()
+            self.runner = Runner(session)
+            self.summary = self.runner.run()
         except Exception as e:  # shown in the builder
-            from .diagnostics import format_report
+            from .diagnostics import format_report, plain_error
             rep = getattr(e, "report", None)
             self.error = format_report(rep) if rep else f"{type(e).__name__}: {e}"
+            try:
+                self.problem = plain_error(rep or {"type": type(e).__name__, "message": str(e)}, self.doc)
+            except Exception:
+                self.problem = None
             self.logs.append(traceback.format_exc())
 
     def _watchdog(self) -> None:
@@ -188,11 +204,33 @@ class Player:
     def running(self) -> bool:
         return self.thread.is_alive()
 
+    def progress(self) -> dict[str, Any]:
+        """Which trial is showing: {"trial": 3, "trials": 18} (``trial`` is 0 before the first trial, and
+        ``in_trial`` is false on screens outside every trial list, such as instructions)."""
+        r = self.runner
+        out: dict[str, Any] = {"trial": 0, "trials": self.total, "in_trial": False}
+        if r is None:
+            return out
+        try:     # read while the engine runs in its own thread: copies, and never fail the frame for it
+            done = set(r.trial_keys)
+            stack = list(r.stack)
+            n = len(done)
+            if stack:
+                key = "|".join([f"{m['id']}:{m['state']}#{m['visit']}" for m in list(r.machines)]
+                               + [f"{f['loop']}={f['state']['n']}" for f in stack])
+                n += 0 if key in done else 1
+            out.update(trial=n, in_trial=bool(stack))
+        except Exception:
+            pass
+        return out
+
     def stop(self) -> None:
         self.backend.escape_at = master_now()
 
     def status(self) -> dict[str, Any]:
         out: dict[str, Any] = {"running": self.running, "error": self.error, "log": self.logs[-8:]}
+        if self.error and getattr(self, "problem", None):
+            out["problem"] = self.problem
         if self.summary is not None:
             out["result"] = results_summary(self.summary)
         return out
@@ -232,11 +270,12 @@ class PlayManager:
         self.root = root
         self.player: Player | None = None
 
-    def start(self, doc: dict[str, Any], base_dir: Path, routine: str | None = None, max_trials: int = 5) -> dict[str, Any]:
+    def start(self, doc: dict[str, Any], base_dir: Path, routine: str | None = None, max_trials: int = 5,
+              data_root: Path | None = None) -> dict[str, Any]:
         if self.player is not None and self.player.running:
             self.player.stop()
             self.player.thread.join(timeout=3)
-        self.player = Player(doc, base_dir, self.root / "data" / "dry_runs" / "try", routine, max_trials)
+        self.player = Player(doc, base_dir, data_root or (self.root / "data" / "dry_runs" / "try"), routine, max_trials)
         return {"ok": True, "size": list(self.player.backend.size)}
 
     def frame(self, since_sound: int = 0) -> dict[str, Any]:
@@ -244,6 +283,7 @@ class PlayManager:
             return {"running": False}
         snap = self.player.backend.snapshot(since_sound)
         snap["running"] = self.player.running
+        snap.update(self.player.progress())
         if not self.player.running:
             snap.update(self.player.status())
         return snap

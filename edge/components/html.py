@@ -60,6 +60,10 @@ BRIDGE = """
       fetch('/__edge/marker', {method: 'POST', headers: {'X-Edge-Token': '__TOKEN__'}, body: JSON.stringify({label: String(label)})});
     }
   };
+  // inside the builder's Try it (an iframe): Esc stops the try, as it does on the other screens
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && window.parent !== window) { try { window.parent.postMessage({edge: 'escape'}, '*'); } catch (x) {} }
+  });
   document.addEventListener('submit', function (e) {
     e.preventDefault();
     var form = e.target, out = {};
