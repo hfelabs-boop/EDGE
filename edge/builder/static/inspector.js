@@ -173,8 +173,8 @@ function inspHead({tile, ic, over, overClass = "", key = "", name, rename = null
     "aria-haspopup": "menu", "aria-expanded": "false", "data-fkey": "head:menu", onclick: (e) => ui.menu(e.currentTarget, menu(), {placement: "bottom-end"})}, icon("more")) : null;
   title.replaceChildren(...[
     h("span", {class: "tile " + tile}, icon(ic, "m")),
-    h("div", {class: "names"}, h("div", {class: "t-overline " + overClass}, over, key && !isSimple() ? h("span", {class: "key mono"}, key) : null), nameEl),
-    S.proposal ? h("span", {class: "chip assistant", title: "The assistant's proposed version"}, icon("assistant"), "Proposed") : null,
+    h("div", {class: "names"}, h("div", {class: "t-overline " + overClass}, h("span", {class: "ov-t"}, over), key && !isSimple() ? h("span", {class: "key mono"}, key) : null,
+      S.proposal ? h("span", {class: "chip assistant", title: "The assistant's proposed version"}, icon("assistant"), "Proposed") : null), nameEl),
     help, menuBtn].filter(Boolean));
 }
 function inspSec(title, {caption = null, actions = null, cls = ""} = {}) {
@@ -352,7 +352,8 @@ function field(name, p, value, onChange, opts = {}) {
     input = unit ? h("div", {class: "input-wrap"}, inp, h("span", {class: "suffix"}, unit)) : inp;
   }
   // label the control, and give it a focus key so it keeps focus when the inspector re-renders
-  const ctl = input && (input.matches?.("input, select, textarea") ? input : input.querySelector?.("input:not([type=hidden]), select, textarea, button"));
+  const ctl = input && (input.matches?.("input, select, textarea") ? input
+    : input.querySelector?.("input:not([type=hidden]):not([tabindex='-1']), select, textarea") || input.querySelector?.("button"));
   if (ctl) { if (!ctl.id) ctl.id = id; else lbl.htmlFor = ctl.id; if (!ctl.dataset.fkey) ctl.dataset.fkey = fkey; }
   else lbl.removeAttribute("for");
   if (pendingFormula && ctl) INSP.focus = fkey;
@@ -420,7 +421,7 @@ function inspKeyChips(value, onChange, id) {
       const k = keyName(e);
       if (!keys.includes(k)) onChange([...keys, k]);
     }});
-  return h("div", {class: "keychips input", onclick: (e) => { if (e.target === e.currentTarget) add.focus(); }},
+  return h("label", {class: "keychips input", for: id},
     keys.map((k, i) => h("span", {class: "chip"}, h("span", {class: "mono"}, k),
       h("button", {type: "button", class: "x", "aria-label": `Remove the key ${k}`, onclick: () => onChange(keys.filter((_, j) => j !== i))}, icon("close")))),
     add);
@@ -465,7 +466,7 @@ function renderComponentProps(el, sel) {
       {label: "Duplicate", icon: "duplicate", shortcut: `${MOD} D`, run: () => inspDuplicateItem(c)},
       {sep: true},
       {label: "Draw earlier (behind)", icon: "chev-down", shortcut: "Alt ↑", disabled: i <= 0, run: () => inspMoveItem(c, -1)},
-      {label: "Draw inspLater (on top)", icon: "chev-down", shortcut: "Alt ↓", disabled: i >= list.length - 1, run: () => inspMoveItem(c, 1)},
+      {label: "Draw later (on top)", icon: "chev-down", shortcut: "Alt ↓", disabled: i >= list.length - 1, run: () => inspMoveItem(c, 1)},
       {sep: true},
       {label: `Help for ${friendlyName(c.type)}`, icon: "book", shortcut: "F1", run: () => openHelp("reference/components", c.type)},
       inspAssistant()?.open && !EDGE.prefs.get("assistant.hidden", false) ? {label: "Ask the assistant about this", icon: "assistant", run: () => inspAssistant().open({focus: EDGE.focus()})} : null,
@@ -593,9 +594,16 @@ function renderScreenProps(el, rid) {
   if (!isSimple() || r.end_if) ends.append(endIf); else ends.append(moreOptions([[endIf, false]], "screen-ends"));
   el.append(ends);
   // rules: react while the screen runs
-  const rules = inspSec("Rules", {caption: "react while the screen runs", actions: helpLink("EXPERIMENT_FORMAT", "routine-rules-when-do")});
-  renderRulesEditor(rules, r);
-  el.append(rules);
+  // Simple: collapsed unless the screen has rules
+  if (isSimple() && !(Array.isArray(r.rules) && r.rules.length)) {
+    const body = h("div", {class: "rules-body"});
+    renderRulesEditor(body, r);
+    el.append(moreOptions([[body, false]], "screen-rules", "Rules: react while the screen runs"));
+  } else {
+    const rules = inspSec("Rules", {caption: "react while the screen runs", actions: helpLink("EXPERIMENT_FORMAT", "routine-rules-when-do")});
+    renderRulesEditor(rules, r);
+    el.append(rules);
+  }
   inspFoot(h("button", {type: "button", class: "btn sm", "data-fkey": "foot:dup", onclick: () => inspDuplicateScreen(rid)}, icon("duplicate"), "Duplicate screen"),
     h("button", {type: "button", class: "btn sm ghost danger-quiet", "data-fkey": "foot:del", onclick: () => { if (inspEditable() && typeof deleteRoutine === "function") deleteRoutine(rid); }}, icon("trash"), "Delete screen"));
 }
@@ -1085,7 +1093,7 @@ function renderRulesEditor(el, r) {
     const when = h("input", {class: "input expr", id: wid, list: "expr-vars", value: rule.when || "", placeholder: "$t > 3", spellcheck: "false", "data-fkey": `rule:${i}:when`,
       onchange: (e) => inspLater(() => { const v = e.target.value.trim(); rule.when = v ? (v.startsWith("$") ? v : "$" + v) : "$False"; commit("Change a rule"); })});
     const say = rule.when ? inspInWords(rule.when) : "";
-    box.append(when, say && say !== rule.when ? h("div", {class: "say"}, `In words: ${say}.`) : null, repeat, h("div", {class: "route-goto"}, h("b", {}, "Do")));
+    put(box, when, say && say !== rule.when ? h("div", {class: "say"}, `In words: ${say}.`) : null, repeat, h("div", {class: "route-goto"}, h("b", {}, "Do")));
     rule.do.forEach((a0, j) => {
       const a = typeof a0 === "string" ? {[a0]: true} : (a0 || {});
       const kind = Object.keys(a)[0] || "end_routine";
@@ -1121,6 +1129,17 @@ function renderRulesEditor(el, r) {
 const DEVICE_SWITCHES = [["required", "Stop the session if it can't connect", "Off: the session goes on without it (the data say so)."],
   ["record", "Save its data", "Its streams are written into the session folder."], ["markers", "Send it event markers", "Every event marker of the experiment also goes to it."]];
 const SIM_TUNING = new Set(["clock_offset", "clock_drift_ppm", "transport_jitter", "seed"]);
+/* Plain names of device options (the file key is the caption in Expert). */
+const DEVICE_OPT_WORDS = {port: "Port", code_map: "Marker codes", srate: "Samples per second", samplerate: "Samples per second", pulse_ms: "Pulse length (ms)",
+  record_releases: "Also record releases", address: "Address", inputs: "Inputs", light_inputs: "Light-sensor inputs", clock_offset: "Clock offset (s)",
+  clock_drift_ppm: "Clock drift (ppm)", transport_jitter: "Transport jitter (s)", seed: "Random seed", baudrate: "Baud rate", protocol: "Protocol", name: "Name",
+  stream_type: "Stream type", source_id: "Source ID", host: "Host", calibration_points: "Calibration points", serial: "Serial number", lsl_name: "LSL stream name",
+  lsl_type: "LSL stream type", reset_code: "Reset code", poll_hz: "Checks per second", follow_mouse: "Follow the mouse", noise_px: "Noise (px)",
+  heart_rate: "Heart rate (beats per minute)", channels: "Channels", format: "Format", timeout: "Timeout (s)", connect_timeout: "Connection timeout (s)",
+  calibration_timeout: "Calibration timeout (s)", frequency: "Frequency (Hz)", eye: "Eye", mode: "Mode", model: "Model", device: "Device", target: "Target",
+  threshold_db: "Threshold (dB)", min_ms: "Shortest sound (ms)", release_ms: "Release (ms)", connection: "Connection", bits: "Trigger lines (bits)",
+  wait_for_consumers: "Wait for a recorder", gaze_source: "Gaze source", gaze_channels: "Gaze channels", marker_format: "Marker format",
+  digital_inputs: "Digital inputs", analog_inputs: "Analog inputs", license_file: "Licence file", input_name: "Input name"};
 function renderDeviceProps(el, d, index) {
   const info = S.schema.devices[d.type] || {options: {}, capabilities: []};
   const base = INSP.base ? (INSP.base.devices || []).find((x) => x.id === d.id) : null;
@@ -1159,7 +1178,7 @@ function renderDeviceProps(el, d, index) {
   for (const [k, p] of Object.entries(info.options || {})) {
     if (SIM_TUNING.has(k) && isSimple() && d.options[k] === undefined) continue;
     const f = field(k, p, d.options[k], (v) => { if (v === null || v === undefined || v === "") delete d.options[k]; else d.options[k] = v; commit(`Change the device “${d.id}”`); },
-      {noExpr: true, label: isSimple() ? inspCapWords(k) : undefined, fkey: "opt:" + k, prop: "options." + k, hasBase: !!base, baseValue: base?.options?.[k]});
+      {noExpr: true, label: DEVICE_OPT_WORDS[k] || inspCapWords(k), fkey: "opt:" + k, prop: "options." + k, hasBase: !!base, baseValue: base?.options?.[k]});
     if (SIM_TUNING.has(k) && isSimple()) more.push([f, true]); else con.append(f);
   }
   if (more.length) con.append(moreOptions(more, "dev-sim", "Simulator tuning"));
@@ -1430,7 +1449,7 @@ function settingsDraw() {
     () => nf("variables", {type: "dict"}, S.exp.variables, (v) => { S.exp.variables = v || {}; commit("Change the variables"); }, {label: "Variables (JSON)", key: false})));
   } else if (sec === "repro") {
     const f = (S.files || []).find((x) => x.path === S.path);
-    out.push(h("p", {class: "t-small t-2"}, "After piloting, lock this version: EDGE records the software versions, the file fingerprints and a golden participant, so you can show inspLater that nothing changed."));
+    out.push(h("p", {class: "t-small t-2"}, "After piloting, lock this version: EDGE records the software versions, the file fingerprints and a golden participant, so you can show later that nothing changed."));
     out.push(h("div", {class: "set-actions"},
       h("button", {type: "button", class: "btn", onclick: () => (typeof lockExperiment === "function" ? lockExperiment() : null)}, icon("lock"), f?.locked ? "Lock again…" : "Lock this version…"),
       h("button", {type: "button", class: "btn ghost", onclick: () => settingsVerify()}, icon("checklist"), "Check it against the lock")),
@@ -1438,7 +1457,9 @@ function settingsDraw() {
     out.push(h("p", {class: "t-small t-2"}, "Having trouble? A support bundle has everything needed to ask for help, without participant data."),
       h("div", {class: "set-actions"}, h("button", {type: "button", class: "btn", onclick: () => (typeof supportBundle === "function" ? supportBundle() : null)}, icon("package"), "Make a support bundle")));
   }
+  if (S.proposal) out.splice(1, 0, h("div", {class: "alert assistant set-proposed"}, icon("assistant"), h("div", {}, "Apply or discard the assistant's changes to edit the settings.")));
   body.replaceChildren(...out);
+  if (S.proposal) for (const x of body.querySelectorAll("input, select, textarea, button")) { x.disabled = true; x.title = x.title || "Apply or discard the assistant's changes first"; }
   if (keep) body.querySelector(`[data-fkey="${CSS.escape(keep)}"]`)?.focus({preventScroll: true});
 }
 function inspSeg(options, value, onChange, labelledBy) {

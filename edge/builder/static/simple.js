@@ -58,7 +58,7 @@ function renderWizard() {
   h("span", {class: "n", "aria-hidden": "true"}, i < W.step ? icon("check") : String(i + 1)), h("span", {class: "t"}, t, i < W.step ? h("span", {class: "sr-only"}, " (done)") : null)))));
   const page = W.pageEl;
   const els = [];
-  const radio = (group, value, label, sub, on, ic) => h("button", {type: "button", role: "radio", class: "wiz-choice", "aria-checked": on ? "true" : "false", "data-group": group,
+  const radio = (group, value, label, sub, on, ic) => h("button", {type: "button", role: "radio", class: "wiz-choice" + (ic ? "" : " dot"), "aria-checked": on ? "true" : "false", "data-group": group,
     onclick: () => { value(); renderWizard(); }}, ic ? h("span", {class: "wc-ic"}, icon(ic, "m")) : null, h("span", {class: "wc-t"}, h("b", {}, label), sub ? h("small", {}, sub) : null));
   const group = (label, ...kids) => { const g = h("div", {class: "wiz-row", role: "radiogroup", "aria-label": label}, ...kids); wizRadioCards(g); return g; };
   let fid = 0;
@@ -92,7 +92,7 @@ function renderWizard() {
     els.push(h("p", {class: "t-small t-2"}, keys ? "One row per stimulus. The correct key is the right answer (leave it empty when there is none). The condition is a label for your analysis, e.g. congruent or incongruent."
       : "One row per stimulus. The condition is a label for your analysis."));
     const first = a.stimulus.kind === "picture" ? "Picture file (in images/)" : a.stimulus.kind === "sound" ? "Sound file or Hz" : a.stimulus.kind === "shape" ? "Shape" : "Word";
-    const tbl = h("table", {class: "grid wiz-items"}, h("thead", {}, h("tr", {}, h("th", {}, first), keys ? h("th", {}, "Correct key") : null, h("th", {}, "Condition"), h("th", {}, h("span", {class: "sr-only"}, "Remove")))));
+    const tbl = h("table", {class: "grid wiz-items"}, h("thead", {}, h("tr", {}, h("th", {}, first), keys ? h("th", {class: "k"}, "Correct key") : null, h("th", {}, "Condition"), h("th", {class: "x"}, h("span", {class: "sr-only"}, "Remove")))));
     const body = h("tbody");
     a.stimulus.items.forEach((it, i) => body.append(h("tr", {},
       h("td", {}, h("input", {class: "input", value: it.stimulus ?? "", "aria-label": `${first}, row ${i + 1}`, oninput: (e) => { it.stimulus = e.target.value; wizPreview(); }})),
@@ -111,7 +111,7 @@ function renderWizard() {
         h("div", {class: "wiz-btns"}, h("button", {type: "button", class: "btn sm primary", onclick: () => {
           const rows = ta.value.split(/\r?\n/).filter((l) => l.trim()).map((l) => { const c = l.split(/\t|,/).map((x) => x.trim()); return {stimulus: c[0], correct: c[1] || "", condition: c[2] || ""}; });
           if (!rows.length) { ta.focus(); return; }
-          a.stimulus.items = rows; W.paste = false; renderWizard(); toast(`Used ${rows.length} rows.`);
+          a.stimulus.items = rows; W.paste = false; renderWizard(); toast(`Used ${countWord(rows.length, "row")}.`);
         }}, "Use these rows"), h("button", {type: "button", class: "btn sm ghost", onclick: () => { W.paste = false; renderWizard(); }}, "Cancel"))));
       setTimeout(() => $("#wiz-paste")?.focus(), 0);
     }
@@ -166,15 +166,15 @@ function renderWizard() {
     const opts = [["sim_eyetracker", "Eye tracker", "Simulated for now; switch to Tobii or Gazepoint in the device settings"],
       ["sim_eeg", "EEG", "Simulated for now; switch to g.tec or an LSL stream"], ["lsl_markers", "LSL markers", "Send every event to LabRecorder"],
       ["ttl_loopback", "Trigger box (TTL)", "Simulated for now; switch to serial TTL or a parallel port"]];
-    els.push(h("p", {class: "t-small t-2"}, "Consent and demographics come before the task, the others after it. Each is a validated, scored questionnaire; change them inspLater in the survey editor."));
+    els.push(h("p", {class: "t-small t-2"}, "Consent and demographics come before the task, the others after it. Each is a validated, scored questionnaire; change them later in the survey editor."));
     const qbox = h("div", {class: "wiz-qs"});
     let cat = null;
     for (const ins of S.schema.survey.library) {
       if (ins.category !== cat) { cat = ins.category; qbox.append(h("div", {class: "wiz-qcat t-overline"}, cat)); }
-      qbox.append(check(ins.title, `${ins.items} items · about ${ins.minutes} min`, a.questionnaires.includes(ins.id),
+      qbox.append(check(ins.title, `${countWord(ins.items, "item")} · about ${ins.minutes} min`, a.questionnaires.includes(ins.id),
         (v) => { a.questionnaires = v ? [...a.questionnaires, ins.id] : a.questionnaires.filter((x) => x !== ins.id); }, ins.description));
     }
-    els.push(qbox, h("h4", {class: "wiz-sub"}, "Devices"), h("p", {class: "t-small t-2"}, "Optional. Everything works without hardware; devices can be added or changed inspLater."));
+    els.push(qbox, h("h4", {class: "wiz-sub"}, "Devices"), h("p", {class: "t-small t-2"}, "Optional. Everything works without hardware; devices can be added or changed later."));
     const dbox = h("div", {class: "wiz-devs"});
     for (const [type, label, sub] of opts) dbox.append(check(label, sub, a.devices.includes(type), (v) => { a.devices = v ? [...a.devices, type] : a.devices.filter((x) => x !== type); }));
     els.push(dbox);
@@ -183,7 +183,7 @@ function renderWizard() {
   page.scrollTop = 0;
   const last = W.step === WIZ_STEPS.length - 1;
   W.backBtn.disabled = W.step === 0;
-  W.nextBtn.replaceChildren(last ? icon("test") : null, last ? "Create and test" : "Next", last ? null : icon("chev-right"));
+  W.nextBtn.replaceChildren(); put(W.nextBtn, last ? icon("test") : null, last ? "Create and test" : "Next", last ? null : icon("chev-right"));
   W.nextBtn.querySelectorAll(".ic").forEach((x) => x.classList.toggle("after", !last));
   W.createBtn.hidden = last;
   if (!W.nameTouched) { W.nameIn.placeholder = "e.g. word task"; }
@@ -295,15 +295,16 @@ function tryIt(scope = "all") {
 
 async function startPlay(routine) {
   if (P.on) return;
-  let r;
+  let r, err = null;
   try { r = await api("/api/play/start", {experiment: S.exp, path: S.path, routine, max_trials: 5}); }
-  catch (e) { return toast(`Try it couldn't start: ${e.message}`, {tone: "danger", ms: 8000}); }
-  if (!r.ok) {
+  catch (e) { err = e.message; }
+  if (err !== null || !r?.ok) {
+    // must-fix problems: show them where they are (the Problems popover), not as a raw message
     S.strict = true;
-    if (typeof validate === "function") await validate();
-    const n = typeof problemGroups === "function" ? problemGroups().error.length : 0;
-    if (typeof openProblems === "function") openProblems({reason: `Can't start yet: ${n ? countWord(n, "thing") : "something"} to fix.`});
-    else toast("Can't start yet: fix the problems first.", {tone: "danger"});
+    try { if (typeof validate === "function") await validate(); } catch { /* the message below says it */ }
+    const n = typeof problemGroups === "function" ? problemGroups().error.length : (S.issues || []).filter((i) => i.level === "error").length;
+    if (n && typeof openProblems === "function") openProblems({reason: `Can't start yet: ${countWord(n, "thing")} to fix.`});
+    else toast(`Try it couldn't start: ${err || r?.error || "the experiment has a problem"}`, {tone: "danger", ms: 8000});
     return;
   }
   P.on = true; P.sound = 0; P.size = r.size; P.routine = routine; P.last = null;
@@ -490,7 +491,7 @@ function finishPlay(f) {
   const back = h("button", {type: "button", class: "btn", onclick: () => closePlay(true)}, "Back to editing");
   end.replaceChildren(
     h("div", {class: "pe-main"},
-      h("div", {class: "pe-head"}, icon(f.error ? "error" : res.aborted ? "stop" : "success", "m"), h("b", {}, title), facts.length ? h("span", {class: "pe-facts"}, facts.join(" · ")) : null),
+      h("div", {class: "pe-head " + (f.error ? "bad" : res.aborted ? "stopped" : "ok")}, icon(f.error ? "error" : res.aborted ? "stop" : "success", "m"), h("b", {}, title), facts.length ? h("span", {class: "pe-facts"}, facts.join(" · ")) : null),
       f.error ? h("pre", {class: "pe-err mono"}, f.error) : null,
       f.error ? h("p", {class: "pe-note"}, "The Problems list and the documentation explain most messages. The last lines of the log:") : null,
       f.error && (f.log || []).length ? h("details", {class: "pe-log"}, h("summary", {}, "Log"), h("pre", {class: "mono"}, (f.log || []).join("\n"))) : null,
@@ -586,7 +587,7 @@ function runBeforeView() {
   sess.append(h("div", {class: "field"}, h("label", {for: "run-ses"}, "Session"),
     h("input", {class: "input num run-ses", id: "run-ses", value: F.ses, inputmode: "numeric", "data-fkey": "run:ses", oninput: (e) => { F.ses = e.target.value; }})));
   const segRow = (label, id, opts, value, on) => { const s = ui.seg(opts, value, on); s.setAttribute("aria-labelledby", id); return h("div", {class: "field run-segrow"}, h("span", {class: "label", id}, label), s); };
-  if (hasDevices) sess.append(segRow("Devices", "run-dev-l", [{value: "real", label: "Real devices"}, {value: "sim", label: "Simulated"}], F.simulate ? "sim" : "real",
+  if (hasDevices) put(sess, segRow("Devices", "run-dev-l", [{value: "real", label: "Real devices"}, {value: "sim", label: "Simulated"}], F.simulate ? "sim" : "real",
     (v) => { F.simulate = v === "sim"; renderRunPage(); }),
   F.simulate ? h("p", {class: "t-caption run-note"}, "No hardware is used: every device is simulated. Use it for a pilot without the lab equipment.") : null);
   sess.append(segRow("Screen", "run-scr-l", [{value: "1", label: "Full screen"}, {value: "0", label: "In a window"}], F.fullscreen ? "1" : "0", (v) => { F.fullscreen = v === "1"; }));
@@ -677,7 +678,7 @@ function runToday() {
     box.replaceChildren(h("h3", {class: "t-small run-sub"}, "Today"),
       mine.length ? h("ul", {class: "run-today-list"}, mine.slice(0, 8).map((s) => h("li", {},
         icon(s.aborted ? "warning" : s.errors ? "error" : "success", s.aborted ? "c-warn" : s.errors ? "c-bad" : "c-ok"),
-        h("b", {}, String(s.participant ?? "?")), ` session ${s.session ?? 1} · ${clock(s.started)}`, s.aborted ? " · stopped early (data kept)" : "")))
+        h("b", {}, String(s.participant ?? "?")), ` session ${s.session ?? 1} · ${clock(s.started)}`, s.aborted ? " · stopped early (data kept)" : s.errors ? ` · ${countWord(s.errors, "problem")} in the report` : "")))
         : h("p", {class: "t-caption"}, "No sessions yet today."),
       h("button", {type: "button", class: "btn sm ghost", onclick: () => { if (typeof D !== "undefined") { D.filter = "participants"; D.sel = null; } EDGE.go("data"); }}, "All sessions in Data", icon("chev-right")));
   };
@@ -725,9 +726,9 @@ function runLiveView() {
   const head = h("div", {class: "run-livehead", role: "status"},
     h("span", {class: "rec-dot", "aria-hidden": "true"}), h("b", {}, `Recording participant ${r.participant}, session ${r.session ?? 1}`),
     h("span", {class: "run-clock t-2", id: "run-clock"}, ""), h("span", {class: "grow"}), stop);
-  const inspStatusLine = h("p", {class: "t-small t-2 run-stline", id: "run-stline"}, r.recovered ? "Found the session again after the page reloaded." : "Starting: opening the window and connecting devices…");
+  const stLine = h("p", {class: "t-small t-2 run-stline", id: "run-stline"}, r.recovered ? "Found the session again after the page reloaded." : "Starting: opening the window and connecting devices…");
   const log = h("pre", {class: "run-log mono", id: "run-log"});
-  return h("div", {class: "run-live"}, runHead("Run with a participant"), h("section", {class: "card pad run-livecard"}, head, inspStatusLine, RUN.mon.el,
+  return h("div", {class: "run-live"}, runHead("Run with a participant"), h("section", {class: "card pad run-livecard"}, head, stLine, RUN.mon.el,
     h("details", {class: "run-logbox"}, h("summary", {}, "Log"), log)),
   h("p", {class: "t-caption run-note"}, "You can keep working: the recording pill on the Run tab brings you back here. Saved changes apply to the next participant."));
 }
@@ -795,8 +796,9 @@ function runAfterView() {
   const crash = st.monitor?.end?.crash;
   const stopped = !crash && (st.monitor?.end?.aborted || st.returncode === 1);
   const trials = st.monitor?.end?.trials ?? st.monitor?.last?.n;
-  const mins = r.endedAt && r.startedAt ? Math.max(1, Math.round((r.endedAt - r.startedAt) / 60000)) : null;
-  const facts = [`participant ${r.participant}`, mins ? `${mins} min` : null, trials != null ? countWord(trials, "trial") : null, saved ? saved.replace(/^Saved to /, "") : null].filter(Boolean).join(" · ");
+  const secs = r.endedAt && r.startedAt ? Math.max(1, Math.round((r.endedAt - r.startedAt) / 1000)) : null;
+  const facts = [`participant ${r.participant}`, secs ? (secs < 90 ? `${secs} s` : `${Math.round(secs / 60)} min`) : null, trials != null ? countWord(trials, "trial") : null,
+    saved ? runShortPath(saved.replace(/^Saved to /, "")) : null].filter(Boolean).join(" · ");
   let banner;
   if (why) banner = h("div", {class: "alert danger"}, icon("error"), h("div", {}, h("b", {}, "The session couldn't start"), why.replace("EDGE could not run the experiment: ", "")));
   else if (st.returncode === 0 && !stopped) banner = h("div", {class: "alert success"}, icon("success"), h("div", {}, h("b", {}, "Session saved"), facts));
@@ -814,6 +816,13 @@ function runAfterView() {
       h("button", {type: "button", class: "btn ghost", onclick: () => { runClear(); EDGE.go("build"); }}, "Back to Build")),
     out.length ? h("details", {class: "run-logbox", open: why ? "" : null}, h("summary", {}, "Log"), h("pre", {class: "run-log mono"}, out.slice(-60).join("\n"))) : null);
   return h("div", {class: "run-page"}, runHead("Run with a participant"), card);
+}
+/* "/home/…/stroop/data/007_1_…" -> "stroop/data/007_1_…" (the folder next to the experiment, as people know it). */
+function runShortPath(p) {
+  const path = String(p || "").replace(/\\/g, "/");
+  const dir = (S.run?.path || S.path || "").split("/").slice(0, -1).join("/");
+  const i = dir ? path.lastIndexOf("/" + dir + "/") : -1;
+  return i >= 0 ? path.slice(i + 1) : path.split("/").filter(Boolean).slice(-3).join("/");
 }
 function runClear() { S.run = null; RUN.status = null; RUN.mon = null; RUN.key = ""; RUN.pfKey = ""; EDGE.emit("run", null); }
 function runOtherView() {

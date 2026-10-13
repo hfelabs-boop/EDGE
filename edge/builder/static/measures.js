@@ -33,19 +33,19 @@ async function openMeasures() { EDGE.go("measures"); }
 /* Kept name: (re)draw the Measures page. */
 async function drawMeasures() { MS.key = ""; renderMeasuresPage($("#ws-measures")); }
 
+/* The measures list: measureList() creates it (only when adding), msRead() never changes the document. */
 const measureList = () => (Array.isArray(S.exp.measures) ? S.exp.measures : (S.exp.measures = []));
+const msRead = () => (Array.isArray(S.exp.measures) ? S.exp.measures : []);
 function measuresChanged(label = "Change the measures") {
-  const ms = measureList();
-  if (!ms.length) delete S.exp.measures;
+  if (Array.isArray(S.exp.measures) && !S.exp.measures.length) delete S.exp.measures;
   commit(label);
-  if (!S.exp.measures) S.exp.measures = [];
 }
 
 /* The Measures page: idempotent; the recording plan is fetched once per version of the document. */
 function renderMeasuresPage(el) {
   el = el || $("#ws-measures");
   if (!el || !S.exp || S.noDoc) return;
-  const key = (S.path || "") + "|" + (S._snapshot || JSON.stringify(S.exp)).length + "|" + S.rev;
+  const key = (S.path || "") + "|" + (S._snapshot || JSON.stringify(S.exp)).length + "|" + S.rev + "|" + (S.proposal ? "proposal:" + JSON.stringify(S.exp).length : "");
   if (MS.key !== key) {
     MS.key = key;
     const ask = MS.loading = api("/api/recording", {experiment: S.exp, path: S.path}).then((R) => {
@@ -74,9 +74,12 @@ function drawMeasuresPage(el) {
     el.replaceChildren(h("div", {class: "ms-page"}, msHead(), MS.err ? h("div", {class: "alert danger"}, icon("error"), h("div", {}, h("b", {}, "Couldn't work out what is recorded"), MS.err)) : h("p", {class: "t-2"}, h("span", {class: "spin"}), " Working out what is recorded…")));
     return;
   }
+  const grid = h("div", {class: "ms-grid"}, msMeasuresCard(R), msRecordedCard(R));
   el.replaceChildren(h("div", {class: "ms-page"}, msHead(),
     h("p", {class: "ms-lead t-2"}, "Say what this experiment measures. After every session EDGE summarises it per participant and condition, and checks it against what you expect."),
-    h("div", {class: "ms-grid"}, msMeasuresCard(R), msRecordedCard(R))));
+    S.proposal ? h("div", {class: "alert assistant ms-proposed"}, icon("assistant"), h("div", {}, h("b", {}, "Showing the assistant's proposed version"), "Apply or discard the assistant's changes to edit the measures.")) : null,
+    grid));
+  if (S.proposal) for (const x of grid.querySelectorAll("input, select, textarea, button")) { if (x.closest("summary")) continue; x.disabled = true; x.title = x.title || "Apply or discard the assistant's changes first"; }
   el.scrollTop = scroll;
   if (keep) {
     const t = el.querySelector(`[data-fkey="${CSS.escape(keep)}"]`);
@@ -86,13 +89,13 @@ function drawMeasuresPage(el) {
 
 /* ---------------- what this experiment measures */
 function msMeasuresCard(R) {
-  const plan = R.plan, ms = measureList();
+  const plan = R.plan, ms = msRead();
   const card = h("section", {class: "card ms-card-main", "aria-labelledby": "ms-what"}, h("div", {class: "card-head ms-cardhead"}, h("h2", {class: "t-title-s", id: "ms-what"}, "What this experiment measures")));
   const sugg = (R.suggestions || []).filter((sg) => !ms.some((m) => m && m.column === sg.column && (m.role || "outcome") === (sg.role || "outcome")));
   if (sugg.length) card.append(h("div", {class: "ms-suggest"}, h("span", {class: "ms-sugg-l"}, icon("star"), "Suggested:"),
     ...sugg.map((sg, i) => h("button", {type: "button", class: "chip lg accent", "data-fkey": "sugg:" + i, title: `${ROLE_WORDS[sg.role] || "Outcome"} from ${sg.column}` + (sg.trials ? `, only when ${inspInWords(sg.trials) || sg.trials}` : ""),
-      onclick: () => { ms.push(sg); measuresChanged(`Add the measure “${sg.label}”`); }}, icon("plus"), sg.label)),
-    sugg.length > 1 ? h("button", {type: "button", class: "btn sm", onclick: () => { ms.push(...sugg); measuresChanged("Add the suggested measures"); }}, "Add all") : null));
+      onclick: () => { measureList().push(sg); measuresChanged(`Add the measure “${sg.label}”`); }}, icon("plus"), sg.label)),
+    sugg.length > 1 ? h("button", {type: "button", class: "btn sm", onclick: () => { measureList().push(...sugg); measuresChanged("Add the suggested measures"); }}, "Add all") : null));
   const list = h("div", {class: "ms-list"});
   if (!ms.length) list.append(h("div", {class: "empty dropzone ms-empty"}, h("span", {class: "ic-wrap"}, icon("measures")),
     h("p", {}, "Say what this experiment measures to see it summarised after every session."),
@@ -122,7 +125,7 @@ function addBlankMeasure(plan) {
   measuresChanged("Add a measure");
 }
 function measureCard(m, i, plan, loops, line, R) {
-  const ms = measureList();
+  const ms = msRead();
   const set = (k, v, label) => { if (v === "" || v === null || v === undefined) delete m[k]; else m[k] = v; measuresChanged(label || `Change the measure “${m.label || m.id}”`); };
   const role = m.role || "outcome";
   const card = h("article", {class: "ms-card role-" + role, "aria-label": `Measure ${m.label || m.id}`});
@@ -138,7 +141,11 @@ function measureCard(m, i, plan, loops, line, R) {
   roleSeg.classList.add("ms-role");
   card.append(h("div", {class: "ms-top"}, label, roleSeg,
     h("button", {type: "button", class: "btn ghost icon sm", "aria-label": `Remove the measure ${m.label || m.id}`, title: "Remove",
-      onclick: () => { ms.splice(i, 1); measuresChanged(`Remove the measure “${m.label || m.id}”`); ui.toast(`Removed the measure “${m.label || m.id}”.`, {action: {label: "Undo", run: () => undo()}}); }}, icon("trash"))));
+      onclick: () => {
+        ms.splice(i, 1); measuresChanged(`Remove the measure “${m.label || m.id}”`);
+        if (typeof inspUndoToast === "function") inspUndoToast(`Removed the measure “${m.label || m.id}”.`);
+        else ui.toast(`Removed the measure “${m.label || m.id}”.`);
+      }}, icon("trash"))));
   const isFactor = role === "factor" || role === "info";
   const row = (...kids) => h("div", {class: "ms-row"}, ...kids);
   const fld = (labelText, id, ctl, cls = "") => h("div", {class: "ms-f " + cls}, h("label", {for: id}, labelText), ctl);
@@ -228,7 +235,7 @@ function newMeasureFor(col, kind, plan) {
 
 /* ---------------- everything that is recorded */
 function msRecordedCard(R) {
-  const plan = R.plan, ms = measureList();
+  const plan = R.plan, ms = msRead();
   const measuredBy = (col) => ms.find((m) => m && m.column === col);
   const q = MS.q.trim().toLowerCase();
   const match = (...t) => !q || t.some((x) => String(x || "").toLowerCase().includes(q));
@@ -244,7 +251,7 @@ function msRecordedCard(R) {
       "aria-label": m ? `It's a measure: “${m.label || m.id}”. Show it` : `Make ${col} a measure`, title: m ? `It's a measure: show it` : "Make this a measure",
       onclick: () => {
         if (m) { const i = ms.indexOf(m); const t = document.querySelector(`[data-fkey="ms:${i}:label"]`); t?.scrollIntoView({behavior: "smooth", block: "center"}); t?.focus({preventScroll: true}); return; }
-        ms.push(newMeasureFor(col, kind, plan)); measuresChanged(`Make ${col} a measure`);
+        measureList().push(newMeasureFor(col, kind, plan)); measuresChanged(`Make ${col} a measure`);
       }}, icon("star"));
   };
   const colRow = (col, desc, units, kind, saved = true, out = null) => {
@@ -553,7 +560,7 @@ function preflightBox(onVerdict) {
       if (go && (s.status === "error" || s.status === "warning")) sec.append(h("div", {class: "pf-go"}, h("button", {type: "button", class: "btn sm", onclick: go[1]}, go[0])));
       if (s.id === "lock") {
         const unlocked = s.items.some((i) => /not locked/.test(i.text));
-        sec.append(h("div", {class: "pf-go"}, h("button", {type: "button", class: "btn sm", title: "Record versions, file fingerprints and a golden participant, so any inspLater change is caught",
+        sec.append(h("div", {class: "pf-go"}, h("button", {type: "button", class: "btn sm", title: "Record versions, file fingerprints and a golden participant, so any later change is caught",
           onclick: async (e) => {
             if (typeof lockExperiment === "function") { await lockExperiment(); draw(); return; }
             e.currentTarget.disabled = true;

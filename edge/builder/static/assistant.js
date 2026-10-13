@@ -96,7 +96,24 @@ const Assistant = (() => {
     b.addEventListener("click", onclick);
     return b;
   }
-  const errText = (e) => (e ? (e.data && e.data.error) || e.message || String(e) : "Something went wrong.");
+  const errText = (e) => {
+    if (!e) return "Something went wrong.";
+    const d = e.data && e.data.error;
+    return (typeof d === "string" && d) || (d && d.message) || e.message || String(e);
+  };
+  /* /api/assistant/* answers carry an "error" field of their own (a failed job, a failed connection test, a model list
+   * that couldn't be read) inside a normal 200 answer, so only an HTTP error status counts as a failure here. */
+  async function aapi(path, body) {
+    const opt = body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)};
+    const r = await fetch(path, opt);
+    let j;
+    try { j = await r.json(); } catch { j = {error: r.statusText || "The builder did not answer"}; }
+    if (!r.ok) {
+      const msg = typeof j.error === "string" ? j.error : (j.error && j.error.message) || r.statusText || "The builder did not answer";
+      throw Object.assign(new Error(msg), {status: r.status, data: j});
+    }
+    return j;
+  }
   async function copyText(text) {
     try { await navigator.clipboard.writeText(text); return true; } catch { /* not allowed here: fall back */ }
     const ta = h("textarea", {style: "position:fixed;left:-9999px;top:0", "aria-hidden": "true"});
@@ -211,7 +228,7 @@ const Assistant = (() => {
   /* ================================================================ status and providers */
   async function refreshStatus() {
     try {
-      st.view = await api("/api/assistant/status");
+      st.view = await aapi("/api/assistant/status");
       st.unavailable = false;
     } catch (e) {
       if (e.status === 404 || e.status === 405) st.unavailable = true;
@@ -375,7 +392,7 @@ const Assistant = (() => {
     if (!panel) return;
     panel.classList.add("asst-host");
     const head = h("div", {class: "asst-head"});
-    const log = h("div", {class: "asst-log", role: "log", "aria-label": "Conversation with the assistant", tabindex: "-1"});
+    const log = h("div", {class: "asst-log", role: "log", "aria-live": "off", "aria-label": "Conversation with the assistant", tabindex: "-1"});   // replies are announced once, when complete
     const ctx = h("div", {class: "asst-ctx", hidden: true});
     const atts = h("div", {id: "assistant-attachments", class: "atts", role: "list", "aria-label": "Attached files", hidden: true});
     const input = h("textarea", {id: "assistant-input", rows: "2", "aria-label": "Describe a change, or ask a question",
@@ -455,8 +472,10 @@ const Assistant = (() => {
     const {head, priv, input, keys} = st.els;
     const menuBtn = iconBtn("more", "Assistant menu", (e) => openPanelMenu(e.currentTarget), {id: "assistant-menu", pos: "end"});
     menuBtn.setAttribute("aria-haspopup", "menu");
+    const hadFocus = head.contains(document.activeElement) ? document.activeElement.id : null;
     head.replaceChildren(icon("assistant", "lead"), providerChip(() => openSettings(), {id: "assistant-provider-chip"}),
       h("span", {class: "grow"}), menuBtn);
+    if (hadFocus) { const f = document.getElementById(hadFocus); if (f) f.focus(); }
     priv.replaceChildren(...[privacyLine()].filter(Boolean));
     const configured = !!(st.view && st.view.configured);
     input.placeholder = st.job ? "Wait for the assistant to finish"
@@ -468,9 +487,10 @@ const Assistant = (() => {
   }
   function updateSendState() {
     if (!st.panelBuilt) return;
-    const {sendBtn, input, attachBtn} = st.els;
+    const {sendBtn, input, attachBtn, box} = st.els;
     const busy = !!st.job;
     input.disabled = busy;
+    box.classList.toggle("busy", busy);
     attachBtn.disabled = busy;
     const configured = !!(st.view && st.view.configured);
     sendBtn.disabled = busy || (configured && !input.value.trim());
@@ -542,7 +562,7 @@ const Assistant = (() => {
 
   /* (b) ready, new conversation: suggestions for what is open */
   function suggestions() {
-    const doc = safe(() => EDGE.doc(), null) || {};
+    const doc = (docPath() ? safe(() => EDGE.doc(), null) : null) || {};
     const routines = doc.routines || {};
     const empty = !(doc.flow || []).length && !Object.values(routines).some((r) => ((r && r.components) || []).length);
     if (empty) {
@@ -618,7 +638,10 @@ const Assistant = (() => {
     if (!st.panelBuilt) return;
     const ctx = st.els.ctx;
     const key = JSON.stringify(safe(() => EDGE.focus(), null));
-    if (key !== st.lastFocusKey) { st.focusOff = false; st.forcedFocus = null; st.lastFocusKey = key; }
+    if (key !== st.lastFocusKey) {
+      st.focusOff = false; st.forcedFocus = null; st.lastFocusKey = key;
+      if (!st.msgs.length && st.view && st.view.configured) renderLog();      // the suggestions follow the selection
+    }
     const f = currentFocus();
     if (!f || !focusWords(f) || !(st.view && st.view.configured)) { ctx.replaceChildren(); ctx.hidden = true; return; }
     const x = h("button", {type: "button", class: "x", "aria-label": `Don't send ${focusWords(f)} as context`, "data-tip": "Don't send this"}, icon("close"));
@@ -666,15 +689,30 @@ const Assistant = (() => {
   const attList = (where) => (where === "home" ? st.home.atts : st.pending);
   const rerenderAtts = (where) => (where === "home" ? renderHomeAtts() : renderPending());
 
+  /* a short name from a description: "Build a Stroop task with 9 words" → "Stroop task" */
+  const LEAD_WORDS = /^(please|can|could|you|i|we|want|would|like|to|build|make|create|design|write|program|set|up|me|us|a|an|the|new|simple|quick|small|experiment|study)$/i;
+  const STOP_WORDS = /^(with|where|in|for|that|which|and|of|on|using|from|about|to|then|who|when|so|by|after|before|while)$/i;
+  function nameWords(text) {
+    const words = [];
+    for (const tok of String(text || "").replace(/[“”"'‘’]/g, " ").split(/\s+/)) {
+      const w = tok.replace(/[^\p{L}\p{N}_-]/gu, "");
+      if (!w) { if (words.length) break; continue; }
+      if (!words.length && LEAD_WORDS.test(w)) continue;
+      if (STOP_WORDS.test(w)) break;
+      words.push(w);
+      if (/[:;,.!?()]$/.test(tok) || words.length >= 3) break;
+    }
+    return words.join(" ") || String(text || "").trim().split(/\s+/).slice(0, 3).join(" ");
+  }
   async function suggestSlug(text) {
-    try { return (await api(`/api/assistant/suggest_path?name=${enc(text || "experiment")}`)).path.split("/")[0]; }
+    try { return (await aapi(`/api/assistant/suggest_path?name=${enc(text || "experiment")}`)).path.split("/")[0]; }
     catch { return ui.slug(text) || "experiment"; }
   }
   async function ensureFolder(where, files) {
     if (where === "home") return homeReservePath(files);
     const path = docPath();
     if (path) return path;
-    const stem = ((st.els.input && st.els.input.value) || "").trim().split(/\s+/).slice(0, 4).join(" ")
+    const stem = nameWords((st.els.input && st.els.input.value) || "")
       || ((files[0] && files[0].name) || "").replace(/\.[^.]*$/, "");
     if (safe(() => EDGE.ws(), "") === "home") {          // nothing is open: reserve a folder for the new experiment
       if (!st.panelPath) { const slug = await suggestSlug(stem); st.panelPath = `${slug}/${slug}.yaml`; }
@@ -698,7 +736,19 @@ const Assistant = (() => {
     if (ok) EDGE.announce(`${plural(ok, "file")} attached.`);
     call("renderFiles");
   }
+  /* types EDGE refuses (assistant spec §8.1): say why at once instead of uploading them */
+  const REFUSED = {
+    xls: "EDGE can't read old Excel files (.xls): save it as .xlsx or .csv in Excel.",
+    xlsm: "Excel files with macros (.xlsm) aren't accepted: save it as .xlsx or .csv.",
+    docx: "EDGE can't read .docx yet: save it as .txt, or paste the text.",
+    doc: "EDGE can't read .doc files: save it as .txt, or paste the text.",
+    odt: "EDGE can't read .odt files: save it as .txt, or paste the text.",
+    pdf: "EDGE can't read PDF files yet: save it as .txt, or paste the text.",
+    pptx: "EDGE can't read slides: export the pictures (PNG) or the text.",
+  };
   async function uploadOne(a, f, where) {
+    const refused = REFUSED[extOf(a.name)];
+    if (refused) { Object.assign(a, {state: "error", error: refused}); rerenderAtts(where); return; }
     try {
       const r = await fetch(`/api/assistant/attach?exp=${enc(a.exp)}&name=${enc(a.name)}`,
         {method: "POST", headers: {"Content-Type": "application/octet-stream"}, body: f});
@@ -715,7 +765,7 @@ const Assistant = (() => {
   }
   async function previewOne(a, where) {
     try {
-      const j = await api(`/api/assistant/preview?exp=${enc(a.exp)}&file=${enc(a.file)}`);
+      const j = await aapi(`/api/assistant/preview?exp=${enc(a.exp)}&file=${enc(a.file)}`);
       Object.assign(a, {preview: j.attachment, kind: j.attachment.kind, name: j.attachment.name, state: "ok"});
     } catch (e) { Object.assign(a, {state: "error", error: errText(e)}); }
     rerenderAtts(where);
@@ -727,7 +777,7 @@ const Assistant = (() => {
       if (i < 0) continue;
       const [a] = list.splice(i, 1);
       if (a.state === "ok" && a.file && !a.existing && !(a.stored && a.stored.reused)) {
-        api("/api/assistant/detach", {exp: a.exp, file: a.file}).then(() => call("renderFiles")).catch(() => { /* kept: harmless */ });
+        aapi("/api/assistant/detach", {exp: a.exp, file: a.file}).then(() => call("renderFiles")).catch(() => { /* kept: harmless */ });
       }
     }
     if (where === "panel" && !st.pending.length) st.panelPath = null;
@@ -853,7 +903,7 @@ const Assistant = (() => {
       const guard = await guardParticipantData(atts);
       if (guard === "cancel") return;
       if (guard.remove) { removeAtt("panel", guard.remove); EDGE.toast("Removed it. Press Send to ask without it."); return; }
-      const name = st.panelPath ? st.panelPath.split("/")[0] : await suggestSlug(text.split(/\s+/).slice(0, 3).join(" "));
+      const name = st.panelPath ? st.panelPath.split("/")[0] : await suggestSlug(nameWords(text));
       if (g("confirmLeaveDirty") && !(await call("confirmLeaveDirty"))) return;
       try { await EDGE.newExperiment({name, template: "blank", save: false, go: "build"}); }
       catch (e) { EDGE.toast(`Couldn't start the experiment: ${errText(e)}`, {tone: "danger"}); return; }
@@ -877,6 +927,8 @@ const Assistant = (() => {
     }
     const path = docPath();
     if (atts.length && !path) { EDGE.toast("Name the experiment first: attached files are kept in its folder."); return null; }
+    const prov = providerOf();
+    if (prov && prow(prov).consented === false && !(await consentDialog(prov))) return null;    // the privacy note first
     const proposalActive = safe(() => EDGE.proposal.active(), false);
     const job = {id: null, status: "submitting", message: text, atts: atts.map((a) => ({...a})), focus, path,
       baseSnapshot: EDGE.snapshot(), basedOn: proposalActive && st.previewJob ? st.previewJob.id : null,
@@ -896,6 +948,7 @@ const Assistant = (() => {
     pushMsg(job.msg);
     st.job = job;
     st.forcedFocus = null;
+    safe(() => EDGE.emit("assistant", {busy: true, path}));     // other modules may show "The assistant is building…"
     renderHeadAndState();
     renderLog();
     const body = {experiment: EDGE.doc(), path: path || undefined, message: text,
@@ -904,12 +957,13 @@ const Assistant = (() => {
       options: {reviewed_code: listPref("assistant.reviewed").slice(-500)}};
     let r;
     try {
-      r = await api("/api/assistant/ask", body);
+      r = await aapi("/api/assistant/ask", body);
     } catch (e) {
       const d = e.data || {};
       if (e.status === 409 && d.code === "consent_required") {
         /* first request to an online service: the privacy note, then the same request again */
         st.job = null;
+        safe(() => EDGE.emit("assistant", {busy: false, path, status: "consent"}));
         st.jobs.delete(job.id);
         st.msgs = st.msgs.filter((m) => m !== userMsg && m !== job.msg);
         persist(); renderLog(); renderHeadAndState();
@@ -928,7 +982,7 @@ const Assistant = (() => {
     job.msg.jobId = job.id;
     st.jobs.set(job.id, job);
     if (r.conversation_reset && st.convId) {
-      st.msgs.splice(st.msgs.length - 2, 0, {role: "note", text: "The builder restarted, so this is a new conversation. The assistant got a summary of the earlier messages."});
+      st.msgs.splice(st.msgs.length - 2, 0, {role: "note", text: "This is a new conversation for the assistant (the model or the builder changed). It got a summary of the earlier messages."});
     }
     st.convId = r.conversation_id; st.convFromThisPage = true;
     job.status = "running";
@@ -954,7 +1008,7 @@ const Assistant = (() => {
     while (job.status === "running" || job.status === "queued") {
       let j;
       try {
-        j = await api(`/api/assistant/job?id=${enc(job.id)}&since=${job.since}&wait=10`);
+        j = await aapi(`/api/assistant/job?id=${enc(job.id)}&since=${job.since}&wait=10`);
         fails = 0;
       } catch (e) {
         if (job.status === "cancelled") return;
@@ -995,7 +1049,7 @@ const Assistant = (() => {
     if (!job || !job.id || job.id.startsWith("pending-")) return;
     job.status = "cancelled";
     finishJob(job);
-    try { await api("/api/assistant/cancel", {id: job.id}); } catch { /* it ends anyway */ }
+    try { await aapi("/api/assistant/cancel", {id: job.id}); } catch { /* it ends anyway */ }
   }
 
   /* the job ended: an answer, a preview, an automatic apply, a conflict or a failure */
@@ -1023,6 +1077,7 @@ const Assistant = (() => {
     renderHeadAndState();
     refreshJob(job);
     announceJob(job);
+    safe(() => EDGE.emit("assistant", {busy: false, path: job.path, status: job.status, phase: job.phase || null}));
   }
   function announceJob(job) {
     const msg = job.msg, n = msg.n || 0;
@@ -1051,7 +1106,7 @@ const Assistant = (() => {
     const res = job.result;
     if (job.path !== docPath()) {
       job.phase = "elsewhere";
-      api("/api/assistant/discard", {id: job.id}).catch(() => {});
+      aapi("/api/assistant/discard", {id: job.id}).catch(() => {});
       return;
     }
     const basedOnGone = job.basedOn && !(st.previewJob && st.previewJob.id === job.basedOn && EDGE.proposal.active());
@@ -1080,7 +1135,7 @@ const Assistant = (() => {
     job.phase = conflict ? "conflict" : "preview";
     job.msg.state = "preview";
     EDGE.proposal.start({doc: res.experiment, marks: computeMarks(base, res.experiment), label: `Assistant: ${shortTitle(res)}`,
-      summary: (res.summary && res.summary.title) || "", conflict, jobId: job.id});
+      summary: (res.summary && res.summary.title) || "", conflict, jobId: job.id, count: (res.changes || []).length});
   }
   /* EDGE.proposal ended: from the card, the proposal bar, Ctrl+Enter, Esc, an external change or a document switch */
   function onProposal(d) {
@@ -1096,7 +1151,7 @@ const Assistant = (() => {
     } else {
       job.phase = "discarded";
       job.msg.state = "discarded";
-      if (!job.discardedServer) for (const id of job.chain || [job.id]) api("/api/assistant/discard", {id}).then(() => call("renderFiles")).catch(() => {});
+      if (!job.discardedServer) for (const id of job.chain || [job.id]) aapi("/api/assistant/discard", {id}).then(() => call("renderFiles")).catch(() => {});
       job.discardedServer = true;
     }
     persist();
@@ -1109,7 +1164,7 @@ const Assistant = (() => {
     job.msg.state = "applied";
     job.msg.time = job.appliedAt;
     st.lastAppliedAt = Date.now();
-    if (!job.discardedServer) for (const id of job.chain || [job.id]) api("/api/assistant/applied", {id}).catch(() => {});
+    if (!job.discardedServer) for (const id of job.chain || [job.id]) aapi("/api/assistant/applied", {id}).catch(() => {});
     persist();
     refreshJob(job);
     if (!auto) EDGE.announce(`Applied ${plural((job.result.changes || []).length, "change")}.`);
@@ -1294,11 +1349,11 @@ const Assistant = (() => {
     card.append(header, list, checkLines(job), ...reviewChips(job));
     if (diffHost) card.append(diffHost);
     const notes = [];
-    const alert = (title, text) => h("div", {class: "alert warning slim"}, icon("warning"), h("div", {}, h("b", {}, title), text ? h("p", {}, text) : null));
-    if (job.phase === "conflict") notes.push(alert("You changed the experiment while the assistant worked.", "Applying replaces your changes since then."));
+    const warnNote = (title, text) => h("div", {class: "alert warning slim"}, icon("warning"), h("div", {}, h("b", {}, title), text ? h("p", {}, text) : null));
+    if (job.phase === "conflict") notes.push(warnNote("You changed the experiment while the assistant worked.", "Applying replaces your changes since then."));
     if (!["discarded", "replaced", "elsewhere"].includes(job.phase)) {
-      if (res.confirm) notes.push(alert(res.confirm.text || "This replaces most of your experiment.", "Check the preview before you apply it."));
-      if (res.status === "incomplete") notes.push(alert("The assistant ran out of steps.", "This is what it did so far."));
+      if (res.confirm) notes.push(warnNote(res.confirm.text || "This replaces most of your experiment.", "Check the preview before you apply it."));
+      if (res.status === "incomplete") notes.push(warnNote("The assistant ran out of steps.", "This is what it did so far."));
       if ((res.files_created || []).length) notes.push(h("p", {class: "files-note"}, `Discard removes the ${plural(res.files_created.length, "file")} it made. Your attached files stay.`));
     }
     card.append(...notes);
@@ -1545,7 +1600,7 @@ const Assistant = (() => {
     if (H.nameEdited || H.path) return;
     clearTimeout(H.nameTimer);
     H.nameTimer = setTimeout(async () => {
-      const words = H.text.replace(/[“”"']/g, " ").split(/[\s:;,.!?()]+/).filter(Boolean).slice(0, 3).join(" ");
+      const words = nameWords(H.text);
       const name = words ? await suggestSlug(words) : "";
       if (H.nameEdited || H.path) return;
       H.name = name;
@@ -1560,7 +1615,7 @@ const Assistant = (() => {
     if (H.path) return H.path;
     let slug = ui.slug(H.name);
     if (!slug) {
-      const stem = H.text.trim().split(/\s+/).slice(0, 3).join(" ") || ((files[0] && files[0].name) || "experiment").replace(/\.[^.]*$/, "");
+      const stem = nameWords(H.text) || ((files[0] && files[0].name) || "experiment").replace(/\.[^.]*$/, "");
       slug = await suggestSlug(stem);
     } else {
       try {
@@ -1587,7 +1642,7 @@ const Assistant = (() => {
     if (guard === "cancel") return;
     if (guard.remove) { removeAtt("home", guard.remove); EDGE.toast("Removed it. Press Build it to continue without it."); return; }
     if (g("confirmLeaveDirty") && !(await call("confirmLeaveDirty"))) return;
-    const name = H.path ? H.path.split("/")[0] : (ui.slug(H.name) || await suggestSlug(text.split(/\s+/).slice(0, 3).join(" ")));
+    const name = H.path ? H.path.split("/")[0] : (ui.slug(H.name) || await suggestSlug(nameWords(text)));
     let path;
     try { path = await EDGE.newExperiment({name, template: "blank", save: false, go: "build"}); }
     catch (e) { showErr(`Couldn't start the experiment: ${errText(e)}`); return; }
@@ -1717,7 +1772,7 @@ const Assistant = (() => {
       S2.modelErr[p] = null; S2.loading = p;
       if (S2.provider === p) renderFields();
       try {
-        const r = await api(`/api/assistant/models?provider=${enc(p)}`);
+        const r = await aapi(`/api/assistant/models?provider=${enc(p)}`);
         S2.models[p] = r.models || [];
         if (r.error) S2.modelErr[p] = r.error;
       } catch (e) { S2.modelErr[p] = {message: errText(e)}; S2.models[p] = []; }
@@ -1831,23 +1886,26 @@ const Assistant = (() => {
       testBtn.prepend(h("span", {class: "spin", "aria-hidden": "true"}));
       result.replaceChildren(h("p", {class: "t-small t-2"}, INFO[p].cloud ? "Connecting…" : "Connecting (a local model can take a minute to load)…"));
       let r;
-      try { r = await api("/api/assistant/test", {provider: p, settings}); }
+      try { r = await aapi("/api/assistant/test", {provider: p, settings}); }
       catch (e) { r = {ok: false, error: {message: errText(e), hint: (e.data && e.data.hint) || ""}}; }
       testBtn.removeAttribute("aria-busy"); testBtn.disabled = false;
       lbl.textContent = "Test connection";
       const sp = testBtn.querySelector(".spin"); if (sp) sp.remove();
       result.replaceChildren(testResult(p, r));
+      result.scrollIntoView({block: "nearest"});
       if (r.ok && !INFO[p].cloud && !(S2.models[p] || []).length) loadModels(p);
     }
     function testResult(p, r) {
       if (r.ok) {
         const caps = r.capabilities || {};
-        const bits = [caps.tools === false ? "no tools (JSON mode)" : "tools ✓", caps.vision ? "pictures ✓" : caps.vision === false ? "no pictures" : null,
-          caps.context_tokens ? `context ${Number(caps.context_tokens).toLocaleString("en").replace(/,/g, " ")}` : null].filter(Boolean);
+        const yes = (word) => h("span", {class: "cap yes"}, icon("check"), word);
+        const bits = [caps.tools === false ? "no tools (JSON mode)" : yes("tools"), caps.vision ? yes("pictures") : caps.vision === false ? "no pictures" : null,
+          caps.context_tokens ? `context ${Number(caps.context_tokens).toLocaleString("en").replace(/,/g, " ")}` : null].filter(Boolean)
+          .flatMap((b, i) => (i ? [" · ", b] : [b]));
         const who = [r.server, modelLabel(p, r.model)].filter(Boolean).join(" · ");
         return h("div", {class: "alert success"}, icon("success"), h("div", {},
           h("b", {}, `Connected${who ? " to " + who : ""}${r.latency_ms != null ? ` in ${(r.latency_ms / 1000).toFixed(1)} s` : ""}`),
-          h("p", {}, bits.join(" · ")), ...(r.warnings || []).map((w) => h("p", {class: "t-small"}, w))));
+          h("p", {class: "caps"}, ...bits), ...(r.warnings || []).map((w) => h("p", {class: "t-small"}, w))));
       }
       const e = r.error || {};
       const acts = h("div", {class: "actions"});
@@ -1876,7 +1934,7 @@ const Assistant = (() => {
           if (INFO[p].cloud && S2.keyMode[p] === "new" && !S2.fields[p].api_key && !prow(p, v).has_key) { showErr(`${p}.api_key`, "Paste the API key."); return; }
           save.setAttribute("aria-busy", "true"); save.disabled = true;
           try {
-            st.view = await api("/api/assistant/config", patch);
+            st.view = await aapi("/api/assistant/config", patch);
             close("saved");
           } catch (e) {
             save.removeAttribute("aria-busy"); save.disabled = false;
@@ -1886,7 +1944,10 @@ const Assistant = (() => {
         dlg.append(h("footer", {}, testBtn, cancel, save));
       }});
     const warnings = (st.view && st.view.config_warnings) || [];
+    /* opened from a menu item that no longer exists: give the focus back to the panel instead of the page */
     await refreshStatus();
+    const lost = !document.activeElement || document.activeElement === document.body;
+    if (lost && EDGE.companion.isOpen("assistant")) { const m = document.getElementById("assistant-menu"); if (m) m.focus(); }
     if (res !== "saved") return false;
     const p = providerOf();
     if (p && prow(p).consented === false) {
@@ -1911,7 +1972,7 @@ const Assistant = (() => {
       onOpen: (dlg) => { dlg.id = "assistant-consent"; },
       buttons: [{label: "Use a local model instead", value: "local"}, {label: "Continue", value: "ok", kind: "primary"}]});
     if (v === "ok") {
-      try { await api("/api/assistant/consent", {provider: provider || providerOf()}); await refreshStatus(); return true; }
+      try { await aapi("/api/assistant/consent", {provider: provider || providerOf()}); await refreshStatus(); return true; }
       catch (e) { EDGE.toast(`Couldn't save your answer: ${errText(e)}`, {tone: "danger"}); return false; }
     }
     if (v === "local") setTimeout(() => openSettings("ollama"), 0);
