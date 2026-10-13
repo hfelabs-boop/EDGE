@@ -111,15 +111,17 @@ class LSLInlet(Device):
         self.inlet = lsl.StreamInlet(si, max_buflen=int(self.options["max_buffered"]),
                                      processing_flags=lsl.proc_clocksync | lsl.proc_dejitter)
         full = self.inlet.info()
-        chans = []
+        chans, units = [], []
         ch = full.desc().child("channels").child("channel")
         for _ in range(full.channel_count()):
             label = ch.child_value("label") if not ch.empty() else ""
             chans.append(label or f"ch{len(chans) + 1}")
+            units.append((ch.child_value("unit") if not ch.empty() else "") or "")    # as the sender declares it
             ch = ch.next_sibling()
         self.stream_name = full.name() or "lsl"
         # proc_clocksync converts remote timestamps to our local_clock, i.e. the master clock.
         self.add_stream(self.stream_name, chans, full.nominal_srate(), full.type(), time_base="master",
+                        units=units if any(units) else None,
                         source_id=full.source_id(), hostname=full.hostname())
         self._gaze_idx = None
         gc = self.options.get("gaze_channels")

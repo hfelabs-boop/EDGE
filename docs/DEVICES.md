@@ -75,8 +75,8 @@ lost. `lsl_inlet`: records any stream, matched by `name`, `stream_type` or `sour
 on a timer, so the frame loop never blocks. `code_map` maps labels to codes per device.
 *Status: logic tested via `ttl_loopback`; untested on physical boxes.*
 
-### Trigger adapters — `trigger_adapter`
-Send the event markers into the system you record with, without working out ports, line counts and
+### Trigger adapters
+Send the event markers into the system you record with (device type `trigger_adapter`), without working out ports, line counts and
 pulse widths yourself: the same job as the cables sold as "Chronos adapters", using hardware you
 may already have (a USB trigger box, a parallel port, a LabJack, or LSL). Pick `target` and EDGE
 sets the connection, the number of trigger lines and the pulse width, explains the wiring, and
@@ -131,7 +131,7 @@ and warns when it varies by more than 4 ms.
 
 ```yaml
 devices:
-  - {id: box, type: serial_inputs, options: {port: COM4, protocol: cedrus, inputs: {1: left, 2: right, 8: light}}}
+  - {id: box, type: serial_inputs, options: {port: COM4, protocol: cedrus, inputs: {1: left, 2: right, 5: trigger, 8: light}}}
   - {id: mic, type: voice_key, options: {threshold_db: -30}}
 routines:
   trial:
@@ -154,7 +154,7 @@ TTL in and out); the amplifier ends of the Chronos adapters are covered by `trig
 *Status: decoding (Cedrus packets, character and line protocols, voice and light thresholds) is
 unit-tested; the drivers are untested on physical boxes.*
 
-### Closed loop — `udp_messages`
+### Closed loop
 Let another program steer a running experiment: a classifier reading EEG, a motion tracker, a robot,
 a script on another computer. It sends UDP packets (JSON objects, or plain text) to the
 `udp_messages` device; their fields become experiment variables, and a field called `event` (or plain
@@ -163,6 +163,7 @@ text) is an input event:
 ```yaml
 devices:
   - {id: bci, type: udp_messages, options: {port: 5005, variables: [alpha], send_markers_to: "127.0.0.1:5006"}}
+variables: {alpha: 0}                    # the value until the first message arrives
 routines:
   feedback:
     rules:
@@ -177,7 +178,8 @@ s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.sendto(json.dumps({"alpha": 0.73, "event": "left"}).encode(), ("127.0.0.1", 5005))
 ```
 
-List the fields under `variables` so Check knows them. Every message is saved with its arrival time
+List the fields under `variables` so Check knows them; until the first message arrives they are empty
+(None), unless the experiment's `variables:` gives them a start value as above. Every message is saved with its arrival time
 in `streams/bci.messages.csv`; with `send_markers_to`, EDGE sends every marker back as JSON so the
 other program knows when each stimulus appeared.
 

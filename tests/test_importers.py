@@ -109,8 +109,8 @@ def test_jspsych(tmp_path):
     path, res = import_experiment(FIX / "jspsych/experiment.html", tmp_path)
     d = load(path).to_dict()
     flow = d["flow"]
-    assert flow[0] == "html_keyboard_response"
-    assert d["routines"]["html_keyboard_response"]["components"][0]["text"] == "Welcome! Press any key."
+    assert flow[0] == "welcome"                              # routines are named after the JS variables
+    assert d["routines"]["welcome"]["components"][0]["text"] == "Welcome! Press any key."
     assert flow[1:3] == ["instructions_p1", "instructions_p2"]
     loop = flow[3]
     assert loop["order"] == "random" and loop["repeats"] == 5 and len(loop["conditions"]) == 2

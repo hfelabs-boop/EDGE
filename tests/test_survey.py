@@ -270,7 +270,9 @@ def test_template_with_consent_workflow_runs_the_whole_study(tmp_path):
 def test_wizard_adds_questionnaires_around_the_task(tmp_path):
     from edge.wizard import build_experiment, estimate
     doc = build_experiment({"questionnaires": ["consent", "demographics", "gad7", "sus"]})
-    assert doc["flow"][:2] == ["consent", "about_you"] and doc["flow"][-2:] == ["questionnaires", "thanks"]
+    assert doc["flow"][0] == "consent" and doc["flow"][1]["else"] == ["declined"]    # declining ends the study
+    agreed = doc["flow"][1]["then"]
+    assert agreed[0] == "about_you" and agreed[-2:] == ["questionnaires", "thanks"]
     assert estimate(doc, tmp_path)["minutes"] >= 4
     from edge.wizard import WizardError
     with pytest.raises(WizardError, match="unknown questionnaire"):

@@ -424,6 +424,7 @@ class Experiment:
                 except Exception as e:  # a driver's own check must not break validation
                     issues.append(Issue("warning", f"devices.{dev.id}", f"could not check the options: {e}"))
 
+        machines_of = _enclosing_machines(self.flow)
         for rid, routine in self.routines.items():
             ids: set[str] = set()
             for c in routine.components:
@@ -444,7 +445,9 @@ class Experiment:
                 if c.type == "code":
                     issues.append(Issue("info", where, "runs Python code on this computer (not sandboxed)",
                                         hint="read it first if the experiment came from someone else"))
-                for key in ("start", "duration", "start_if", "stop_if"):
+                for key in ("start", "duration"):
+                    _check_seconds(getattr(c, key), f"{where}.{key}", issues, key)
+                for key in ("start_if", "stop_if"):
                     v = getattr(c, key)
                     if isinstance(v, str):
                         _check_expr(v if v.startswith("$") else "$" + v, where + "." + key, issues)
@@ -458,6 +461,13 @@ class Experiment:
                 if c.only_if:
                     _check_expr(c.only_if if c.only_if.startswith("$") else "$" + c.only_if,
                                 f"routines.{rid}.{c.id}.if", issues)
+            # duration 0 on a screen of code, variables or markers only is the usual "do this, then go on"
+            shows = any(getattr(comp_types.get(c.type), "category", "") in ("stimulus", "response")
+                        for c in routine.components)
+            _check_seconds(routine.duration, f"routines.{rid}.duration", issues, "duration", positive=shows)
+            if isinstance(routine.end_if, str) and routine.end_if.strip():
+                _check_expr(routine.end_if if routine.end_if.startswith("$") else "$" + routine.end_if,
+                            f"routines.{rid}.end_if", issues)
             for i, rule in enumerate(routine.rules):
                 where = f"routines.{rid}.rules[{i}]"
                 if not isinstance(rule, dict) or "when" not in rule:
@@ -479,6 +489,8 @@ class Experiment:
                         for k in ("start", "stop"):
                             if k in a and (not isinstance(a[k], str) or a[k] not in ids):
                                 issues.append(Issue("error", where, f"{k}: no component '{a[k]}' in this routine"))
+                        if "goto" in a and rid in machines_of:
+                            issues.extend(_check_goto(str(a["goto"]), machines_of[rid], where))
             for c in routine.components:
                 if c.start_after and c.start_after not in ids:
                     issues.append(Issue("error", f"routines.{rid}.{c.id}", f"start_after refers to unknown component '{c.start_after}'"))
@@ -521,6 +533,14 @@ class Experiment:
                             exists = False
                         if not exists:
                             issues.append(Issue("error", w, f"conditions file not found: {n.conditions[:200]}"))
+                        else:
+                            from .conditions import load_conditions
+                            try:
+                                load_conditions(n.conditions, self.base_dir)
+                            except ImportError as e:     # .xlsx without openpyxl: said when it runs
+                                issues.append(Issue("warning", w + ".conditions", str(e)))
+                            except Exception as e:
+                                issues.append(Issue("error", w + ".conditions", str(e)))
                     elif n.conditions is not None:
                         from .conditions import load_conditions
                         try:
@@ -539,17 +559,20 @@ class Experiment:
                         walk(st.run, f"{w}.{n.id}.{sname}")
 
         walk(self.flow, "flow")
-        if not any(i.level == "error" and "expression" in i.message for i in issues):
-            from .scope import scope_issues
-            try:
-                issues.extend(scope_issues(self))
-            except Exception:  # the scope check is advisory; never let it break validation
-                pass
+        from .scope import scope_issues        # also next to syntax errors: every problem in one pass
+        try:
+            issues.extend(scope_issues(self))
+        except Exception:  # the scope check is advisory; never let it break validation
+            pass
         for rid in self.routines:
             if rid not in used:
                 issues.append(Issue("info", f"routines.{rid}", "routine is defined but never used in the flow"))
-        from .measures import validate_measures
+        from .measures import validate_measures, validate_summary_settings
         issues.extend(validate_measures(self))
+        try:
+            issues.extend(validate_summary_settings(self))
+        except Exception:  # advisory; never let it break validation
+            pass
         issues.extend(validate_settings(self.settings))
         data_dir = str((self.settings.get("data") or {}).get("dir") or "data")
         try:
@@ -572,6 +595,44 @@ class Experiment:
 
 
 LOOP_ORDERS = ("sequential", "random", "fullrandom", "latin_square", "counterbalance")
+
+
+def _enclosing_machines(flow: list[FlowNode]) -> dict[str, list[StateMachine]]:
+    """Routine id -> the state machines around it, wherever it is used (empty list: used, but in none)."""
+    out: dict[str, list[StateMachine]] = {}
+
+    def walk(nodes: list[FlowNode], stack: list[StateMachine]) -> None:
+        for n in nodes:
+            if isinstance(n, RoutineRef):
+                lst = out.setdefault(n.routine, [])
+                lst += [m for m in stack if m not in lst]
+            elif isinstance(n, Loop):
+                walk(n.children, stack)
+            elif isinstance(n, Branch):
+                walk(n.then, stack)
+                walk(n.else_, stack)
+            elif isinstance(n, StateMachine):
+                for st in n.states.values():
+                    walk(st.run, stack + [n])
+    walk(flow, [])
+    return out
+
+
+def _check_goto(target: str, machines: list[StateMachine], where: str) -> list["Issue"]:
+    """A rule's goto jumps to a state of a workflow around this screen (or 'end' to leave it)."""
+    if not machines:
+        return [Issue("error", where, f"goto '{target}': this screen isn't inside a workflow (state machine), "
+                                      "so there is no state to go to",
+                      hint="use end_routine to finish the screen, or put the screen in a workflow state")]
+    states = {s for m in machines for s in m.states}
+    if target == "end" or target in states:
+        return []
+    import difflib
+    close = difflib.get_close_matches(target, sorted(states), 1)
+    names = ", ".join(f"'{m.id}'" for m in machines)
+    return [Issue("error", where, f"goto '{target}': workflow {names} has no such state"
+                  + (f". Did you mean '{close[0]}'?" if close else ""),
+                  hint=f"states: {', '.join(sorted(states))}, or end to leave the workflow")]
 
 
 def validate_state_machine(m: StateMachine, where: str, issues: list["Issue"]) -> None:
@@ -628,8 +689,13 @@ def _check_loop_numbers(n: "Loop", w: str) -> list[Issue]:
     """repeats / max_repeat / max_steps must be whole numbers (or expressions), and not absurd."""
     out: list[Issue] = []
     v = n.repeats
-    if isinstance(v, str):
-        _check_expr(v if v.startswith("$") else "$" + v, f"{w}.repeats", out)
+    if isinstance(v, str) and not v.startswith("$"):
+        try:                         # read as an expression when it runs (repeats: n_blocks)
+            expressions.compile_expr(v)
+        except expressions.ExpressionError:
+            out.append(Issue("error", f"{w}.repeats", f"repeats must be a whole number, e.g. 2, not '{v[:40]}'"))
+    elif isinstance(v, str):
+        _check_expr(v, f"{w}.repeats", out)
     elif v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or v != int(v) or v < 0):
         out.append(Issue("error", f"{w}.repeats", f"repeats must be a whole number (or an expression), not {v!r:.40}"))
     elif isinstance(v, (int, float)) and v > MAX_TRIALS:
@@ -656,6 +722,32 @@ def _check_expr(src: str, where: str, issues: list[Issue]) -> None:
         expressions.compile_expr(src[1:])
     except expressions.ExpressionError as e:
         issues.append(Issue("error", where, str(e)))
+
+
+def _check_seconds(v: Any, where: str, issues: list[Issue], what: str = "duration", positive: bool = False) -> None:
+    """A time (start, duration): a number of seconds or an expression. Text without '$' is still read as an
+    expression when it runs (``duration: iti``), so it must at least be one."""
+    example = f"a {what} is a number of seconds, e.g. 1.5 (no units), or an expression such as $iti"
+    if v is None:
+        return
+    if isinstance(v, str):
+        if v.startswith("$$") or not v.strip():
+            issues.append(Issue("error", where, f"{what} is empty or text, not a number", hint=example))
+        elif v.startswith("$"):
+            _check_expr(v, where, issues)
+        else:
+            try:
+                expressions.compile_expr(v)
+            except expressions.ExpressionError:
+                issues.append(Issue("error", where, f"'{v[:40]}' isn't a number", hint=example))
+        return
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v:
+        issues.append(Issue("error", where, f"{what} must be a number of seconds, not {_short(v, 40)}", hint=example))
+    elif v < 0:
+        issues.append(Issue("error", where, f"a {what} can't be negative ({v:g} s)", hint=example))
+    elif positive and v == 0:
+        issues.append(Issue("warning", where, f"a {what} of 0 s ends it before anything is shown",
+                            hint="remove the duration, or give it a number of seconds"))
 
 
 def window_size(settings: dict[str, Any]) -> tuple[int, int]:
@@ -689,6 +781,16 @@ def validate_settings(settings: dict[str, Any]) -> list[Issue]:
         issues.append(Issue("error", "settings.data", "must be a mapping (dir, …)"))
     elif data and data.get("dir") is not None and not isinstance(data.get("dir"), str):
         issues.append(Issue("error", "settings.data.dir", "must be a folder name"))
+    exports = (data or {}).get("exports") if isinstance(data, dict) else None
+    if exports:
+        from .export import check_formats, missing_packages
+        try:
+            fmts = check_formats(exports if isinstance(exports, (list, str)) else [str(exports)], need_packages=False)
+        except ValueError as e:
+            issues.append(Issue("error", "settings.data.exports", str(e)))
+        else:
+            for f, why in missing_packages(fmts).items():     # the session's csv tables are still written
+                issues.append(Issue("warning", "settings.data.exports", why.replace("\n", " ")))
     return issues
 
 

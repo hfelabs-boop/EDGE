@@ -121,6 +121,24 @@ def _svg_size(text: str) -> tuple[int, int] | None:
     return None
 
 
+PICTURE_MAGIC = {".png": (b"\x89PNG\r\n\x1a\n",), ".jpg": (b"\xff\xd8\xff",), ".jpeg": (b"\xff\xd8\xff",),
+                 ".gif": (b"GIF87a", b"GIF89a"), ".bmp": (b"BM",)}
+ANY_PICTURE = tuple(m for ms in PICTURE_MAGIC.values() for m in ms) + (b"RIFF", b"II*\x00", b"MM\x00*")
+
+
+def _is_picture(path: Path) -> bool:
+    """False for a .png/.jpg/.gif/.bmp that exists but holds no picture (damaged, empty, a placeholder);
+    a picture saved under the wrong extension still counts. Other extensions and missing files: True."""
+    if path.suffix.lower() not in PICTURE_MAGIC:
+        return True
+    try:
+        with open(path, "rb") as f:
+            head = f.read(16)
+    except OSError:
+        return True                       # missing files are reported on their own
+    return head.startswith(ANY_PICTURE) and len(head) >= 8
+
+
 def pitfall_issues(exp) -> list:
     issues: list = []
     issues += frame_issues(exp)
@@ -262,6 +280,12 @@ def _file_list_issues(Issue, base: Path, where: str, files: Iterable[str], ctype
         out.append(Issue("error", where, msg, hint=f"did you mean {near}?" if near else
                          "file names are relative to the experiment's folder; check the spelling and the extension"))
     if ctype == "image":
+        broken = [f for f in files if not _is_picture((base / f) if not Path(f).is_absolute() else Path(f))]
+        if broken:
+            out.append(Issue("error", where, f"{broken[0]} is not a readable picture"
+                             + (f" (and {len(broken) - 1} more)" if len(broken) > 1 else "")
+                             + ": the file is damaged, empty, or not really a picture of that type",
+                             hint="open it in an image viewer; save it again as PNG or JPEG"))
         big = []
         for f in files:
             fp = (base / f) if not Path(f).is_absolute() else Path(f)

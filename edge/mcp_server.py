@@ -14,7 +14,10 @@ All paths are relative to the workspace root and cannot escape it.
 from __future__ import annotations
 
 import contextlib
+import copy
 import functools
+import os
+import re
 import subprocess
 import sys
 import threading
@@ -25,7 +28,7 @@ from typing import Any, Callable
 from mcp.server.fastmcp import FastMCP
 
 from . import __version__
-from .editing import EditError, ExperimentDoc
+from .editing import EditError, ExperimentDoc, undo_edit
 from .storage import (ConflictError, DocumentError, dumps, export_bundle, fingerprint, import_bundle,
                       list_backups, loads, restore_backup, save_document)
 
@@ -46,7 +49,8 @@ Recommended workflow:
 5. dry_run to test the whole experiment with simulated devices and a virtual participant;
    read the verdict, the measures and the data preview.
 6. After real sessions: list_sessions, analyze_session (includes the measures and their checks), export_data.
-Edits are saved immediately with backups; use undo if something went wrong.
+Edits are saved immediately with backups; use undo if something went wrong. A call that can't be done
+returns {"ok": false, "error": ...} saying what to change, and nothing is saved.
 Timing is in seconds; routine t=0 is its first screen flip. A routine needs something that ends it
 (a duration, an end_routine response, or end_if).
 """
@@ -57,6 +61,7 @@ class Workspace:
         self.root = root.resolve()
         self.builder_url: str | None = None
         self.runs: dict[str, subprocess.Popen] = {}
+        self.run_logs: dict[str, Path] = {}      # pid -> the log of that run (not just the newest log)
 
     def path(self, rel: str, must_exist: bool = True) -> Path:
         if not rel:
@@ -77,25 +82,179 @@ class Workspace:
 
 def _issues(doc: ExperimentDoc) -> dict[str, Any]:
     issues = doc.validate()
-    errors = [f"{i['where']}: {i['message']}" + (f" ({i['hint']})" if i.get("hint") else "")
-              for i in issues if i["level"] == "error"]
-    warnings = [f"{i['where']}: {i['message']}" for i in issues if i["level"] == "warning"]
+    def line(i: dict[str, Any]) -> str:
+        return f"{i['where']}: {i['message']}" + (f" ({i['hint']})" if i.get("hint") else "")
+    errors = [line(i) for i in issues if i["level"] == "error"]
+    warnings = [line(i) for i in issues if i["level"] == "warning"]
     return {"errors": errors, "warnings": warnings, "valid": not errors}
+
+
+EXPERIMENT_SUFFIXES = (".yaml", ".yml", ".json")
+
+
+def _experiment_suffix(path: str) -> None:
+    if Path(path).suffix.lower() not in EXPERIMENT_SUFFIXES:
+        raise EditError(f"an experiment file name ends in .yaml (e.g. '{Path(path).with_suffix('.yaml').as_posix()}'), "
+                        f"not '{Path(path).suffix or '(nothing)'}'")
+
+
+# edit_experiment accepts the single tools' names for ops and arguments too
+OP_ALIASES = {"add_workflow": "add_state_machine", "update_workflow_state": "update_state",
+              "add_routine_rule": "add_rule"}
+ARG_ALIASES: dict[str, dict[str, str]] = {
+    "add_routine": {"routine": "rid", "loop": "parent"},
+    "update_routine": {"routine": "rid"},
+    "rename_routine": {"routine": "old", "rename_to": "new"},
+    "remove_routine": {"routine": "rid"},
+    "duplicate_routine": {"routine": "rid"},
+    "add_component": {"routine": "rid", "type": "ctype", "id": "cid"},
+    "update_component": {"routine": "rid", "id": "cid", "properties": "set_props", "remove": "unset",
+                         "rename_to": "new_id"},
+    "remove_component": {"routine": "rid", "id": "cid"},
+    "move_component": {"routine": "rid", "id": "cid"},
+    "insert_flow": {"name": "item"},
+    "add_loop": {"loop": "lid", "wrap_existing": "wrap"},
+    "update_loop": {"loop": "lid"},
+    "set_conditions": {"loop": "lid"},
+    "add_device": {"type": "dtype", "id": "did"},
+    "update_device": {"id": "did"},
+    "remove_device": {"id": "did"},
+    "update_settings": {"settings": "patch"},
+    "add_state_machine": {"workflow": "mid"},
+    "update_state": {"workflow": "mid", "routes": "next"},
+    "remove_state": {"workflow": "mid"},
+    "add_rule": {"routine": "rid"},
+    "remove_rule": {"routine": "rid"},
+}
+
+WIZARD_ANSWERS: dict[str, set[str] | None] = {
+    "name": None, "description": None, "instructions": None, "thanks": None, "feedback": None,
+    "questionnaires": None, "devices": None,
+    "stimulus": {"kind", "items"},
+    "response": {"kind", "keys", "ticks", "labels"},
+    "timing": {"fixation", "stimulus_duration", "response_deadline", "iti"},
+    "practice": {"mode", "criterion", "max_rounds", "repeats"},
+    "blocks": {"count", "repeats", "order", "break_text"},
+}
+
+
+def _check_wizard_answers(answers: Any) -> None:
+    """Wizard answers the assistant got wrong are refused (with the valid names), not silently ignored."""
+    import difflib
+
+    def dym(word: str, choices: Any) -> str:
+        c = difflib.get_close_matches(word, sorted(choices), 1)
+        return f" (did you mean '{c[0]}'?)" if c else ""
+
+    if not isinstance(answers, dict):
+        raise EditError("answers must be a mapping, e.g. {\"stimulus\": {\"kind\": \"word\", \"items\": [...]}}")
+    for k, v in answers.items():
+        if k not in WIZARD_ANSWERS:
+            raise EditError(f"the wizard has no answer '{k}'{dym(k, WIZARD_ANSWERS)}; it understands: "
+                            f"{', '.join(WIZARD_ANSWERS)}")
+        sub = WIZARD_ANSWERS[k]
+        if sub is None or v is None:
+            continue
+        if not isinstance(v, dict):
+            raise EditError(f"answer '{k}' must be a mapping with {', '.join(sorted(sub))}")
+        for kk in v:
+            if kk not in sub:
+                raise EditError(f"the wizard has no answer '{k}.{kk}'{dym(kk, sub)}; '{k}' takes {', '.join(sorted(sub))}")
+    for sec, keys in (("blocks", ("count", "repeats")), ("practice", ("max_rounds", "repeats"))):
+        for kk in keys:
+            v = (answers.get(sec) or {}).get(kk)
+            if v is None:
+                continue
+            try:
+                n = None if isinstance(v, bool) else float(v)
+            except (TypeError, ValueError):
+                n = None
+            if n is None or n != int(n) or n < 1:
+                raise EditError(f"{sec}.{kk} must be a whole number of at least 1, not {v!r:.40}")
+    from .devices import device_registry
+    reg = device_registry()
+    for d in answers.get("devices") or []:
+        dtype = d if isinstance(d, str) else (d.get("type") if isinstance(d, dict) else None)
+        if dtype not in reg:
+            raise EditError(f"unknown device type '{dtype}'{dym(str(dtype), reg)}; available: {', '.join(sorted(reg))}")
+
+
+def _strict_arguments(mcp: FastMCP) -> None:
+    """Refuse misspelled arguments (props instead of properties) instead of silently ignoring them."""
+    tm = getattr(mcp, "_tool_manager", None)
+    if tm is None or not hasattr(tm, "call_tool"):
+        return
+    orig = tm.call_tool
+
+    async def call_tool(name: str, arguments: dict[str, Any], *a: Any, **k: Any) -> Any:
+        t = tm.get_tool(name)
+        known = set(((getattr(t, "parameters", None) or {}).get("properties") or {})) if t else set()
+        unknown = [x for x in (arguments or {}) if t is not None and x not in known]
+        if unknown:
+            import difflib
+            hints = [f"'{x}'" + (f" (did you mean '{c[0]}'?)" if (c := difflib.get_close_matches(x, sorted(known), 1)) else "")
+                     for x in unknown]
+            res = {"ok": False, "error": f"{name} has no argument {', '.join(hints)}; nothing was changed"
+                   + ("" if all("did you mean" in h for h in hints) else f" (its arguments: {', '.join(sorted(known))})"),
+                   "arguments": sorted(known)}
+            convert = k.get("convert_result", a[1] if len(a) > 1 else False)
+            return t.fn_metadata.convert_result(res) if convert else res
+        return await orig(name, arguments, *a, **k)
+
+    tm.call_tool = call_tool
+
+
+def _failures_are_errors(mcp: FastMCP) -> None:
+    """Tool results with ok=false reach MCP clients with isError=true (the details stay in the result)."""
+    try:
+        from mcp import types as mt
+        handlers = mcp._mcp_server.request_handlers
+        orig = handlers[mt.CallToolRequest]
+    except (AttributeError, KeyError, ImportError):
+        return
+
+    async def handler(req: Any) -> Any:
+        res = await orig(req)
+        r = getattr(res, "root", None)
+        if isinstance(r, mt.CallToolResult) and not r.isError and isinstance(r.structuredContent, dict) \
+                and r.structuredContent.get("ok") is False:
+            r.isError = True
+        return res
+
+    handlers[mt.CallToolRequest] = handler
 
 
 def create_server(root: str | Path = ".") -> FastMCP:
     ws = Workspace(Path(root))
     mcp = FastMCP("edge", instructions=INSTRUCTIONS)
+    mcp._mcp_server.version = __version__       # serverInfo: EDGE's version, not the mcp package's
 
     def tool(fn: Callable) -> Callable:
         """Register a tool; keep stdout clean (stdio transport) and turn errors into messages."""
+        from .diagnostics import ExperimentError
+        from .templates import public_templates
+        if fn.__doc__ and "{templates}" in fn.__doc__:
+            fn.__doc__ = fn.__doc__.replace("{templates}", ", ".join(public_templates()))
+
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             with contextlib.redirect_stdout(sys.stderr):
                 try:
                     return fn(*args, **kwargs)
-                except (EditError, DocumentError, ConflictError, FileNotFoundError, ValueError) as e:
+                except ExperimentError as e:      # already explained in plain words by the engine
+                    rep = getattr(e, "report", None) or {}
+                    return {"ok": False, "error": str(e), **({"hint": rep["hint"]} if rep.get("hint") else {})}
+                except (EditError, DocumentError, ConflictError, ValueError) as e:
                     return {"ok": False, "error": str(e)}
+                except (FileNotFoundError, NotADirectoryError, IsADirectoryError, PermissionError) as e:
+                    what = next(w for c, w in ((FileNotFoundError, "was not found"),
+                                               (NotADirectoryError, "is a file, not a folder"),
+                                               (IsADirectoryError, "is a folder, not a file"),
+                                               (PermissionError, "can't be opened (no permission)")) if isinstance(e, c))
+                    name = ws.rel(Path(e.filename)) if getattr(e, "filename", None) else ""
+                    if e.strerror and e.errno and e.strerror != os.strerror(e.errno):   # EDGE's own explanation
+                        return {"ok": False, "error": f"{name}: {e.strerror}" if name else e.strerror}
+                    return {"ok": False, "error": f"{name} {what}" if name else (e.strerror or str(e))}
                 except Exception as e:  # unexpected: give the model enough to report it
                     return {"ok": False, "error": f"{type(e).__name__}: {e}",
                             "trace": traceback.format_exc(limit=3)}
@@ -103,7 +262,11 @@ def create_server(root: str | Path = ".") -> FastMCP:
 
     def edit(path: str, fn: Callable[[ExperimentDoc], Any], label: str) -> dict[str, Any]:
         doc = ExperimentDoc.open(ws.path(path))
+        before = copy.deepcopy(doc.doc)
         result = fn(doc)
+        if doc.doc == before and not doc._pending_files:     # e.g. empty properties: no save, no backup
+            return {"ok": True, "changes": [], "note": "nothing was changed: the experiment already looks like this",
+                    **_issues(doc)}
         doc.save(label)
         out: dict[str, Any] = {"ok": True, "changes": doc.changes, **_issues(doc)}
         if result is not None and not isinstance(result, ExperimentDoc):
@@ -118,8 +281,9 @@ def create_server(root: str | Path = ".") -> FastMCP:
         found = []
         for p in sorted(base.rglob("*")):
             parts = p.relative_to(ws.root).parts
-            if p.suffix.lower() not in (".yaml", ".yml", ".json") or any(x.startswith(".") for x in parts) \
-                    or "data" in parts[:-1] or (p.parent / "session.json").exists():
+            if p.suffix.lower() not in EXPERIMENT_SUFFIXES or any(x.startswith(".") for x in parts) \
+                    or any((q / "session.json").exists() or q.name == "dry_runs" for q in p.parents
+                           if q == ws.root or ws.root in q.parents):     # recorded sessions, not experiments
                 continue
             try:
                 d = loads(p.read_text(encoding="utf-8"), "json" if p.suffix == ".json" else "yaml")
@@ -167,7 +331,8 @@ def create_server(root: str | Path = ".") -> FastMCP:
     @tool
     def create_experiment(path: str, name: str = "", template: str = "", description: str = "") -> dict[str, Any]:
         """Create a new experiment file (e.g. path='stroop/stroop.yaml'), empty or from a template
-        (blank, freeview_eyetracking, eeg_oddball, staircase)."""
+        ({templates}; see list_templates)."""
+        _experiment_suffix(path)
         p = ws.path(path, must_exist=False)
         doc = ExperimentDoc.new(p, name=name or None, template=template or None, description=description)
         doc.save("created")
@@ -176,25 +341,31 @@ def create_server(root: str | Path = ".") -> FastMCP:
     @tool
     def create_from_wizard(path: str, answers: dict[str, Any]) -> dict[str, Any]:
         """Build a complete, runnable experiment from plain design answers (the builder's guided wizard).
-        answers keys (all optional): name; stimulus {kind: word|picture|sound|shape, items: [{stimulus,
-        correct, condition}]}; response {kind: keys|mouse|rating|none, keys: [..]}; timing {fixation,
-        stimulus_duration, response_deadline, iti} in seconds; feedback (bool); practice {mode:
-        none|once|until, criterion, max_rounds}; blocks {count, repeats, order, break_text}; instructions;
-        thanks; devices [device types]. Fastest way to a standard trial-based task; refine with other tools."""
-        from .wizard import WizardError, build_experiment, estimate
+        answers keys (all optional): name; description; stimulus {kind: word|picture|sound|shape, items:
+        [{stimulus, correct, condition}]}; response {kind: keys|buttons|mouse|rating|none (buttons = a response
+        box), keys: [..], ticks (rating points), labels (rating end labels)}; timing {fixation, stimulus_duration,
+        response_deadline, iti} in seconds; feedback (bool); practice {mode: none|once|until, criterion (0-1),
+        max_rounds, repeats}; blocks {count, repeats, order: sequential|random|fullrandom|latin_square|
+        counterbalance, break_text}; instructions; thanks; questionnaires [library ids from survey_library, e.g.
+        consent, demographics, phq9]; devices [device types]. Unknown keys are refused. 'notes' in the result
+        say what was filled in, adjusted or left out, and which files still have to be provided: pass them on.
+        Fastest way to a standard trial-based task; refine with other tools."""
+        from .wizard import WizardError, build_experiment, estimate, prepare_files
+        _experiment_suffix(path)
+        _check_wizard_answers(answers)
         p = ws.path(path, must_exist=False)
         if p.exists():
             raise EditError(f"{path} already exists")
+        notes: list[str] = []
         try:
-            data = build_experiment(answers)
+            data = build_experiment(answers, notes)
         except WizardError as e:
             raise EditError(str(e)) from None
         save_document(p, data, label="wizard")
-        from .wizard import write_placeholders
-        write_placeholders(data, p.parent)
+        notes += prepare_files(data, p.parent)
         doc = ExperimentDoc.open(p)
-        return {"ok": True, "path": ws.rel(p), "estimate": estimate(data, p.parent), "outline": doc.outline(),
-                **_issues(doc)}
+        return {"ok": True, "path": ws.rel(p), "estimate": estimate(data, p.parent), "notes": notes,
+                "outline": doc.outline(), **_issues(doc)}
 
     @tool
     def estimate_duration(path: str) -> dict[str, Any]:
@@ -210,8 +381,10 @@ def create_server(root: str | Path = ".") -> FastMCP:
         from .measures import describe as describe_measures
         from .model import Experiment
         exp = Experiment.from_dict(doc.doc, base_dir=ws.path(path).parent)
-        return {"outline": doc.outline(), "measures": describe_measures(exp) or
-                "none declared: use describe_recording / set_measures to say what this experiment measures",
+        measures = describe_measures(exp)
+        return {"outline": doc.outline(), "measures": measures,
+                **({} if measures else {"measures_hint": "none declared: use describe_recording / set_measures to "
+                                                         "say what this experiment measures"}),
                 **_issues(doc), "migrated": doc.changes}
 
     @tool
@@ -228,14 +401,25 @@ def create_server(root: str | Path = ".") -> FastMCP:
         virtual-participant test run, declared measures, the lock (versions, files, golden participant) and the
         computer check. Returns verdict (go / go with warnings / no-go) and sections with items to fix."""
         from .preflight import run_preflight
-        return run_preflight(ws.path(path))
+        p = ws.path(path)
+        res = run_preflight(p)
+        saved = p.with_name(p.stem + ".preflight.json")
+        if saved.exists():
+            res["saved_to"] = ws.rel(saved)
+        res["note"] = ("hints name command-line commands; here use: edge validate -> validate_experiment, "
+                       "edge run --dry-run -> dry_run, edge lock -> lock_experiment, edge verify -> verify_experiment, "
+                       "edge test-device -> test_device, edge doctor -> check_system")
+        return res
 
     @tool
     def lock_experiment(path: str) -> dict[str, Any]:
         """After piloting: record EDGE/Python/package versions, plugins, fingerprints of every file the experiment
         uses, and a golden participant (a fixed-seed dry run). verify_experiment later catches any change."""
         from .reproduce import lock
-        return lock(ws.path(path))
+        res = lock(ws.path(path))
+        if isinstance(res.get("lock"), str):
+            res["lock"] = ws.rel(Path(res["lock"]))
+        return res
 
     @tool
     def verify_experiment(path: str) -> dict[str, Any]:
@@ -250,7 +434,7 @@ def create_server(root: str | Path = ".") -> FastMCP:
         session's report and error report) into a zip, with participant information removed."""
         from .support import make_bundle
         r = make_bundle(ws.path(path), include_data=include_data)
-        return {**r, "bundle": ws.rel(Path(r["bundle"]))}
+        return {**r, "bundle": ws.rel(Path(r["bundle"])), "session": ws.rel(Path(r["session"])) if r.get("session") else None}
 
     @tool
     def check_system(path: str = "", fix: bool = False) -> dict[str, Any]:
@@ -306,7 +490,8 @@ def create_server(root: str | Path = ".") -> FastMCP:
         proportion|first|last|none, trials (optional filter, e.g. "$resp.corr == 1"), loop (only trials of this
         loop, e.g. skip practice), expect ([low, high] plausible range), units}. They are summarised per
         participant and condition in measures.csv after every session, shown live while it runs, and checked
-        in the session report. replace=False appends (same id = replaced)."""
+        in the session report. replace=False appends (same id = replaced; without an id, the id is the column
+        with _ for ., e.g. resp_rt). Invalid measures (unknown role or summary …) are refused."""
         def op(d: ExperimentDoc) -> Any:
             d.set_measures(measures, replace)
             from .measures import describe as describe_measures
@@ -324,6 +509,7 @@ def create_server(root: str | Path = ".") -> FastMCP:
     @tool
     def replace_experiment_source(path: str, yaml_text: str) -> dict[str, Any]:
         """Replace the whole experiment with new YAML (validated; the old version is backed up)."""
+        _experiment_suffix(path)
         p = ws.path(path, must_exist=False)
         data = loads(yaml_text, "yaml", path)
         doc = ExperimentDoc(data, p)
@@ -340,26 +526,47 @@ def create_server(root: str | Path = ".") -> FastMCP:
           add_component(rid, ctype, properties, cid, position) · update_component(rid, cid, set_props, unset, new_id)
           remove_component(rid, cid) · move_component(rid, cid, position)
           insert_flow(item, parent, position, branch) · remove_from_flow(name, occurrence, keep_children)
-          move_in_flow(name, position, parent)
+          move_in_flow(name, position, parent, branch)
           add_loop(lid, children, conditions, order, repeats, max_repeat, stop_if, staircase, parent, position, wrap)
-          update_loop(lid, changes) · set_conditions(lid, rows, file, factorial, write_file)
+          update_loop(lid, changes) · set_conditions(lid, rows, file, factorial, write_file, overwrite)
           add_branch(condition, then, otherwise, parent, position)
           add_device(dtype, did, options, required, record, markers, calibrate) · update_device(did, options, ...)
           remove_device(did) · update_settings(patch) · set_variables(values, replace) · set_info(name, description)
           add_state_machine(mid, states, start, parent, position, max_steps)
           update_state(mid, state, run, next, max_visits, description, rename_to, make_start) · remove_state(mid, state)
           add_rule(rid, when, do, repeat, name) · remove_rule(rid, index)
+        The argument names of the single tools work too (routine, type, id, properties, remove, rename_to, loop,
+        workflow, routes, settings), and so do the tool names add_workflow, update_workflow_state, add_routine_rule.
         Example: [{"op":"add_routine","rid":"trial"},{"op":"add_component","rid":"trial","ctype":"text",
                    "properties":{"text":"$word","duration":1}}]"""
         from .editing import apply_operations
         p = ws.path(path)
         doc = ExperimentDoc.open(p)
-        res = apply_operations(doc, operations)
+        snapshot = copy.deepcopy(doc.doc)
+        normalized = []
+        for i, op in enumerate(operations):
+            if not isinstance(op, dict):
+                return {"ok": False, "error": f"operation {i}: must be a mapping like {{\"op\": \"add_routine\", "
+                                              f"\"rid\": \"trial\"}}", "applied": 0}
+            args = dict(op)
+            name = OP_ALIASES.get(args.get("op"), args.get("op"))
+            args["op"] = name
+            for alias, real in ARG_ALIASES.get(name, {}).items():
+                if alias in args:
+                    if real in args:
+                        return {"ok": False, "error": f"operation {i} ({name}): give '{real}' or '{alias}', not both",
+                                "applied": 0}
+                    args[real] = args.pop(alias)
+            normalized.append(args)
+        res = apply_operations(doc, normalized)
         if not res["ok"]:
             out = {"ok": False, "error": res["error"], "applied": 0}
             if "allowed" in res:
                 out["allowed"] = res["allowed"]
             return out
+        if doc.doc == snapshot and not doc._pending_files:
+            return {"ok": True, "applied": len(operations), "changes": [],
+                    "note": "nothing was changed: the experiment already looks like this", **_issues(doc)}
         doc.save(f"{len(operations)} edits")
         return {"ok": True, "applied": len(operations), "changes": doc.changes,
                 "results": res["results"], **_issues(doc)}
@@ -428,8 +635,23 @@ def create_server(root: str | Path = ".") -> FastMCP:
         screen_capture, location, page_break) and display logic ("show_if": {"age": {">=": 18}}).
         `language` (en, de, es, fr, he …) translates buttons and messages; Hebrew (set as the language, or used
         in the questions) lays the page out right to left.
-        `position`: "end", "start" or "after:<routine>". Creates the routine if it doesn't exist. Answers and
-        scores (e.g. phq9_total, phq9_total_band) become data columns."""
+        `position`: "end", "start" or "after:<routine>". Creates the routine if it doesn't exist; if the routine
+        already has a survey, the questions are added to it. Questions are checked first: an unknown
+        questionnaire or question type is refused and nothing is saved. Answers and scores (e.g. phq9_total,
+        phq9_total_band) become data columns."""
+        import difflib
+        from .survey_library import INSTRUMENTS
+        if not (position in ("start", "end") or position.startswith("after:")):
+            raise EditError(f"position must be 'start', 'end' or 'after:<routine>', not '{position}'")
+        for q in questions:
+            ins = q.get("instrument") if isinstance(q, dict) else None
+            if ins is not None and ins not in INSTRUMENTS:
+                norm = {re.sub(r"[^a-z0-9]", "", k.lower()): k for k in INSTRUMENTS}
+                close = norm.get(re.sub(r"[^a-z0-9]", "", str(ins).lower())) or \
+                    next(iter(difflib.get_close_matches(str(ins), list(INSTRUMENTS), 1)), None)
+                raise EditError(f"unknown questionnaire '{ins}'" + (f" (did you mean '{close}'?)" if close else "") +
+                                f"; available: {', '.join(INSTRUMENTS)}. Nothing was saved")
+
         def op(d: ExperimentDoc) -> None:
             d.add_survey(questions, routine, title, intro, position, scores, language)
         return edit(path, op, f"add survey to {routine}")
@@ -437,7 +659,8 @@ def create_server(root: str | Path = ".") -> FastMCP:
     @tool
     def update_component(path: str, routine: str, id: str, properties: dict[str, Any] | None = None,
                          remove: list[str] | None = None, rename_to: str = "") -> dict[str, Any]:
-        """Change component properties/timing (null value = remove), remove properties, or rename it."""
+        """Change component properties/timing (null value = remove), remove properties, or rename it (references
+        such as $resp.corr in other screens and measures on resp.rt are renamed with it)."""
         return edit(path, lambda d: d.update_component(routine, id, properties, remove, rename_to or None),
                     f"update {routine}.{id}")
 
@@ -469,38 +692,45 @@ def create_server(root: str | Path = ".") -> FastMCP:
 
     @tool
     def update_loop(path: str, loop: str, changes: dict[str, Any]) -> dict[str, Any]:
-        """Change loop settings: conditions, order, repeats, max_repeat, stop_if, staircase, select, id."""
+        """Change loop settings: conditions, order, repeats, max_repeat, stop_if, staircase, select, id (renames the
+        loop and its references, e.g. $trials.total and measures limited to that loop)."""
         return edit(path, lambda d: d.update_loop(loop, changes), f"update loop {loop}")
 
     @tool
     def set_conditions(path: str, loop: str, rows: list[dict[str, Any]] | None = None, file: str = "",
-                       factorial: dict[str, list[Any]] | None = None, write_file: bool = False) -> dict[str, Any]:
+                       factorial: dict[str, list[Any]] | None = None, write_file: bool = False,
+                       overwrite: bool = False) -> dict[str, Any]:
         """Set a loop's trial list. rows = [{"word": "RED", "ink": "blue", "answer": "b"}, ...];
         with write_file=true and file='stroop.csv' the rows are saved as a CSV next to the experiment
-        (editable in Excel). Or reference an existing file, or give a factorial design."""
-        return edit(path, lambda d: d.set_conditions(loop, rows, file or None, factorial, write_file),
+        (editable in Excel; a file it replaces is backed up and undo puts it back). A file another loop also
+        uses is only replaced with overwrite=true. Or reference an existing file, or give a factorial design."""
+        return edit(path, lambda d: d.set_conditions(loop, rows, file or None, factorial, write_file, overwrite),
                     f"conditions {loop}")
 
     @tool
     def add_branch(path: str, condition: str, then: list[str], otherwise: list[str] | None = None,
                    parent: str = "", position: int | None = None) -> dict[str, Any]:
         """Add an if/else to the flow, e.g. condition='$practice.n_correct >= 8', then=['main_block'],
-        otherwise=['more_practice']."""
+        otherwise=['more_practice']. then/otherwise name routines (run there) or loops/workflows, which are moved
+        into the branch from the same level of the flow (`parent`). describe_experiment shows each branch's
+        name for modify_flow (if:0, if:1 …)."""
         return edit(path, lambda d: d.add_branch(condition, then, otherwise, parent or None, position), "add branch")
 
     @tool
     def modify_flow(path: str, action: str, name: str, parent: str = "", position: int | None = None,
-                    keep_children: bool = True) -> dict[str, Any]:
-        """Edit the flow: action='insert' adds routine `name` (at `position`, inside loop `parent`);
-        'remove' takes a routine/loop out of the flow (routine definitions stay; a removed loop's children
-        stay unless keep_children=false); 'move' repositions it."""
+                    keep_children: bool = True, branch: str = "then") -> dict[str, Any]:
+        """Edit the flow: action='insert' adds routine `name`; 'move' repositions a routine, loop, workflow or
+        branch; 'remove' takes it out of the flow (routine definitions stay; what was inside a removed loop,
+        workflow or branch stays in its place unless keep_children=false). `parent` is where to put it: a loop
+        id, a branch ('if:0' as describe_experiment shows it, or 'if <condition>'; branch='else' for its else
+        part) or a workflow state ('workflow.state'); empty = the top level. `position` counts from 0."""
         def op(d: ExperimentDoc) -> None:
             if action == "insert":
-                d.insert_flow(name, parent or None, position)
+                d.insert_flow(name, parent or None, position, branch)
             elif action == "remove":
                 d.remove_from_flow(name, keep_children=keep_children)
             elif action == "move":
-                d.move_in_flow(name, position if position is not None else 10**6, parent or None)
+                d.move_in_flow(name, position if position is not None else 10**6, parent or None, branch)
             else:
                 raise EditError("action must be insert, remove or move")
         return edit(path, op, f"flow {action} {name}")
@@ -512,7 +742,8 @@ def create_server(root: str | Path = ".") -> FastMCP:
         adaptive paths, screening. states = {"practice": {"run": ["prac_loop_or_routine"], "max_visits": 3,
         "next": [{"if": "$practice.accuracy >= 0.8", "goto": "main"}, {"goto": "practice"}]},
         "main": {"run": ["main_block"], "next": ["end"]}}. Routes are checked in order; one without "if" is the
-        default; "end" finishes. Routines/loops already in the flow are moved into the state. Loop results usable in
+        default; "end" finishes. "run" lists routine names and loop ids ("trials" or {"loop": "trials"}); routines
+        and loops already in the flow (at the level of `parent`) are moved into the state. Loop results usable in
         conditions: $loopid.accuracy, .n_correct, .mean_rt, .total; workflow: $workflow.state, $workflow.visit."""
         return edit(path, lambda d: d.add_state_machine(workflow, states, start or None, parent or None, position),
                     f"add workflow {workflow}")
@@ -541,14 +772,17 @@ def create_server(root: str | Path = ".") -> FastMCP:
         return edit(path, lambda d: d.add_rule(routine, when, do, repeat, name or None), f"rule in {routine}")
 
     @tool
-    def import_experiment(source: str, out_dir: str = "", platform: str = "") -> dict[str, Any]:
+    def import_experiment(source: str, out_dir: str = "", platform: str = "", name: str = "") -> dict[str, Any]:
         """Import a PsychoPy (.psyexp), E-Prime (generated .ebs3/.ebs2 script, plus List .txt exports next to it),
-        OpenSesame (.osexp/.opensesame) or jsPsych (.html/.js) experiment from the workspace. Returns the new EDGE
-        experiment path, what was converted, and items that need manual work. Follow with dry_run."""
+        OpenSesame (.osexp/.opensesame) or jsPsych (.html/.js) experiment from the workspace. platform (psychopy,
+        eprime, opensesame, jspsych) is detected when left out; name renames the experiment. Importing the same file
+        again updates an earlier import nobody changed since; one that was edited is never overwritten (the new one
+        goes to <folder>_2). Returns the new EDGE experiment
+        path, what was converted, and items that need manual work. Follow with dry_run."""
         from .importers import ImportError_, import_experiment as do_import
         try:
             path, res = do_import(ws.path(source), ws.path(out_dir, must_exist=False) if out_dir else None,
-                                  platform or None)
+                                  platform or None, name or None)
         except ImportError_ as e:
             raise EditError(str(e)) from None
         doc = ExperimentDoc.open(path)
@@ -585,7 +819,9 @@ def create_server(root: str | Path = ".") -> FastMCP:
         """Change settings (deep-merged; null removes a key), e.g. {"window": {"fullscreen": true,
         "background": "#808080", "units": "deg"}, "data": {"exports": ["csv", "xlsx", "bids"]},
         "markers": {"codes": {"stim": 10}}, "participant": {"participant": "001", "group": "A"}};
-        set initial experiment variables; rename or describe the experiment."""
+        set initial experiment variables; rename or describe the experiment. Sections: window, data, participant,
+        markers, timing, seed; units px|norm|height|deg; exports csv|tsv|xlsx|json|jsonl|parquet|mat|bids. Unknown
+        settings and invalid values are refused."""
         def op(d: ExperimentDoc) -> None:
             if settings:
                 d.update_settings(settings)
@@ -605,7 +841,8 @@ def create_server(root: str | Path = ".") -> FastMCP:
     def dry_run(path: str, participant: str = "", accuracy: float = 0.9) -> dict[str, Any]:
         """Run the whole experiment headless in seconds: hardware replaced by simulators on drifting clocks,
         a virtual participant responding (ex-Gaussian RTs, given accuracy). Returns the quality verdict,
-        timing, per-device sync results, the summary table and a preview of the trial data."""
+        timing, per-device sync results, the declared measures (values and checks), the summary table and a
+        preview of the trial data. `trials` counts loop trials, like estimate_duration and preflight."""
         from .engine import run_experiment
         from .export import SessionTables, summarize, wide_trials
         from .model import Experiment
@@ -627,10 +864,14 @@ def create_server(root: str | Path = ".") -> FastMCP:
         cols, rows = wide_trials(st)
         scols, srows, info = summarize(st)
         t = summary.get("timing", {})
+        n_trials = rep.get("trials")
+        if n_trials is None:
+            n_trials = sum(1 for r in rows if r.get("loop"))
         return {"ok": True, "verdict": rep["verdict"], "data_dir": ws.rel(Path(summary["data_dir"])),
                 "session_minutes": round(t.get("frames", 0) / max(t.get("refresh_rate_hz") or 60, 1) / 60, 2),
-                "trials": len(rows), "errors": summary["errors"],
+                "trials": n_trials, "table_rows": len(rows), "errors": summary["errors"],
                 "streams": {k: {"samples": v["samples"], "triggers": v.get("triggers")} for k, v in rep["streams"].items()},
+                "measures": rep.get("measures"),
                 "summary": srows[:20], "summary_detected": info,
                 "columns": cols, "first_trials": rows[:5], "log": logs[-10:]}
 
@@ -649,10 +890,14 @@ def create_server(root: str | Path = ".") -> FastMCP:
             cmd += ["-f", f"{k}={v}"]
         if simulate_devices:
             cmd.append("--simulate-devices")
-        log = p.parent / "data" / f"run_{participant or 'session'}.log"
+        from datetime import datetime
+        safe = re.sub(r"[^A-Za-z0-9_-]+", "-", participant or "session")[:40]
+        log = p.parent / "data" / f"run_{safe}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.log"   # one per run
         log.parent.mkdir(parents=True, exist_ok=True)
-        proc = subprocess.Popen(cmd, cwd=str(p.parent), stdout=log.open("w"), stderr=subprocess.STDOUT)
+        with log.open("w") as fh:
+            proc = subprocess.Popen(cmd, cwd=str(p.parent), stdout=fh, stderr=subprocess.STDOUT)
         ws.runs[str(proc.pid)] = proc
+        ws.run_logs[str(proc.pid)] = log
         return {"ok": True, "pid": proc.pid, "log": ws.rel(log), "note": "check progress with run_status"}
 
     @tool
@@ -660,12 +905,15 @@ def create_server(root: str | Path = ".") -> FastMCP:
         """Status and output of a session started with run_experiment."""
         proc = ws.runs.get(str(pid))
         if proc is None:
-            raise EditError("unknown run id")
-        args = proc.args if isinstance(proc.args, list) else []
-        exp_dir = Path(args[4]).parent if len(args) > 4 else ws.root
-        logs = sorted((exp_dir / "data").glob("run_*.log"), key=lambda f: f.stat().st_mtime)
-        return {"running": proc.poll() is None, "returncode": proc.returncode,
-                "output": logs[-1].read_text()[-4000:] if logs else ""}
+            known = ", ".join(ws.runs) or "none in this conversation"
+            raise EditError(f"no session was started with run id {pid} (runs: {known})")
+        log = ws.run_logs.get(str(pid))
+        try:
+            output = log.read_text(encoding="utf-8", errors="replace")[-4000:] if log else ""
+        except OSError:
+            output = ""
+        return {"running": proc.poll() is None, "returncode": proc.returncode, "log": ws.rel(log) if log else None,
+                "output": output}
 
     # ================================================================ data
     @tool
@@ -686,17 +934,28 @@ def create_server(root: str | Path = ".") -> FastMCP:
 
     @tool
     def analyze_session(session: str, by: list[str] | None = None, rt: str = "", correct: str = "") -> dict[str, Any]:
-        """Quality report (frames, gaps, trigger alignment per device) and a per-condition summary
-        (accuracy, RT mean/median/SD on correct trials, outliers removed) for one session folder.
+        """Quality report (frames, gaps, trigger alignment per device), the declared measures with their checks,
+        and a per-condition summary (accuracy, RT mean/median/SD on correct trials, outliers removed) for one
+        session folder (list_sessions gives their paths).
         Optionally choose grouping factors and the rt/correct columns (e.g. rt='resp.rt')."""
-        from .export import SessionTables, summarize
+        from .export import SessionTables, find_sessions, summarize
         from .report import analyze_session as quality
         root = ws.path(session)
+        if not (root.is_dir() and (root / "session.json").exists()):
+            inside = [ws.rel(Path(s)) for s in find_sessions(root if root.is_dir() else root.parent, True)][-5:]
+            if root.is_file():
+                what = "an experiment file" if root.suffix.lower() in EXPERIMENT_SUFFIXES else "a file"
+            else:
+                what = "an experiment folder" if any(f.suffix.lower() in EXPERIMENT_SUFFIXES for f in root.iterdir()) \
+                    else "a folder"
+            raise EditError(f"'{session}' is {what}, not a session folder. Sessions are the folders inside the "
+                            f"experiment's data folder (list_sessions shows them)" +
+                            (f"; for example: {', '.join(inside)}" if inside else ""))
         st = SessionTables(root)
         cols, rows, info = summarize(st, by=by, rt=rt or None, correct=correct or None)
         rep = quality(root)
         return {"verdict": rep["verdict"], "timing": rep["timing"], "streams": rep["streams"],
-                "summary_columns": cols, "summary": rows, "detected": info}
+                "measures": rep.get("measures"), "summary_columns": cols, "summary": rows, "detected": info}
 
     @tool
     def export_data(path: str, formats: list[str] | None = None, layout: str = "wide", out: str = "",
@@ -713,61 +972,102 @@ def create_server(root: str | Path = ".") -> FastMCP:
             return {"ok": True, "files": [ws.rel(f) for f in files]}
         if not find_sessions(p, include_dry_runs):
             raise EditError(f"no sessions under {path}")
-        res = export_many(p, fmts, out_dir, include_dry_runs)
+        res = export_many(p, fmts, out_dir, include_dry_runs, layout=layout)
         res["files"] = [ws.rel(Path(f)) for f in res["files"]]
         return {"ok": True, **res}
 
     # ================================================================ files, history, tools
     @tool
     def undo(path: str, steps: int = 1) -> dict[str, Any]:
-        """Undo the last edit(s) to an experiment by restoring automatic backups."""
+        """Undo the last edit(s) to an experiment by restoring automatic backups (including conditions files
+        that an edit replaced)."""
         p = ws.path(path)
-        restored = []
+        restored, files = [], []
         for _ in range(max(1, steps)):
             try:
-                restored.append(restore_backup(p))
+                r = undo_edit(p)
             except DocumentError:
                 break
+            restored.append(r["restored"] or "(only files)")
+            files += r["files"]
         if not restored:
             raise EditError("nothing to undo")
         doc = ExperimentDoc.open(p)
-        return {"ok": True, "restored": restored, "outline": doc.outline(), **_issues(doc)}
+        return {"ok": True, "restored": restored, **({"files_restored": files} if files else {}),
+                "outline": doc.outline(), **_issues(doc)}
 
     @tool
     def list_versions(path: str) -> dict[str, Any]:
-        """Saved versions (automatic backups) of an experiment; restore one with restore_version."""
-        return {"versions": [{k: v for k, v in b.items() if k != "path"} for b in list_backups(ws.path(path))]}
+        """Saved versions (automatic backups) of an experiment, newest first; restore one with restore_version.
+        Each version is the experiment as it was just BEFORE the change named in `before_change` (so the
+        version before 'imported from eprime' is the earlier import)."""
+        return {"versions": [{"id": b["id"], "time": b["time"], "before_change": b["label"] or "(unnamed edit)"}
+                             for b in list_backups(ws.path(path))]}
 
     @tool
     def restore_version(path: str, version_id: str) -> dict[str, Any]:
-        """Restore a specific saved version (the current one is backed up first)."""
+        """Restore a specific saved version from list_versions: the experiment as it was before that version's
+        `before_change` (the current one is backed up first, so this can be undone)."""
         p = ws.path(path)
         restore_backup(p, version_id)
         return {"ok": True, **_issues(ExperimentDoc.open(p))}
 
     @tool
     def bundle_experiment(path: str, out: str = "") -> dict[str, Any]:
-        """Pack an experiment and all files it uses (conditions, images, sounds) into a shareable .edgez file."""
-        res = export_bundle(ws.path(path), ws.path(out, must_exist=False) if out else None)
+        """Pack an experiment and all files it uses (conditions, images, sounds) into a shareable .edgez file.
+        `out`: a file name (.edgez is added if missing) or a folder (ending in /) to put <name>.edgez in."""
+        p = ws.path(path)
+        target = None
+        if out:
+            target = ws.path(out, must_exist=False)
+            if out.endswith(("/", "\\")) or target.is_dir():
+                target = target / f"{p.stem}.edgez"
+            elif not target.suffix:
+                target = target.with_suffix(".edgez")
+            target.parent.mkdir(parents=True, exist_ok=True)
+        res = export_bundle(p, target)
         res["bundle"] = ws.rel(Path(res["bundle"]))
         return {"ok": True, **res}
 
     @tool
     def import_experiment_bundle(bundle: str, directory: str) -> dict[str, Any]:
         """Unpack a .edgez bundle into a workspace directory."""
-        p = import_bundle(ws.path(bundle), ws.path(directory, must_exist=False))
+        import zipfile
+        b = ws.path(bundle)
+        if b.is_dir() or not zipfile.is_zipfile(b):
+            raise EditError(f"'{bundle}' is not an EDGE bundle (.edgez, made with bundle_experiment or `edge bundle`)")
+        try:
+            p = import_bundle(b, ws.path(directory, must_exist=False))
+        except (KeyError, zipfile.BadZipFile):
+            raise EditError(f"'{bundle}' is a zip file but not an EDGE bundle (it has no manifest.json or "
+                            "experiment.yaml)") from None
         return {"ok": True, "path": ws.rel(p)}
 
     @tool
     def write_file(path: str, content: str) -> dict[str, Any]:
-        """Write a text file in the workspace (e.g. a conditions CSV or instructions text)."""
-        from .storage import atomic_write
+        """Write a text file in the workspace (e.g. a conditions CSV or instructions text). An existing file is
+        backed up first. Not for experiments: use replace_experiment_source (validated, and undo works)."""
+        from .storage import _make_backup, atomic_write
         p = ws.path(path, must_exist=False)
         from .builder.server import BLOCKED_UPLOAD_SUFFIXES
         if p.suffix.lower() in BLOCKED_UPLOAD_SUFFIXES or p.name.startswith("."):
             raise EditError("refusing to write executable, script or hidden files")
+        if p.suffix.lower() in EXPERIMENT_SUFFIXES:
+            def is_experiment(text: str) -> bool:
+                try:
+                    d = loads(text, "json" if p.suffix.lower() == ".json" else "yaml", path)
+                except Exception:
+                    return False
+                return isinstance(d, dict) and ("routines" in d or "flow" in d)
+            if (p.is_file() and is_experiment(p.read_text(encoding="utf-8", errors="replace"))) or is_experiment(content):
+                raise EditError(f"'{path}' is an experiment: use replace_experiment_source to rewrite it (it is "
+                                "checked, backed up and can be undone), or the editing tools for smaller changes")
+        backup = None
+        if p.is_file():
+            backup = _make_backup(p, "before write_file")
         atomic_write(p, content)
-        return {"ok": True, "path": ws.rel(p), "bytes": len(content.encode())}
+        return {"ok": True, "path": ws.rel(p), "bytes": len(content.encode()),
+                **({"previous_version": ws.rel(backup)} if backup else {})}
 
     @tool
     def scan_hardware(timeout: float = 2.0) -> dict[str, Any]:
@@ -881,6 +1181,8 @@ def create_server(root: str | Path = ".") -> FastMCP:
                 "then export_data for the whole folder as csv and xlsx and summarize accuracy and RTs per "
                 "condition across participants, flagging sessions with quality problems.")
 
+    _strict_arguments(mcp)
+    _failures_are_errors(mcp)
     mcp.workspace = ws  # type: ignore[attr-defined]  # for tests
     return mcp
 

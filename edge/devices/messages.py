@@ -87,7 +87,14 @@ class UDPMessages(Device):
             self.out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._pending: collections.deque[tuple[float, dict[str, Any]]] = collections.deque(maxlen=10_000)
         self._allowed = {str(v) for v in (o.get("variables") or [])}
-        self.values: dict[str, Any] = {}
+        # the listed variables exist from the start (empty until the first message), so a rule such as
+        # "$alpha is not None and alpha > 0.5" or "$decision == 'left'" can be checked on the first frame
+        listed = [v for v in sorted(self._allowed) if v.isidentifier() and not v.startswith("_") and v not in RESERVED]
+        self.values: dict[str, Any] = {v: None for v in listed}
+        if o.get("into_variables", True) and self.session is not None:
+            for v in listed:
+                if v not in (self.session.participant or {}):
+                    self.session.vars.setdefault(v, None)
         self.add_stream("messages", ["json"], 0.0, "Events", time_base="master")
         self.connected = True
 

@@ -12,10 +12,9 @@ edge start [-h] [--port PORT] [--no-browser] [directory]
 
 | argument | description |
 |---|---|
-| `directory` | experiments folder (default: ~/Documents/EDGE Experiments) |
-| `--port` | local port for the builder |
+| `directory` | experiments folder, or an experiment file to open the folder it is in (default: 'EDGE Experiments' in your Documents folder, or in your home folder if there is none) |
+| `--port` | local port for the builder (default: 8765) |
 | `--no-browser` | do not open a browser window |
-| `--from-shortcut` | ==SUPPRESS== |
 
 ## edge desktop-shortcut
 
@@ -27,7 +26,7 @@ edge desktop-shortcut [-h] [--workspace WORKSPACE]
 
 | argument | description |
 |---|---|
-| `--workspace` | folder the icon opens (default: ~/Documents/EDGE Experiments) |
+| `--workspace` | folder the icon opens (default: 'EDGE Experiments' in your Documents folder, or in your home folder if there is none) |
 
 ## edge wizard
 
@@ -39,15 +38,15 @@ edge wizard [-h] [--answers ANSWERS] [directory]
 
 | argument | description |
 |---|---|
-| `directory` | where to create it |
-| `--answers` | JSON file with the answers instead of asking |
+| `directory` | where to create it (default: the current folder) |
+| `--answers` | JSON or YAML file with the answers instead of asking |
 
 ## edge run
 
 run an experiment
 
 ```
-edge run [-h] [-p PARTICIPANT] [-s SESSION] [-f FIELD] [--dry-run]
+edge run [-h] [-p PARTICIPANT] [-s SESSION] [-f KEY=VALUE] [--dry-run]
                 [--simulate-devices]
                 [--backend {pyglet,headless,headless-realtime}]
                 [--data-dir DATA_DIR] [--report] [--fullscreen | --windowed]
@@ -57,12 +56,12 @@ edge run [-h] [-p PARTICIPANT] [-s SESSION] [-f FIELD] [--dry-run]
 | argument | description |
 |---|---|
 | `experiment` | experiment file (.yaml or .json) |
-| `-p, --participant` | participant id (also used for counterbalancing) |
-| `-s, --session` | session id |
-| `-f, --field` | extra participant field key=value |
-| `--dry-run` | headless, simulated devices, virtual participant |
+| `-p, --participant` | participant id (also used for counterbalancing; default: the experiment's, usually 001). EDGE warns if it already has data |
+| `-s, --session` | session number (default: 1) |
+| `-f, --field` | another participant field, e.g. -f age=30 (repeat for more) |
+| `--dry-run` | test run: no window, simulated devices, a virtual participant; saved under data/dry_runs |
 | `--simulate-devices` | replace hardware with simulators |
-| `--backend` | headless-realtime: no window, real clock (screenless tasks with real hardware) |
+| `--backend` | pyglet (default): the experiment window; headless-realtime: no window, real clock (screenless tasks with real hardware); headless: no window, simulated clock, for automated tests (to test an experiment use --dry-run) |
 | `--data-dir` | where to write data (default: data/ next to the experiment) |
 | `--report` | print the quality report afterwards |
 | `--fullscreen` | full screen (overrides the experiment setting) |
@@ -142,7 +141,7 @@ edge preflight [-h] [--no-golden] [--no-computer] [--json] experiment
 
 | argument | description |
 |---|---|
-| `experiment` |  |
+| `experiment` | experiment file |
 | `--no-golden` | don't re-run the golden participant of the lock |
 | `--no-computer` | skip the computer check |
 | `--json` | machine-readable output |
@@ -158,9 +157,9 @@ edge test-device [-h] [--seconds SECONDS] [--simulate]
 
 | argument | description |
 |---|---|
-| `experiment` |  |
-| `device` | device id (default: all) |
-| `--seconds` |  |
+| `experiment` | experiment file whose devices to test |
+| `device` | device id (default: all of the experiment's devices) |
+| `--seconds` | how long to record from each device (default: 3) |
 | `--simulate` | test with the device's simulator |
 
 ## edge timing-test
@@ -173,7 +172,7 @@ edge timing-test [-h] [directory]
 
 | argument | description |
 |---|---|
-| `directory` |  |
+| `directory` | where to create it (default: the current folder) |
 
 ## edge update
 
@@ -199,7 +198,7 @@ edge lock [-h] [--no-golden] experiment
 
 | argument | description |
 |---|---|
-| `experiment` |  |
+| `experiment` | experiment file |
 | `--no-golden` | skip the golden-participant dry run |
 
 ## edge verify
@@ -212,7 +211,7 @@ edge verify [-h] [--no-golden] [--json] experiment
 
 | argument | description |
 |---|---|
-| `experiment` |  |
+| `experiment` | experiment file (its lock is the .lock.json next to it) |
 | `--no-golden` | skip the golden-participant dry run |
 | `--json` | machine-readable output |
 
@@ -235,12 +234,12 @@ edge support-bundle [-h] [--out OUT] [--include-data] path
 timing / data / sync quality report for a session
 
 ```
-edge report [-h] [--json] session_dir
+edge report [-h] [--json] session_dir [session_dir ...]
 ```
 
 | argument | description |
 |---|---|
-| `session_dir` | a session folder in data/ |
+| `session_dir` | a session folder in data/ (a data folder or an experiment file means its newest session) |
 | `--json` | machine-readable output |
 
 ## edge align
@@ -248,14 +247,16 @@ edge report [-h] [--json] session_dir
 align an external recording via shared TTL codes
 
 ```
-edge align [-h] [--tolerance TOLERANCE] session_dir external
+edge align [-h] [--tolerance TOLERANCE] [--json]
+                  session_dir [session_dir ...] external
 ```
 
 | argument | description |
 |---|---|
 | `session_dir` | the EDGE session folder |
 | `external` | CSV with columns time,code (external clock) |
-| `--tolerance` | maximum timing mismatch (s) when pairing events |
+| `--tolerance` | maximum timing mismatch (s) when pairing events (default: 0.05) |
+| `--json` | machine-readable output |
 
 ## edge new
 
@@ -281,7 +282,7 @@ edge builder [-h] [--host HOST] [--port PORT] [--no-browser]
 
 | argument | description |
 |---|---|
-| `directory` | folder with your experiments (default: current) |
+| `directory` | folder with your experiments, or an experiment file to open the folder it is in (default: the current folder) |
 | `--host` | interface to listen on (keep the default for safety) |
 | `--port` | local port for the builder |
 | `--no-browser` | do not open a browser window |
@@ -299,10 +300,10 @@ edge export [-h] [--formats FORMATS] [--layout {wide,long}] [--out OUT]
 | argument | description |
 |---|---|
 | `path` | session folder or data folder |
-| `--formats` | csv,tsv,xlsx,json,jsonl,parquet,mat,bids |
-| `--layout` | wide: one row per trial; long: one row per routine |
+| `--formats` | one or more of csv,tsv,xlsx,json,jsonl,parquet,mat,bids, separated by commas (default: csv,xlsx) |
+| `--layout` | wide (default): one row per trial; long: one row per routine |
 | `--out` | output folder (default: <path>/exports) |
-| `--name` | file name stem for merged exports |
+| `--name` | start of the file names (default: the session folder's name, or <experiment>_all_<date> for a data folder) |
 | `--include-dry-runs` | also include dry-run sessions |
 
 ## edge bundle
@@ -316,7 +317,7 @@ edge bundle [-h] [--out OUT] experiment
 | argument | description |
 |---|---|
 | `experiment` | experiment file |
-| `--out` | bundle path (default: <experiment>.edgez) |
+| `--out` | bundle file, or a folder to put <experiment>.edgez in (default: <experiment>.edgez next to the experiment) |
 
 ## edge unbundle
 
@@ -396,7 +397,7 @@ edge tutorial [-h] [--print] [--port PORT] [--no-browser]
 
 ## edge docs
 
-regenerate the reference documentation from the code
+for EDGE developers: regenerate the reference pages (to read the docs: edge help)
 
 ```
 edge docs [-h] [--check] [{build}]
@@ -425,10 +426,12 @@ run the MCP server (natural-language control from Claude / VS Code)
 
 ```
 edge mcp [-h] [--root ROOT] [--transport {stdio,sse,streamable-http}]
+                [directory]
 ```
 
 | argument | description |
 |---|---|
+| `directory` | workspace folder (the same as --root) |
 | `--root` | workspace folder the server may read and write |
 | `--transport` | stdio for Claude/VS Code; http transports for remote clients |
 

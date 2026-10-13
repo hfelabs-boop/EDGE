@@ -110,7 +110,12 @@ class Component:
                 issues.append(Issue("error", where, f"missing required property '{k}'"))
             if "choices" in meta and k in spec.props and not expressions.is_expr(spec.props[k]) \
                     and spec.props[k] not in meta["choices"]:
-                issues.append(Issue("error", where, f"'{k}' must be one of {meta['choices']}"))
+                v = spec.props[k]
+                words = [c for c in meta["choices"] if isinstance(v, bool) and isinstance(c, str)
+                         and c.lower() in (("yes", "on", "true") if v else ("no", "off", "false"))]
+                issues.append(Issue("error", where, f"'{k}' must be one of {meta['choices']}",
+                                    hint=f"a bare {words[0]} is read as true/false: put it in quotes, "
+                                         f"{k}: \"{words[0]}\"" if words else ""))
         return issues
 
     # ----------------------------------------------------------- helpers

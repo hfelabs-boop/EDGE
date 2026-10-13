@@ -68,8 +68,9 @@ are prefixed with a quote so that a spreadsheet opens them as text, not as a for
 ## Importers and bundles
 
 Files from an imported PsychoPy, OpenSesame or E-Prime experiment, and from an `.edgez` bundle, are
-only written inside the target folder; entries that would escape it (absolute paths, `..`, drive
-letters) are skipped and listed in the import notes.
+only written inside the target folder. For an import, entries that would escape it (absolute paths,
+`..`, drive letters) are skipped and listed in the import notes; a bundle with such an entry is
+refused as a whole, before anything is written.
 
 ## Support bundles
 

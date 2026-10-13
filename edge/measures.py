@@ -50,9 +50,10 @@ def recording_plan(exp) -> dict[str, Any]:
     from .components import component_registry
     from .devices import device_registry
     from .model import Branch, Loop, StateMachine
-    from .scope import loop_columns
+    from .scope import resolved_loop_columns
 
     comps, devs = component_registry(), device_registry()
+    loop_cols = resolved_loop_columns(exp)
     plan: dict[str, Any] = {"participant": [], "loops": [], "variables": [], "components": [], "devices": [],
                             "always": [], "columns": {}}
     cols = plan["columns"]
@@ -65,7 +66,7 @@ def recording_plan(exp) -> dict[str, Any]:
     def walk(nodes, parents: list[str]):
         for n in nodes:
             if isinstance(n, Loop):
-                known = loop_columns(n, exp.base_dir)
+                known = loop_cols.get(n.id)
                 src = ("staircase" if n.staircase else n.conditions if isinstance(n.conditions, str)
                        else "factorial design" if isinstance(n.conditions, dict) else "table in the experiment")
                 plan["loops"].append({"loop": n.id, "columns": sorted(known) if known is not None else None,
@@ -167,9 +168,21 @@ def suggest_measures(exp, plan: dict[str, Any] | None = None) -> list[dict[str, 
 
     where = _routine_loops(exp)          # routine -> enclosing loops, outermost first
     has_loops = any(where.values())
+    deepest = max((len(v) for v in where.values()), default=0)
+    specs = {(rid, c.id): c for rid, r in exp.routines.items() for c in r.components}
+
+    def only_advances(c: dict[str, Any]) -> bool:
+        """A break screen's 'press space to continue' (one key, no correct answer) in an outer loop (blocks)."""
+        s = specs.get((c["routine"], c["id"]))
+        keys = s.props.get("keys") if s is not None else None
+        keys = [keys] if isinstance(keys, str) else keys
+        return (c["type"] == "keyboard" and s is not None and s.props.get("correct") in (None, "")
+                and isinstance(keys, list) and len(keys) == 1 and len(where.get(c["routine"]) or []) < deepest)
+
     responders = [c for c in plan["components"] if c["save"] and not c["disabled"]
                   and c["type"] in ("keyboard", "device_response", "mouse", "slider", "gaze_roi")
-                  and (where.get(c["routine"]) or not has_loops)]      # "press space to continue" isn't a measure
+                  and (where.get(c["routine"]) or not has_loops)      # "press space to continue" isn't a measure
+                  and not only_advances(c)]
     for c in responders:
         keys = {o["key"]: o for o in c["outputs"]}
         loops = [lp for lp in where.get(c["routine"], []) if "practi" not in lp.lower()]
@@ -333,6 +346,43 @@ def validate_measures(exp) -> list:
             issues.append(Issue("error", where, "expect must be [lowest, highest], e.g. [0.15, 2.5]"))
     if raw and not any(normalize(m).get("role") == "outcome" for m in raw if isinstance(m, dict) and m.get("column")):
         issues.append(Issue("info", "measures", "no outcome measure declared: which column is the result you care about?"))
+    return issues
+
+
+def validate_summary_settings(exp) -> list:
+    """settings.data.summary {by, rt, correct} names recorded columns: a typo would give a summary where
+    every trial counts as missed."""
+    from .model import Issue
+    cfg = (exp.settings.get("data") or {}).get("summary")
+    if not cfg:
+        return []
+    if not isinstance(cfg, dict):
+        return [Issue("error", "settings.data.summary", "must be a mapping like {by: [congruent], rt: resp.rt, "
+                                                        "correct: resp.corr}")]
+    plan = recording_plan(exp)
+    cols = plan["columns"]
+    unknown_loops = any(lp["columns"] is None for lp in plan["loops"])
+    issues = []
+    for key in ("rt", "correct", "by"):
+        val = cfg.get(key)
+        if val is None:
+            continue
+        names = val if key == "by" else [val]
+        if not isinstance(names, list) or not all(isinstance(v, str) and v for v in names):
+            issues.append(Issue("error", f"settings.data.summary.{key}",
+                                "by must be a list of column names" if key == "by" else f"{key} must be a column name"))
+            continue
+        for v in names:
+            if v in cols or (unknown_loops and "." not in v):
+                continue
+            pool = [c for c in cols if c.endswith(".rt")] if key == "rt" else \
+                [c for c in cols if c.endswith(".corr")] if key == "correct" else \
+                [c for c, m in cols.items() if m.get("kind") == "condition"]
+            close = difflib.get_close_matches(v, pool or list(cols), 1, 0.5)
+            issues.append(Issue("warning", f"settings.data.summary.{key}",
+                                f"no column called '{v}' will be recorded, so the summary can't use it",
+                                hint=f"did you mean {close[0]}?" if close else
+                                (f"choose from {', '.join(sorted(pool)[:12])}" if pool else "see the list of recorded columns")))
     return issues
 
 

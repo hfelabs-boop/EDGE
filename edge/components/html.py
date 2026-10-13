@@ -338,6 +338,10 @@ class Html(Component):
             rng = getattr(vp, "rng", random.Random(0))
             answers = self.auto_answers(rng)
             delay = 2.0 + rng.random() * 3.0 + 0.8 * len(answers)   # time to read and answer
+            pages = [v for k, v in answers.items() if k.startswith("page") and k.endswith("_time")
+                     and k[4:-5].isdigit() and isinstance(v, (int, float))]
+            if pages:          # a survey: submitted once all its pages are done, so page times add up to its rt
+                delay = float(sum(pages))
             self._scheduled = (t + delay, answers)
             return
         self._scheduled = None

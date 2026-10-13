@@ -7,7 +7,7 @@ from typing import Any
 
 import copy
 
-from .storage import save_document
+from .storage import save_document, unshare
 
 _INSTR = lambda text: {  # noqa: E731
     "components": [
@@ -19,6 +19,8 @@ _INSTR = lambda text: {  # noqa: E731
 TEMPLATES: dict[str, dict[str, Any]] = {
     "blank": {
         "name": "my_experiment",
+        "description": "An empty starting point: one screen that says hello. Add your own screens (routines) "
+                       "and put them in the order they should run (the flow).",
         "settings": {"window": {"size": [1280, 720], "background": "#000000"}},
         "devices": [],
         "routines": {"hello": _INSTR("Hello! Press SPACE to finish.")},
@@ -26,12 +28,16 @@ TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "freeview_eyetracking": {
         "name": "freeview",
-        "description": "Free viewing of images with gaze AOIs. Swap sim_eyetracker for tobii or gazepoint.",
+        "description": "Free viewing with an eye tracker: two coloured rectangles side by side stand in for your "
+                       "pictures, with a gaze check before each trial and a gaze area (AOI) on each side. To show "
+                       "pictures, replace each rectangle with an image component (image: $left_picture) and put "
+                       "the picture file names in the trial list. Replace the simulated eye tracker (sim_eyetracker) with "
+                       "yours (tobii or gazepoint).",
         "settings": {"window": {"size": [1280, 720], "background": "#808080"}},
         "devices": [{"id": "et", "type": "sim_eyetracker", "calibrate": True},
                     {"id": "lsl", "type": "lsl_markers", "required": False}],
         "routines": {
-            "instructions": _INSTR("Look at the pictures freely.\n\nPress SPACE to start."),
+            "instructions": _INSTR("Look freely at what appears on the screen.\n\nPress SPACE to start."),
             "fixcheck": {"description": "Gaze-contingent fixation check: look at the dot for 300 ms",
                          "duration": 5,
                          "components": [
@@ -53,7 +59,10 @@ TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "eeg_oddball": {
         "name": "auditory_oddball",
-        "description": "Auditory oddball with TTL + LSL markers. Swap sim_eeg for gtec / lsl_inlet.",
+        "description": "Auditory oddball for EEG: a frequent low tone and a rare high tone; participants press "
+                       "SPACE for the high one. Each tone sends an event code to the EEG through a trigger box "
+                       "(TTL) and Lab Streaming Layer (LSL). Replace the simulated EEG (sim_eeg) with your "
+                       "amplifier (gtec or lsl_inlet) and the virtual trigger box (ttl_loopback) with yours.",
         "settings": {"window": {"size": [1280, 720], "background": "#000000"},
                      "markers": {"codes": {"standard": 1, "deviant": 2, "response": 10}}},
         "devices": [{"id": "eeg", "type": "sim_eeg"},
@@ -96,7 +105,9 @@ TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "staircase": {
         "name": "contrast_staircase",
-        "description": "3-down/1-up staircase on stimulus opacity (~79% correct threshold).",
+        "description": "Finds how faint a square can be and still be seen: the square appears left or right, "
+                       "gets fainter after 3 correct answers in a row and stronger after each mistake, and settles "
+                       "where people are about 79% correct (a 3-down/1-up staircase on its opacity).",
         "settings": {"window": {"size": [1280, 720], "background": "#808080"}},
         "routines": {
             "trial": {"components": [
@@ -115,8 +126,9 @@ TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "online_questionnaire": {
         "name": "wellbeing_survey",
-        "description": "A complete questionnaire study: consent (declining ends the study), demographics, "
-                       "SWLS + WHO-5 + TIPI with attention checks, a custom block with display logic, debriefing.",
+        "description": "A complete questionnaire study: consent (declining ends the study), demographics, life "
+                       "satisfaction (SWLS), well-being (WHO-5) and personality (TIPI) with attention checks, your "
+                       "own questions that only appear when they apply, and a debriefing.",
         "settings": {"window": {"size": [1280, 720], "background": "#f7f8fa"}},
         "routines": {
             "consent": {"components": [{"id": "consent_form", "type": "survey", "end_routine": True,
@@ -207,13 +219,24 @@ TEMPLATES.update({
 })
 
 
+# templates reuse definitions (the tutorials' trial); give every routine its own copy, so a copy of a template
+# is plain YAML and editing one routine never changes another
+TEMPLATES = {k: unshare(v) for k, v in TEMPLATES.items()}
+
+
 def public_templates() -> dict[str, dict[str, Any]]:
     return {k: v for k, v in TEMPLATES.items() if not k.startswith("tutorial_")}
 
 
 def write_template(name: str, directory: Path) -> Path:
+    """Write template ``name`` into ``directory`` as ``<name>.yaml``; an existing file is never replaced:
+    the copy is then ``<name>_2.yaml`` (as the wizard does)."""
     directory.mkdir(parents=True, exist_ok=True)
     data = TEMPLATES[name]
     path = directory / f"{data['name']}.yaml"
+    n = 2
+    while path.exists():
+        path = directory / f"{data['name']}_{n}.yaml"
+        n += 1
     save_document(path, copy.deepcopy(data))
     return path

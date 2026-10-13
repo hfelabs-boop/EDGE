@@ -11,19 +11,25 @@
   (the builder, the MCP server and your text editor can all work on one file).
 * **Format migrations**: documents carry ``edge_format``; older documents are
   upgraded on load and the applied migrations are reported.
-* **Friendly errors**: YAML/JSON syntax errors come back with line and column.
+* **Friendly errors**: YAML/JSON syntax errors come back with line and column; a key given twice in
+  one mapping is an error too (YAML would otherwise keep only the last one, silently).
+* **Comments survive saves**: ``# comments`` in a YAML file are carried over when EDGE rewrites it
+  (the layout is EDGE's own: ``{a: 1}`` on one line becomes one key per line).
+* **Permissions**: a rewritten file keeps its permissions; a new file follows the umask.
 * **Bundles**: ``export_bundle`` packs an experiment and every file it
   references (conditions, images, sounds) into one ``.edgez`` archive.
 """
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
-import tempfile
+import stat
 import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -61,7 +67,9 @@ def fingerprint(path: str | Path) -> str:
 
 # ---------------------------------------------------------------------- serialization
 class _Dumper(yaml.SafeDumper):
-    pass
+    def ignore_aliases(self, data: Any) -> bool:
+        # a routine or trial list used twice is written out twice: no &id001 / *id001 in a researcher's file
+        return True
 
 
 def _str_presenter(dumper, data: str):
@@ -74,6 +82,66 @@ def _str_presenter(dumper, data: str):
 _Dumper.add_representer(str, _str_presenter)
 
 
+class _Loader(yaml.SafeLoader):
+    """SafeLoader that refuses a key given twice in one mapping (YAML keeps only the last one, silently)."""
+
+    def construct_mapping(self, node: Any, deep: bool = False) -> Any:
+        if isinstance(node, yaml.MappingNode):
+            seen: dict[Any, int] = {}
+            for key_node, _ in node.value:
+                if key_node.tag == "tag:yaml.org,2002:merge":
+                    continue
+                key = self.construct_object(key_node, deep=True)
+                try:
+                    first = seen.setdefault(key, key_node.start_mark.line)
+                except TypeError:          # an unhashable key: the normal error explains it
+                    continue
+                if first != key_node.start_mark.line:
+                    raise yaml.constructor.ConstructorError(
+                        None, None, f"'{key}' is given twice (lines {first + 1} and {key_node.start_mark.line + 1}); "
+                        "only one can count: keep one, or merge them into one entry", key_node.start_mark)
+        return super().construct_mapping(node, deep=deep)
+
+
+def _safe_load(text: str) -> Any:
+    """``yaml.safe_load`` that also refuses a key given twice."""
+    loader = _Loader(text)
+    try:
+        return loader.get_single_data()
+    finally:
+        loader.dispose()
+
+
+MAX_VALUES = 2_000_000      # an experiment, its aliases written out; far more is a file made to exhaust memory
+
+
+def unshare(data: Any, limit: int = MAX_VALUES) -> Any:
+    """A copy in which no two places share one dict or list (YAML anchors and aliases, or a template that
+    reuses a definition), so editing one routine can never change another.
+
+    A ``DocumentError`` (without the file name) for an alias inside the part it names (it would never end)
+    and for aliases nested so that writing them out gives more than ``limit`` values."""
+    budget = [limit]
+    open_: set[int] = set()
+
+    def copy(v: Any) -> Any:
+        budget[0] -= 1
+        if budget[0] < 0:
+            raise DocumentError(f"its aliases (*name) repeat parts so often that it would hold more than {limit:,} "
+                                "values: write the repeated parts out instead")
+        if not isinstance(v, (dict, list)):
+            return v
+        if id(v) in open_:
+            raise DocumentError("an alias (*name) points back into the part that contains it, so that part would "
+                                "never end: remove that alias")
+        open_.add(id(v))
+        try:
+            return {k: copy(x) for k, x in v.items()} if isinstance(v, dict) else [copy(x) for x in v]
+        finally:
+            open_.discard(id(v))
+    return copy(data)
+
+
 def dumps(doc: dict[str, Any], fmt: str = "yaml") -> str:
     if fmt == "json":
         return json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
@@ -82,7 +150,12 @@ def dumps(doc: dict[str, Any], fmt: str = "yaml") -> str:
 
 def loads(text: str, fmt: str = "yaml", source: str = "<string>") -> dict[str, Any]:
     try:
-        data = json.loads(text) if fmt == "json" else yaml.safe_load(text)
+        data = json.loads(text) if fmt == "json" else unshare(_safe_load(text))
+    except DocumentError as e:            # aliases that never end or write out to millions of values
+        raise DocumentError(f"{source}: {e}") from None
+    except RecursionError:
+        raise DocumentError(f"{source}: it is nested too deeply to read (lists or mappings inside each other "
+                            "hundreds of times)") from None
     except json.JSONDecodeError as e:
         raise DocumentError(f"{source}: invalid JSON at line {e.lineno}, column {e.colno}: {e.msg}") from None
     except yaml.YAMLError as e:
@@ -170,14 +243,28 @@ def load_document(path: str | Path) -> Loaded:
 
 
 def atomic_write(path: str | Path, data: str | bytes) -> None:
+    """Write via a temporary sibling + rename. The file keeps its permissions; a new one follows the umask
+    (like any other file the user creates), so colleagues and lab accounts keep their access."""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=f".{p.name}.", suffix=".tmp", dir=str(p.parent))
+    try:
+        mode: int | None = stat.S_IMODE(os.stat(p).st_mode)
+    except OSError:
+        mode = None
+    while True:
+        tmp = str(p.parent / f".{p.name}.{secrets.token_hex(4)}.tmp")
+        try:     # 0o666 minus the umask, created exclusively (never through an existing file or link)
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o666)
+            break
+        except FileExistsError:
+            continue
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(data.encode("utf-8") if isinstance(data, str) else data)
             f.flush()
             os.fsync(f.fileno())
+        if mode is not None and os.name != "nt":
+            os.chmod(tmp, mode)
         os.replace(tmp, p)
     except BaseException:
         try:
@@ -206,6 +293,13 @@ def save_document(path: str | Path, doc: dict[str, Any], expected_fingerprint: s
     doc["edge_format"] = FORMAT_VERSION
     doc = {"edge_format": doc.pop("edge_format"), **doc}  # keep it at the top of the file
     text = dumps(doc, fmt_of(p))
+    if fmt_of(p) == "yaml" and p.is_file():
+        try:
+            old = p.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError):
+            old = ""
+        if re.search(r"(?m)(^|\s)#", old):         # a comment (not just a colour such as '#111111')
+            text = carry_comments(old, text)
     if backup and p.exists():
         if p.read_text(encoding="utf-8-sig") == text:
             return current  # no change: no new backup
@@ -225,6 +319,135 @@ def _make_backup(p: Path, label: str = "") -> Path:
     for old in backups[:-MAX_BACKUPS]:
         old.unlink()
     return dest
+
+
+# ---------------------------------------------------------------------- comments
+class _Layout:
+    """Where things are in a YAML text: the outermost key or list item starting on each line (as a path that
+    survives edits: list items with an id are named by it), the lines inside multi-line text, and where the
+    last value on each line ends (anything after it is a comment)."""
+
+    def __init__(self, text: str):
+        self.path_at: dict[int, tuple] = {}
+        self.line_of: dict[tuple, int] = {}
+        self.inside: set[int] = set()
+        self.multi_start: set[int] = set()
+        self.ends: dict[int, int] = {}
+        self._seen: set[int] = set()
+        root = yaml.compose(text, Loader=_Loader)
+        if root is not None:
+            self._visit(root, (), set())
+
+    def _at(self, path: tuple, line: int) -> None:
+        self.path_at.setdefault(line, path)
+        self.line_of.setdefault(path, line)
+
+    def _end(self, n: Any) -> None:
+        self.ends[n.end_mark.line] = max(self.ends.get(n.end_mark.line, 0), n.end_mark.column)
+
+    def _visit(self, n: Any, path: tuple, stack: set[int]) -> None:
+        if id(n) in self._seen:      # an alias: its anchor's lines are mapped already (each node once, so
+            return                   # aliases of aliases can't make this take forever)
+        self._seen.add(id(n))
+        if isinstance(n, yaml.ScalarNode):
+            s, e = n.start_mark, n.end_mark
+            if e.line > s.line:
+                self.multi_start.add(s.line)
+                self.inside.update(range(s.line + 1, e.line + (1 if e.column else 0)))
+            self._end(n)
+        elif isinstance(n, yaml.MappingNode):
+            if n.flow_style:
+                self._end(n)
+            for k, v in n.value:
+                p = path + (("key", k.value if isinstance(k, yaml.ScalarNode) else repr(k.start_mark)),)
+                self._at(p, k.start_mark.line)
+                self._visit(k, p, stack)
+                self._visit(v, p, stack)
+        elif isinstance(n, yaml.SequenceNode):
+            if n.flow_style:
+                self._end(n)
+            seen: dict[Any, int] = {}
+            for i, v in enumerate(n.value):
+                name: Any = ("item", i)
+                if isinstance(v, yaml.MappingNode):
+                    for k, kv in v.value:
+                        if isinstance(k, yaml.ScalarNode) and k.value in ("id", "loop", "statemachine", "routine") \
+                                and isinstance(kv, yaml.ScalarNode):
+                            name = (k.value, kv.value)
+                            break
+                elif isinstance(v, yaml.ScalarNode):
+                    name = ("value", v.value)
+                seen[name] = seen.get(name, -1) + 1
+                p = path + (name + (seen[name],),)
+                self._at(p, v.start_mark.line)
+                self._visit(v, p, stack)
+
+
+def carry_comments(old_text: str, new_text: str) -> str:
+    """``new_text`` (a fresh dump of an edited document) with the ``# comments`` of ``old_text`` put back:
+    a comment above a key or list item goes above the same key or item, a comment at the end of a line goes
+    after the same key or item, and the comments at the top and bottom of the file stay there. Comments
+    about something that was deleted are dropped. If anything could change the document's meaning, the
+    comments are left out rather than risk it."""
+    try:
+        old, new = _Layout(old_text), _Layout(new_text)
+    except yaml.YAMLError:
+        return new_text
+    lines = old_text.splitlines()
+    out = new_text.splitlines()
+    above: dict[Any, list[str]] = {}     # new line index, "top" or "end" -> comment lines to put above it
+    trailing: dict[int, str] = {}
+    first_content = next((i for i, ln in enumerate(lines) if ln.strip() and not ln.lstrip().startswith("#")), len(lines))
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
+        if i in old.inside or not ln.lstrip().startswith("#"):
+            if i not in old.inside and i in old.ends:
+                m = re.search(r"\s(#.*)$", ln[old.ends[i]:])
+                if m and i in old.path_at:
+                    path = old.path_at[i]
+                    j = new.line_of.get(path)
+                    if j is not None:
+                        if j in new.multi_start or j in trailing:
+                            above.setdefault(j, []).append(m.group(1))
+                        else:
+                            trailing[j] = m.group(1)
+            i += 1
+            continue
+        start = i                      # a block of comment lines (blank lines between them belong to it)
+        while i < len(lines) and i not in old.inside and (not lines[i].strip() or lines[i].lstrip().startswith("#")):
+            i += 1
+        block = [x.strip() for x in lines[start:i]]
+        while block and not block[-1]:
+            block.pop()
+        gap = start > 0 and not lines[start - 1].strip()
+        if start < first_content:
+            where: Any = "top"
+        elif i >= len(lines):
+            where = "end"
+        else:
+            path = old.path_at.get(i)
+            where = new.line_of.get(path) if path is not None else None
+        if where is None:
+            continue
+        above.setdefault(where, []).extend(([""] if gap and where != "top" else []) + block)
+    if not above and not trailing:
+        return new_text
+    if above.get("top") and first_content > 0 and not lines[first_content - 1].strip():
+        above["top"].append("")
+    result: list[str] = list(above.get("top", []))
+    for j, ln in enumerate(out):
+        indent = ln[:len(ln) - len(ln.lstrip(" "))]
+        result += [indent + c if c else "" for c in above.get(j, [])]
+        result.append(f"{ln}  {trailing[j]}" if j in trailing else ln)
+    result += above.get("end", [])
+    text = "\n".join(result) + "\n"
+    try:     # never at the price of the content
+        if _safe_load(text) != _safe_load(new_text):
+            return new_text
+    except yaml.YAMLError:
+        return new_text
+    return text
 
 
 def list_backups(path: str | Path) -> list[dict[str, Any]]:
@@ -361,11 +584,24 @@ def export_bundle(path: str | Path, out: str | Path | None = None) -> dict[str, 
     """Pack the experiment + referenced files into a ``.edgez`` zip. Missing files are reported."""
     loaded = load_document(path)
     base = loaded.path.parent
-    out = Path(out) if out else loaded.path.with_suffix(".edgez")
+    if out:      # a folder (existing, or written with a trailing /) gets <name>.edgez; a new folder is made
+        folder = str(out).endswith(("/", "\\")) or Path(out).is_dir()
+        out = Path(out) / f"{loaded.path.stem}.edgez" if folder else Path(out)
+        if not out.suffix:
+            out = out.with_suffix(".edgez")
+        out.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        out = loaded.path.with_suffix(".edgez")
     files = sorted(referenced_files(loaded.doc, base))
     included, missing = [], []
+    text = None
+    if fmt_of(loaded.path) == "yaml" and not loaded.migrations:      # the file as written, comments and all
+        try:
+            text = loaded.path.read_bytes().decode("utf-8-sig")
+        except (OSError, UnicodeDecodeError):
+            text = None
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("experiment.yaml", dumps(loaded.doc))
+        z.writestr("experiment.yaml", text if text is not None else dumps(loaded.doc))
         manifest = {"edge_format": FORMAT_VERSION, "name": loaded.doc.get("name"), "source": loaded.path.name,
                     "created": datetime.now().isoformat(timespec="seconds"), "files": []}
         for rel in files:
@@ -390,10 +626,17 @@ def export_bundle(path: str | Path, out: str | Path | None = None) -> dict[str, 
     return {"bundle": str(out), "files": included, "missing": missing}
 
 
-def import_bundle(bundle: str | Path, dest_dir: str | Path) -> Path:
-    """Unpack a ``.edgez`` bundle into ``dest_dir``; returns the experiment path."""
+def import_bundle(bundle: str | Path, dest_dir: str | Path, overwrite: bool = False) -> Path:
+    """Unpack a ``.edgez`` bundle into ``dest_dir``; returns the experiment path.
+
+    Everything is checked before anything is written: a bundle with an entry that would land outside
+    ``dest_dir`` is refused as a whole, and so is unpacking over files in ``dest_dir`` that differ from the
+    bundle's (an edited trial list, another experiment's files). With ``overwrite`` those files are replaced,
+    each one backed up first (``edge backups FILE``)."""
+    from .reproduce import lock_path
     dest = Path(dest_dir)
-    dest.mkdir(parents=True, exist_ok=True)
+    root = dest.resolve()
+    writes: list[tuple[Path, bytes]] = []
     with zipfile.ZipFile(bundle) as z:
         manifest = json.loads(z.read("manifest.json"))
         name = Path(manifest.get("source") or "experiment.yaml").name
@@ -402,17 +645,40 @@ def import_bundle(bundle: str | Path, dest_dir: str | Path) -> Path:
         for info in z.infolist():
             if not info.filename.startswith("files/") or info.is_dir():
                 continue
-            rel = Path(info.filename[len("files/"):])
-            target = (dest / rel).resolve()
-            if dest.resolve() not in target.parents:
-                raise DocumentError(f"unsafe path in bundle: {info.filename}")
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(z.read(info))
-        doc = loads(z.read("experiment.yaml").decode("utf-8"), "yaml", str(bundle))
+            rel = info.filename[len("files/"):]
+            if root not in (dest / rel).resolve().parents:
+                raise DocumentError(f"{Path(bundle).name} is not a safe bundle: its file '{rel}' would be written "
+                                    f"outside {dest}. Nothing was unpacked.")
+            writes.append((dest / rel, z.read(info)))
+        text = z.read("experiment.yaml").decode("utf-8-sig")
         lock_data = z.read(manifest["lock"]) if manifest.get("lock") in z.namelist() else None
+    doc = loads(text, "yaml", str(bundle))
     exp_path = dest / name
-    save_document(exp_path, doc, backup=exp_path.exists())
+    if fmt_of(exp_path) == "yaml" and not migrate(copy.deepcopy(doc)):
+        content = text.encode("utf-8")           # exactly as the sender wrote it, comments and all
+    else:
+        migrate(doc)
+        content = dumps({"edge_format": FORMAT_VERSION, **{k: v for k, v in doc.items() if k != "edge_format"}},
+                        fmt_of(exp_path)).encode("utf-8")
+    writes.append((exp_path, content))
     if lock_data is not None:      # keep the lock, so 'edge verify' works on the receiving computer
-        from .reproduce import lock_path
-        lock_path(exp_path).write_bytes(lock_data)
+        writes.append((lock_path(exp_path), lock_data))
+    differ = [t for t, data in writes if t.exists() and (not t.is_file() or t.read_bytes() != data)]
+    if differ and not overwrite:
+        other = dest.with_name(dest.name + "_2")
+        n = 3
+        while other.exists():
+            other, n = dest.with_name(f"{dest.name}_{n}"), n + 1
+        shown = sorted({t.relative_to(dest).as_posix() for t in differ})
+        raise DocumentError(f"the folder {dest.name or dest} already has {', '.join(shown[:6])}"
+                            f"{' …' if len(shown) > 6 else ''}, different from the bundle's "
+                            f"{'copy' if len(shown) == 1 else 'copies'}. Nothing was unpacked, so nothing of yours was "
+                            f"replaced: unpack into a new folder instead (e.g. {other.name}), or move those files "
+                            "away first.")
+    for t, data in writes:
+        if t.is_file():
+            if t.read_bytes() == data:
+                continue
+            _make_backup(t, "before unbundle")
+        atomic_write(t, data)
     return exp_path

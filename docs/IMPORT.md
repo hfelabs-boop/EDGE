@@ -13,6 +13,8 @@ conditions, images, list exports), or ask Claude through MCP (`import_experiment
 Each import creates a folder with the EDGE experiment, copies of every file it needs, and
 **`IMPORT_REPORT.md`**, which lists:
 
+* **Won't run until fixed:** problems the check of the result found (for example a list export or
+  conditions file that is missing); `edge import` then ends with exit code 1;
 * **Not converted:** things that need manual work (unsupported components, E-Basic InLine code,
   JavaScript functions);
 * **Converted approximately:** check these against the original (e.g. a staircase's variable,
@@ -22,6 +24,16 @@ Each import creates a folder with the EDGE experiment, copies of every file it n
 The result is validated, and you should **always dry-run it** (`edge run file --dry-run --report`)
 and compare trial counts and timing with the original. While these importers were being built,
 dry runs caught several conversion gaps that are now handled automatically.
+
+An import never overwrites earlier work. Importing the same file again (say, after exporting a
+missing list) updates the earlier import if nobody has changed it since, keeping the previous
+experiment file as a backup (`edge backups`). If you have edited that import, recorded sessions
+with it, or the folder holds another experiment or a file of the same name with other contents,
+the new import is saved next to it in a folder ending in `_2` (`stroop_edge_2`), and the output
+says so. A file from which nothing
+could be converted (cut short, damaged, or not an experiment of that program) is refused with an
+explanation, and nothing is written. Files saved as UTF-16 ("Unicode" in Windows programs) and
+Windows paths such as `stimuli\red.png` are read as well.
 
 ## PsychoPy (.psyexp)
 
@@ -64,7 +76,7 @@ rows from an external file work as well.
 | `[Attribute]` references, `c.GetAttrib("x")`, `[Subject]`/`[Session]` | `$attribute`, f-strings, `participant`/`session` |
 | Procedures | sequences in the flow |
 | List: rows and Weight, order (sequential/random/permuted/counterbalance/offset), Cycles, Samples | `loop` (weights expand rows) |
-| FeedbackDisplay | text using the previous response (`prev_corr`), flagged for checking |
+| FeedbackDisplay | text using the previous response (`prev_corr`: 1 correct, 0 wrong, empty when there was no response, shown as "Too slow"), flagged for checking |
 
 Not converted: InLine E-Basic (copied into the report), movies, and some advanced Slide features. The
 generated script differs between E-Prime versions, so this importer is best effort: check the report.
@@ -77,13 +89,23 @@ line, image), keyboard and mouse responses, samplers, synths, delays, and inline
 Python, flagged). A sketchpad with duration 0 followed by a keyboard_response becomes one routine, the
 usual OpenSesame trial pattern. OpenSesame's built-in `[correct]`, `[response]` and
 `[response_time]` are provided, so run-if conditions keep working. Coordinates are converted from
-OpenSesame's y-down system. File-pool contents of `.osexp` archives are extracted.
+OpenSesame's y-down system. File-pool contents of `.osexp` archives are extracted. Text keeps its
+line breaks (`<br />`) and, when it applies to all of the text, its colour, bold and italic; font
+sizes stay in pixels.
 
 ## jsPsych (6/7, .html or .js)
 
-A tolerant parser reads the timeline from inline scripts: object literals, variables,
-`timeline.push(...)`, `jsPsych.timelineVariable()`, nested timelines with `timeline_variables`,
-`randomize_order`, `repetitions`.
+A tolerant parser reads the timeline from the page's inline scripts and from its own script files
+next to it (`<script src="experiment.js">`; jsPsych and its plugins are skipped): object literals,
+variables, `timeline.push(...)`, `jsPsych.timelineVariable()`, nested timelines with
+`timeline_variables`, `randomize_order`, `repetitions`. Routines and loops are named after the
+variables that hold the trials (`fixation`, `test_procedure`).
+
+Text is shown dark on jsPsych's white page. Simple inline HTML styling (colour, font size, bold,
+italic) becomes text properties; when timeline variables hold HTML, its text and colour go into
+new columns (`stimulus_text`, `stimulus_color`) next to the original. Styling that can't be kept is
+listed in the report. A trial's `data` fields (`task: 'response'`) are saved as columns of the
+trials table, as in jsPsych.
 
 | jsPsych plugin | EDGE |
 |---|---|

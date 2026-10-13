@@ -8,7 +8,7 @@ every device as part of the experiment, not something bolted on afterwards.
 
 ```
 edge                               # open the builder on your experiments folder (or double-click the EDGE icon)
-edge wizard                        # answer a few questions, get a finished, tested experiment
+edge wizard                        # answer a few questions in the terminal, get a finished experiment
 edge mcp                           # let Claude / VS Code build experiments from plain-language requests
 edge run study.yaml --dry-run      # simulated devices + virtual participant, takes seconds
 edge run study.yaml -p 012         # the real thing
@@ -82,17 +82,31 @@ The included Stroop example records an eye tracker, EEG and physiology, all time
 edge run examples/stroop/stroop.yaml --dry-run --report
 ```
 
+The end of the report (your numbers will differ a little):
+
 ```
 Streams
   eeg.eeg: 8575 samples, 250.0 Hz (nominal 250.0), gaps 0, clock arrival-linear drift -20.1 ppm (residual 0.008 ms)
       triggers 19/19 matched; alignment 1.894 ± 1.079 ms (max |err| 3.965 ms)
   eyetracker.gaze: 4116 samples, 120.0 Hz (nominal 120.0), gaps 0, clock arrival-linear drift -19.3 ppm (residual 0.014 ms)
       triggers 19/19 matched; alignment 1.311 ± 0.007 ms (max |err| 1.322 ms)
+  lsl.ttl: 20 samples, 0.554 Hz (nominal 0)
+      triggers 20/20 matched; alignment -0.0 ± 0.0 ms (max |err| 0.0 ms)
   physio.physio: 17150 samples, 500.0 Hz (nominal 500.0), gaps 0, clock arrival-linear drift -19.7 ppm (residual 0.011 ms)
       triggers 19/19 matched; alignment 0.951 ± 0.507 ms (max |err| 1.656 ms)
+
+Markers: 20 (18 time-locked to screen flips)
+
+Measures
+  Reaction time: 0.5587 s (median, outcome, n=15)
+  Accuracy: 0.8333 (proportion, outcome, n=18)
+
 Verdict
   OK: no timing, data or synchronization problems detected
 ```
+
+(`lsl.ttl` is the dry run's stand-in for the LSL marker outlet: a loopback that records every marker
+it was sent.)
 
 In a dry run every device is simulated on its own drifting clock (here about 20 ppm), and EDGE has
 to recover that drift from the data alone.
@@ -192,7 +206,11 @@ edge update --stash    # keep your own uncommitted changes (put back afterwards)
 
 From a copy of the repository you can also double-click `update.bat` (Windows) or run `sh update.sh`
 (macOS / Linux). Your experiments and data are never touched. If the update would overwrite changes
-you made to EDGE's own files, it stops and tells you instead.
+you made to EDGE's own files, it stops and tells you instead; with `--stash` it sets them aside and
+puts them back afterwards, and if they clash with the update they stay safe in git's stash and the
+folder is left clean on the new version. Commits of your own are combined with the update.
+`edge --version` shows the release and the exact commit (`0.1.0+g61bc96e`), which is also recorded in
+every session's data and in experiment locks, so `edge verify` notices when EDGE changed.
 
 ## Hardware
 
@@ -234,7 +252,8 @@ session.json         settings, devices, clock models, marker codebook, timing su
 edge export data/ --formats csv,xlsx,bids    # merge all participants; Excel workbook; BIDS tree
 ```
 
-See [docs/DATA.md](docs/DATA.md) for how the tables are built and for all save, load and export features.
+See [docs/DATA.md](docs/DATA.md) for how the tables are built and for all save, load and export features,
+including [scripting EDGE from Python](docs/DATA.md#scripting-edge-from-python) (`edge.run(...)`).
 
 ## Talk to it: MCP for Claude and VS Code
 
@@ -246,9 +265,9 @@ claude mcp add edge -- edge mcp --root .          # Claude Code (VS Code: .vscod
 > "Build a 2-back task with letters, 3 blocks of 30 trials, g.tec EEG over LSL and TTL triggers,
 > dry-run it and give me the expected session length."
 
-The 51 tools cover building experiments (including the design wizard and questionnaires) and editing them (with all-or-nothing batch edits), devices,
-validation, dry runs, real runs, session analysis, exports, undo and version history, and
-opening the visual builder. Edits are validated, backed up and show up live in an open builder.
+The 59 tools cover building experiments (including the design wizard and questionnaires) and editing them (with all-or-nothing batch edits), devices,
+validation, dry runs, real runs, preflight, lock and verify, session analysis, exports, undo and
+version history, and opening the visual builder. Edits are validated, backed up and show up live in an open builder.
 See [docs/MCP.md](docs/MCP.md).
 
 ## Status

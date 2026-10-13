@@ -28,7 +28,7 @@ def test_example_stroop_dry_run_with_report(tmp_path, capsys):
     rc = main(["run", str(tmp_path / "stroop/stroop.yaml"), "--dry-run", "--report", "-p", "042"])
     out = capsys.readouterr().out
     assert rc == 0 and "Verdict" in out and "OK" in out
-    assert list((tmp_path / "stroop/data").glob("042_1_stroop_*"))
+    assert list((tmp_path / "stroop/data/dry_runs").glob("042_1_stroop_*"))   # test runs never mix with real data
 
 
 def test_cli_lists(capsys):

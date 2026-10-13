@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import heapq
 import itertools
+from pathlib import Path
 from typing import Any
 
 import time
@@ -28,6 +29,14 @@ class HeadlessStim(Stim):
 
     def draw(self) -> None:
         self.backend._drawn.append((self.kind, dict(self.props)))
+
+    def native_size(self) -> tuple[float, float] | None:
+        from ..pitfalls import image_size
+        src = self.props.get("image")
+        if not isinstance(src, str) or not src:
+            return None
+        path = Path(src) if Path(src).is_absolute() else Path(self.backend.base_dir) / src
+        return image_size(path)
 
 
 class HeadlessBackend(Backend):
@@ -55,6 +64,7 @@ class HeadlessBackend(Backend):
         self.frame_jitter = list(frame_jitter or [])  # extra seconds added to given frame indices (tests)
         self.n_flips = 0
         self.escape_at: float | None = None
+        self.base_dir = Path.cwd()       # the session sets the experiment's folder (image native sizes)
 
     def open(self, window: dict[str, Any]) -> None:
         if window.get("size"):

@@ -20,9 +20,17 @@
   builder tells you what changed. Files from a newer EDGE are refused instead of being
   misread.
 * **Clear syntax errors.** Malformed YAML/JSON produces `invalid YAML at line 12, column 5: …`.
+  A key given twice in one place (two `max_repeat:` lines in one loop) is an error that names both
+  lines, instead of YAML silently keeping only the last one.
+* **Your comments stay.** When EDGE saves a YAML file (builder, MCP tools, `edge` commands), each
+  `# comment` stays with the key or list item it was written next to; comments about something you
+  deleted go with it. The layout is EDGE's own: `{a: 1, b: 2}` on one line becomes one key per line.
+  Saved files keep their permissions.
 * **Portable bundles.** `edge bundle study.yaml` (or the builder's **Bundle** button) writes a
-  `.edgez` archive with the experiment and every file it references (conditions tables, images,
-  sounds). `edge unbundle study.edgez dest/` unpacks it on another computer.
+  `.edgez` archive with the experiment, exactly as written, and every file it references (conditions
+  tables, images, sounds). `edge unbundle study.edgez dest/` unpacks it on another computer. It never
+  replaces files already in `dest/` that differ from the bundle's (an edited trial list, another
+  experiment's files): it stops before writing anything and asks for a new folder.
 
 ## Session data (written automatically)
 
@@ -147,14 +155,47 @@ edge export data/ --layout long --formats parquet                         # one 
 | `json`, `jsonl` | records |
 | `parquet` | needs `pyarrow` |
 | `mat` | MATLAB struct `trials` (needs `scipy`) |
-| `bids` | BIDS-style tree: `sub-XX/ses-YY/beh/*_beh.tsv` + JSON sidecar (column descriptions), `*_events.tsv` (onsets from session start, labels, TTL codes), `*_physio.tsv.gz` + JSON (sampling rate, start time, columns) per device stream, `dataset_description.json`, `participants.tsv` |
+| `bids` | BIDS-style tree: `sub-XX/ses-YY/beh/*_beh.tsv` + JSON sidecar (column descriptions), `*_events.tsv` (onsets from session start, labels, TTL codes), `*_physio.tsv.gz` + JSON (sampling rate, start time, columns and their units) per device stream, `dataset_description.json`, `participants.tsv`. Every time in it counts from the session start; two folders with the same participant and session become `run-1`, `run-2` |
 
-Merging many sessions (`edge export data/`) adds a `session_folder` column, unions columns
-across participants in a stable order, stacks the per-participant summaries, and writes a
-**sessions** table (date, aborted, dropped frames, devices, errors) for screening.
+`parquet` and `mat` need a package that is not installed by default: the export says so, with the
+command that installs it for your EDGE, before writing anything.
+
+Merging many sessions (`edge export data/`) adds a `session_folder` column (also to the summary and
+measures, so two sessions of one participant stay apart), unions columns across participants in a
+stable order, stacks the per-participant summaries, and writes a **sessions** table (date, aborted,
+dropped frames, devices, errors) for screening. A folder that holds several experiments gets one set
+of files per experiment, and a session folder that can't be read is skipped and named.
 
 To export automatically after every session, list the formats in the experiment:
 `settings: {data: {exports: [csv, xlsx, bids]}}`.
 
 The same exports are in the builder (**Data** tab), and are available to Claude over MCP
 (`export_data`, `analyze_session`).
+
+## Scripting EDGE from Python
+
+Everything the `edge` command does is also available from Python, e.g. to run a batch of test
+participants or to load the data into your own analysis:
+
+```python
+import edge
+from edge.export import SessionTables, export_many, summarize, wide_trials
+
+summary = edge.run("stroop.yaml", participant="012", dry_run=True)   # like: edge run stroop.yaml -p 012 --dry-run
+print(summary["data_dir"])                       # the session folder
+
+st = SessionTables(summary["data_dir"])          # one session folder
+cols, rows = wide_trials(st)                     # the trial table: column names, one dict per trial
+sum_cols, sum_rows, info = summarize(st, rows)   # accuracy and RT per participant and condition
+
+export_many("data", formats=["csv", "xlsx"])     # like: edge export data/ (add include_dry_runs=True for test runs)
+```
+
+* `edge.run(experiment, participant=..., **options)` loads the file (or takes an `edge.Experiment`)
+  and runs it. `participant` is the ID (`"012"`) or a dict of participant fields
+  (`{"participant": "012", "session": "2", "group": "A"}`), the same as `-p 012 -s 2 -f group=A`;
+  IDs are stored as text, as on the command line. Options: `dry_run=True` (simulated devices and a
+  virtual participant), `data_dir="..."`, `backend="headless"`. It returns the session summary.
+* `edge.Experiment.load(path)` reads an experiment file (to change it in code before `edge.run`).
+* `edge.export.export_session(folder, formats=["csv", "xlsx"])` exports one session, and
+  `export_many(folder)` merges every session under a folder, like `edge export`.

@@ -20,15 +20,24 @@ from typing import Any
 
 @dataclass
 class VirtualParticipant:
+    """``seed=None`` (the default): a different but reproducible participant in every session, seeded from
+    the session's seed (saved in session.json). Give a seed for exactly the same answers every time."""
+
     accuracy: float = 0.9
     respond_prob: float = 0.98
     rt_mu: float = 0.45       # ex-Gaussian parameters (s)
     rt_sigma: float = 0.05
     rt_tau: float = 0.12
-    seed: int | None = 0
+    seed: int | None = None
 
     def __post_init__(self) -> None:
-        self.rng = random.Random(self.seed)
+        self.used_seed = self.seed
+        self.rng = random.Random(self.seed if self.seed is not None else 0)
+
+    def reseed(self, seed: int) -> None:
+        """Start a new simulated person (the session calls this with its own seed)."""
+        self.used_seed = seed
+        self.rng = random.Random(seed)
 
     def rt(self) -> float:
         return max(0.12, self.rng.gauss(self.rt_mu, self.rt_sigma) + self.rng.expovariate(1.0 / self.rt_tau))
@@ -36,8 +45,12 @@ class VirtualParticipant:
     def respond(self, component: Any, allowed: Any, correct: Any, backend: Any) -> None:
         """Schedule simulated input on the headless backend for a response window."""
         open_ended = component.spec.duration is None and component.spec.duration_frames is None
+        can_time_out = not open_ended or _routine_can_end_by_itself(component)
         if not open_ended and self.rng.random() > self.respond_prob:
             return  # a missed response; only possible when the window times out
+        if correct is not None and str(correct).strip().lower() in ("none", "") and can_time_out \
+                and component.type_name in ("keyboard", "device_response") and self.rng.random() < self.accuracy:
+            return  # "no response" is the right answer (a no-go / standard trial): withhold, as people mostly do
         onset = component.t_start if component.t_start is not None else backend.clock()
         at = onset + self.rt()
         kind = component.type_name
@@ -89,3 +102,10 @@ class VirtualParticipant:
             backend.click((x, component.cy), at)
             if component.p.get("require_confirm"):
                 backend.press("return", at + 0.4)
+
+
+def _routine_can_end_by_itself(component: Any) -> bool:
+    """Whether the screen ends without this response (a routine duration or end condition), so not
+    answering can't leave the session waiting forever."""
+    routine = getattr(getattr(component, "run", None), "routine", None)
+    return routine is not None and (routine.duration is not None or bool(routine.end_if))

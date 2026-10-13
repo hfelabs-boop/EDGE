@@ -47,6 +47,23 @@ def _latest_session(exp_path: Path) -> Path | None:
     return max(sessions, key=lambda s: (s / "session.json").stat().st_mtime) if sessions else None
 
 
+def _session_experiment_dir(session: Path, exp_doc: dict[str, Any]) -> Path | None:
+    """The folder of the experiment a session was recorded with: sessions live in <experiment folder>/<data dir>
+    (or its dry_runs/ folder). None when the session folder has been moved out of there."""
+    data_dir = ((exp_doc.get("settings") or {}).get("data") or {}).get("dir") or "data"
+    rel = Path(str(data_dir))
+    d = session.resolve().parent
+    if d.name == "dry_runs":
+        d = d.parent
+    if rel.is_absolute():           # data kept elsewhere: the session doesn't say where the experiment is
+        return None
+    parts = rel.parts
+    if parts and tuple(d.parts[-len(parts):]) == parts and len(d.parts) > len(parts):
+        cand = Path(*d.parts[:-len(parts)])
+        return cand if cand.is_dir() else None
+    return None
+
+
 def make_bundle(path: str | Path, out: str | Path | None = None, include_data: bool = False) -> dict[str, Any]:
     from .reproduce import environment, lock_path
     from .storage import dumps, load_document
@@ -106,8 +123,17 @@ def make_bundle(path: str | Path, out: str | Path | None = None, include_data: b
             try:
                 from .measures import recording_plan
                 from .model import Experiment
-                exp = Experiment.from_dict(exp_doc, base_dir=exp_path.parent if exp_path else p)
-                put("validation.txt", "\n".join(str(i) for i in exp.validate()) or "no issues")
+                # a session's copy of the experiment is checked against the experiment's own folder, where its
+                # conditions files and pictures are (the session folder has none of them)
+                base = exp_path.parent if exp_path else _session_experiment_dir(p, exp_doc)
+                exp = Experiment.from_dict(exp_doc, base_dir=base or p)
+                text = "\n".join(str(i) for i in exp.validate()) or "no issues"
+                if exp_path is None:
+                    text = (f"Checked against the experiment folder {base.name}/ (where the session was recorded).\n\n"
+                            if base else "The experiment folder of this session was not found, so files it uses "
+                                         "(conditions, pictures) could not be checked; 'not found' messages below "
+                                         "may only mean that.\n\n") + text
+                put("validation.txt", text)
                 plan = recording_plan(exp)
                 put("recording_plan.json", json.dumps({k: plan[k] for k in ("participant", "loops", "devices", "always")},
                                                       indent=2, default=str))

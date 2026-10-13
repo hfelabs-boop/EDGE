@@ -133,7 +133,8 @@ def test_merge_many_participants(tmp_path):
         d = dict(EXP, settings={"participant": {"participant": pid}})
         run_headless(d, tmp_path, vp=VirtualParticipant(seed=int(pid)))
     res = export_many(tmp_path / "data", ["csv", "xlsx"], tmp_path / "merged", name="all")
-    assert res["sessions"] == 3 and res["participants"] == 3 and res["trials"] == 33
+    # trials = loop iterations (10 each, as in the report); the table also has each session's intro row
+    assert res["sessions"] == 3 and res["participants"] == 3 and res["trials"] == 30 and res["rows"] == 33
     trials = list(csv.DictReader((tmp_path / "merged" / "all_trials.csv").open(encoding="utf-8-sig")))
     assert {r["participant"] for r in trials} == {"001", "002", "003"}
     assert list(trials[0])[:3] == ["experiment", "session_folder", "participant"]

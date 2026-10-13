@@ -1,6 +1,7 @@
 """Starting EDGE without a terminal: default workspace, desktop shortcuts, guided questions.
 
-* ``edge`` (no arguments) opens the builder on ``~/EDGE Experiments`` (created on first use).
+* ``edge`` (no arguments) opens the builder on "EDGE Experiments" in your Documents folder (in your
+  home folder if there is none), created on first use.
 * ``edge desktop-shortcut`` puts an "EDGE" icon on the desktop / in the app menu.
 * ``edge wizard`` asks the design-wizard questions in the terminal.
 """
@@ -26,12 +27,22 @@ This folder is where EDGE keeps your experiments. Each experiment is a `.yaml` f
 """
 
 
-def default_workspace() -> Path:
+WORKSPACE_HELP = "'EDGE Experiments' in your Documents folder, or in your home folder if there is none"
+EXPERIMENT_SUFFIXES = (".yaml", ".yml", ".json")
+
+
+def default_workspace(plat: str | None = None, home: Path | None = None) -> Path:
     env = os.environ.get("EDGE_HOME")
     if env:
         return Path(env).expanduser()
-    docs = Path.home() / "Documents"
-    return (docs if docs.is_dir() else Path.home()) / "EDGE Experiments"
+    home = home or Path.home()
+    preferred = (documents_dir(plat, home) or home) / "EDGE Experiments"
+    if not preferred.is_dir():
+        # the folder an earlier EDGE made stays in use: an update must never seem to lose experiments
+        for old in (home / "Documents" / "EDGE Experiments", home / "EDGE Experiments"):
+            if old.is_dir():
+                return old
+    return preferred
 
 
 def ensure_workspace(path: Path | None = None) -> Path:
@@ -43,10 +54,31 @@ def ensure_workspace(path: Path | None = None) -> Path:
     return ws
 
 
+def workspace_for(directory: str | Path | None) -> tuple[Path | None, str | None]:
+    """The folder to open for what was given, and the experiment's file name when it was an experiment
+    file (``edge start study.yaml`` opens the folder it is in)."""
+    if not directory:
+        return None, None
+    p = Path(directory).expanduser()
+    if p.is_file():
+        if p.suffix.lower() in EXPERIMENT_SUFFIXES:
+            return p.parent, p.name
+        raise NotADirectoryError(20, "this is a file, not a folder: give the folder your experiments are in", str(p))
+    return p, None
+
+
+def open_query(name: str | None) -> str:
+    from urllib.parse import quote
+    return f"?open={quote(name)}" if name else ""
+
+
 def launch(directory: str | None = None, port: int = 8765, open_browser: bool = True) -> int:
     from .builder.server import serve
-    ws = ensure_workspace(Path(directory) if directory else None)
-    serve(ws, port=port, open_browser=open_browser)
+    folder, name = workspace_for(directory)
+    ws = ensure_workspace(folder)
+    if name:
+        print(f"{name} is an experiment file: opening the folder it is in, {ws}")
+    serve(ws, port=port, open_browser=open_browser, path_query=open_query(name))
     return 0
 
 
@@ -96,15 +128,49 @@ def desktop_dir(plat: str | None = None, home: Path | None = None) -> Path:
             if cand and (Path(cand) / "Desktop").is_dir():
                 return Path(cand) / "Desktop"
     elif plat.startswith("linux"):
-        try:
-            for line in (home / ".config" / "user-dirs.dirs").read_text(encoding="utf-8").splitlines():
-                if line.startswith("XDG_DESKTOP_DIR="):
-                    p = Path(line.split("=", 1)[1].strip().strip('"').replace("$HOME", str(home)))
-                    if p.is_dir():
-                        return p
-        except OSError:
-            pass
+        p = _xdg_dir("XDG_DESKTOP_DIR", home)
+        if p:
+            return p
     return home / "Desktop"
+
+
+def _xdg_dir(key: str, home: Path) -> Path | None:
+    """A folder named in ~/.config/user-dirs.dirs (translated: ~/Bureau, ~/Dokumente …), if it exists."""
+    try:
+        for line in (home / ".config" / "user-dirs.dirs").read_text(encoding="utf-8").splitlines():
+            if line.startswith(key + "="):
+                p = Path(line.split("=", 1)[1].strip().strip('"').replace("$HOME", str(home)))
+                if p.is_dir() and p != home:        # "$HOME" itself means the folder is switched off
+                    return p
+    except OSError:
+        pass
+    return None
+
+
+def documents_dir(plat: str | None = None, home: Path | None = None) -> Path | None:
+    """The real Documents folder: redirected to OneDrive on many Windows PCs, translated on Linux
+    (~/Dokumente, ~/Documenti …). None if there is none."""
+    plat = plat or sys.platform
+    home = home or Path.home()
+    if plat.startswith("win"):
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders") as k:
+                p = Path(os.path.expandvars(winreg.QueryValueEx(k, "Personal")[0]))
+            if p.is_dir():
+                return p
+        except Exception:
+            pass
+        for cand in (os.environ.get("OneDrive"), os.environ.get("OneDriveConsumer"), os.environ.get("OneDriveCommercial")):
+            if cand and (Path(cand) / "Documents").is_dir():
+                return Path(cand) / "Documents"
+    elif plat.startswith("linux"):
+        p = _xdg_dir("XDG_DOCUMENTS_DIR", home)
+        if p:
+            return p
+    docs = home / "Documents"
+    return docs if docs.is_dir() else None
 
 
 def show_message(title: str, text: str, error: bool = True) -> None:
@@ -151,8 +217,10 @@ def launch_from_shortcut(directory: str | None = None, port: int = 8765) -> int:
         pass
     try:
         from .builder.server import serve
-        ws = ensure_workspace(Path(directory) if directory else None)
-        serve(ws, port=port, open_browser=True, notify=lambda t, m: show_message(t, m, error=False))
+        folder, name = workspace_for(directory)
+        ws = ensure_workspace(folder)
+        serve(ws, port=port, open_browser=True, notify=lambda t, m: show_message(t, m, error=False),
+              path_query=open_query(name))
         return 0
     except KeyboardInterrupt:
         return 0
@@ -189,8 +257,8 @@ def desktop_shortcut(platform: str | None = None, desktop: Path | None = None, w
     import shutil
     import subprocess
     plat = platform or sys.platform
-    ws = workspace or default_workspace()
     user_home = home or Path.home()
+    ws = workspace or default_workspace(plat, user_home)
     cmd = edge_command() + ["start", "--from-shortcut", str(ws)]
     icons = install_icons()
     written: list[Path] = []
@@ -280,8 +348,8 @@ def desktop_shortcut(platform: str | None = None, desktop: Path | None = None, w
 
 
 def _version() -> str:
-    from . import __version__
-    return __version__
+    from . import __release__
+    return __release__        # macOS wants plain numbers here: no "+g<commit>"
 
 
 def _desktop_quote(arg: str) -> str:
@@ -292,20 +360,109 @@ def _desktop_quote(arg: str) -> str:
 
 
 # ---------------------------------------------------------------- terminal wizard
+def _choice(options: tuple[str, ...]) -> Callable[[str], str]:
+    def check(text: str) -> str:
+        t = text.strip().lower()
+        for cand in (t, t[:-1] if t.endswith("s") else t, t + "s"):     # "words" -> word, "key" -> keys
+            if cand in options:
+                return cand
+        import difflib
+        close = difflib.get_close_matches(t, options, 1)
+        raise ValueError((f"did you mean {close[0]}? " if close else "") + "Please type one of: " + ", ".join(options))
+    return check
+
+
+def _seconds(blank: Any) -> Callable[[str], Any]:
+    """A number of seconds ('0.5', '0,5', '500 ms'); 'none' (or nothing) gives ``blank``."""
+    def check(text: str) -> Any:
+        t = text.strip().lower().replace(",", ".")
+        if t in ("", "none", "no", "-", "never", "forever"):
+            return blank
+        ms = t.endswith("ms")
+        t = t.removesuffix("ms").removesuffix("seconds").removesuffix("second").removesuffix("secs") \
+            .removesuffix("sec").removesuffix("s").strip()
+        try:
+            v = float(t)
+        except ValueError:
+            raise ValueError("please type a number of seconds, e.g. 0.5" + (", or none" if blank != 0.0 else "")) from None
+        if v < 0:
+            raise ValueError("please type a number of seconds that is 0 or more")
+        return v / 1000 if ms else v
+    return check
+
+
+def _whole(text: str) -> int:
+    try:
+        v = float(text.strip())
+    except ValueError:
+        raise ValueError("please type a whole number, e.g. 2") from None
+    if v != int(v) or v < 1:
+        raise ValueError("please type a whole number of 1 or more, e.g. 2")
+    return int(v)
+
+
+def _proportion(text: str) -> float:
+    """'0.8', '80%' and '80' all mean 80 % correct."""
+    t = text.strip().replace(",", ".")
+    try:
+        v = float(t.rstrip("%").strip())
+    except ValueError:
+        raise ValueError("please type the accuracy as a proportion or a percentage, e.g. 0.8 or 80%") from None
+    if t.endswith("%") or 1 < v <= 100:
+        v /= 100
+    if not 0 < v <= 1:
+        raise ValueError("please type an accuracy between 0 and 1 (or a percentage), e.g. 0.8 or 80%")
+    return v
+
+
+def _yes_no(text: str) -> bool:
+    t = text.strip().lower()
+    if t in ("y", "yes", "j", "ja", "o", "oui", "s", "si", "sí"):
+        return True
+    if t in ("n", "no", "nein", "non"):
+        return False
+    raise ValueError("please answer y (yes) or n (no)")
+
+
 def ask_wizard(ask: Callable[[str, str], str] | None = None) -> dict[str, Any]:
-    """Ask the design questions in the terminal and return wizard answers."""
+    """Ask the design questions in the terminal and return wizard answers. Every answer is checked as it is
+    given: a typo is explained and the question asked again, so nothing typed so far is lost."""
+    from .survey_library import INSTRUMENTS
+    from .wizard import PRACTICE_MODES, RESPONSE_KINDS, STIMULUS_KINDS
+
     def default_ask(q: str, default: str) -> str:
         r = input(f"{q} [{default}]: ").strip()
         return r or default
-    ask = ask or default_ask
+    raw = ask or default_ask
+
+    def get(q: str, default: str, check: Callable[[str], Any] | None = None) -> Any:
+        for _ in range(20):          # a person retypes; a script that keeps giving a wrong answer must still stop
+            r = raw(q, default)
+            r = default if not str(r).strip() else str(r)
+            if check is None:
+                return r
+            try:
+                return check(r)
+            except ValueError as e:
+                print(f"  {e}")
+        raise ValueError(f"no valid answer to '{q}'")
+
+    def questionnaires(text: str) -> list[str]:
+        chosen = text.replace(",", " ").split()
+        unknown = [x for x in chosen if x not in INSTRUMENTS]
+        if unknown:
+            raise ValueError(f"there is no questionnaire called {', '.join(unknown)}; choose from: {' '.join(INSTRUMENTS)}")
+        return chosen
+
     a: dict[str, Any] = {}
-    a["name"] = ask("Name of the experiment", "my_experiment")
-    kind = ask("What do participants see or hear? (word / picture / sound / shape)", "word")
-    rkind = ask("How do they respond? (keys / mouse / rating / none)", "keys")
+    a["name"] = get("Name of the experiment", "my_experiment")
+    kind = get("What do participants see or hear? (word / picture / sound / shape)", "word", _choice(STIMULUS_KINDS))
+    rkind = get(f"How do they respond? ({' / '.join(RESPONSE_KINDS)})", "keys", _choice(RESPONSE_KINDS))
     items = []
-    print("List the stimuli, one per line as: stimulus, correct key, condition  (empty line to finish)")
+    answer = "correct button" if rkind == "buttons" else "correct key"
+    print(f"List the stimuli, one per line as: stimulus, {answer}, condition  (empty line to finish)")
     while True:
-        line = ask("  stimulus", "")
+        line = get("  stimulus", "")
         if not line:
             break
         parts = [p.strip() for p in line.split(",")]
@@ -314,29 +471,42 @@ def ask_wizard(ask: Callable[[str, str], str] | None = None) -> dict[str, Any]:
     a["stimulus"] = {"kind": kind, "items": items or None}
     a["response"] = {"kind": rkind}
     if rkind == "keys":
-        keys = ask("Response keys, separated by spaces (empty = the correct keys you gave)", "")
+        correct = sorted({i["correct"] for i in items if i["correct"]})
+
+        def keys_check(text: str) -> list[str]:
+            keys = text.split()
+            missing = [c for c in correct if keys and c not in keys]
+            if missing:
+                raise ValueError(f"the correct key(s) you gave ({', '.join(missing)}) must be among the response keys; "
+                                 f"add them, e.g. {' '.join(sorted(set(keys) | set(correct)))}")
+            return keys
+        keys = get("Response keys, separated by spaces (empty = the correct keys you gave)", "", keys_check)
         if keys:
-            a["response"]["keys"] = keys.split()
-    a["timing"] = {"fixation": ask("Fixation cross before each stimulus, seconds (0 = none)", "0.5"),
-                   "stimulus_duration": ask("Show the stimulus for how many seconds? (empty = until response)", "") or None,
-                   "response_deadline": ask("Response deadline, seconds (empty = wait forever)", "2") or None}
-    a["feedback"] = ask("Show correct / wrong feedback? (y/n)", "n").lower().startswith("y")
-    a["practice"] = {"mode": ask("Practice block? (none / once / until)", "none")}
+            a["response"]["keys"] = keys
+    a["timing"] = {"fixation": get("Fixation cross before each stimulus, seconds (0 = none)", "0.5", _seconds(0.0)),
+                   "stimulus_duration": get("Show the stimulus for how many seconds? (empty = until response)", "",
+                                            _seconds(None))}
+    if rkind != "none":
+        # 'none' (not an empty answer, which takes the default) means no deadline: wait for the answer
+        a["timing"]["response_deadline"] = get("Response deadline in seconds (none = wait for the answer)",
+                                               "2" if rkind == "keys" else "none", _seconds("none"))
+    a["feedback"] = get("Show correct / wrong feedback? (y/n)", "n", _yes_no)
+    a["practice"] = {"mode": get("Practice block? (none / once / until)", "none", _choice(PRACTICE_MODES))}
     if a["practice"]["mode"] == "until":
-        a["practice"]["criterion"] = float(ask("Accuracy needed to pass (0-1)", "0.8"))
-        a["practice"]["max_rounds"] = int(ask("At most how many practice rounds", "3"))
-    a["blocks"] = {"count": int(ask("Number of blocks", "1")),
-                   "repeats": int(ask("How many times each stimulus appears per block", "1"))}
-    from .survey_library import INSTRUMENTS
-    qs = ask("Questionnaires, separated by spaces (" + " ".join(INSTRUMENTS) + "; empty = none)", "")
-    a["questionnaires"] = qs.split()
+        a["practice"]["criterion"] = get("Accuracy needed to pass (e.g. 0.8 or 80%)", "0.8", _proportion)
+        a["practice"]["max_rounds"] = get("At most how many practice rounds", "3", _whole)
+    a["blocks"] = {"count": get("Number of blocks", "1", _whole),
+                   "repeats": get("How many times each stimulus appears per block", "1", _whole)}
+    a["questionnaires"] = get("Questionnaires, separated by spaces (" + " ".join(INSTRUMENTS) + "; empty = none)", "",
+                              questionnaires)
     return a
 
 
 def write_wizard_experiment(answers: dict[str, Any], directory: Path) -> tuple[Path, dict[str, Any]]:
     from .storage import save_document
-    from .wizard import build_experiment, estimate
-    doc = build_experiment(answers)
+    from .wizard import build_experiment, estimate, prepare_files
+    notes: list[str] = []          # answers the wizard filled in, adjusted or left out; files still to provide
+    doc = build_experiment(answers, notes)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{doc['name']}.yaml"
     n = 2
@@ -344,10 +514,13 @@ def write_wizard_experiment(answers: dict[str, Any], directory: Path) -> tuple[P
         path = directory / f"{doc['name']}_{n}.yaml"
         n += 1
     save_document(path, doc, label="wizard")
-    from .wizard import write_placeholders
-    write_placeholders(doc, directory)
-    return path, estimate(doc, directory)
+    notes += prepare_files(doc, directory)
+    est = estimate(doc, directory)
+    est["notes"] = notes
+    return path, est
 
 
 def load_answers(path: str) -> dict[str, Any]:
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    """Wizard answers from a JSON or YAML file (a mistake in it is a WizardError that says where)."""
+    from .wizard import read_answers
+    return read_answers(path)

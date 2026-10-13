@@ -43,6 +43,13 @@ class PygletStim(Stim):
             self.props.update(props)
             self._dirty = True
 
+    def native_size(self) -> tuple[float, float] | None:
+        try:
+            img = self.b.load_image(self.props["image"])
+        except Exception:
+            return None
+        return img.width, img.height
+
     def _build(self) -> None:
         import pyglet
         p = self.props

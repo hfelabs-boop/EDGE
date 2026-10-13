@@ -19,6 +19,13 @@ jobs:
           python-version: "3.12"
       - run: pip install -e ".[all]" pyinstaller
       - run: pyinstaller install/edge.spec --noconfirm
+      - name: Check that the app starts and runs an experiment
+        shell: bash
+        run: |
+          cd dist
+          ./EDGE/EDGE --version
+          ./EDGE/EDGE new blank smoke
+          ./EDGE/EDGE run smoke/my_experiment.yaml --dry-run
       - uses: actions/upload-artifact@v4
         with:
           name: EDGE-${{ matrix.os }}

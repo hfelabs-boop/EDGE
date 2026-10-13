@@ -26,10 +26,12 @@ def test_registry_has_builtin_drivers():
 def test_simulated_devices_sync_end_to_end(run):
     """Every simulated device runs on its own drifting clock; after alignment, the trigger
     channel of each stream must line up with EDGE's flip-locked markers within one sample."""
+    # fixed seeds: simulated devices otherwise produce different data in every session, and the 1 ppm drift
+    # tolerance below is for this recording, not for any random one
     d = {"devices": [{"id": "eeg", "type": "sim_eeg", "options": {"srate": 500, "clock_offset": 12345.6,
-                                                                   "clock_drift_ppm": 50}},
-                     {"id": "physio", "type": "sim_physio"},
-                     {"id": "et", "type": "sim_eyetracker"}],
+                                                                   "clock_drift_ppm": 50, "seed": 0}},
+                     {"id": "physio", "type": "sim_physio", "options": {"seed": 0}},
+                     {"id": "et", "type": "sim_eyetracker", "options": {"seed": 0}}],
          "routines": {"r": {"duration": 1.0, "components": [
              {"id": "s", "type": "shape", "start": 0.3, "duration": 0.2, "marker": "$f'stim_{L.n % 3}'"}]}},
          "flow": [{"loop": "L", "repeats": 30, "children": ["r"]}]}

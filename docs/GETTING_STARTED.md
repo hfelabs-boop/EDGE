@@ -42,7 +42,8 @@ MCP server. Extras you might also want:
 ## 2. Open EDGE
 
 Double-click the **EDGE** icon (or type `edge` in a terminal). The builder opens in your browser on your
-experiments folder, `Documents/EDGE Experiments`. Everything stays on your computer.
+experiments folder, `EDGE Experiments` in your Documents folder (in your home folder if there is no
+Documents folder). Everything stays on your computer.
 
 ## 3. Make an experiment by answering questions
 
@@ -65,7 +66,12 @@ The bottom line updates as you go: *"This makes 64 trials, about 6 minutes"*. Pr
 experiment**: EDGE writes the experiment, opens it, and immediately runs a **test run** with a
 virtual participant to prove it works.
 
-Prefer the terminal? `edge wizard` asks the same questions.
+Prefer the terminal? `edge wizard` asks the core questions: the stimuli and how participants respond,
+fixation, stimulus duration and deadline, feedback, practice, blocks and repeats, and questionnaires.
+It does not ask about devices, the pause between trials, the order or the texts, and its defaults are
+simpler (one block, no practice); change those afterwards in the builder. It doesn't run the test run
+for you: it prints the command (`edge run <file> --dry-run`), with a note on anything it filled in,
+adjusted or left out (example stimuli, stand-in pictures, sound files you still have to add).
 
 ## 4. Look at it, try it
 
@@ -103,14 +109,14 @@ From a terminal it's the same:
 
 ```bash
 edge run study.yaml -p 001 -s 1          # participant 001, session 1
-edge report data/001_1_study_*           # timing and synchronization check
+edge report study.yaml                   # its newest session: timing and synchronization check
 edge export data/ --formats csv,xlsx     # one table for all participants
 ```
 
 ## 7. Learn more
 
 * **Interactive tutorials**: on the welcome screen or under **?**. Start with *Your first experiment*,
-  which builds a Stroop task by hand in ten minutes and explains every part.
+  which builds a Stroop task by hand in about 12 minutes and explains every part.
 * [Tutorials](TUTORIALS.md): trial lists, workflows (practice until criterion), eye tracking,
   questionnaires, rules, data.
 * [Cookbook](COOKBOOK.md): ready-made solutions to common design problems.

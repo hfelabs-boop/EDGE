@@ -98,7 +98,8 @@ class SimEyeTracker(_SimBase):
     def connect(self) -> None:
         super().connect()
         self.add_stream("gaze", ["x", "y", "valid", "pupil_l", "pupil_r", "user"], self.options["srate"], "Gaze",
-                        units=["px", "px", "bool", "mm", "mm", ""])
+                        units=["px", "px", "bool", "mm", "mm", ""],
+                        coordinates="x, y: px from the centre of the screen, +y up (EDGE's own units)")
         self._fix = (0.0, 0.0)
         self._fix_until = 0.0
         self._latest: tuple[float, float] | None = None
@@ -205,7 +206,8 @@ class MouseGaze(Device):
                  "what": "the mouse position, standing in for gaze"}]
 
     def connect(self) -> None:
-        self.add_stream("gaze", ["x", "y"], self.options["srate"], "Gaze", time_base="master")
+        self.add_stream("gaze", ["x", "y"], self.options["srate"], "Gaze", units=["px", "px"], time_base="master",
+                        coordinates="x, y: px from the centre of the screen, +y up (EDGE's own units)")
         self.connected = True
 
     def poll(self) -> None:

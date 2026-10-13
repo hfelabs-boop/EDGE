@@ -21,12 +21,16 @@ builds those automatically:
 from __future__ import annotations
 
 import csv
+import difflib
 import gzip
+import importlib.util
 import io
 import json
 import math
 import re
 import statistics
+import sys
+import unicodedata
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -36,6 +40,71 @@ from xml.sax.saxutils import escape
 import yaml
 
 FORMATS = ("csv", "tsv", "xlsx", "json", "jsonl", "parquet", "mat", "bids")
+FORMAT_ALIASES = {"excel": "xlsx", "xls": "xlsx", "matlab": "mat", "text": "tsv", "txt": "tsv"}
+LAYOUTS = ("wide", "long")
+
+
+class ExportError(ValueError):
+    """What was asked can't be exported (unknown format, a missing package, an unreadable session),
+    said in words with what to do."""
+
+
+def install_command(package: str) -> str:
+    """The pip command for *this* Python (the one EDGE runs in, e.g. ~/.edge/venv), not whatever pip is on PATH."""
+    return f'"{sys.executable}" -m pip install {package}'
+
+
+def _have(module: str) -> bool:
+    try:
+        return importlib.util.find_spec(module) is not None
+    except (ImportError, ValueError):
+        return False
+
+
+def missing_packages(formats: Iterable[str]) -> dict[str, str]:
+    """Format -> what to install, for the requested formats that need a package this EDGE doesn't have."""
+    out = {}
+    for f in formats:
+        if f == "parquet" and not (_have("pyarrow") or (_have("pandas") and _have("fastparquet"))):
+            out[f] = (f"Parquet export needs the 'pyarrow' package, which isn't installed for this EDGE. "
+                      f"Install it with:\n  {install_command('pyarrow')}")
+        elif f == "mat" and not (_have("scipy") and _have("numpy")):
+            out[f] = (f"MATLAB (.mat) export needs the 'scipy' package, which isn't installed for this EDGE. "
+                      f"Install it with:\n  {install_command('scipy')}")
+    return out
+
+
+def check_formats(formats: Iterable[str] | str, need_packages: bool = True) -> list[str]:
+    """The requested formats, cleaned, or an ExportError before anything is written."""
+    if isinstance(formats, str):
+        formats = formats.split(",")
+    fmts: list[str] = []
+    for f in formats or []:
+        f = str(f).lower().strip().lstrip(".")
+        f = FORMAT_ALIASES.get(f, f)
+        if f and f not in fmts:
+            fmts.append(f)
+    unknown = [f for f in fmts if f not in FORMATS]
+    if unknown:
+        close = difflib.get_close_matches(unknown[0], FORMATS, 1, 0.5)
+        raise ExportError(f"unknown export format '{unknown[0]}'" + (f"; did you mean {close[0]}?" if close else "")
+                          + f" (choose from {', '.join(FORMATS)})")
+    if not fmts:
+        raise ExportError(f"no export format given (choose from {', '.join(FORMATS)})")
+    if need_packages:
+        missing = missing_packages(fmts)
+        if missing:
+            others = [f for f in fmts if f not in missing]
+            raise ExportError("\n".join(missing.values()) + "\nNothing was exported. "
+                              + (f"Or leave {' and '.join(missing)} out: the other formats ({', '.join(others)}) "
+                                 "need nothing extra." if others else "Or choose another format, e.g. csv or xlsx."))
+    return fmts
+
+
+def check_layout(layout: str) -> str:
+    if layout not in LAYOUTS:
+        raise ExportError(f"unknown layout '{layout}': choose wide (one row per trial) or long (one row per screen)")
+    return layout
 
 STRUCT_COLS = {"routine", "routine_index", "routine_start", "routine_duration", "trial_key", "loop", "experiment"}
 
@@ -52,7 +121,7 @@ class SessionTables:
 
     def __init__(self, root: str | Path):
         self.root = Path(root)
-        self.meta: dict[str, Any] = json.loads((self.root / "session.json").read_text(encoding="utf-8"))
+        self.meta: dict[str, Any] = read_session_json(self.root)
         self.rows: list[dict[str, Any]] = _read_jsonl(self.root / "trials.jsonl")
         self.events: list[dict[str, Any]] = _read_jsonl(self.root / "events.jsonl")
         exp_file = self.root / "experiment.yaml"
@@ -84,6 +153,25 @@ class SessionTables:
         return self.root.name
 
 
+def read_session_json(root: Path) -> dict[str, Any]:
+    """A session folder's session.json; a damaged one is an ExportError that names the folder."""
+    path = Path(root) / "session.json"
+    if not path.exists() and Path(root).is_dir() and any(Path(root).rglob("session.json")):
+        raise ExportError(f"{root} is a folder of sessions, not one session: choose one of the session folders "
+                          "inside it (they hold a session.json)")
+    try:
+        text = path.read_text(encoding="utf-8")
+        meta = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ExportError(f"{root}: session.json is damaged and can't be read (line {e.lineno}: {e.msg}); "
+                          "the session was probably cut off. Its trials.jsonl may still hold the data") from None
+    except UnicodeDecodeError:
+        raise ExportError(f"{root}: session.json is not a text file EDGE wrote") from None
+    if not isinstance(meta, dict):
+        raise ExportError(f"{root}: session.json doesn't describe a session")
+    return meta
+
+
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
@@ -105,7 +193,7 @@ def find_sessions(path: str | Path, include_dry_runs: bool = False) -> list[Path
     out = []
     for s in sorted(p.rglob("session.json")):
         root = s.parent
-        if not include_dry_runs and "dry_runs" in root.parts:
+        if not include_dry_runs and "dry_runs" in root.relative_to(p).parts:     # not the folders above p
             continue
         out.append(root)
     return out
@@ -241,11 +329,43 @@ def _num(v: Any) -> float | None:
     return None
 
 
+def _component_specs(st: SessionTables) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for r in (st.experiment.get("routines") or {}).values():
+        for c in (r or {}).get("components", []) or []:
+            if isinstance(c, dict) and c.get("id"):
+                out.setdefault(str(c["id"]), c)
+    return out
+
+
+def _advances_screen(spec: dict[str, Any]) -> bool:
+    """'Press SPACE to continue': a keyboard with one key and no correct answer only moves on."""
+    keys = spec.get("keys")
+    keys = [keys] if isinstance(keys, str) else keys
+    return spec.get("type") == "keyboard" and spec.get("correct") in (None, "") \
+        and isinstance(keys, list) and len(keys) == 1
+
+
 def detect_measures(st: SessionTables, rows: list[dict[str, Any]]) -> tuple[str | None, str | None]:
-    """Pick the main response component: the one with the most non-missing RTs (corr preferred)."""
+    """Pick the main response component: the one with the most non-missing RTs (corr preferred), among the
+    trials of the loops (a key press on the instructions isn't the task's response). Without loops, every
+    screen counts except those that only wait for a key to continue."""
     best, best_score = None, -1
-    comps = {c.rpartition(".")[0] for r in rows for c in r if c.endswith(".rt")
-             and st.comp_types.get(c.rpartition(".")[0]) not in ("survey", "html")}   # page times aren't RTs
+    loop_rows = [r for r in rows if r.get("loop")]
+    specs = _component_specs(st)
+    main = _main_loop(loop_rows)
+    if loop_rows:
+        rows = loop_rows
+    in_main = {c.rpartition(".")[0] for r in rows if r.get("loop") == main for c, v in r.items()
+               if c.endswith(".rt") and v is not None}
+
+    def candidate(comp: str) -> bool:
+        if st.comp_types.get(comp) in ("survey", "html"):          # page times aren't RTs
+            return False
+        # a break screen's "press space" inside an outer loop (blocks) isn't the task's response either
+        return not _advances_screen(specs.get(comp, {})) or comp in in_main
+
+    comps = {c.rpartition(".")[0] for r in rows for c in r if c.endswith(".rt") and candidate(c.rpartition(".")[0])}
     for comp in comps:
         n_rt = sum(_num(r.get(f"{comp}.rt")) is not None for r in rows)
         n_corr = sum(r.get(f"{comp}.corr") is not None for r in rows)
@@ -258,11 +378,54 @@ def detect_measures(st: SessionTables, rows: list[dict[str, Any]]) -> tuple[str 
     return f"{best}.rt", corr
 
 
+def _main_loop(loop_rows: list[dict[str, Any]]) -> str | None:
+    """The loop with the most trials (the task, not the blocks around it or a short practice)."""
+    counts: dict[str, int] = {}
+    for r in loop_rows:
+        counts[r["loop"]] = counts.get(r["loop"], 0) + 1
+    return max(counts, key=lambda k: counts[k]) if counts else None
+
+
+def _trial_rows(rows: list[dict[str, Any]], rt: str | None) -> list[dict[str, Any]]:
+    """The rows that are trials: those of the loops where the main response happens (or of the main loop)."""
+    loop_rows = [r for r in rows if r.get("loop")]
+    if not loop_rows:
+        return rows
+    if rt:
+        loops = {r["loop"] for r in loop_rows if r.get(rt) is not None}
+        if loops:
+            return [r for r in loop_rows if r["loop"] in loops]
+    main = _main_loop(loop_rows)
+    return [r for r in loop_rows if r["loop"] == main]
+
+
+FILE_VALUE = re.compile(r"\.(png|jpe?g|gif|bmp|tiff?|webp|svg|wav|mp3|ogg|flac|aac|m4a|mp4|mov|avi|webm|html?|csv|tsv|xlsx)$",
+                        re.I)
+
+
+def _not_factors(st: SessionTables) -> set[str]:
+    """Trial-list columns that aren't conditions: the answer key ($correct_key in a `correct:`), adaptive
+    staircase levels."""
+    out: set[str] = set()
+    for spec in _component_specs(st).values():
+        v = spec.get("correct")
+        if isinstance(v, str) and v.startswith("$") and v[1:].strip().isidentifier():
+            out.add(v[1:].strip())
+    for lid, info in st.loops.items():
+        if isinstance(info, dict) and info.get("type") == "staircase":
+            out.update(str(c) for c in info.get("columns") or [])
+    return out
+
+
 def detect_factors(st: SessionTables, rows: list[dict[str, Any]], max_levels: int = 12) -> list[str]:
     out = []
+    skip = _not_factors(st)
     for col in st.condition_cols:
-        if re.search(r"(correct|answer|corr_?key|^key|_key$|stim(ulus)?_?file|image|sound|file)", col, re.I):
+        if re.search(r"(correct|answer|corr_?key|^key|_key$|stim(ulus)?_?file|image|sound|file)", col, re.I) \
+                or col in skip:
             continue
+        if any(isinstance(r.get(col), str) and FILE_VALUE.search(r[col].strip()) for r in rows):
+            continue                         # picture / sound / page file names
         levels = {json.dumps(r.get(col), default=str) for r in rows if col in r}
         if 2 <= len(levels) <= max_levels:
             out.append(col)
@@ -308,12 +471,33 @@ def summarize(st: SessionTables, rows: list[dict[str, Any]] | None = None, by: l
     if rows is None:
         _, rows = wide_trials(st, drop_empty=False)
     cfg = (st.experiment.get("settings") or {}).get("data", {}).get("summary") or {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+    present = {c for r in rows for c in r}
+    # columns asked for by name must exist: a typo would otherwise read as "every trial missed"
+    for what, col in (("rt", rt), ("correct", correct)):
+        if col and col not in present:
+            raise ExportError(_no_column(col, present, what))
+    for col in by or []:
+        if col not in present:
+            raise ExportError(_no_column(col, present, "by"))
+    problems: list[str] = []
+    for what in ("rt", "correct"):        # settings.data.summary: fall back to what EDGE finds, and say so
+        if cfg.get(what) and cfg[what] not in present:
+            problems.append("settings.data.summary." + _no_column(str(cfg[what]), present, what)
+                            + "; using the automatic choice instead")
+            cfg = {k: v for k, v in cfg.items() if k != what}
+    if isinstance(cfg.get("by"), list):
+        bad = [c for c in cfg["by"] if c not in present]
+        for c in bad:
+            problems.append("settings.data.summary." + _no_column(str(c), present, "by") + "; left out")
+        cfg = dict(cfg, by=[c for c in cfg["by"] if c in present])
     auto_rt, auto_corr = detect_measures(st, rows)
     rt = rt or cfg.get("rt") or auto_rt
     correct = correct or cfg.get("correct") or (auto_corr if not cfg.get("rt") else None)
     declared_factors = [m["column"] for m in _declared(st) if m["role"] == "factor"]
     factors = by if by is not None else (cfg.get("by") or declared_factors or detect_factors(st, rows))
-    trial_rows = [r for r in rows if r.get("loop")] or rows   # instructions etc. aren't trials
+    trial_rows = _trial_rows(rows, rt)    # instructions, break screens etc. aren't trials
     pid_fields = [f for f in st.participant_fields if f in ("participant", "session")] or st.participant_fields[:1]
     out: list[dict[str, Any]] = []
     parts: dict[tuple, list[dict[str, Any]]] = {}
@@ -335,7 +519,19 @@ def summarize(st: SessionTables, rows: list[dict[str, Any]] | None = None, by: l
             cols.append(c)
     info = {"rt_column": rt, "correct_column": correct, "factors": factors, "outlier_sd": outlier_sd,
             "min_rt": min_rt, "rt_uses": "correct trials only" if correct else "all responded trials"}
+    if problems:
+        info["problems"] = problems
     return cols, out, info
+
+
+def _no_column(col: str, present: set[str], what: str) -> str:
+    kind = {"rt": ".rt", "correct": ".corr"}.get(what)
+    shown = sorted(c for c in present if not kind or c.endswith(kind)) or sorted(present)
+    close = difflib.get_close_matches(col, shown, 2, 0.6) or difflib.get_close_matches(col, sorted(present), 1, 0.6)
+    return (f"{what}: there is no column '{col}' in this session"
+            + (f"; did you mean {' or '.join(close)}?" if close else "")
+            + (f" ({ {'rt': 'RT columns', 'correct': 'correctness columns'}.get(what, 'columns') }: "
+               f"{', '.join(shown[:30])}{' …' if len(shown) > 30 else ''})" if shown else ""))
 
 
 def _declared(st: SessionTables) -> list[dict[str, Any]]:
@@ -382,9 +578,13 @@ def describe_column(col: str, st: SessionTables) -> str:
         return "Routines that ran in this trial, in order"
     if _is_loop_col(col, st.loops):
         lid, _, what = col.rpartition(".")
-        return {"n": f"Iteration index within loop '{lid}' (0-based)",
-                "repeat": f"Repetition number of loop '{lid}' (0-based)",
-                "row": f"Row of loop '{lid}''s conditions table used for this trial (0-based)",
+        src = (st.loops.get(lid) or {}).get("source") if isinstance(st.loops.get(lid), dict) else None
+        sheet = isinstance(src, str) and src.lower().endswith((".csv", ".tsv", ".txt", ".xlsx"))
+        return {"n": f"Iteration index within loop '{lid}', counted from 0 (0 = its first trial)",
+                "repeat": f"Repetition number of loop '{lid}', counted from 0 (0 = first time through)",
+                "row": f"Which row of the trial list of loop '{lid}' this trial used, counted from 0 (0 = the "
+                       "first row of values" + (f"; in {src} opened as a spreadsheet that is row 2, so "
+                                               "spreadsheet row = this + 2)" if sheet else ")"),
                 "state": f"Current state of state machine '{lid}'",
                 "visit": f"How many times the current state of '{lid}' has been entered (1 = first)"}[what]
     if group == "condition":
@@ -464,26 +664,32 @@ def _type_of(values: list[Any]) -> str:
 def data_dictionary(st: SessionTables, cols: list[str], rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out = []
     for c in cols:
-        vals = [r.get(c) for r in rows]
-        t = _type_of(vals)
         meta = _output_meta(c, st)
         units = meta["units"] if meta and meta.get("units") else \
             UNITS.get(c.rpartition(".")[2].rstrip("_0123456789"), "") if classify(c, st) in ("response", "timing") else ""
         entry: dict[str, Any] = {"column": c, "group": classify(c, st), "description": describe_column(c, st),
-                                 "type": t, "units": units,
-                                 "n": sum(v not in (None, "") for v in vals),
-                                 "missing": sum(v in (None, "") for v in vals)}
-        present = [v for v in vals if v not in (None, "")]
-        if t in ("integer", "number") and present:
-            entry["min"], entry["max"] = min(present), max(present)
-        is_categorical = entry["group"] in ("condition", "id") or t in ("text", "boolean") \
-            or (t == "integer" and c.rpartition(".")[2] in ("corr", "entered", "completed", "repeat"))
-        if is_categorical:
-            levels = {json.dumps(v, default=str) for v in present}
-            if 0 < len(levels) <= 20:
-                entry["levels"] = sorted((json.loads(x) for x in levels), key=lambda v: (str(type(v)), v))
-        out.append(entry)
+                                 "units": units}
+        out.append(_with_stats(entry, [r.get(c) for r in rows]))
     return out
+
+
+def _with_stats(entry: dict[str, Any], vals: list[Any]) -> dict[str, Any]:
+    """Type, n, missing, range and levels of a column's values (description etc. stay as they are)."""
+    c = entry["column"]
+    entry = {k: v for k, v in entry.items() if k not in ("type", "n", "missing", "min", "max", "levels")}
+    t = _type_of(vals)
+    entry.update({"type": t, "n": sum(v not in (None, "") for v in vals), "missing": sum(v in (None, "") for v in vals)})
+    present = [v for v in vals if v not in (None, "")]
+    if t in ("integer", "number") and present:
+        entry["min"], entry["max"] = min(present), max(present)
+    is_categorical = entry.get("group") in ("condition", "id") or t in ("text", "boolean") \
+        or (t == "integer" and c.rpartition(".")[2] in ("corr", "entered", "completed", "repeat"))
+    if is_categorical:
+        levels = {json.dumps(v, default=str) for v in present}
+        if 0 < len(levels) <= 20:
+            entry["levels"] = sorted((json.loads(x) for x in levels), key=lambda v: (str(type(v)), v))
+    order = ["column", "group", "description", "type", "units", "n", "missing", "min", "max", "levels"]
+    return {k: entry[k] for k in sorted(entry, key=lambda k: order.index(k) if k in order else len(order))}
 
 
 # ============================================================================ writers
@@ -505,14 +711,15 @@ def _looks_numeric(s: str) -> bool:
         return False
 
 
-def write_delimited(path: Path, cols: list[str], rows: list[dict[str, Any]], delimiter: str = ",") -> Path:
+def write_delimited(path: Path, cols: list[str], rows: list[dict[str, Any]], delimiter: str = ",",
+                    bom: bool = True) -> Path:
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=delimiter, lineterminator="\n")
     w.writerow(cols)
     for r in rows:
         w.writerow([_cell(r.get(c)) for c in cols])
-    # utf-8-sig so Excel opens accents/symbols correctly
-    path.write_text(buf.getvalue(), encoding="utf-8-sig")
+    # utf-8-sig so Excel opens accents/symbols correctly; BIDS files are plain UTF-8 (bom=False)
+    path.write_text(buf.getvalue(), encoding="utf-8-sig" if bom else "utf-8")
     return path
 
 
@@ -642,16 +849,18 @@ def write_parquet(path: Path, cols: list[str], rows: list[dict[str, Any]]) -> Pa
         import pandas as pd
         pd.DataFrame(clean, columns=cols).to_parquet(path)
         return path
-    except ImportError as e:
-        raise ImportError("Parquet export needs pyarrow: pip install pyarrow") from e
+    except ImportError:
+        raise ExportError(missing_packages(["parquet"]).get("parquet") or "Parquet export needs the 'pyarrow' "
+                          f"package. Install it with:\n  {install_command('pyarrow')}") from None
 
 
 def write_mat(path: Path, cols: list[str], rows: list[dict[str, Any]]) -> Path:
     try:
         import numpy as np
         from scipy.io import savemat
-    except ImportError as e:
-        raise ImportError("MATLAB export needs scipy: pip install scipy") from e
+    except ImportError:
+        raise ExportError(missing_packages(["mat"]).get("mat") or "MATLAB export needs the 'scipy' package. "
+                          f"Install it with:\n  {install_command('scipy')}") from None
     data = {}
     for c in cols:
         vals = [r.get(c) for r in rows]
@@ -679,7 +888,8 @@ def write_table(path: Path, fmt: str, cols: list[str], rows: list[dict[str, Any]
         return write_mat(path, cols, rows)
     if fmt == "xlsx":
         return write_xlsx(path, {"trials": (cols, rows)})
-    raise ValueError(f"unknown format '{fmt}' (choose from {', '.join(FORMATS)})")
+    check_formats([fmt], need_packages=False)
+    raise ExportError(f"{fmt} is written as a folder, not a table")
 
 
 DICT_COLS = ["column", "group", "description", "type", "units", "n", "missing", "min", "max", "levels"]
@@ -687,34 +897,96 @@ DICT_COLS = ["column", "group", "description", "type", "units", "n", "missing", 
 
 # ============================================================================ BIDS
 def _bids_label(v: Any) -> str:
-    return re.sub(r"[^A-Za-z0-9]", "", str(v)) or "x"
+    """Letters and digits only, as BIDS wants; accents become plain letters (é01 -> e01)."""
+    text = "".join(ch for ch in unicodedata.normalize("NFKD", str(v)) if not unicodedata.combining(ch))
+    return re.sub(r"[^A-Za-z0-9]", "", text) or "x"
 
 
-def export_bids(st: SessionTables, out_root: Path) -> list[Path]:
-    """BIDS-style folder: behavioural table, events and continuous recordings (physio)."""
+def bids_names(sessions: list[SessionTables]) -> tuple[dict[Path, tuple[str, str, int | None]], list[str]]:
+    """sub / ses labels (and a run number when one participant+session has several folders) for every
+    session, so no session overwrites another in the BIDS folder; plus notes on what was renamed."""
+    notes: list[str] = []
+    owner: dict[str, str] = {}               # label -> the participant id it stands for
+    groups: dict[tuple[str, str, str], list[SessionTables]] = {}
+    for st in sessions:
+        p = st.meta.get("participant") or {}
+        raw = str(p.get("participant", "01"))
+        sub = base = _bids_label(raw)
+        n = 2
+        while owner.get(sub, raw) != raw:     # 'é01' and 'e01' are different people
+            sub, n = f"{base}x{n}", n + 1
+        owner[sub] = raw
+        if sub != raw:
+            note = f"participant '{raw}' is sub-{sub} in the BIDS folder (BIDS labels are letters and digits only)"
+            if note not in notes:
+                notes.append(note)
+        ses = _bids_label(p.get("session", "1"))
+        groups.setdefault((sub, ses, _bids_label(st.meta.get("experiment", "task"))), []).append(st)
+    out: dict[Path, tuple[str, str, int | None]] = {}
+    for (sub, ses, _), sts in groups.items():
+        if len(sts) == 1:
+            out[sts[0].root] = (sub, ses, None)
+            continue
+        sts = sorted(sts, key=lambda s: (str(s.meta.get("started") or ""), s.name))
+        for i, s in enumerate(sts, 1):
+            out[s.root] = (sub, ses, i)
+        notes.append(f"sub-{sub} ses-{ses} has {len(sts)} session folders ({', '.join(s.name for s in sts)}): "
+                     f"kept as run-1 … run-{len(sts)} in the order they were recorded")
+    return out, notes
+
+
+def _clock_columns(st: SessionTables, cols: list[str]) -> list[str]:
+    """Columns holding master-clock times (routine starts, response times): absolute seconds."""
+    routines = st.experiment.get("routines") or {}
+    out = []
+    for c in cols:
+        comp, _, attr = c.rpartition(".")
+        if (comp in routines and attr == "start") or \
+                (attr.rstrip("_0123456789") == "time" and st.comp_types.get(comp.split(".")[-1]) not in ("html", "survey")
+                 and classify(c, st) in ("timing", "response")):
+            out.append(c)
+    return out
+
+
+def _session_t0(st: SessionTables) -> float:
+    t0 = next((e["time"] for e in st.events if e.get("label") == "session_start"), None)
+    if t0 is None:
+        t0 = st.events[0]["time"] if st.events else 0.0
+    return float(t0)
+
+
+def export_bids(st: SessionTables, out_root: Path, sub: str | None = None, ses: str | None = None,
+                run: int | None = None) -> list[Path]:
+    """BIDS-style folder: behavioural table, events and continuous recordings (physio). Every time in it
+    counts from the session start (EDGE's 'session_start' marker), like the events' onsets."""
     p = st.meta.get("participant", {})
-    sub, ses = _bids_label(p.get("participant", "01")), _bids_label(p.get("session", "1"))
+    sub = sub or _bids_label(p.get("participant", "01"))
+    ses = ses or _bids_label(p.get("session", "1"))
     task = _bids_label(st.meta.get("experiment", "task"))
     d = out_root / f"sub-{sub}" / f"ses-{ses}" / "beh"
     d.mkdir(parents=True, exist_ok=True)
-    stem = f"sub-{sub}_ses-{ses}_task-{task}"
+    stem = f"sub-{sub}_ses-{ses}_task-{task}" + (f"_run-{run}" if run else "")
     files = []
+    t0 = _session_t0(st)
     cols, rows = wide_trials(st)
-    files.append(write_delimited(d / f"{stem}_beh.tsv", cols, rows, "\t"))
-    dd = data_dictionary(st, cols, rows)
+    clock = _clock_columns(st, cols)
+    rel = [{**r, **{c: round(r[c] - t0, 6) for c in clock if isinstance(r.get(c), (int, float))
+                    and not isinstance(r.get(c), bool)}} for r in rows]
+    files.append(write_delimited(d / f"{stem}_beh.tsv", cols, rel, "\t", bom=False))
+    dd = data_dictionary(st, cols, rel)
+    for e in dd:
+        if e["column"] in clock:
+            e["description"] = e["description"].replace("Master-clock time (s)", "Time (s from session start)")
     (d / f"{stem}_beh.json").write_text(json.dumps(
         {e["column"]: {k: v for k, v in {"Description": e["description"], "Units": e["units"] or None,
                                          "Levels": {str(lv): str(lv) for lv in e.get("levels", [])} or None}.items() if v}
          for e in dd}, indent=2), encoding="utf-8")
     files.append(d / f"{stem}_beh.json")
-    t0 = next((e["time"] for e in st.events if e.get("label") == "session_start"), None)
-    if t0 is None:
-        t0 = st.events[0]["time"] if st.events else 0.0
     ev_rows = [{"onset": round(e["time"] - t0, 6), "duration": "n/a", "trial_type": e.get("label"),
                 "value": e.get("code") if e.get("code") is not None else "n/a", "source": e.get("source") or "n/a"}
                for e in st.events]
     files.append(write_delimited(d / f"{stem}_events.tsv", ["onset", "duration", "trial_type", "value", "source"],
-                                 ev_rows, "\t"))
+                                 ev_rows, "\t", bom=False))
     (d / f"{stem}_events.json").write_text(json.dumps({
         "onset": {"Description": "Seconds from session start (EDGE 'session_start' marker)", "Units": "s"},
         "trial_type": {"Description": "EDGE marker label"},
@@ -730,22 +1002,37 @@ def export_bids(st: SessionTables, out_root: Path) -> list[Path]:
         info = st.meta.get("devices", {}).get(device, {}).get("streams", {}).get(stream, {})
         with f.open(newline="", encoding="utf-8") as src:
             r = csv.reader(src)
-            header = next(r)
-            data = list(r)
+            header = next(r, [])
+            data = [row for row in r if row]
         if not data:
             continue
         rec = f"{stem}_recording-{_bids_label(device + stream)}_physio"
+
+        def since_start(v: str) -> Any:
+            try:
+                return round(float(v) - t0, 6)
+            except ValueError:
+                return "n/a"
         with gzip.open(d / f"{rec}.tsv.gz", "wt", encoding="utf-8", newline="") as gz:
             w = csv.writer(gz, delimiter="\t", lineterminator="\n")
             for row in data:
-                w.writerow([row[0]] + row[3:])
-        (d / f"{rec}.json").write_text(json.dumps({
+                w.writerow([since_start(row[0])] + row[3:])
+        channels = header[3:]
+        units = info.get("units") if isinstance(info.get("units"), list) else []
+        sidecar: dict[str, Any] = {
             "SamplingFrequency": info.get("srate") or "n/a",
-            "StartTime": round(float(data[0][0]) - t0, 6),
-            "Columns": ["time"] + header[3:],
+            "StartTime": since_start(data[0][0]),
+            "Columns": ["time"] + channels,
             "Manufacturer": st.meta.get("devices", {}).get(device, {}).get("type"),
             "RecordingType": info.get("kind"),
-        }, indent=2), encoding="utf-8")
+            "time": {"Description": "Seconds from session start, on EDGE's clock (device clock aligned)", "Units": "s"},
+        }
+        for ch, u in zip(channels, units):
+            if u:
+                sidecar[ch] = {"Units": u}
+        if info.get("coordinates"):
+            sidecar["CoordinateSystem"] = info["coordinates"]
+        (d / f"{rec}.json").write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
         files += [d / f"{rec}.tsv.gz", d / f"{rec}.json"]
     desc = out_root / "dataset_description.json"
     if not desc.exists():
@@ -783,7 +1070,8 @@ def session_tables(st: SessionTables, layout: str = "wide") -> dict[str, tuple[l
 def timing_row(st: SessionTables) -> dict[str, Any]:
     m = st.meta
     t = m.get("timing") or {}
-    return {"session": st.name, "experiment": m.get("experiment"), **{k: v for k, v in (m.get("participant") or {}).items()},
+    return {"session_folder": st.name, "experiment": m.get("experiment"),
+            **{k: v for k, v in (m.get("participant") or {}).items()},
             "started": m.get("started"), "ended": m.get("ended"), "aborted": m.get("aborted"),
             "dry_run": m.get("dry_run"), "frames": t.get("frames"), "dropped_frames": t.get("dropped_frames"),
             "refresh_rate_hz": t.get("refresh_rate_hz"), "devices": ", ".join(m.get("devices", {}).keys()),
@@ -791,22 +1079,29 @@ def timing_row(st: SessionTables) -> dict[str, Any]:
 
 
 def export_session(session_dir: str | Path, formats: Iterable[str] = ("csv",), out_dir: str | Path | None = None,
-                   layout: str = "wide") -> list[Path]:
+                   layout: str = "wide", name: str | None = None) -> list[Path]:
+    """``name``: the file name stem (default: the session folder's name)."""
+    formats = check_formats(formats)          # before anything is written
+    check_layout(layout)
     st = SessionTables(session_dir)
     out = Path(out_dir) if out_dir else st.root / "exports"
     out.mkdir(parents=True, exist_ok=True)
     tables = session_tables(st, layout)
-    return _write_all(tables, formats, out, st.name, [st])
+    return _write_all(tables, formats, out, _safe_name(name) if name else st.name, [st])
 
 
-def _write_all(tables, formats, out: Path, stem: str, sessions: list[SessionTables]) -> list[Path]:
+def _write_all(tables, formats, out: Path, stem: str, sessions: list[SessionTables],
+               notes: list[str] | None = None) -> list[Path]:
     out.mkdir(parents=True, exist_ok=True)
     files: list[Path] = []
     for fmt in formats:
-        fmt = fmt.lower().strip()
+        fmt = FORMAT_ALIASES.get(fmt.lower().strip(), fmt.lower().strip())
         if fmt == "bids":
+            names, bids_notes = bids_names(sessions)
             for st in sessions:
-                files += export_bids(st, out / "bids")
+                files += export_bids(st, out / "bids", *names[st.root])
+            if notes is not None:
+                notes += [n for n in bids_notes if n not in notes]
         elif fmt == "xlsx":
             files.append(write_xlsx(out / f"{stem}.xlsx", tables))
         else:
@@ -822,61 +1117,119 @@ def _write_all(tables, formats, out: Path, stem: str, sessions: list[SessionTabl
     return files
 
 
-def export_many(path: str | Path, formats: Iterable[str] = ("csv", "xlsx"), out_dir: str | Path | None = None,
-                include_dry_runs: bool = False, name: str | None = None) -> dict[str, Any]:
-    """Merge every session under ``path`` into one dataset (trials, summary, dictionary, sessions)."""
-    roots = find_sessions(path, include_dry_runs)
-    if not roots:
-        raise FileNotFoundError(f"no EDGE sessions found under {path}")
-    sessions = [SessionTables(r) for r in roots]
+def _union(lists: Iterable[list[str]]) -> list[str]:
+    out: list[str] = []
+    for cols in lists:
+        out += [c for c in cols if c not in out]
+    return out
+
+
+def merged_tables(sessions: list[SessionTables], layout: str = "wide"
+                  ) -> dict[str, tuple[list[str], list[dict[str, Any]]]]:
+    """One experiment's sessions as one dataset: trials (with the session folder of every row), summary and
+    measures (also with session_folder, so two sessions of one participant stay apart), a data dictionary
+    computed on the merged table, and one row per session."""
     all_rows, sum_rows, sess_rows, dd_by_col = [], [], [], {}
-    meas_cols: list[str] = []
+    meas_cols: list[list[str]] = []
+    sum_cols: list[list[str]] = []
     meas_rows: list[dict[str, Any]] = []
     col_order: list[str] = []
     for st in sessions:
         cols, rows = wide_trials(st)
-        for c in cols:
-            if c not in col_order:
-                col_order.append(c)
-        for r in rows:
+        if layout == "long":
+            lcols = order_columns(st, st.rows)
+            lrows = [dict(r) for r in st.rows]
+            lcols = [c for c in lcols if any(r.get(c) not in (None, "") for r in lrows)]
+        else:
+            lcols, lrows = cols, [dict(r) for r in rows]
+        col_order += [c for c in lcols if c not in col_order]
+        for r in lrows:
             r["session_folder"] = st.name
-        all_rows += rows
+        all_rows += lrows
         scols, srows, _ = summarize(st)
-        sum_rows += srows
+        sum_cols.append(scols)
+        sum_rows += [{"session_folder": st.name, **r} for r in srows]
         if _declared(st):
             mcols, mrows = measures_table(st, rows)
-            meas_cols += [c for c in mcols if c not in meas_cols]
-            meas_rows += mrows
+            meas_cols.append(mcols)
+            meas_rows += [{"session_folder": st.name, **r} for r in mrows]
         sess_rows.append(timing_row(st))
-        for e in data_dictionary(st, cols, rows):
-            dd_by_col.setdefault(e["column"], e)
+        for e in data_dictionary(st, lcols, lrows):
+            dd_by_col.setdefault(e["column"], e)       # descriptions; the numbers are recomputed below
     # stable global order: group, then first appearance
     first = sessions[0]
     col_order = sorted(col_order, key=lambda c: (GROUP_ORDER.index(classify(c, first)), col_order.index(c)))
     col_order.insert(1, "session_folder")
-    dd_by_col["session_folder"] = {"column": "session_folder", "group": "id", "type": "text",
+    dd_by_col["session_folder"] = {"column": "session_folder", "group": "id", "units": "",
                                    "description": "Session folder the row came from"}
-    scols = []
-    for r in sum_rows:
-        for k in r:
-            if k not in scols:
-                scols.append(k)
-    sess_cols = []
-    for r in sess_rows:
-        for k in r:
-            if k not in sess_cols:
-                sess_cols.append(k)
-    tables = {"trials": (col_order, all_rows), "summary": (scols, sum_rows),
-              "dictionary": (DICT_COLS, [dd_by_col[c] for c in col_order if c in dd_by_col]),
-              "sessions": (sess_cols, sess_rows)}
+    dictionary = [_with_stats(dd_by_col[c], [r.get(c) for r in all_rows]) for c in col_order if c in dd_by_col]
+    tables = {"trials": (col_order, all_rows), "summary": (["session_folder"] + _union(sum_cols), sum_rows),
+              "dictionary": (DICT_COLS, dictionary), "sessions": (_union([list(r) for r in sess_rows]), sess_rows)}
     if meas_rows:
-        tables["measures"] = (meas_cols, meas_rows)
+        tables["measures"] = (["session_folder"] + _union(meas_cols), meas_rows)
+    return tables
+
+
+def _safe_name(text: str) -> str:
+    return re.sub(r"[^\w.-]+", "_", str(text)).strip("_") or "edge"
+
+
+def export_many(path: str | Path, formats: Iterable[str] = ("csv", "xlsx"), out_dir: str | Path | None = None,
+                include_dry_runs: bool = False, name: str | None = None, layout: str = "wide") -> dict[str, Any]:
+    """Merge every session under ``path`` into one dataset per experiment (trials, summary, dictionary,
+    sessions). A folder holding several experiments gets one set of files for each, never one mixed table.
+    Session folders that can't be read are skipped and listed in ``skipped``."""
+    formats = check_formats(formats)          # before anything is written
+    check_layout(layout)
+    roots = find_sessions(path, include_dry_runs)
+    if not roots:
+        tests = [] if include_dry_runs else find_sessions(path, True)
+        raise FileNotFoundError(f"no EDGE sessions found under {path}"
+                                + (f": only {len(tests)} test run(s) (dry runs); include them with --include-dry-runs"
+                                   if tests else ""))
+    sessions, skipped = [], []
+    for r in roots:
+        try:
+            sessions.append(SessionTables(r))
+        except (ExportError, OSError) as e:
+            skipped.append({"folder": str(r), "reason": str(e)})
+    if not sessions:
+        raise ExportError(f"none of the {len(roots)} session folder(s) under {path} could be read: "
+                          + "; ".join(s["reason"] for s in skipped[:3]))
+    groups: dict[str, list[SessionTables]] = {}
+    for st in sessions:
+        groups.setdefault(str(st.meta.get("experiment") or "edge"), []).append(st)
+    notes = [f"skipped {s['reason']}" for s in skipped]
+    if len(groups) > 1:
+        notes.insert(0, f"this folder holds {len(groups)} different experiments ({', '.join(groups)}): "
+                        "each gets its own set of files")
+    tests = [st for st in sessions if st.meta.get("dry_run")] if not include_dry_runs else []
+    if tests:       # test runs next to the participants' data (earlier EDGE versions saved 'edge run --dry-run' there)
+        shown = ", ".join(st.name for st in tests[:3]) + (" …" if len(tests) > 3 else "")
+        notes.append(f"{len(tests)} of these sessions are test runs with a virtual participant ({shown}), but they "
+                     f"are not in the dry_runs folder, so they are exported as participants: move them into "
+                     f"{Path(path) / 'dry_runs'} to leave them out")
     out = Path(out_dir) if out_dir else Path(path) / "exports"
     out.mkdir(parents=True, exist_ok=True)
-    stem = name or f"{sessions[0].meta.get('experiment', 'edge')}_all_{datetime.now():%Y%m%d}"
-    files = _write_all(tables, list(formats), out, stem, sessions)
-    return {"sessions": len(sessions), "participants": len({r.get("participant") for r in sess_rows}),
-            "trials": len(all_rows), "files": [str(f) for f in files]}
+    files: list[Path] = []
+    n_trials = n_rows = 0
+    for exp_name, sts in groups.items():
+        tables = merged_tables(sts, layout)
+        rows = tables["trials"][1]
+        n_rows += len(rows)
+        # trials = loop iterations, as in the report, preflight and the lock (screens outside loops, such as
+        # instructions, have rows too; the long layout has one row per screen)
+        n_trials += len({(r.get("session_folder"), r.get("trial_key")) for r in rows if r.get("loop")}) \
+            if layout == "long" else sum(1 for r in rows if r.get("loop"))
+        if name:
+            stem = name if len(groups) == 1 else f"{name}_{_safe_name(exp_name)}"
+        else:
+            stem = f"{_safe_name(exp_name)}_all_{datetime.now():%Y%m%d}"
+        files += _write_all(tables, formats, out, stem, sts, notes)
+    participants = {(str(st.meta.get("experiment")), str((st.meta.get("participant") or {}).get("participant")))
+                    for st in sessions}
+    return {"sessions": len(sessions), "participants": len(participants), "trials": n_trials, "rows": n_rows,
+            "experiments": list(groups), "files": [str(f) for f in files], "skipped": skipped, "notes": notes}
 
 
 README_TXT = """EDGE session data
@@ -889,6 +1242,7 @@ trials.csv           one row per routine run (long format; trials.jsonl is the c
 events.jsonl         every marker: master-clock time, label, TTL code, delivery time per device
 frames.csv           every screen flip (frame-timing audit)
 streams/             device recordings: time (aligned master clock), device_time, arrival_time, channels
+                     (each channel's units and the gaze coordinates: session.json -> devices -> streams)
 session.json         settings, devices, clock models, marker codebook, timing summary, seed
 experiment.yaml      the exact experiment that produced this data
 Times are in seconds. Re-export any time with:  edge export <this folder> --formats xlsx,bids
@@ -906,7 +1260,11 @@ def auto_export(session_dir: str | Path, settings: dict[str, Any]) -> list[Path]
     if "measures" in tables:
         files.append(write_delimited(st.root / "measures.csv", *tables["measures"]))
     (st.root / "README.txt").write_text(README_TXT, encoding="utf-8")
-    extra = [f for f in (settings.get("data", {}).get("exports") or []) if f != "csv"]
-    if extra:
-        files += _write_all(tables, extra, st.root / "exports", st.name, [st])
+    wanted = settings.get("data", {}).get("exports") or []
+    extra = [f for f in check_formats(wanted, need_packages=False) if f != "csv"] if wanted else []
+    missing = missing_packages(extra)
+    if [f for f in extra if f not in missing]:
+        files += _write_all(tables, [f for f in extra if f not in missing], st.root / "exports", st.name, [st])
+    if missing:       # the session's own tables are written; say what's missing (the runtime logs it)
+        raise ExportError(" ".join(missing.values()) + f" (or remove {', '.join(missing)} from settings.data.exports)")
     return files

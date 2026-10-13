@@ -21,6 +21,12 @@ from .clock import now
 from .events import Marker
 
 TRIGGER_CHANNELS = ("TRIG", "trigger", "event", "user", "USER", "marker", "code", "Trigger")
+# the simulator that stands in for each real device type (the same as in a session with --simulate-devices)
+SIM_MAP = {"tobii": "sim_eyetracker", "gazepoint": "sim_eyetracker", "gtec": "sim_eeg", "mindware": "sim_physio",
+           "lsl_inlet": "sim_eeg", "ttl_serial": "ttl_loopback", "parallel_port": "ttl_loopback",
+           "lsl_markers": "ttl_loopback", "trigger_adapter": "ttl_loopback", "serial_inputs": "sim_inputs",
+           "parallel_inputs": "sim_inputs", "labjack": "sim_inputs", "voice_key": "sim_inputs"}
+SIMULATORS = frozenset(SIM_MAP.values())
 
 
 def test_device(dtype: str, did: str, options: dict[str, Any] | None = None, seconds: float = 3.0,
@@ -158,13 +164,19 @@ def test_experiment_device(exp, did: str, seconds: float = 3.0, simulate: bool =
     if spec is None:
         raise ValueError(f"no device '{did}' in this experiment ({', '.join(d.id for d in exp.devices) or 'none'})")
     dtype, options = spec.type, dict(spec.options)
-    if simulate:
-        sim = {"tobii": "sim_eyetracker", "gazepoint": "sim_eyetracker", "gtec": "sim_eeg", "mindware": "sim_physio",
-               "lsl_inlet": "sim_eeg", "ttl_serial": "ttl_loopback", "parallel_port": "ttl_loopback",
-               "lsl_markers": "ttl_loopback", "trigger_adapter": "ttl_loopback", "serial_inputs": "sim_inputs",
-               "parallel_inputs": "sim_inputs", "labjack": "sim_inputs", "voice_key": "sim_inputs"}.get(dtype)
-        if sim:
-            from .devices import device_registry
-            keep = device_registry()[sim].options_schema
-            dtype, options = sim, {k: v for k, v in options.items() if k in keep}
-    return test_device(dtype, did, options, seconds=seconds)
+    note = None
+    if simulate and dtype in SIM_MAP:
+        sim = SIM_MAP[dtype]
+        from .devices import device_registry
+        keep = device_registry()[sim].options_schema
+        note = f"SIMULATED: EDGE's '{sim}' stood in for the {dtype}; this says nothing about the real device"
+        dtype, options = sim, {k: v for k, v in options.items() if k in keep}
+    elif dtype in SIMULATORS:
+        note = f"SIMULATED: '{dtype}' is EDGE's simulator in the experiment itself, not real hardware"
+    res = test_device(dtype, did, options, seconds=seconds)
+    if note:
+        res["simulated"] = dtype
+        res["messages"] = [note] + list(res.get("messages") or [])
+        if not res.get("connected") and res.get("error"):
+            res["error"] = f"{res['error']} (simulated {dtype})"
+    return res

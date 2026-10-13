@@ -27,11 +27,27 @@ class ExperimentAborted(Exception):
 
 
 class MarkerCodebook:
-    """Stable label -> TTL code mapping (1..254), saved with the session."""
+    """Stable label -> TTL code mapping (1..254), saved with the session.
 
-    def __init__(self, preset: dict[str, int] | None = None):
-        self.codes: dict[str, int] = dict(preset or {})
+    Codes for the labels an experiment can send (see :func:`planned_marker_labels`) are given out
+    before the session starts, in a fixed order, so the same event has the same code for every
+    participant whatever the trial order. Labels that only exist at run time get the next free code."""
+
+    def __init__(self, preset: dict[str, int] | None = None, planned: dict[str, int | None] | None = None):
+        self.codes: dict[str, int] = {}
+        for k, v in (preset or {}).items():
+            try:
+                self.codes[str(k)] = int(v)
+            except (TypeError, ValueError):
+                continue
         self._next = 1
+        planned = planned or {}
+        for label, code in planned.items():            # explicit codes in the experiment first
+            if code is not None and label not in self.codes:
+                self.codes[label] = int(code)
+        for label in sorted(planned, key=_plan_order):  # then the others, in an order that never changes
+            if label not in self.codes:
+                self.code_for(label)
 
     def code_for(self, label: str) -> int:
         if label not in self.codes:
@@ -42,6 +58,101 @@ class MarkerCodebook:
                 return 255  # overflow code; the label is still logged everywhere else
             self.codes[label] = self._next
         return self.codes[label]
+
+
+def _plan_order(label: str) -> tuple[int, str]:
+    return (0 if label == "session_start" else 2 if label == "session_end" else 1, label)
+
+
+def planned_marker_labels(exp: Experiment, limit: int = 2000) -> dict[str, int | None]:
+    """Every marker label the experiment can send that is known before it runs: component markers,
+    marker components, response markers, rule markers, gaze-area entries. Labels written as expressions
+    (``$f"word_{congruent}"``) are worked out for every row of the trial lists around the screen; those
+    that depend on what happens during the session (e.g. the key pressed) are left out.
+    Returns label -> the code given in the experiment (or None)."""
+    from . import expressions
+    from .conditions import load_conditions, select_rows
+    from .model import Branch, Loop, RoutineRef, StateMachine
+
+    found: dict[str, int | None] = {"session_start": None, "session_end": None}
+    base = {**(exp.settings.get("participant") or {}), **dict(exp.variables or {})}
+
+    def add(raw: Any, contexts: list[dict[str, Any]], code: Any = None) -> None:
+        if raw in (None, ""):
+            return
+        labels = []
+        if expressions.is_expr(raw):
+            try:    # a label drawn at random (or from the clock) can't be known in advance
+                if expressions.resolve(raw, contexts[0]) != expressions.resolve(raw, contexts[0]):
+                    return
+            except Exception:
+                pass
+            for ns in contexts:
+                try:
+                    labels.append(expressions.resolve(raw, ns))
+                except Exception:
+                    continue     # depends on the session (a response, a variable): coded when first sent
+        else:
+            labels.append(expressions.resolve(raw, {}))
+        for lab in labels:
+            if lab in (None, ""):
+                continue
+            c = code if isinstance(code, int) and not isinstance(code, bool) and 0 < code < 256 else None
+            if c is not None or str(lab) not in found:
+                found[str(lab)] = c
+
+    def routine(rid: str, contexts: list[dict[str, Any]]) -> None:
+        r = exp.routines.get(rid)
+        if r is None:
+            return
+        for spec in r.components:
+            p = spec.props
+            m = p.get("marker")
+            if spec.type == "marker":
+                add(p.get("label"), contexts, p.get("code"))
+                add(p.get("offset_label"), contexts)
+            elif isinstance(m, dict):
+                add(m.get("onset"), contexts, m.get("code"))
+                add(m.get("offset"), contexts, m.get("offset_code"))
+            elif m:
+                add(m, contexts)
+            add(p.get("response_marker"), contexts)
+            if spec.type == "gaze_roi":
+                add(f"{spec.id}.enter", contexts)
+        for rule in r.rules or []:
+            acts = rule.get("do") if isinstance(rule, dict) else None
+            for a in acts if isinstance(acts, list) else [acts]:
+                if isinstance(a, dict) and "marker" in a:
+                    add(a["marker"], contexts)
+
+    def walk(nodes: Any, contexts: list[dict[str, Any]]) -> None:
+        for node in nodes or []:
+            if isinstance(node, RoutineRef):
+                routine(node.routine, contexts)
+            elif isinstance(node, Loop):
+                rows: list[dict[str, Any]] = [{}]
+                if not node.staircase:
+                    try:
+                        cond = node.conditions
+                        if expressions.is_expr(cond):
+                            cond = expressions.resolve(cond, contexts[0])
+                        rows = select_rows(load_conditions(cond, exp.base_dir), node.select) or [{}]
+                    except Exception:
+                        rows = [{}]
+                from itertools import islice      # (never the whole product of big nested trial lists)
+                walk(node.children, list(islice(({**c, **r} for c in contexts for r in rows), limit)))
+            elif isinstance(node, Branch):
+                walk(node.then, contexts)
+                walk(node.else_, contexts)
+            elif isinstance(node, StateMachine):
+                for st in node.states.values():
+                    walk(st.run, contexts)
+
+    try:
+        walk(exp.flow, [base])
+    except Exception:       # never stop a session over this; unknown labels are coded when first sent
+        pass
+    return found
 
 
 class Session:
@@ -62,7 +173,8 @@ class Session:
         self.bus = EventBus()
         self.devices: dict[str, Device] = {}
         self.marker_targets: dict[str, bool] = {}
-        self.codebook = MarkerCodebook(self.settings.get("markers", {}).get("codes"))
+        self.codebook = MarkerCodebook((self.settings.get("markers") or {}).get("codes"),
+                                       planned_marker_labels(experiment))
         self.calibrations: list[dict[str, Any]] = []
         self.loop_summaries: dict[str, Any] = {}
         self.frame_index = 0
@@ -74,11 +186,18 @@ class Session:
         self.system_checks: list[dict[str, Any]] = []
         self.crash: dict[str, Any] | None = None     # structured report of the error that stopped the session
         self.aborted = False
+        self.stop_reason: str | None = None          # why the session stopped early (Esc, Ctrl+C, EDGE closed …)
         self.data_root = Path(data_dir) if data_dir else experiment.base_dir / self.settings["data"]["dir"]
         self.data: SessionData | None = None
         seed = self.settings.get("seed")
         self.seed = seed if seed is not None else random.SystemRandom().randrange(2**31)
         self.rng = random.Random(self.seed)
+        # a virtual participant without its own seed behaves differently in every session, reproducibly
+        # from the session seed (saved in session.json), so test data looks like a sample, not clones
+        if virtual_participant is not None and getattr(virtual_participant, "seed", 0) is None \
+                and hasattr(virtual_participant, "reseed"):
+            virtual_participant.reseed(self.seed)
+        self.simulated: dict[str, str] = {}           # device id -> the simulator that stood in for it
         self.started_at: str | None = None
         from .monitor import from_env
         self.monitor = from_env(self)
@@ -90,14 +209,10 @@ class Session:
 
     def open(self) -> None:
         self.started_at = datetime.now().isoformat(timespec="seconds")
-        fields = {**self.participant, "experiment": self.exp.name}
-        root = SessionData.make_dir(self.data_root, self.settings["data"]["filename"], fields)
-        self.data = SessionData(root)
-        if self.exp.source:
-            from .storage import dumps
-            self.data.write_text("experiment.yaml", dumps(self.exp.source))
         if hasattr(self.backend, "base_dir"):
             self.backend.base_dir = self.exp.base_dir
+        # the window and the devices come first: a session that can't start (no screen, a required device
+        # missing) leaves no data folder behind, so it neither takes the participant id nor ends up in exports
         self.backend.open(self.settings["window"])
         for w in getattr(self.backend, "warnings", ()) or ():
             self.log(f"[edge] WARNING: {w}")
@@ -117,6 +232,18 @@ class Session:
                      "working, stimulus durations will not be frame-accurate (check GPU driver settings)")
             self.errors.append("vsync appears disabled")
         self._connect_devices()
+        fields = {**self.participant, "experiment": self.exp.name}
+        root = SessionData.make_dir(self.data_root, self.settings["data"]["filename"], fields)
+        self.data = SessionData(root)
+        if self.exp.source:
+            from .storage import dumps
+            self.data.write_text("experiment.yaml", dumps(self.exp.source))
+        for spec in self.exp.devices:
+            dev = self.devices.get(spec.id)
+            if dev is not None and spec.record:
+                for sname, sinfo in dev.streams.items():
+                    self.data.open_stream(spec.id, sname, sinfo.channels)
+                dev.add_sink(self._on_sample)
         for spec in self.exp.devices:
             dev = self.devices.get(spec.id)
             if dev is not None and spec.calibrate and "calibration" in dev.capabilities:
@@ -138,13 +265,17 @@ class Session:
                    "voice_key": "sim_inputs"}
         from .devices import device_registry
         registry = device_registry()
-        for spec in self.exp.devices:
+        for i, spec in enumerate(self.exp.devices):
             dtype = spec.type
             options = {**spec.options, **self.device_overrides.get(spec.id, {})}
             if self.simulate_devices and dtype in sim_map:
                 self.log(f"[edge] {spec.id}: simulating '{dtype}' with '{sim_map[dtype]}'")
                 keep = registry[sim_map[dtype]].options_schema   # e.g. input names, code maps
                 dtype, options = sim_map[dtype], {k: v for k, v in options.items() if k in keep}
+                self.simulated[spec.id] = dtype
+            cls = registry.get(dtype)
+            if cls is not None and "seed" in (cls.options_schema or {}) and "seed" not in options:
+                options["seed"] = (self.seed + 7919 * (i + 1)) % 2**31   # simulated data differs per session
 
             try:
                 dev = create_device(dtype, spec.id, options, clock=self.clock)
@@ -157,10 +288,6 @@ class Session:
                 self.log(f"[edge] WARNING {msg} (optional device, continuing)")
                 self.errors.append(msg)
                 continue
-            if spec.record:
-                for sname, sinfo in dev.streams.items():
-                    self.data.open_stream(spec.id, sname, sinfo.channels)
-                dev.add_sink(self._on_sample)
             self.devices[spec.id] = dev
             self.marker_targets[spec.id] = spec.markers and "markers" in dev.capabilities
             self.log(f"[edge] connected {spec.id} ({dtype}) {dev.info() or ''}")
@@ -236,9 +363,11 @@ class Session:
 
     def check_abort(self) -> None:
         if self.backend.check_escape():
+            self.stop_reason = "Esc was pressed"
             raise ExperimentAborted("escape pressed")
         if self.monitor and self.frame_index % 10 == 0 and self.monitor.stop_requested():
             self.log("[edge] stopped by the experimenter")
+            self.stop_reason = "stopped by the experimenter"
             raise ExperimentAborted("stopped by the experimenter")
 
     # ------------------------------------------------------------------ teardown
@@ -344,6 +473,7 @@ class Session:
             "started": self.started_at,
             "ended": datetime.now().isoformat(timespec="seconds"),
             "aborted": self.aborted,
+            "stop_reason": self.stop_reason,
             "seed": self.seed,
             "backend": self.backend.name,
             "window_size": list(self.backend.size),
@@ -351,9 +481,13 @@ class Session:
             else CLOCK_SOURCE,
             "platform": {"python": sys.version.split()[0], "os": platform.platform()},
             "dry_run": self.virtual_participant is not None,
+            "virtual_participant": _virtual_participant_info(self.virtual_participant),
+            "simulated_devices": dict(self.simulated),
             "timing": self.timing_summary(),
             "devices": {did: {"type": dev.type_name, "info": _safe(dev.info), "streams": {
-                k: {"channels": s.channels, "srate": s.srate, "kind": s.kind, "samples": dev.n_samples.get(k, 0)}
+                k: {"channels": s.channels, "srate": s.srate, "kind": s.kind, "samples": dev.n_samples.get(k, 0),
+                    **({"units": s.units} if s.units else {}),
+                    **({"coordinates": str(s.meta["coordinates"])} if s.meta.get("coordinates") else {})}
                 for k, s in dev.streams.items()},
                 "clock_model": clock_models[did].to_dict() if did in clock_models else None}
                 for did, dev in self.devices.items()},
@@ -376,6 +510,16 @@ def _safe(fn) -> Any:
         return fn()
     except Exception as e:  # pragma: no cover
         return {"error": str(e)}
+
+
+def _virtual_participant_info(vp: Any) -> dict[str, Any] | None:
+    if vp is None:
+        return None
+    out = {k: getattr(vp, k) for k in ("accuracy", "respond_prob", "rt_mu", "rt_sigma", "rt_tau")
+           if isinstance(getattr(vp, k, None), (int, float))}
+    seed = getattr(vp, "seed", None)
+    out["seed"] = seed if seed is not None else getattr(vp, "used_seed", None)
+    return out
 
 
 

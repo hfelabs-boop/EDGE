@@ -20,11 +20,12 @@ starting point and review the import report.
 from __future__ import annotations
 
 import csv
+import io
 import re
 from pathlib import Path
 from typing import Any
 
-from .base import Ids, ImportResult, ident, key_name, ms, num
+from .base import Ids, ImportResult, ident, key_name, ms, num, portable_path, read_text
 
 DISPLAY_TYPES = {"TextDisplay", "ImageDisplay", "Slide", "SoundOut", "Wait", "FeedbackDisplay", "MovieDisplay"}
 ORDERS = {"SequentialOrder": "sequential", "RandomOrder": "random", "RandomReplaceOrder": "random",
@@ -137,8 +138,8 @@ def _pos(v: Any, axis_size: int) -> Any:
 
 def read_list_file(path: Path) -> tuple[list[dict[str, Any]], str | None]:
     """E-Prime list export: tab-delimited, columns Weight, Nested, Procedure, attributes..."""
-    with path.open(newline="", encoding="utf-8-sig", errors="replace") as f:
-        rows = list(csv.DictReader(f, delimiter="\t"))
+    text = read_text(path)          # E-Studio saves list exports as UTF-16 ("Unicode") or in the Windows code page
+    rows = list(csv.DictReader(io.StringIO(text, newline=""), delimiter="\t"))
     out, procs = [], []
     for r in rows:
         weight = int(num(r.get("Weight", 1)) or 1) if str(r.get("Weight", "1")).strip() else 1
@@ -150,7 +151,7 @@ def read_list_file(path: Path) -> tuple[list[dict[str, Any]], str | None]:
 
 
 def import_eprime(path: Path) -> ImportResult:
-    text = path.read_text(encoding="utf-8", errors="replace")
+    text = read_text(path)          # E-Studio writes UTF-8, UTF-16 ("Unicode") or the Windows code page
     res = ImportResult({}, path, "E-Prime (generated E-Basic script)")
     res.note("info", "source", "converted from the generated E-Basic script; review the result against E-Studio")
     objects: dict[str, str] = {m.group(1): m.group(2) for m in RE_NEW.finditer(text)}
@@ -210,7 +211,7 @@ def import_eprime(path: Path) -> ImportResult:
                 c["height"] = fs * 1.33 if isinstance(fs, (int, float)) else fs
             comps.append(c)
         elif kind == "ImageDisplay":
-            img = _expr(p.get("Filename", '""'))
+            img = portable_path(_expr(p.get("Filename", '""')))
             comps.append({"id": "image", "type": "image", "image": img})
             if isinstance(img, str) and img and not img.startswith("$"):
                 res.assets.add(img)
@@ -225,18 +226,20 @@ def import_eprime(path: Path) -> ImportResult:
                     if "ForeColor" in sp:
                         c["color"] = _color(_expr(sp["ForeColor"]))
                 else:
-                    c = {"id": cid, "type": "image", "image": _expr(sp.get("Filename", '""')), "pos": [x, y]}
+                    c = {"id": cid, "type": "image", "image": portable_path(_expr(sp.get("Filename", '""'))),
+                         "pos": [x, y]}
                     if isinstance(c["image"], str) and c["image"] and not c["image"].startswith("$"):
                         res.assets.add(c["image"])
                 comps.append(c)
             if not slide_parts.get(obj):
                 res.note("approx", f"routines.{rid}", "slide sub-objects were not found in the script; add them manually")
         elif kind == "SoundOut":
-            f = _expr(p.get("Filename", '""'))
+            f = portable_path(_expr(p.get("Filename", '""')))
             comps.append({"id": "sound", "type": "sound", "sound": f})
             if isinstance(f, str) and f and not f.startswith("$"):
                 res.assets.add(f)
         elif kind == "FeedbackDisplay":
+            # prev_corr is None when the response before it timed out (see 'remember' below)
             comps.append({"id": "feedback", "type": "text",
                           "text": "$'Correct' if prev_corr else ('Too slow' if prev_corr is None else 'Incorrect')"})
             res.note("approx", f"routines.{rid}", "FeedbackDisplay converted to a text that reads the variable "
@@ -261,7 +264,9 @@ def import_eprime(path: Path) -> ImportResult:
                 if isinstance(lv, (int, float)) and lv > 0:
                     k["duration"] = ms(lv)
             comps.append(k)
-            comps.append({"id": "remember", "type": "variable", "when": "end", "set": {"prev_corr": "$resp.corr"}})
+            # a response that timed out scores 0 (wrong) but is remembered as None ("too slow")
+            comps.append({"id": "remember", "type": "variable", "when": "end",
+                          "set": {"prev_corr": "$None if resp.rt is None else resp.corr"}})
             if dur is not None:
                 if inp["terminate"]:
                     k.setdefault("duration", dur)
@@ -309,18 +314,21 @@ def import_eprime(path: Path) -> ImportResult:
                 proc = r.pop("Procedure", proc)
                 rows += [{ident(k): num(v) for k, v in r.items()} for _ in range(max(weight, 1))]
         else:
-            fname = _expr(p.get("Filename", '""'))
+            fname = portable_path(_expr(p.get("Filename", '""')))
             candidates = [path.parent / f"{name}.txt"] + ([path.parent / fname] if isinstance(fname, str) and fname else [])
             for cand in candidates:
                 if cand.is_file():
                     rows, proc = read_list_file(cand)
                     res.note("info", f"lists.{name}", f"rows read from {cand.name}")
                     break
-        if not rows:
-            rows = [{ident(a): "" for a in attribs}] if attribs else []
+        missing = None
+        if not rows:   # the loop names the export it needs, so the experiment won't run until it has its rows
+            missing = f"{name}.txt"
             res.note("unsupported", f"lists.{name}", "list rows not found: in E-Studio export the list "
-                     f"(right-click → Save to file) as '{name}.txt' next to the script and import again")
-        lists[name] = {"rows": rows, "order": ORDERS.get(order_m.group(1), "random") if order_m else "sequential",
+                     f"(right-click → Save to file) as '{missing}' next to the script and import again"
+                     + (f" (its attributes: {', '.join(attribs)})" if attribs else ""))
+        lists[name] = {"rows": rows or missing,
+                       "order": ORDERS.get(order_m.group(1), "random") if order_m else "sequential",
                        "cycles": int(cyc.group(1)) if cyc else 1, "samples": int(samples.group(1)) if samples else None,
                        "procedure": proc}
         if order_m and order_m.group(1) not in ORDERS:

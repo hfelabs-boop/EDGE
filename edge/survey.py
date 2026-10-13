@@ -144,14 +144,42 @@ def slug(text: Any) -> str:
     return (s or "option")[:40]
 
 
+def _yaml_word(v: Any) -> Any:
+    """YAML reads a bare Yes / No (also On / Off) as true / false: show and save the word, not 'True'."""
+    return ("Yes" if v else "No") if isinstance(v, bool) else v
+
+
 def _norm_list(raw: Any) -> list[dict[str, Any]]:
     out = []
     for o in raw or []:
         if isinstance(o, dict):
-            label = str(o.get("label", o.get("value", "")))
-            out.append({"value": o.get("value", label), "label": label})
+            label = str(_yaml_word(o.get("label", o.get("value", ""))))
+            out.append({"value": o["value"] if "value" in o else label, "label": label})
         else:
+            o = _yaml_word(o)
             out.append({"value": o, "label": str(o)})
+    return out
+
+
+def _has_bool_options(q: dict[str, Any]) -> bool:
+    return isinstance(q.get("options"), list) and any(isinstance(o, bool) for o in q["options"])
+
+
+def _words_in_condition(cond: Any, ids: set[str]) -> Any:
+    """show_if: {strategy: Yes} next to options: [Yes, No] - both were read as true/false; compare words."""
+    if not isinstance(cond, dict):
+        return cond
+
+    def words(r: Any) -> Any:
+        return [_yaml_word(x) for x in r] if isinstance(r, list) else _yaml_word(r)
+    out: dict[Any, Any] = {}
+    for k, v in cond.items():
+        if k in ("any", "all") and isinstance(v, list):
+            out[k] = [_words_in_condition(c, ids) for c in v]
+        elif str(k) in ids:
+            out[k] = {op: r if op == "answered" else words(r) for op, r in v.items()} if isinstance(v, dict) else words(v)
+        else:
+            out[k] = v
     return out
 
 
@@ -189,6 +217,7 @@ def expand(questions: list[Any], rng: random.Random | None = None) -> tuple[list
     shuffled. Returns (flat question list, scores)."""
     flat: list[dict[str, Any]] = []
     scores: dict[str, Any] = {}
+    yes_no: set[str] = set()          # questions whose options YAML read as true/false
     for q in questions or []:
         if not isinstance(q, dict):
             raise SurveyError(f"each question must be a mapping, not {q!r}")
@@ -209,6 +238,8 @@ def expand(questions: list[Any], rng: random.Random | None = None) -> tuple[list
         t = ALIASES.get(q.get("type", "single"), q.get("type", "single"))
         q["type"] = t
         if t in OPTION_TYPES:
+            if _has_bool_options(q) and q.get("id") is not None:
+                yes_no.add(str(q["id"]))
             q["options"] = norm_options(q)
         if t == "side_by_side":
             for c in q.get("columns") or []:
@@ -254,6 +285,10 @@ def expand(questions: list[Any], rng: random.Random | None = None) -> tuple[list
             rng.shuffle(q["items"])
             q["shown_order"] = [it["value"] for it in q["items"]]
         flat.append(q)
+    if yes_no:
+        for q in flat:
+            if q.get("show_if") is not None:
+                q["show_if"] = _words_in_condition(q["show_if"], yes_no)
     return flat, scores
 
 

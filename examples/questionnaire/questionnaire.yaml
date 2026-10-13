@@ -1,7 +1,8 @@
 name: questionnaire_demo
 description: >
   HTML pages inside an experiment: consent and demographics forms, a per-trial rating page that shows
-  the trial's word, and an adaptive state machine. Try:  edge run examples/questionnaire/questionnaire.yaml --dry-run
+  the trial's word, and an adaptive state machine. Try it with a test run (edge run questionnaire.yaml --dry-run
+  in this folder, or Test run in the builder).
 settings:
   window: {size: [1280, 720], background: "#202020"}
   data: {exports: [csv, xlsx]}
@@ -15,7 +16,7 @@ routines:
   trial:
     components:
       - {id: fix, type: fixation, duration: 0.5}
-      - {id: word, type: text, text: $word, start: 0.5, duration: 1.0, height: 60}
+      - {id: word_stim, type: text, text: $word, start: 0.5, duration: 1.0, height: 60}
   rate:
     components:
       - {id: rating, type: html, file: pages/rating.html, end_routine: true}

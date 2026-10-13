@@ -107,7 +107,7 @@ def test_lock_verify_and_golden_participant(tmp_path):
     from edge.reproduce import lock, verify
     p = _copy_stroop(tmp_path)
     r = lock(p)
-    assert r["files"] == 1 and r["trials"] == 20
+    assert r["files"] == 1 and r["trials"] == 18     # trials = loop iterations, as in preflight and exports
     v = verify(p)
     assert all(f["level"] == "ok" for f in v["findings"])
     csv_path = p.parent / "stroop.csv"

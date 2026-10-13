@@ -59,8 +59,15 @@ stop are decided for each screen refresh.
 ### No more than two identical trials in a row
 
 ```yaml
-  max_repeat: {ink: 2}                    # per column
-  max_repeat: {kind: {deviant: 1}}        # per value: deviants never back to back
+  max_repeat: {ink: 2}                    # per column: never 3 trials with the same ink in a row
+```
+
+Per value (deviants never back to back), and both rules at once (one `max_repeat:` per loop; a
+second one would be an error):
+
+```yaml
+  max_repeat: {kind: {deviant: 1}}
+  # or both:  max_repeat: {ink: 2, kind: {deviant: 1}}
 ```
 
 ### Full factorial design without typing rows
@@ -299,7 +306,7 @@ devices:
 Export the event times from the recording software as `time,code`, then:
 
 ```bash
-edge align data/001_1_study_* biolab_events.csv
+edge align data/001_1_study_2027-02-01_101500 biolab_events.csv   # the session folder 'edge run' printed
 ```
 
 ## Running

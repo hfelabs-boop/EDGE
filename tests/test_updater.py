@@ -60,11 +60,12 @@ def test_up_to_date_and_check(repos):
     assert not (clone / "b.txt").exists()                  # only looked
 
 
-def test_update_applies_new_commits_and_reinstalls(repos):
+def test_update_applies_new_commits_and_reinstalls(repos, monkeypatch):
     clone, upstream = repos
     upstream("b.txt", "new\n", "add b")
     upstream("c.txt", "newer\n", "add c")
     out, calls = [], []
+    monkeypatch.setattr(updater, "install_kind", lambda root: "editable")   # as if pip install -e of this clone
     r = updater.update(root=clone, run=runner(calls), say=out.append)
     assert r["ok"] and r["updated"] and r["behind"] == 2
     assert (clone / "b.txt").exists() and (clone / "c.txt").exists()
@@ -98,7 +99,7 @@ def test_stash_conflict_keeps_the_user_changes_safe(repos):
     assert "mine" in sh(clone, "git", "stash", "show", "-p")
 
 
-def test_diverged_copy_is_explained(repos):
+def test_diverged_copy_is_combined(repos):
     clone, upstream = repos
     (clone / "own.txt").write_text("x\n")
     sh(clone, *GIT, "add", "-A")
@@ -106,7 +107,8 @@ def test_diverged_copy_is_explained(repos):
     upstream("b.txt", "new\n", "add b")
     out = []
     r = updater.update(root=clone, run=runner([]), say=out.append)
-    assert not r["ok"] and "can't be fast-forwarded" in r["reason"] and not (clone / "b.txt").exists()
+    assert r["ok"] and r["updated"] and (clone / "b.txt").exists() and (clone / "own.txt").exists()
+    assert "Your own commits were kept and combined with the update." in out
 
 
 def test_no_connection_is_explained(tmp_path):
@@ -127,7 +129,7 @@ def test_installed_copies_use_pip_and_explain_missing_git():
         calls.append(cmd)
         return 0, ""
     r = updater.update_installed(run, say=lambda s: None)
-    assert r["ok"] and "edge-experiments[all] @ git+https://github.com/hfelabs-boop/EDGE.git" in calls[0][-1]
+    assert r["ok"] and any("edge-experiments[all] @ git+https://github.com/hfelabs-boop/EDGE.git" in c[-1] for c in calls)
 
     def no_git(cmd, cwd=None):
         return 1, "ERROR: Cannot find command 'git' - do you have 'git' installed and in your PATH?"

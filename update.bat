@@ -6,7 +6,9 @@ setlocal
 set "HERE=%~dp0"
 set "PY="
 
-for %%P in ("%USERPROFILE%\.edge\venv\Scripts\python.exe" "%HERE%.venv\Scripts\python.exe") do (
+rem A clone's own .venv first. EDGE never installs a clone into a Python whose EDGE came from
+rem somewhere else (such as %USERPROFILE%\.edge from the installer): it says so and leaves it alone.
+for %%P in ("%HERE%.venv\Scripts\python.exe" "%USERPROFILE%\.edge\venv\Scripts\python.exe") do (
   if not defined PY if exist %%P (%%P -c "import edge" >nul 2>nul && set "PY=%%~P")
 )
 if not defined PY (
