@@ -1,114 +1,170 @@
 <!doctype html>
+<!-- index.html: the builder's page skeleton (SPEC §7.3). Owner: P1.
+     Owns the static markup: the app bar, the workspaces (Home, Build, Measures, Test, Run, Data), the companion
+     column, the status bar, the static Experiment menu and the hosts for dialogs, toasts and live regions.
+     Every id here is a contract (§7.4, §6.1, §6.5); modules fill the containers. Icons come from data-ic at boot. -->
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EDGE Builder</title>
 <link rel="icon" type="image/svg+xml" href="/assets/edge-icon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/edge-32.png">
 <link rel="apple-touch-icon" href="/assets/edge-128.png">
+<link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="/static/components.css">
 <link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/build.css">
+<link rel="stylesheet" href="/static/pages.css">
+<link rel="stylesheet" href="/static/assistant.css">
 </head>
-<body>
-<header id="topbar">
-  <div class="brand"><img class="logo-img" src="/assets/edge-48.png" alt="" width="26" height="26"> EDGE <span class="sub">builder</span></div>
-  <div class="file">
-    <span id="filename">untitled</span><span id="dirty" title="unsaved changes"></span>
-  </div>
-  <nav class="actions">
-    <button id="btn-new" title="Start a new experiment: guided questions, templates, or import">New</button>
-    <button id="btn-open" title="Open experiment">Open</button>
-    <button id="btn-import" class="expert-only" title="Import a PsychoPy, E-Prime, OpenSesame or jsPsych experiment">Import</button>
-    <button id="btn-save" title="Save (Ctrl+S)">Save</button>
-    <button id="btn-versions" class="expert-only" title="Saved versions (automatic backups)">Versions</button>
-    <button id="btn-bundle" class="expert-only" title="Download the experiment with all its files (.edgez)">Bundle</button>
-    <span class="sep"></span>
-    <button id="btn-undo" title="Undo (Ctrl+Z)">↶</button>
-    <button id="btn-redo" title="Redo (Ctrl+Shift+Z)">↷</button>
-    <span class="sep"></span>
-    <button id="btn-measures" title="What this experiment measures, and everything it records">Measures &amp; data</button>
-    <button id="btn-settings" title="Experiment settings: window, colours, data">Settings</button>
-    <button id="btn-validate" title="Check the experiment for mistakes">Check</button>
-    <button id="btn-dryrun" title="Test run: a virtual participant does the whole experiment in seconds (simulated hardware)">▶ Test run</button>
-    <button id="btn-try" class="accent" title="Try it yourself, right here: press the keys and click like a participant">▶ Try it</button>
-    <button id="btn-run" class="primary" title="Run with a participant: opens the experiment window and records data">Run with a participant</button>
-    <span class="sep"></span>
-    <button id="btn-mode" title="Simple shows the essentials; Expert shows every option">Simple</button>
-    <button id="btn-help" title="Help, tutorials and documentation (?)">?</button>
+<body class="mode-simple">
+<div id="app">
+ <header id="appbar" class="appbar">
+  <a id="logo" href="#/home" aria-label="Home: all experiments" data-tip="Home: all experiments" data-tip-pos="start"><img src="/assets/edge-48.png" alt="" width="24" height="24"></a>
+  <span id="home-brand" class="home-brand home-only"><b>EDGE</b><span id="home-root" class="t-caption"></span></span>
+  <button id="docname" class="docname doc-only" aria-haspopup="menu" aria-controls="menu-experiment" aria-expanded="false"><span id="filename">untitled</span><span id="filepath"></span></button>
+  <button id="btn-save" class="savestate doc-only" data-tip="Save (Ctrl+S)" data-ic="success"><span id="dirty"></span><span id="save-label">Saved</span></button>
+  <nav id="ws-nav" class="nav doc-only" aria-label="Workspaces">
+   <a id="nav-build" href="#/build" data-ws="build" data-ic="design">Build</a>
+   <a id="btn-measures" href="#/measures" data-ws="measures" data-ic="measures">Measures</a>
+   <a id="nav-test" href="#/test" data-ws="test" data-ic="test">Test<span id="badge-test" class="badge"></span></a>
+   <a id="nav-run" href="#/run" data-ws="run" data-ic="run">Run<span id="badge-run" class="badge"></span></a>
+   <a id="nav-data" href="#/data" data-ws="data" data-tab="data" data-ic="results">Data<span id="badge-data" class="badge"></span></a>
   </nav>
-</header>
-
-<main id="layout">
-  <aside id="left">
-    <section>
-      <h3>Add to this screen</h3>
-      <input id="palette-filter" placeholder="search…">
-      <div id="palette"></div>
+  <span class="grow"></span>
+  <button id="appbar-open" class="btn ghost home-only" data-ic="folder">Open…</button>
+  <button id="appbar-import" class="btn ghost home-only" data-ic="import">Import</button>
+  <button id="btn-undo" class="btn ghost icon doc-only" aria-label="Undo" data-tip="Nothing to undo" data-ic="undo"></button>
+  <button id="btn-redo" class="btn ghost icon doc-only" aria-label="Redo" data-tip="Nothing to redo" data-ic="redo"></button>
+  <span id="try-split" class="split doc-only"><button id="btn-try" class="btn" data-ic="play" data-tip="Try it yourself, right here (Ctrl+Enter)">Try it</button><button id="btn-try-menu" class="btn icon" aria-label="More ways to try it" aria-haspopup="menu" aria-expanded="false" data-ic="chev-down"></button></span>
+  <button id="assistant-toggle" class="btn assistant-outline" aria-controls="companion" aria-expanded="false" data-ic="assistant" data-tip="Describe a change in plain words (Ctrl+I)" data-tip-pos="end" hidden><span class="lbl">Assistant</span></button>
+  <span class="vsep" aria-hidden="true"></span>
+  <button id="btn-help" class="btn ghost icon" aria-label="Help and tutorials" aria-controls="companion" aria-pressed="false" data-tip="Help and tutorials (?)" data-tip-pos="end" data-ic="help"></button>
+  <button id="btn-more" class="btn ghost icon" aria-label="More" aria-haspopup="menu" aria-controls="menu-more" aria-expanded="false" data-tip="More" data-tip-pos="end" data-ic="more"></button>
+ </header>
+ <div id="banner" class="alerts" hidden></div>
+ <div id="proposal-bar" class="preview-banner" hidden></div>
+ <div id="body">
+  <main id="ws-home" class="ws page" data-ws="home" aria-label="Home" hidden>
+   <div class="home-inner">
+    <header class="home-head"><h1 class="t-display">What do you want to build?</h1>
+     <p class="home-lead">An experiment is a series of screens shown in order. A trial list repeats screens with different words, pictures or sounds. You test it, run it with participants, and look at the data.</p></header>
+    <div id="home-hero" class="home-hero"><div id="home-describe"></div><div id="home-start"></div></div>
+    <div id="home-first" class="home-first" hidden></div>
+    <section id="home-list" class="home-sec" aria-label="Your experiments"></section>
+    <section id="home-learn" class="home-sec" aria-label="Examples and tutorials"></section>
+   </div>
+  </main>
+  <main id="ws-build" class="ws" data-ws="build">
+   <aside id="sidebar" aria-label="Add, files and devices">
+    <div id="sidebar-tabs" class="seg full" role="radiogroup" aria-label="Sidebar">
+     <button role="radio" data-side="add">Add</button><button role="radio" data-side="files">Files</button><button role="radio" data-side="devices">Devices</button>
+    </div>
+    <section id="side-add" aria-label="Add to this screen"><input id="palette-filter" class="input" placeholder="Search things to add" aria-label="Search things to add"><div id="palette"></div></section>
+    <section id="side-files" aria-label="Files" hidden><div id="files"></div></section>
+    <section id="side-devices" aria-label="Devices" hidden>
+     <div class="panel-head">Devices <button id="btn-add-device" class="btn sm" data-ic="plus">Add device</button></div>
+     <div id="devices"></div><button id="btn-scan" class="btn sm ghost" data-ic="chip">Find connected devices</button><div id="scan-results"><div id="tab-hardware"></div></div>
     </section>
-    <section>
-      <h3>Devices <button class="mini" id="btn-add-device" title="Add an eye tracker, EEG, physiology, LSL or trigger device">+</button></h3>
-      <div id="devices"></div>
-      <button class="wide expert-only" id="btn-scan">Scan for hardware</button>
-    </section>
+   </aside>
+   <nav id="rail" aria-label="Add, files and devices"></nav>
+   <section id="center" aria-label="Experiment">
+    <div id="build-toolbar" class="toolbar">
+     <div id="view-switch" class="seg" role="radiogroup" aria-label="View">
+      <button role="radio" data-view="story" data-ic="storyboard" aria-label="Storyboard"><span class="lbl">Storyboard</span></button><button role="radio" data-view="screen" data-ic="screen" aria-label="Screen"><span class="lbl">Screen</span></button><button data-tab="source" class="expert-only" role="radio" data-view="source" data-ic="code" aria-label="YAML"><span class="lbl">YAML</span></button>
+     </div>
+     <nav id="crumbs" class="crumbs" aria-label="Where you are"></nav>
+     <div id="story-density" class="seg" role="radiogroup" aria-label="Density"></div>
+     <span id="est"></span><span class="grow"></span>
+     <button id="btn-settings" class="btn sm ghost" data-ic="settings" aria-label="Experiment settings" data-tip="Experiment settings: window, colours, data"><span class="lbl">Experiment settings</span></button>
+     <button id="btn-add-screen" class="btn sm rtab add" data-ic="plus" title="A new screen: a trial, an instruction page, feedback">Add screen</button>
+     <button id="btn-try-screen" class="btn sm" data-ic="play" aria-label="Try this screen" data-tip="Try this screen (5 trials)"><span class="lbl">Try this screen</span></button>
+     <button id="preview-big" class="btn sm ghost" data-ic="expand" aria-pressed="false" aria-label="Focus" title="Bigger preview, for arranging things on the screen"><span class="lbl">Focus</span></button>
+     <button id="btn-view-done" class="btn sm" hidden>Done</button>
+    </div>
+    <div id="flowstrip" class="flowstrip" hidden></div>
+    <div id="canvas">
+     <div id="view-story" class="view"><div id="flow"></div></div>
+     <div id="view-screen" class="view" hidden>
+      <div id="preview-wrap" class="stage">
+       <div class="preview-stack"><canvas id="preview" width="480" height="270" role="img" aria-label="Preview of the screen"></canvas>
+        <iframe id="preview-html" class="hidden" title="Web page preview" sandbox="allow-scripts allow-forms"></iframe></div>
+       <div class="playbar"><button id="preview-play" class="btn sm icon" aria-label="Play this screen" data-tip="Play this screen at real speed" data-tip-pos="top" data-ic="play"></button>
+        <input type="range" id="preview-t" min="0" max="5" step="0.01" value="0" aria-label="Time"><span id="preview-label"></span><span id="row-stepper"></span></div>
+       <div id="stage-hint" class="help">Click something to select it · drag to move · corners resize · the round handle rotates · double-click text to type · arrow keys nudge · drop pictures or sounds here</div>
+      </div>
+      <div id="splitter" role="separator" aria-orientation="horizontal" aria-label="Resize the preview" tabindex="0"></div>
+      <div id="timeline"></div>
+     </div>
+     <div id="view-list" class="view" hidden><div id="list-editor"></div></div>
+     <div id="view-diagram" class="view" hidden><div id="diagram"></div></div>
+     <div id="view-source" class="view" hidden><textarea id="yaml" spellcheck="false" aria-label="YAML source"></textarea><div class="source-actions"><button id="btn-apply-yaml" class="btn">Apply YAML</button></div></div>
+    </div>
+   </section>
+   <aside id="inspector" aria-label="Properties"><div id="props-title" class="insp-head"></div><div id="props"></div><div id="props-foot" class="insp-foot"></div></aside>
+  </main>
+  <main id="ws-measures" class="ws page" data-ws="measures" hidden></main>
+  <main id="ws-test" class="ws page" data-ws="test" aria-labelledby="test-title" hidden>
+   <header class="page-head"><h1 class="t-title-l" id="test-title">Is it ready?</h1><span class="grow"></span><span id="test-status" class="chip lg" role="status"></span></header>
+   <div class="test-grid">
+    <section id="test-ready" class="card pad" aria-label="Ready for participants?"></section>
+    <section id="test-check" class="card pad" aria-labelledby="test-check-title"><div class="card-head"><h2 id="test-check-title" class="t-title-s">Check</h2><span id="test-check-state" class="chip"></span></div><p class="t-small t-2">EDGE checks while you edit.</p><div id="tab-issues"></div><button id="btn-check-again" class="btn sm" data-ic="refresh">Check again</button></section>
+    <section id="test-try" class="card pad" aria-labelledby="test-try-title"><h2 id="test-try-title" class="t-title-s">Try it yourself</h2><p class="t-small t-2">Do it as a participant would: press the keys, click, rate. Esc stops.</p><div class="card-acts"><button id="btn-try-test" class="btn" data-ic="play">Whole experiment</button><button id="btn-try-one" class="btn ghost sm" aria-haspopup="menu" data-ic="screen">Only one screen</button></div></section>
+    <div id="test-run-card" class="card pad" role="region" aria-labelledby="test-run-title"><h2 id="test-run-title" class="t-title-s">Test run</h2><p class="t-small t-2">A virtual participant does the whole experiment in seconds, with simulated hardware.</p><div class="card-acts"><button id="btn-dryrun" class="btn primary" data-ic="test">Start test run</button><span id="test-run-last" class="run-last"></span></div></div>
+   </div>
+   <div id="test-results"><div id="tab-results"></div></div><div id="test-devices"></div>
+  </main>
+  <main id="ws-run" class="ws page" data-ws="run" hidden></main>
+  <main id="ws-data" class="ws page" data-ws="data" aria-labelledby="data-title" hidden>
+   <header class="page-head"><h1 class="t-title-l" id="data-title">Data</h1><span id="data-count" class="t-caption"></span></header>
+   <div class="data-grid"><aside id="data-sessions" class="card" aria-label="Sessions"></aside><section id="data-detail" class="card" aria-label="Session"></section></div>
+  </main>
+  <aside id="companion" class="companion" aria-label="Assistant and help" hidden>
+   <div class="companion-head">
+    <div id="companion-tabs" class="tabs" role="tablist">
+     <button id="companion-tab-props" role="tab" data-ctab="props" hidden>Properties</button>
+     <button id="companion-tab-assistant" role="tab" data-ctab="assistant" aria-controls="assistant-panel">Assistant</button>
+     <button id="companion-tab-help" role="tab" data-ctab="help" aria-controls="help-panel">Help</button>
+    </div>
+    <button id="companion-close" class="btn ghost icon sm" aria-label="Close" data-tip="Close" data-tip-pos="end" data-ic="close"></button>
+   </div>
+   <section id="assistant-panel" role="tabpanel" aria-labelledby="companion-tab-assistant"></section>
+   <section id="help-panel" role="tabpanel" aria-labelledby="companion-tab-help" hidden></section>
   </aside>
-
-  <section id="center">
-    <div id="routine-area">
-      <div id="routine-tabs"></div>
-      <div id="routine-body">
-        <div id="timeline"></div>
-        <div id="preview-wrap">
-          <div class="preview-stack">
-            <canvas id="preview" width="480" height="270"></canvas>
-            <iframe id="preview-html" class="hidden" title="HTML page preview" sandbox="allow-scripts allow-forms"></iframe>
-          </div>
-          <div class="preview-ctl">
-            <button id="preview-play" class="mini" title="Play this screen at real speed">▶</button>
-            <input type="range" id="preview-t" min="0" max="5" step="0.01" value="0">
-            <span id="preview-label">t = 0.00 s</span>
-            <button id="preview-big" class="mini" title="Bigger preview, for arranging things on the screen">⤢</button>
-          </div>
-          <div id="stage-hint" class="help">Click something to select it · drag to move · corners resize · ◯ rotates · double-click text to type · arrow keys nudge · drop pictures or sounds here</div>
-        </div>
-      </div>
-    </div>
-    <div id="flow-area">
-      <h3>Flow <span class="flow-hint">the order of screens: + inserts, drag to move</span></h3>
-      <div id="flow"></div>
-    </div>
-    <div id="console">
-      <div class="tabs">
-        <button data-tab="issues" class="active">Check <span id="issue-count"></span></button>
-        <button data-tab="results">Test results</button>
-        <button data-tab="source" class="expert-only">Source (YAML)</button>
-        <button data-tab="hardware" class="expert-only">Hardware</button>
-        <button data-tab="data">Data</button>
-      </div>
-      <div id="tab-issues" class="tab active"></div>
-      <div id="tab-results" class="tab"></div>
-      <div id="tab-source" class="tab">
-        <textarea id="yaml" spellcheck="false"></textarea>
-        <button id="btn-apply-yaml">Apply YAML</button>
-      </div>
-      <div id="tab-hardware" class="tab"></div>
-      <div id="tab-data" class="tab"></div>
-    </div>
-  </section>
-
-  <aside id="right">
-    <h3 id="props-title">Properties</h3>
-    <div id="props"></div>
-  </aside>
-</main>
-
-<div id="modal" class="hidden"><div class="modal-box"><div id="modal-body"></div></div></div>
-<div id="toast"></div>
-<div id="banner" class="hidden"></div>
+ </div>
+ <footer id="statusbar" class="statusbar">
+  <span id="sb-home" class="st" hidden>The builder runs on this computer.</span>
+  <button id="btn-validate" class="st" aria-haspopup="dialog"><span id="issue-count"></span></button><span id="sb-estimate" class="st"></span><span id="sb-test" class="st"></span>
+  <span id="sb-devices" class="st"></span><button id="sb-recording" class="st rec" aria-live="polite" hidden></button><button id="sb-tutorial" class="st pill" hidden></button><span class="grow"></span>
+  <span id="sb-saved" class="st"></span>
+  <div id="btn-mode" class="seg" role="radiogroup" aria-label="Mode"><button role="radio" data-mode="simple">Simple</button><button role="radio" data-mode="expert">Expert</button></div>
+  <button id="sb-palette" class="st" hidden></button>
+ </footer>
+</div>
+<div id="menu-experiment" class="menu" role="menu" aria-label="Experiment" hidden>
+ <button id="btn-new" role="menuitem" class="item" data-ic="file"><span class="lbl">New experiment…</span></button><button id="btn-open" role="menuitem" class="item" data-ic="folder"><span class="lbl">Open…</span><span class="sc">Ctrl O</span></button><div id="menu-recent" role="presentation"></div>
+ <button id="btn-import" role="menuitem" class="item" data-ic="import"><span class="lbl">Import…</span></button><hr role="separator">
+ <button id="menu-save" role="menuitem" class="item" data-ic="save"><span class="lbl">Save</span><span class="sc">Ctrl S</span></button><button id="menu-save-copy" role="menuitem" class="item" data-ic="duplicate"><span class="lbl">Save a copy…</span><span class="sc">Ctrl Shift S</span></button>
+ <button id="btn-versions" role="menuitem" class="item" data-ic="history"><span class="lbl">History…</span></button><button id="btn-bundle" role="menuitem" class="item" data-ic="package"><span class="lbl">Share as one file (.edgez)</span></button>
+ <button id="menu-settings" role="menuitem" class="item" data-ic="settings"><span class="lbl">Experiment settings…</span></button><button id="menu-yaml" role="menuitem" class="item expert-only" data-ic="code"><span class="lbl">Show the YAML</span></button>
+ <button id="menu-copy-path" role="menuitem" class="item expert-only" data-ic="file"><span class="lbl">Copy the file path</span></button><hr role="separator"><button id="menu-home" role="menuitem" class="item" data-ic="home"><span class="lbl">Close and go Home</span></button>
+</div>
+<div id="menu-more" class="menu" role="menu" aria-label="More" hidden></div>
+<div id="modal" class="hidden"><div class="modal-box" role="dialog" aria-modal="true" aria-label="Dialog"><div id="modal-body"></div></div></div>
+<div id="dialogs"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="sr-live" class="sr-only" aria-live="polite"></div>
 <div id="play" class="hidden"></div>
+<script src="/static/icons.js"></script>
+<script src="/static/ui.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/build.js"></script>
+<script src="/static/inspector.js"></script>
 <script src="/static/simple.js"></script>
 <script src="/static/survey.js"></script>
+<script src="/static/widgets.js"></script>
 <script src="/static/stage.js"></script>
 <script src="/static/measures.js"></script>
+<script src="/static/assistant.js"></script>
 </body>
 </html>

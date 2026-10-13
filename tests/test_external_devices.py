@@ -224,6 +224,7 @@ def test_builder_device_menu_targets_come_from_the_schema():
     d = schema()["devices"]
     assert set(d["trigger_adapter"]["targets"]) == set(TARGETS)
     assert d["serial_inputs"]["planned_streams"][0]["name"] == "inputs"
-    js = (Path(__file__).resolve().parent.parent / "edge" / "builder" / "static" / "app.js").read_text()
+    static = Path(__file__).resolve().parent.parent / "edge" / "builder" / "static"
+    js = "".join(f.read_text() for f in sorted(static.glob("*.js")))   # the device menu lives in build.js
     for t in ("serial_inputs", "labjack", "parallel_inputs", "voice_key", "device_response"):
         assert t in js

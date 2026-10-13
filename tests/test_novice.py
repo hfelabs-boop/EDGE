@@ -318,7 +318,7 @@ def test_builder_static_files_reference_existing_functions():
     assert "simple.js" in html and 'id="btn-try"' in html and 'id="btn-mode"' in html
     assert "stage.js" in html and 'id="preview-big"' in html
     assert "measures.js" in html and 'id="btn-measures"' in html
-    js = "".join((static / f).read_text() for f in ("app.js", "simple.js", "stage.js", "measures.js"))
+    js = "".join(f.read_text() for f in sorted(static.glob("*.js")))   # the builder's scripts share globals
     for fn in ("function renderStoryboard", "function openWizard", "function tryIt", "function runDialog",
                "function addTrialColumn", "function drawScreen", "function setMode", "function stageInput",
                "function openAssetPicker", "function drawStageOverlay", "function uploadAsset", "function toggleBigPreview",
@@ -334,7 +334,8 @@ def test_simple_mode_tutorials_only_use_visible_controls():
     hidden = set(re.findall(r'id="([\w-]+)"[^>]*class="[^"]*expert-only', html)) | \
         set(re.findall(r'class="[^"]*expert-only[^"]*"[^>]*id="([\w-]+)"', html)) | \
         {f"data-tab={t}" for t in re.findall(r'data-tab="(\w+)" class="expert-only"', html)}
-    assert "btn-import" in hidden and "data-tab=source" in hidden
+    # Simple hides options, never safety, sharing or import (redesign spec §5.1): Import is in both modes now
+    assert "btn-import" not in hidden and "data-tab=source" in hidden
     for tut in hp.tutorials():
         if tut.get("mode", "simple") != "simple":
             continue

@@ -1,0 +1,130 @@
+/* tokens.css: EDGE design tokens v1 (SPEC §3.1). Owner: P1 (written by P0).
+ * Owns every colour, size, radius, shadow, duration and layer of the builder as a CSS custom property.
+ * Light is the default; dark comes from the system setting (unless forced light) or from data-theme="dark"
+ * on <html>. Every text/background pair is WCAG 2.2 AA (SPEC §3.2). No colour is mixed at run time: each tint is
+ * a token below. The legacy aliases at the end keep older rules working until each package migrates.
+ */
+:root {
+  color-scheme: light;
+  /* neutrals (cool slate) */
+  --canvas:#F4F6F8; --surface-1:#FFFFFF; --surface-2:#F6F7F9; --surface-3:#EDF0F3; --surface-inverse:#16191D;
+  --border-subtle:#E3E7EC; --border-default:#CDD3DB; --border-control:#858F9C;
+  --text-1:#16191D; --text-2:#4A5360; --text-3:#5F6B7A; --text-inverse:#FFFFFF;
+  /* interactive */
+  --accent:#2155C4; --accent-hover:#1B47A6; --accent-press:#163B8A; --accent-subtle:#E8EFFC; --accent-text:#1B47A6;
+  --on-accent:#FFFFFF; --focus-ring:#2155C4; --accent-ring:rgba(33,85,196,.25);
+  /* semantic */
+  --success:#127A55; --success-subtle:#E6F4EE; --success-border:rgba(18,122,85,.30); --on-success:#FFFFFF;
+  --warning:#9A5B00; --warning-subtle:#FFF4E0; --warning-border:rgba(154,91,0,.30); --warning-icon:#D98A00;
+  --danger:#B42318;  --danger-subtle:#FDECEA;  --danger-border:rgba(180,35,24,.30);  --on-danger:#FFFFFF;
+  --info:#2155C4;    --info-subtle:#E8EFFC;    --info-border:rgba(33,85,196,.30);
+  /* assistant identity (violet means "the assistant did or proposes this"; also workflows) */
+  --assistant:#6A3FC2; --assistant-subtle:#F1ECFD; --assistant-text:#5B3BB0; --assistant-border:rgba(106,63,194,.35);
+  --on-assistant:#FFFFFF;
+  /* change marks: always paired with + ~ - glyphs and the words New / Changed / Removed */
+  --change-add:var(--success); --change-add-bg:var(--success-subtle);
+  --change-mod:var(--warning); --change-mod-bg:var(--warning-subtle);
+  --change-del:var(--danger);  --change-del-bg:var(--danger-subtle);
+  /* categories of items (icon tint, dot, timeline bar, 4-px edges; >= 4.5:1 on surface-1) */
+  --cat-show:#3A6FD8; --cat-respond:#B4540A; --cat-eye:#A3307A; --cat-hw:#0D756B; --cat-logic:#5F6B7A;
+  --cat-show-tint:rgba(58,111,216,.12); --cat-respond-tint:rgba(180,84,10,.12); --cat-eye-tint:rgba(163,48,122,.12);
+  --cat-hw-tint:rgba(13,117,107,.12); --cat-logic-tint:rgba(95,107,122,.12);
+  /* flow structures */
+  --loop:var(--cat-hw); --loop-border:rgba(13,117,107,.55); --loop-tint:rgba(13,117,107,.06);
+  --branch:var(--warning); --branch-border:rgba(154,91,0,.55);
+  --workflow:var(--assistant-text); --workflow-border:rgba(91,59,176,.55);
+  /* the stage (participant screen preview; the experiment keeps its own colours) */
+  --stage-matte:#E3E7EC; --stage-ring:rgba(22,25,29,.22); --stage-sel:#4D8DFF; --play-chrome:#0B0E12;
+  /* typography: system fonts only (offline) */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --fs-caption:12px; --lh-caption:16px;   --fs-small:13px; --lh-small:18px;   --fs-body:14px; --lh-body:20px;
+  --fs-title-s:16px; --lh-title-s:22px;   --fs-title-m:18px; --lh-title-m:24px; --fs-title-l:22px; --lh-title-l:28px;
+  --fs-display:28px; --lh-display:34px;   --fs-overline:11px; --lh-overline:16px; --fs-mono:12.5px;
+  --fw-regular:400; --fw-medium:500; --fw-semibold:600; --fw-bold:700;
+  /* spacing (4-px grid) */
+  --sp-0:0; --sp-1:2px; --sp-2:4px; --sp-3:6px; --sp-4:8px; --sp-5:12px; --sp-6:16px; --sp-7:20px; --sp-8:24px;
+  --sp-9:32px; --sp-10:40px; --sp-11:48px; --sp-12:64px;
+  /* sizes */
+  --ctl-h-sm:28px; --ctl-h-md:32px; --ctl-h-lg:40px; --hit-min:24px;
+  --appbar-h:48px; --statusbar-h:28px; --alert-h:40px; --toolbar-h:40px; --flowstrip-h:44px;
+  --sidebar-w:256px; --rail-w:56px; --inspector-w:336px; --companion-w:384px; --shared-right-w:360px;
+  --tl-row-h:32px; --tl-label-w:232px; --scard-w:216px;
+  --icon-s:16px; --icon-m:20px; --icon-l:24px;
+  /* radius */
+  --r-xs:4px; --r-sm:6px; --r-md:8px; --r-lg:12px; --r-pill:999px;
+  /* elevation */
+  --e0:none;
+  --e1:0 1px 2px rgba(16,24,40,.06), 0 1px 1px rgba(16,24,40,.04);
+  --e2:0 4px 12px rgba(16,24,40,.10), 0 1px 3px rgba(16,24,40,.08);
+  --e3:0 16px 40px rgba(16,24,40,.18), 0 4px 12px rgba(16,24,40,.10);
+  --scrim:rgba(16,24,40,.40);
+  /* motion */
+  --dur-1:80ms; --dur-2:140ms; --dur-3:220ms; --dur-4:320ms;
+  --ease-standard:cubic-bezier(.2,0,0,1); --ease-exit:cubic-bezier(.4,0,1,1); --ease-emph:cubic-bezier(.3,0,0,1.15);
+  /* layers */
+  --z-sticky:10; --z-flyout:20; --z-drawer:30; --z-popover:40; --z-dialog:50; --z-coach:60; --z-toast:70; --z-play:80;
+
+  /* legacy aliases: today's style.css and module code keep working until each package migrates */
+  --bg:var(--canvas); --panel:var(--surface-1); --panel2:var(--surface-2); --line:var(--border-subtle);
+  --text:var(--text-1); --muted:var(--text-3); --accent2:var(--success); --warn:var(--warning); --err:var(--danger);
+  --stim:var(--cat-show); --resp:var(--cat-respond); --eye:var(--cat-eye); --hw:var(--cat-hw); --logic:var(--cat-logic);
+  --mono:var(--font-mono);
+}
+
+/* dark: the same block twice (system preference unless forced light, and forced dark) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --canvas:#0F1216; --surface-1:#161A20; --surface-2:#1C2128; --surface-3:#252B34; --surface-inverse:#E8ECF1;
+    --border-subtle:#2A313B; --border-default:#3A424D; --border-control:#66717F;
+    --text-1:#E8ECF1; --text-2:#B4BDC9; --text-3:#8D98A7; --text-inverse:#0F1216;
+    --accent:#7AA2F7; --accent-hover:#93B4F9; --accent-press:#A9C3FA; --accent-subtle:#1E2A44; --accent-text:#A9C3FA;
+    --on-accent:#0B1220; --focus-ring:#7AA2F7; --accent-ring:rgba(122,162,247,.35);
+    --success:#4FC08D; --success-subtle:#12291F; --success-border:rgba(79,192,141,.30); --on-success:#0B1220;
+    --warning:#F2B54A; --warning-subtle:#2E2410; --warning-border:rgba(242,181,74,.30); --warning-icon:#F2B54A;
+    --danger:#FF7B72;  --danger-subtle:#3A1714;  --danger-border:rgba(255,123,114,.30); --on-danger:#0B1220;
+    --info:#7AA2F7;    --info-subtle:#1E2A44;    --info-border:rgba(122,162,247,.30);
+    --assistant:#A78BFA; --assistant-subtle:#231B3D; --assistant-text:#C4B5FD; --assistant-border:rgba(167,139,250,.35);
+    --on-assistant:#0B1220;
+    --cat-show:#6E9BF0; --cat-respond:#F0904A; --cat-eye:#F07AB8; --cat-hw:#3CC2B2; --cat-logic:#9AA4B2;
+    --cat-show-tint:rgba(110,155,240,.16); --cat-respond-tint:rgba(240,144,74,.16); --cat-eye-tint:rgba(240,122,184,.16);
+    --cat-hw-tint:rgba(60,194,178,.16); --cat-logic-tint:rgba(154,164,178,.16);
+    --loop-border:rgba(60,194,178,.55); --loop-tint:rgba(60,194,178,.08);
+    --branch-border:rgba(242,181,74,.55); --workflow-border:rgba(196,181,253,.55);
+    --stage-matte:#0B0E12; --stage-ring:rgba(232,236,241,.18);
+    --e1:0 1px 2px rgba(0,0,0,.4);
+    --e2:0 6px 16px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.04);
+    --e3:0 20px 48px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06);
+    --scrim:rgba(0,0,0,.55);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas:#0F1216; --surface-1:#161A20; --surface-2:#1C2128; --surface-3:#252B34; --surface-inverse:#E8ECF1;
+  --border-subtle:#2A313B; --border-default:#3A424D; --border-control:#66717F;
+  --text-1:#E8ECF1; --text-2:#B4BDC9; --text-3:#8D98A7; --text-inverse:#0F1216;
+  --accent:#7AA2F7; --accent-hover:#93B4F9; --accent-press:#A9C3FA; --accent-subtle:#1E2A44; --accent-text:#A9C3FA;
+  --on-accent:#0B1220; --focus-ring:#7AA2F7; --accent-ring:rgba(122,162,247,.35);
+  --success:#4FC08D; --success-subtle:#12291F; --success-border:rgba(79,192,141,.30); --on-success:#0B1220;
+  --warning:#F2B54A; --warning-subtle:#2E2410; --warning-border:rgba(242,181,74,.30); --warning-icon:#F2B54A;
+  --danger:#FF7B72;  --danger-subtle:#3A1714;  --danger-border:rgba(255,123,114,.30); --on-danger:#0B1220;
+  --info:#7AA2F7;    --info-subtle:#1E2A44;    --info-border:rgba(122,162,247,.30);
+  --assistant:#A78BFA; --assistant-subtle:#231B3D; --assistant-text:#C4B5FD; --assistant-border:rgba(167,139,250,.35);
+  --on-assistant:#0B1220;
+  --cat-show:#6E9BF0; --cat-respond:#F0904A; --cat-eye:#F07AB8; --cat-hw:#3CC2B2; --cat-logic:#9AA4B2;
+  --cat-show-tint:rgba(110,155,240,.16); --cat-respond-tint:rgba(240,144,74,.16); --cat-eye-tint:rgba(240,122,184,.16);
+  --cat-hw-tint:rgba(60,194,178,.16); --cat-logic-tint:rgba(154,164,178,.16);
+  --loop-border:rgba(60,194,178,.55); --loop-tint:rgba(60,194,178,.08);
+  --branch-border:rgba(242,181,74,.55); --workflow-border:rgba(196,181,253,.55);
+  --stage-matte:#0B0E12; --stage-ring:rgba(232,236,241,.18);
+  --e1:0 1px 2px rgba(0,0,0,.4);
+  --e2:0 6px 16px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.04);
+  --e3:0 20px 48px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06);
+  --scrim:rgba(0,0,0,.55);
+}
+
+@media (prefers-reduced-motion: reduce) { :root { --dur-1:0ms; --dur-2:0ms; --dur-3:0ms; --dur-4:0ms; } }
+
+/* density: Preferences > Compact (experts on 1024-px laptops) */
+:root[data-density="compact"] { --ctl-h-md:28px; --ctl-h-sm:24px; --tl-row-h:28px; --scard-w:184px; --toolbar-h:36px; }

@@ -39,8 +39,14 @@ def test_every_doc_link_and_anchor_resolves():
     assert not problems, "\n".join(problems)
 
 
+def _builder_js() -> str:
+    """Every script of the builder (the app is split over several files that share globals)."""
+    static = Path(hp.__file__).parent / "builder" / "static"
+    return "\n".join(f.read_text() for f in sorted(static.glob("*.js")))
+
+
 def test_builder_help_links_point_to_real_sections():
-    js = (Path(hp.__file__).parent / "builder" / "static" / "app.js").read_text()
+    js = _builder_js()
     for topic, anchor in re.findall(r'helpLink\("([^"]+)", "([^"]+)"\)', js):
         if topic == "reference/components" or topic == "reference/devices":
             continue   # anchors are component/device names, checked below
@@ -76,7 +82,7 @@ def test_tutorials_are_valid(tut):
         assert errors == []
     # every UI element a tutorial points at exists in the builder
     html = (Path(hp.__file__).parent / "builder" / "static" / "index.html").read_text()
-    js = (Path(hp.__file__).parent / "builder" / "static" / "app.js").read_text()
+    js = _builder_js()
     for st in tut["steps"]:
         target = st.get("target")
         if not target:

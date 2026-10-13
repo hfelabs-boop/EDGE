@@ -1,297 +1,11 @@
-/* EDGE builder: easy editing of what participants see and hear.
- * - property widgets: sliders, colour swatches, X/Y and W/H boxes you can drag, icon buttons, font menu
- * - file pickers for pictures, sounds and pages (browse the experiment folder, upload, drag and drop)
- * - the screen preview as an editor: click to select, drag to move, corners resize, handle rotates,
- *   double-click text to type, arrow keys nudge, drop palette items or files from the computer onto it
+/* stage.js: the screen preview as an editor (SPEC W4). Owner: P4a (split by P0; the widgets moved to widgets.js).
+ * Owns ST and the stage interactions: click to select, drag to move with snapping, corner handles resize, the
+ * round handle rotates, double-click text to type in place, arrow keys nudge, drop palette items or files from
+ * the computer onto it (drawStageOverlay, startDrag, editInPlace, nudge, dropOnStage), the stage chrome (the
+ * trial-row chip and the empty-screen drop zone: renderStageChrome), the Focus mode (toggleBigPreview), the
+ * splitter between the stage and the timeline (wireSplitter) and wireStage(), which runs on DOMContentLoaded.
  */
 "use strict";
-
-const ASSET_EXT = {
-  image: [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".tif", ".tiff"],
-  audio: [".wav", ".mp3", ".ogg", ".flac", ".aiff", ".aif", ".m4a"],
-  html: [".html", ".htm"],
-};
-const ASSET_WORD = {image: "picture", audio: "sound", html: "web page"};
-const ASSET_FOLDER = {image: "images", audio: "sounds", html: "pages"};
-const SWATCHES = ["white", "black", "grey", "red", "orange", "yellow", "green", "cyan", "blue", "purple", "magenta", "brown"];
-const TONES = [[250, "Low"], [440, "Middle"], [1000, "High"], [2000, "Very high"]];
-
-/* ---------------------------------------------------------------- units */
-const winSize = () => (S.exp.settings.window || {}).size || [1280, 720];
-const winUnits = () => (S.exp.settings.window || {}).units || "px";
-const compUnits = (c) => (c && ["px", "norm", "height"].includes(c.units) ? c.units : winUnits());
-function toUnits(v, axis, u) { const [W, H] = winSize(); return u === "norm" ? v / (axis === "x" ? W / 2 : H / 2) : u === "height" ? v / H : v; }
-function fromUnits(v, axis, u) { const [W, H] = winSize(); return u === "norm" ? v * (axis === "x" ? W / 2 : H / 2) : u === "height" ? v * H : v; }
-const roundU = (v, u) => (u === "norm" || u === "height" ? Math.round(v * 1000) / 1000 : Math.round(v));
-const unitStep = (u) => (u === "norm" || u === "height" ? 0.01 : 1);
-const decimals = (step) => Math.max(0, Math.ceil(-Math.log10(step) - 1e-9));
-const expDir = () => (S.path ? S.path.replace(/[^/]*$/, "") : "");
-const assetUrl = (rel) => `/api/file?path=${encodeURIComponent(expDir() + rel)}`;
-const kindOf = (name) => Object.keys(ASSET_EXT).find((k) => ASSET_EXT[k].some((x) => name.toLowerCase().endsWith(x)));
-
-/* ---------------------------------------------------------------- property widgets */
-/* Returns an input element for properties that have a friendlier editor than a text box, else null. */
-function stageInput(name, p, value, onChange, opts = {}) {
-  const type = p.type || "str";
-  const live = opts.live || (() => {});
-  if (type === "color") return colorInput(p, value, onChange, live);
-  if (type === "file" && p.accept) return fileInput(p, value, onChange, opts.comp);
-  if (type === "vec2") return vecInput(name, p, value, onChange, live, opts.comp);
-  if (type === "choice" && opts.comp && (p.icons || ((p.choices || []).length <= 4 && (p.choices || []).every((c) => String(c).length <= 10))))
-    return segmented(p, value, onChange);
-  if ((type === "float" || type === "int") && p.min !== undefined && p.max !== undefined) return sliderInput(p, value, onChange, live, opts.comp);
-  if (type === "str" && p.suggest) return suggestInput(name, p, value, onChange);
-  return null;
-}
-
-function sliderInput(p, value, onChange, live, comp) {
-  if (value !== null && value !== undefined && typeof value !== "number") return null;
-  let {min, max, step} = p;
-  const u = compUnits(comp);
-  if (p.length && u !== "px") { min = roundU(toUnits(min, "y", u), u); max = roundU(toUnits(max, "y", u), u); step = 0.005; }
-  step = step ?? (max - min) / 100;
-  const dec = p.type === "int" ? 0 : decimals(step);
-  const fmt = (v) => +(+v).toFixed(dec);
-  const rng = h("input", {type: "range", min, max, step, value: value ?? p.default ?? min, "aria-label": "slider"});
-  const num = h("input", {type: "number", class: "st-num", step, value: value ?? "", placeholder: p.default != null ? String(p.default) : ""});
-  rng.oninput = () => { num.value = fmt(rng.value); live(fmt(rng.value)); };
-  rng.onchange = () => onChange(fmt(rng.value));
-  num.onchange = () => onChange(num.value === "" ? null : fmt(num.value));
-  return h("div", {class: "st-slider"}, rng, num);
-}
-
-const _cc = document.createElement("canvas").getContext("2d");
-function colorHex(c) {
-  if (typeof c !== "string" || !c || isExpr(c)) return null;
-  _cc.fillStyle = "#000001"; _cc.fillStyle = c;
-  const v = _cc.fillStyle;
-  return v === "#000001" && c.toLowerCase() !== "#000001" ? null : v;
-}
-function colorInput(p, value, onChange, live) {
-  if (value !== null && value !== undefined && typeof value !== "string") return null;
-  const cur = value ?? p.default;
-  const curHex = colorHex(cur);
-  const sw = h("div", {class: "st-swatches"});
-  const names = p.transparent ? [...SWATCHES, "none"] : SWATCHES;
-  for (const c of names) {
-    const none = c === "none";
-    const on = none ? (cur == null || cur === "transparent" || cur === "none") : curHex && colorHex(c) === curHex;
-    sw.append(h("button", {class: "st-sw" + (none ? " none" : "") + (on ? " on" : ""), title: none ? "none (transparent)" : c,
-      style: none ? "" : `background:${c}`, onclick: (e) => { e.preventDefault(); onChange(none ? (p.default == null ? null : "transparent") : c); }}));
-  }
-  const pick = h("input", {type: "color", class: "st-pick", title: "Any colour"});
-  if (curHex && /^#[0-9a-f]{6}$/i.test(curHex)) pick.value = curHex;
-  pick.oninput = (e) => live(e.target.value);
-  pick.onchange = (e) => onChange(e.target.value);
-  const txt = h("input", {value: value ?? "", placeholder: p.default != null ? String(p.default) : "none", title: "a colour name, #hex, or $expression",
-    onchange: (e) => onChange(e.target.value.trim() || null)});
-  return h("div", {class: "st-color"}, sw, h("div", {class: "row2"}, pick, txt));
-}
-
-function segmented(p, value, onChange) {
-  const cur = value ?? p.default;
-  return h("div", {class: "st-seg"}, (p.choices || []).map((c) => h("button", {class: "st-segb" + (c === cur ? " on" : ""), title: c === "" ? "default" : c,
-    onclick: (e) => { e.preventDefault(); onChange(c === "" ? null : c); }},
-    p.icons?.[c] ? h("span", {class: "ic"}, p.icons[c]) : null, h("small", {}, c === "" ? "default" : c))));
-}
-
-function suggestInput(name, p, value, onChange) {
-  const sel = h("select", {onchange: (e) => {
-    let v = e.target.value;
-    if (v === "__other") { v = prompt("Font name (it must be installed on the computer that runs the experiment):", value || ""); if (v === null) { e.target.value = value || ""; return; } }
-    onChange(v || null);
-  }});
-  const opt = (v, label) => { const o = h("option", {value: v, style: v && v !== "__other" ? `font-family:'${v}'` : ""}, label); if ((value || "") === v) o.selected = true; return o; };
-  sel.append(opt("", "(system default)"));
-  if (value && !p.suggest.includes(value)) sel.append(opt(value, value));
-  for (const f of p.suggest) sel.append(opt(f, f));
-  sel.append(opt("__other", "Other…"));
-  return sel;
-}
-
-/* X/Y (position) or W/H (size): number boxes whose letter you can drag sideways, plus helpers. */
-const _unlocked = new Set();
-function vecInput(name, p, value, onChange, live, comp) {
-  if (value !== null && value !== undefined && !(Array.isArray(value) && value.length === 2 && value.every((x) => typeof x === "number"))) return null;
-  const u = comp ? compUnits(comp) : "px";     // outside a component (e.g. the window size) it's pixels
-  const isSize = name === "size";
-  const cur = value ?? p.default;
-  const vals = Array.isArray(cur) ? [...cur] : [null, null];
-  const key = (comp ? comp.id : "") + "." + name;
-  const lockable = isSize && p.aspect;
-  const locked = () => lockable && !_unlocked.has(key);
-  const natural = () => { if (comp?.type !== "image" || typeof comp.image !== "string" || !comp.image || isExpr(comp.image)) return null;
-    const im = imgCache(comp.image); return im.naturalWidth ? [roundU(toUnits(im.naturalWidth, "x", u), u), roundU(toUnits(im.naturalHeight, "y", u), u)] : null; };
-  const boxes = [0, 1].map((i) => h("input", {type: "number", class: "st-num", step: unitStep(u), value: value ? value[i] : "",
-    placeholder: vals[i] != null ? String(vals[i]) : (isSize ? "auto" : "0")}));
-  const withAspect = (i, v, base) => {
-    const out = [...(base[0] == null ? (natural() || [v, v]) : base)];
-    const ratio = out[0] && out[1] ? out[1] / out[0] : 1;
-    out[i] = v;
-    if (locked()) out[1 - i] = roundU(i === 0 ? v * ratio : v / ratio, u);
-    return out;
-  };
-  boxes.forEach((b, i) => { b.onchange = () => {
-    if (b.value === "") return onChange(null);
-    onChange(withAspect(i, +b.value, value ? [...value] : (Array.isArray(p.default) ? [...p.default] : [null, null])));
-  }; });
-  const scrub = (i, label) => h("span", {class: "st-axis", title: "Drag sideways to change, or type a number",
-    onmousedown: (e) => {
-      e.preventDefault();
-      const start = value ? [...value] : (natural() || (Array.isArray(p.default) ? [...p.default] : [0, 0]));
-      const x0 = e.clientX; let last = start;
-      const mv = (ev) => { const d = (ev.clientX - x0) * unitStep(u) * (ev.shiftKey ? 10 : 1);
-        last = withAspect(i, roundU(start[i] + d, u), start); boxes[0].value = last[0]; boxes[1].value = last[1]; live(last); };
-      const up = () => { window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up);
-        if (JSON.stringify(last) !== JSON.stringify(start)) onChange(last); };
-      window.addEventListener("mousemove", mv); window.addEventListener("mouseup", up);
-    }}, label);
-  const L = isSize ? ["W", "H"] : ["X", "Y"];
-  const row = h("div", {class: "st-vec"}, scrub(0, L[0]), boxes[0], scrub(1, L[1]), boxes[1]);
-  if (lockable) row.append(h("button", {class: "mini st-lock" + (locked() ? " on" : ""), title: locked() ? "Keeping the proportions (click to unlock)" : "Proportions unlocked (click to lock)",
-    onclick: (e) => { e.preventDefault(); locked() ? _unlocked.add(key) : _unlocked.delete(key); renderProps(); }}, locked() ? "🔒" : "🔓"));
-  const extra = [];
-  if (isSize && comp?.type === "image") {
-    const scale = (f) => (e) => { e.preventDefault(); const b = value || natural(); if (b) onChange([roundU(b[0] * f, u), roundU(b[1] * f, u)]); };
-    extra.push(h("div", {class: "st-btnrow"},
-      h("button", {class: "mini" + (value == null ? " on" : ""), onclick: (e) => { e.preventDefault(); onChange(null); }, title: "The picture's own size in pixels"}, "Original size"),
-      h("button", {class: "mini", onclick: scale(0.5)}, "½×"), h("button", {class: "mini", onclick: scale(0.75)}, "¾×"),
-      h("button", {class: "mini", onclick: scale(1.5)}, "1½×"), h("button", {class: "mini", onclick: scale(2)}, "2×")));
-  }
-  if (name === "pos") extra.push(placeGrid(value || [0, 0], onChange, u));
-  return h("div", {}, row, ...extra);
-}
-
-function placeGrid(cur, onChange, u) {
-  const [W, H] = winSize();
-  const grid = h("div", {class: "st-place", title: "Put it in a standard place"});
-  for (const [yy, ny] of [[H / 3, "top"], [0, "middle"], [-H / 3, "bottom"]])
-    for (const [xx, nx] of [[-W / 3, "left"], [0, "centre"], [W / 3, "right"]]) {
-      const v = [roundU(toUnits(xx, "x", u), u), roundU(toUnits(yy, "y", u), u)];
-      const on = Math.abs(cur[0] - v[0]) < 1e-6 && Math.abs(cur[1] - v[1]) < 1e-6;
-      grid.append(h("button", {class: "st-cell" + (on ? " on" : ""), title: ny === "middle" && nx === "centre" ? "centre of the screen" : `${ny} ${nx}`,
-        onclick: (e) => { e.preventDefault(); onChange(v); }}));
-    }
-  return h("div", {class: "st-placerow"}, grid, h("span", {class: "help"}, "or drag it on the screen preview"));
-}
-
-/* ---------------------------------------------------------------- files: pictures, sounds, pages */
-function fileInput(p, value, onChange, comp) {
-  const kind = p.accept;
-  if (value !== null && value !== undefined && typeof value !== "string" && !(kind === "audio" && typeof value === "number")) return null;
-  const cur = value ?? p.default;
-  const isTone = kind === "audio" && typeof cur === "number";
-  const card = h("div", {class: "st-file", title: "Drop a file here to use it"});
-  if (kind === "image" && cur) card.append(h("img", {class: "st-thumb", src: assetUrl(cur), alt: ""}));
-  if (kind === "audio" && cur !== "" && cur != null)
-    card.append(h("button", {class: "mini st-play", title: "Listen", onclick: (e) => { e.preventDefault(); playSound(cur, comp?.volume, comp?.tone_duration); }}, "▶"));
-  card.append(h("div", {class: "st-fname"}, isTone ? `Tone · ${cur} Hz` : cur ? String(cur) : `No ${ASSET_WORD[kind]} yet`));
-  card.append(h("button", {class: "primary mini", onclick: (e) => { e.preventDefault(); openAssetPicker(kind, onChange, cur); }}, cur ? "Change…" : "Choose…"));
-  card.ondragover = (e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); card.classList.add("drop"); } };
-  card.ondragleave = () => card.classList.remove("drop");
-  card.ondrop = async (e) => {
-    e.preventDefault(); card.classList.remove("drop");
-    const f = [...e.dataTransfer.files][0]; if (!f) return;
-    const rel = await uploadAsset(f, kind); if (rel) onChange(rel);
-  };
-  return card;
-}
-
-async function assetList(kind) {
-  const q = `/api/assets?kind=${kind}` + (S.path ? `&exp=${encodeURIComponent(S.path)}` : "");
-  try { return (await api(q)).assets; } catch { return []; }
-}
-
-/* Copy a file from the participant's computer into the experiment folder (images/, sounds/, pages/). */
-async function uploadAsset(file, kind) {
-  if (kindOf(file.name) !== kind) { toast(`${file.name} is not a ${ASSET_WORD[kind]} file (${ASSET_EXT[kind].join(" ")})`, 4000); return null; }
-  if (!S.path) {
-    toast("Save the experiment first, so the file can be stored next to it", 4000);
-    await save(); if (!S.path) return null;
-  }
-  const existing = new Map((await assetList(kind)).map((a) => [a.path, a.size]));
-  const clean = file.name.replace(/[^\w.\- ]+/g, "_");
-  let rel = `${ASSET_FOLDER[kind]}/${clean}`;
-  if (existing.has(rel) && existing.get(rel) === file.size) return rel;   // already there
-  for (let i = 2; existing.has(rel); i++) rel = `${ASSET_FOLDER[kind]}/${clean.replace(/(\.[^.]*)?$/, `_${i}$1`)}`;
-  const r = await fetch(`/api/upload?path=${encodeURIComponent(expDir() + rel)}`, {method: "POST", body: await file.arrayBuffer()});
-  if (!r.ok) { toast(`Could not copy ${file.name}`, 4000); return null; }
-  return rel;
-}
-
-let _audio = null;
-function playSound(v, volume, duration) {
-  if (_audio) { try { _audio.pause?.(); _audio.stop?.(); } catch {} _audio = null; }
-  const vol = typeof volume === "number" ? Math.max(0, Math.min(1, volume)) : 1;
-  if (typeof v === "number" || (typeof v === "string" && /^\d+(\.\d+)?$/.test(v))) {
-    const ac = playSound._ac ||= new (window.AudioContext || window.webkitAudioContext)();
-    const o = ac.createOscillator(), g = ac.createGain();
-    o.frequency.value = +v; g.gain.value = 0.3 * vol; o.connect(g).connect(ac.destination);
-    o.start(); o.stop(ac.currentTime + (typeof duration === "number" ? duration : 0.2));
-    _audio = o;
-  } else if (typeof v === "string" && v && !isExpr(v)) {
-    _audio = new Audio(assetUrl(v)); _audio.volume = vol;
-    _audio.play().catch(() => toast("This browser can't play that file (the experiment may still can)"));
-  }
-}
-
-/* The picker dialog: what's in the experiment folder, upload or drop new files, tones for sounds. */
-async function openAssetPicker(kind, onPick, cur) {
-  const body = $("#modal-body"); body.innerHTML = ""; _resetModal(); body.classList.add("assetpick");
-  const word = ASSET_WORD[kind];
-  const pick = (v) => { closeModal(); onPick(v); };
-  const search = h("input", {type: "search", placeholder: `Search ${word}s…`, class: "st-search"});
-  const input = h("input", {type: "file", multiple: true, accept: ASSET_EXT[kind].join(","), style: "display:none"});
-  const grid = h("div", {class: kind === "image" ? "st-grid" : "st-list"});
-  const status = h("div", {class: "help"});
-  let items = [];
-  const draw = () => {
-    grid.innerHTML = "";
-    const f = search.value.toLowerCase();
-    const shown = items.filter((a) => a.path.toLowerCase().includes(f));
-    status.textContent = items.length ? `${shown.length} of ${items.length} in the experiment folder` : "";
-    if (!items.length) grid.append(h("div", {class: "st-empty"}, `No ${word}s in the experiment folder yet.`, h("br"), `Click “Upload from computer” or drop files here.`));
-    for (const a of shown) {
-      const sel = a.path === cur;
-      if (kind === "image") grid.append(h("div", {class: "st-tile" + (sel ? " on" : ""), title: a.path, onclick: () => pick(a.path)},
-        h("img", {src: assetUrl(a.path), loading: "lazy", alt: ""}), h("span", {}, a.path.split("/").pop()), a.folder ? h("small", {}, a.folder) : null));
-      else grid.append(h("div", {class: "st-row" + (sel ? " on" : ""), title: a.path},
-        kind === "audio" ? h("button", {class: "mini", title: "Listen", onclick: (e) => { e.stopPropagation(); playSound(a.path); }}, "▶") : null,
-        h("span", {class: "st-rowname", onclick: () => pick(a.path)}, a.path), h("small", {}, `${Math.max(1, Math.round(a.size / 1024))} KB`),
-        h("button", {class: "mini primary", onclick: () => pick(a.path)}, "Use")));
-    }
-  };
-  const refresh = async () => { items = await assetList(kind); draw(); };
-  const addFiles = async (files) => {
-    const done = [];
-    for (const f of files) { const rel = await uploadAsset(f, kind); if (rel) done.push(rel); }
-    if (!S.path) return;
-    if (done.length === 1) return pick(done[0]);
-    await refresh();
-    if (done.length) toast(`Added ${done.length} ${word}s to ${ASSET_FOLDER[kind]}/`);
-  };
-  input.onchange = () => addFiles([...input.files]);
-  search.oninput = draw;
-  const drop = h("div", {class: "st-drop"}, grid);
-  drop.ondragover = (e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); drop.classList.add("drop"); } };
-  drop.ondragleave = (e) => { if (e.target === drop) drop.classList.remove("drop"); };
-  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("drop"); addFiles([...e.dataTransfer.files]); };
-  const tones = kind === "audio" ? h("div", {class: "st-tones"}, h("b", {}, "Or a beep (pure tone): "),
-    ...TONES.map(([hz, label]) => h("span", {class: "st-tone" + (cur === hz ? " on" : "")},
-      h("button", {class: "mini", title: "Listen", onclick: () => playSound(hz)}, "▶"),
-      h("button", {class: "mini", onclick: () => pick(hz)}, `${label} · ${hz} Hz`))),
-    (() => { const hz = h("input", {type: "number", min: 20, max: 20000, step: 10, value: typeof cur === "number" ? cur : 440, class: "st-num"});
-      return h("span", {class: "st-tone"}, hz, " Hz ", h("button", {class: "mini", onclick: () => playSound(+hz.value)}, "▶"), h("button", {class: "mini", onclick: () => pick(+hz.value)}, "Use")); })()) : null;
-  body.append(...[h("h3", {}, `Choose a ${word}`),
-    h("div", {class: "st-toolbar"}, search, h("button", {class: "primary", onclick: () => input.click()}, "⬆ Upload from computer"), input),
-    status, drop, tones,
-    h("p", {class: "help"}, kind === "html" ? "Pages are stored next to the experiment, in pages/." :
-      `A different ${word} on each trial? Close this and use the menu next to the field: “+ New trial-list column…”.`),
-    h("div", {class: "btns"}, h("button", {onclick: () => closeModal()}, "Cancel"))].filter(Boolean));
-  openModal();
-  search.focus();
-  await refresh();
-}
 
 /* ---------------------------------------------------------------- the screen preview as an editor */
 const ST = {drag: null, guides: [], nudge: null};
@@ -328,15 +42,18 @@ function drawStageOverlay(cv) {
   }
   const b = selBox(cv);
   if (b) {
-    ctx.setLineDash([5 * dpr, 4 * dpr]); ctx.strokeStyle = "#4d8dff"; ctx.lineWidth = 1.5 * dpr; ctx.beginPath();
-    [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sy], i) => { const [px, py] = toCanvas(cv, ...world(b, sx * b.hw, sy * b.hh)); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
-    ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+    const outline = () => { ctx.beginPath();
+      [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sy], i) => { const [px, py] = toCanvas(cv, ...world(b, sx * b.hw, sy * b.hh)); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+      ctx.closePath(); ctx.stroke(); };
+    ctx.setLineDash([]);
+    ctx.strokeStyle = "rgba(0,0,0,.4)"; ctx.lineWidth = 3.5 * dpr; outline();
+    ctx.strokeStyle = "#4d8dff"; ctx.lineWidth = 1.5 * dpr; outline();
     for (const hd of handles(cv, b)) {
       ctx.fillStyle = "#fff"; ctx.strokeStyle = "#4d8dff"; ctx.lineWidth = 1.5 * dpr;
       if (hd.kind === "rotate") {
         ctx.beginPath(); ctx.moveTo(...hd.base); ctx.lineTo(...hd.at); ctx.stroke();
         ctx.beginPath(); ctx.arc(...hd.at, 5 * dpr, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
-      } else { const s = 4 * dpr; ctx.fillRect(hd.at[0] - s, hd.at[1] - s, 2 * s, 2 * s); ctx.strokeRect(hd.at[0] - s, hd.at[1] - s, 2 * s, 2 * s); }
+      } else { const s = 4 * dpr; ctx.beginPath(); ctx.rect(hd.at[0] - s, hd.at[1] - s, 2 * s, 2 * s); ctx.fill(); ctx.stroke(); }
     }
     if (ST.drag?.label) {
       ctx.font = `${11 * dpr}px sans-serif`; const w = ctx.measureText(ST.drag.label).width + 10 * dpr;
@@ -380,11 +97,12 @@ function startDrag(cv, e) {
   }
   const c = findComp(S.routine, hit.box.id); if (!c) return;
   if (S.sel?.kind !== "component" || S.sel.id !== c.id) { S.sel = {kind: "component", routine: S.routine, id: c.id}; renderProps(); renderTimeline(); renderPreview(); }
+  if (S.proposal) return;   // the assistant's preview is read-only
   const b = selBox(cv) || hit.box;
   const prop = hit.kind === "move" ? "pos" : hit.kind === "rotate" ? "ori" : resizeProp(c);
   if (isExpr(c[prop])) {
     const col = String(c[prop]).slice(1);
-    return toast(`“${prop}” comes from the trial list (${col}). Change it there, or set it to Fixed in the panel on the right.`, 4500);
+    return toast(`This ${prop === "pos" ? "position" : prop === "ori" ? "rotation" : "size"} comes from the trial list (“${col}”). Change it there, or make it the same on every trial in Properties.`);
   }
   e.preventDefault(); cv.focus();
   ST.drag = {kind: hit.kind, c, b: {...b}, p0: p, before: JSON.stringify(c), u: b.units, moved: false,
@@ -441,7 +159,7 @@ function dragMove(cv, e) {
 
 function endDrag() {
   const d = ST.drag; ST.drag = null; ST.guides = [];
-  if (d && d.moved && JSON.stringify(d.c) !== d.before) commit(); else renderPreview();
+  if (d && d.moved && JSON.stringify(d.c) !== d.before) commit(d.kind === "move" ? `Move “${d.c.id}”` : d.kind === "rotate" ? `Rotate “${d.c.id}”` : `Resize “${d.c.id}”`); else renderPreview();
 }
 
 function hoverCursor(cv, e) {
@@ -454,9 +172,10 @@ function hoverCursor(cv, e) {
 function editInPlace(cv, e) {
   const hit = hitTest(cv, cvPoint(cv, e)); if (!hit) return;
   const c = findComp(S.routine, hit.box.id); if (!c) return;
+  if (S.proposal) return toast("Apply or discard the assistant's changes first");
   if (c.type === "image") return openAssetPicker("image", (v) => setProp(c, "image", v), c.image);
   if (c.type !== "text") return;
-  if (isExpr(c.text)) return toast("This text comes from the trial list or a formula: edit it in the panel on the right.", 4000);
+  if (isExpr(c.text)) return toast("This text comes from the trial list or a formula: edit it in Properties on the right.");
   const b = hit.box, r = cv.getBoundingClientRect(), s = r.width / cv.width;
   const [px, py] = toCanvas(cv, b.x, b.y);
   const w = Math.max(160, 2 * b.hw * cv._k * s + 40), hh = Math.max(40, 2 * b.hh * cv._k * s + 16);
@@ -474,6 +193,7 @@ function nudge(cv, e) {
   if (!arrows[e.key] || S.sel?.kind !== "component") return;
   const c = findComp(S.sel.routine, S.sel.id); if (!c || !(S.schema.components[c.type]?.props || {}).pos) return;
   e.preventDefault();
+  if (S.proposal) return toast("Apply or discard the assistant's changes first");
   if (isExpr(c.pos)) return toast("The position comes from the trial list: change it there.");
   const u = compUnits(c), st = unitStep(u) * (e.shiftKey ? 10 : 1), [dx, dy] = arrows[e.key];
   const p0 = Array.isArray(c.pos) ? c.pos : [0, 0];
@@ -481,12 +201,13 @@ function nudge(cv, e) {
   c.pos = [roundU(p0[0] + dx * st, u), roundU(p0[1] + dy * st, u)];
   renderPreview();
   clearTimeout(ST.nudge.t);
-  ST.nudge.t = setTimeout(() => { ST.nudge = null; commit(); }, 500);
+  ST.nudge.t = setTimeout(() => { ST.nudge = null; commit(`Move “${c.id}”`); }, 500);
 }
 
 /* Drop a palette item or files from the computer onto the screen: it appears where it was dropped. */
 async function dropOnStage(cv, e) {
-  e.preventDefault(); cv.classList.remove("drop");
+  e.preventDefault(); cv.classList.remove("drop"); $("#preview-wrap .stage-empty")?.classList.remove("drop");
+  if (S.proposal) return toast("Apply or discard the assistant's changes first");
   const p = cvPoint(cv, e);
   const at = (type) => { const u = compUnits(null);
     return S.schema.components[type]?.props?.pos ? {pos: [roundU(toUnits(p.x, "x", u), u), roundU(toUnits(p.y, "y", u), u)]} : {}; };
@@ -501,13 +222,49 @@ async function dropOnStage(cv, e) {
   }
 }
 
+/* Focus (#preview-big): the stage takes the whole canvas; the timeline and the flow strip come back with Esc. */
 function toggleBigPreview(force) {
-  const on = force ?? !$("#routine-body").classList.contains("big");
-  $("#routine-body").classList.toggle("big", on);
+  const on = typeof force === "boolean" ? force : !$("#ws-build").classList.contains("focus");
+  $("#ws-build").classList.toggle("focus", on);
   try { localStorage.setItem("edge.bigPreview", on ? "1" : ""); } catch {}
-  $("#preview-big").textContent = on ? "⤡" : "⤢";
-  $("#preview-big").title = on ? "Smaller preview" : "Bigger preview, for arranging things on the screen";
+  const b = $("#preview-big");
+  b.setAttribute("aria-pressed", on ? "true" : "false");
+  const tip = on ? "Show the timeline again (Esc)" : "Focus: a bigger screen for arranging things";
+  b.title = tip; b.setAttribute("aria-label", on ? "Leave focus" : "Focus");
+  const lbl = b.querySelector(".lbl"); if (lbl) lbl.textContent = on ? "Leave focus" : "Focus";
   requestAnimationFrame(() => { if (S.exp) renderPreview(); });
+}
+
+/* The stage's chrome: the trial-row chip ("Row 1 of 9 · word RED · ink red") and the empty-screen drop zone. */
+function renderStageChrome(cv) {
+  const stack = cv.parentElement; if (!stack) return;
+  const rid = S.routine;
+  let chip = stack.querySelector(".trial-chip");
+  const info = rid && typeof rowInfo === "function" ? rowInfo(rid) : null;
+  if (info && info.count) {
+    const row = sampleRowFor(rid);
+    const used = [];
+    for (const c of comps(rid)) for (const v of Object.values(c)) {
+      if (!isExpr(v)) continue;
+      for (const w of String(v).match(/[A-Za-z_]\w*/g) || []) if (w in row && !used.includes(w) && !(w in (S.exp.variables || {}))) used.push(w);
+    }
+    const txt = [`Row ${Math.min(S.rowIndex || 0, info.count - 1) + 1} of ${info.count}`, ...used.slice(0, 3).map((k) => `${k} ${short(String(row[k]), 14)}`)].join(" · ");
+    if (!chip) { chip = h("span", {class: "trial-chip", "aria-hidden": "true"}); stack.append(chip); }
+    chip.textContent = txt;
+  } else chip?.remove();
+  let empty = stack.querySelector(".stage-empty");
+  const isEmpty = rid && S.exp.routines[rid] && !comps(rid).length;
+  if (!isEmpty) { empty?.remove(); return; }
+  if (empty && empty.dataset.rid === rid) return;
+  empty?.remove();
+  const add = (type) => h("button", {type: "button", class: "btn sm", onclick: () => addComponent(type)}, icon(TYPE_ICON[type] || "plus"), friendlyName(type));
+  empty = h("div", {class: "stage-empty empty dropzone", "data-rid": rid},
+    h("p", {}, "Drop pictures, sounds or web pages here, or pick something from Add."),
+    h("div", {class: "actions"}, ["text", "image", "keyboard", "fixation"].filter((t) => S.schema.components[t]).map(add)));
+  empty.addEventListener("dragover", (e) => { const t = e.dataTransfer.types; if (t.includes("edge/component") || t.includes("Files")) { e.preventDefault(); empty.classList.add("drop"); } });
+  empty.addEventListener("dragleave", (e) => { if (e.target === empty) empty.classList.remove("drop"); });
+  empty.addEventListener("drop", (e) => dropOnStage(cv, e));
+  stack.append(empty);
 }
 
 function wireStage() {
@@ -520,9 +277,41 @@ function wireStage() {
   cv.addEventListener("dragover", (e) => { const t = e.dataTransfer.types; if (t.includes("edge/component") || t.includes("Files")) { e.preventDefault(); cv.classList.add("drop"); } });
   cv.addEventListener("dragleave", () => cv.classList.remove("drop"));
   cv.addEventListener("drop", (e) => dropOnStage(cv, e));
+  cv.addEventListener("focus", () => { const hint = $("#stage-hint"); if (hint) hint.classList.add("on"); });
+  cv.addEventListener("blur", () => $("#stage-hint")?.classList.remove("on"));
+  const hint = $("#stage-hint");
+  if (hint) { hint.textContent = "Click to select · drag to move · corners resize · the round handle rotates · double-click text to type · arrows nudge · Space plays"; hint.id = "stage-hint"; cv.setAttribute("aria-describedby", "stage-hint"); }
   $("#preview-big").onclick = () => toggleBigPreview();
   let big = false; try { big = !!localStorage.getItem("edge.bigPreview"); } catch {}
   if (big) toggleBigPreview(true);
   window.addEventListener("resize", () => { if (S.exp) renderPreview(); });
+  wireSplitter();
+}
+
+/* P0: the splitter between the stage and the timeline (drag, or arrow keys); remembered in edge.layout. */
+function wireSplitter() {
+  const sp = $("#splitter"), view = $("#view-screen"); if (!sp || !view) return;
+  const set = (pct, save) => {
+    pct = Math.round(Math.max(25, Math.min(80, pct)));
+    view.style.setProperty("--stage-split", pct + "%");
+    sp.setAttribute("aria-valuenow", pct);
+    if (S.exp && S.view === "screen") renderPreview();
+    if (save) EDGE.prefs.set("layout", {...(EDGE.prefs.get("layout", {}) || {}), split: pct});
+    return pct;
+  };
+  sp.setAttribute("aria-valuemin", "25"); sp.setAttribute("aria-valuemax", "80");
+  sp.title = "Drag to resize the screen and the timeline (or use the arrow keys)";
+  let cur = set(Number((EDGE.prefs.get("layout", {}) || {}).split) || 60, false);
+  sp.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    const r = view.getBoundingClientRect();
+    const mv = (ev) => { cur = set(((ev.clientY - r.top) / r.height) * 100, false); };
+    const up = () => { window.removeEventListener("mousemove", mv); window.removeEventListener("mouseup", up); set(cur, true); };
+    window.addEventListener("mousemove", mv); window.addEventListener("mouseup", up);
+  });
+  sp.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault(); cur = set(cur + (e.key === "ArrowUp" ? -5 : 5), true);
+  });
 }
 window.addEventListener("DOMContentLoaded", wireStage);

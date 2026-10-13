@@ -591,8 +591,9 @@ def test_code_the_assistant_wrote_earlier_is_not_test_run_later(ws, tmp_path, mo
     fake.close()
 
 
-def test_code_from_an_applied_earlier_result_is_remembered_in_the_history(ws):
+def test_code_from_an_applied_earlier_result_is_remembered_in_the_history(ws, tmp_path, monkeypatch):
     from edge.assistant.jobs import append_history
+    monkeypatch.chdir(tmp_path)                                     # the reviewed code runs at the end: keep its file here
     fake = FakeAnthropic([
         FakeAnthropic.turn(FakeAnthropic.tool("apply_operations", {"operations": _code_ops()}, id="a")),
         FakeAnthropic.turn(FakeAnthropic.text("Added code.")),
@@ -616,6 +617,7 @@ def test_code_from_an_applied_earlier_result_is_remembered_in_the_history(ws):
     res3 = execute(req, conv, prov, load_config(), ws, EventSink(), CancelEvent(), FileLedger(ws / "stroop_ai"),
                    normalized_base(res2.experiment, ws / EXP))
     assert res3.dry_run["ran"] is True and res3.review == []
+    assert (tmp_path / "ran.txt").exists()                          # it really ran, once a person had read it
     fake.close()
 
 
