@@ -306,7 +306,7 @@ devices:
 Export the event times from the recording software as `time,code`, then:
 
 ```bash
-edge align data/001_1_study_* biolab_events.csv
+edge align data/001_1_study_2027-02-01_101500 biolab_events.csv   # the session folder 'edge run' printed
 ```
 
 ## Running

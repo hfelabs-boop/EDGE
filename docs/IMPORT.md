@@ -25,9 +25,12 @@ The result is validated, and you should **always dry-run it** (`edge run file --
 and compare trial counts and timing with the original. While these importers were being built,
 dry runs caught several conversion gaps that are now handled automatically.
 
-An import never overwrites earlier work. If the folder already holds an import (perhaps one you
-have edited since), or a file of the same name with other contents, the new import is saved next to
-it in a folder ending in `_2` (`stroop_edge_2`), and the output says so. A file from which nothing
+An import never overwrites earlier work. Importing the same file again (say, after exporting a
+missing list) updates the earlier import if nobody has changed it since, keeping the previous
+experiment file as a backup (`edge backups`). If you have edited that import, recorded sessions
+with it, or the folder holds another experiment or a file of the same name with other contents,
+the new import is saved next to it in a folder ending in `_2` (`stroop_edge_2`), and the output
+says so. A file from which nothing
 could be converted (cut short, damaged, or not an experiment of that program) is refused with an
 explanation, and nothing is written. Files saved as UTF-16 ("Unicode" in Windows programs) and
 Windows paths such as `stimuli\red.png` are read as well.

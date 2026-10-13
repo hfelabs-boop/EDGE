@@ -135,8 +135,8 @@ def _check_participant(exp, participant: dict, data_dir: str | None) -> bool:
         except (OSError, ValueError):
             continue
         p = meta.get("participant") or {}
-        if meta.get("experiment") != exp.name or not isinstance(p, dict):
-            continue
+        if meta.get("experiment") != exp.name or not isinstance(p, dict) or meta.get("dry_run"):
+            continue        # (earlier EDGE versions saved test runs next to the participants' data)
         used.append((str(p.get("participant", "")), str(p.get("session", ""))))
         if used[-1] == (pid, ses):
             same.append(s)
@@ -317,6 +317,8 @@ def cmd_test_device(a: argparse.Namespace) -> int:
 def cmd_timing_test(a: argparse.Namespace) -> int:
     from .templates import write_template
     path = write_template("timing_test", Path(a.directory))
+    if path.stem != "timing_test":      # never over an existing file
+        print("timing_test.yaml already exists there, so it was left as it is")
     print(f"Created {path}.")
     print("1. Tape a light sensor over the top-left corner of the screen and put a microphone at the speaker.")
     print("2. Replace the 'sensors' device with your hardware (serial_inputs, labjack, voice_key …), naming its")
@@ -496,7 +498,10 @@ def cmd_export(a: argparse.Namespace) -> int:
         print("\n".join(str(f) for f in files))
     else:
         res = export_many(p, formats, a.out, a.include_dry_runs, a.name, layout=a.layout)
-        print(f"{res['sessions']} session(s), {res['participants']} participant(s), {res['trials']} trials")
+        rows = res.get("rows", res["trials"])
+        print(f"{res['sessions']} session(s), {res['participants']} participant(s), {res['trials']} trials"
+              + ("" if rows == res["trials"] else
+                 f" ({rows} rows in the trials table: {'one per screen' if a.layout == 'long' else 'screens outside the trial loops, such as instructions, have rows too'})"))
         for note in res.get("notes") or []:       # several experiments, unreadable folders, BIDS renames
             print(f"note: {note}")
         print("\n".join(res["files"]))
@@ -997,6 +1002,13 @@ def main(argv: list[str] | None = None) -> int:
                                                            "(a new one, or one that exists)" if Path(name).is_file() else ""),
               file=sys.stderr)
         return 2
+    except BrokenPipeError:             # the output went to a program that stopped reading (edge help | head)
+        try:
+            import os
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())   # no second error at exit
+        except (OSError, ValueError, AttributeError):
+            pass
+        return 0
     except OSError as e:                # file not found, not a folder, no permission, no free port …
         where = f" ({e.filename})" if getattr(e, "filename", None) else ""
         print(f"edge {a.cmd}: {e.strerror or e}{where}", file=sys.stderr)

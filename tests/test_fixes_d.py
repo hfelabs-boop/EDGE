@@ -73,6 +73,23 @@ def test_jspsych_page_reads_its_own_script_files(tmp_path):
     with pytest.raises(ImportError_, match="missing.js"):
         import_experiment(d / "index.html", tmp_path / "out2")
     assert not (tmp_path / "out2").exists()
+    # the experiment's code in a file named like a jsPsych library: the refusal says which file to import
+    (d / "jspsych_stroop.js").write_text(m.group(1))
+    (d / "index.html").write_text(src.replace(m.group(0), '<script src="jspsych_stroop.js"></script>'))
+    with pytest.raises(ImportError_, match="if the experiment's code is in jspsych_stroop.js .*import that file"):
+        import_experiment(d / "index.html", tmp_path / "out3")
+
+
+def test_utf16_pages_and_psyexp_files_are_recognized(tmp_path):
+    from edge.importers import detect
+    for src, enc in ((FIX / "jspsych/experiment.html", "utf-16"), (FIX / "psychopy/stroop.psyexp", "utf-16")):
+        text = src.read_text().replace('encoding="utf-8"', 'encoding="utf-16"')
+        (tmp_path / src.name).write_bytes(text.encode(enc))
+    assert detect(tmp_path / "experiment.html") == "jspsych" and detect(tmp_path / "stroop.psyexp") == "psychopy"
+    shutil.copy(FIX / "psychopy/trialTypes.csv", tmp_path)
+    path, _ = import_experiment(tmp_path / "stroop.psyexp")
+    plain, _ = import_experiment(FIX / "psychopy/stroop.psyexp", tmp_path / "plain")
+    assert Experiment.load(path).to_dict()["routines"] == Experiment.load(plain).to_dict()["routines"]
 
 
 # ------------------------------------------------------------------ importers#5 / mcp#21: empty or mis-labelled
@@ -208,11 +225,14 @@ def test_opensesame_line_breaks_and_pixel_font_sizes(tmp_path):
 def test_opensesame_span_colour_and_bold(tmp_path):
     script = ("set start experiment\ndefine sequence experiment\n\trun s always\n"
               "define sketchpad s\n\tset duration 500\n"
-              "\tdraw textline text=\"<span color='red'><b>Stop</b></span>\" x=0 y=0 color=white font_size=30\n")
+              "\tdraw textline text=\"<span color='red'><b>Stop</b></span>\" x=0 y=0 color=white font_size=30\n"
+              "\tdraw textline text=\"<span color=[ink]>Go</span>\" x=0 y=50 color=white\n")
     (tmp_path / "t.opensesame").write_text(script)
-    path, _ = import_experiment(tmp_path / "t.opensesame", tmp_path / "out")
-    c = Experiment.load(path).to_dict()["routines"]["s"]["components"][0]
+    path, res = import_experiment(tmp_path / "t.opensesame", tmp_path / "out")
+    c, v = Experiment.load(path).to_dict()["routines"]["s"]["components"][:2]
     assert c["text"] == "Stop" and c["color"] == "red" and c["bold"] is True and c["height"] == 30
+    assert v["text"] == "Go" and v["color"] == "$ink"           # a colour from a variable stays a variable
+    assert not any("styling not kept" in n["message"] for n in res.notes)
 
 
 # ------------------------------------------------------------------ importers#10: E-Prime "Too slow"
@@ -246,7 +266,29 @@ def test_reimport_never_overwrites_earlier_work(tmp_path):
     assert (tmp_path / "shared/IMPORT_REPORT.md").read_text().startswith("# Import report: stroop.psyexp")
 
 
-def test_builder_reimport_goes_next_to_the_first(tmp_path):
+def test_reimport_updates_an_import_nobody_changed(tmp_path):
+    from edge.storage import list_backups
+    ep = tmp_path / "ep"
+    ep.mkdir()
+    shutil.copy(FIX / "eprime/Stroop.ebs3", ep)                     # the list export is missing at first
+    first, _ = import_experiment(ep / "Stroop.ebs3")
+    assert "conditions: TrialList.txt" in first.read_text()
+    shutil.copy(FIX / "eprime/TrialList.txt", ep)                   # as the report asks: export it, import again
+    again, res = import_experiment(ep / "Stroop.ebs3")
+    assert again == first and "Word: RED" in again.read_text()
+    assert any(n["where"] == "output" and "previous version is kept as a backup" in n["message"] for n in res.notes)
+    assert [b["label"] for b in list_backups(again)] == ["before importing again"]
+    same, res = import_experiment(ep / "Stroop.ebs3")              # nothing changed: nothing new
+    assert same == first and len(list_backups(same)) == 1
+    # recorded sessions belong to the import they were recorded with
+    (first.parent / "data/P01_session1").mkdir(parents=True)
+    assert import_experiment(ep / "Stroop.ebs3")[0].parent.name == "Stroop_edge_2"
+    # another file of the same name (trunc.ebs3 / trunc.html) never replaces it
+    shutil.copy(FIX / "jspsych/experiment.html", ep / "Stroop.html")
+    assert import_experiment(ep / "Stroop.html")[0].parent.name == "Stroop_edge_3"
+
+
+def test_builder_reimport_goes_next_to_an_edited_import(tmp_path):
     app = BuilderApp(tmp_path)
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(app))
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -256,13 +298,17 @@ def test_builder_reimport_goes_next_to_the_first(tmp_path):
         src.mkdir(parents=True)
         shutil.copy(FIX / "opensesame/flanker.opensesame", src)
         paths = []
-        for _ in range(2):
+        for i in range(3):
+            if i == 2:                                              # the researcher edits the import
+                f = tmp_path / paths[0]
+                f.write_text(f.read_text().replace("Thanks!", "Thank you!"))
             req = urllib.request.Request(base + "/api/import", headers={"Content-Type": "application/json"},
                                          data=json.dumps({"source": "imports/flanker/source/flanker.opensesame",
                                                           "out": "imports/flanker"}).encode())
             with urllib.request.urlopen(req) as r:
                 paths.append(json.loads(r.read())["path"])
-        assert paths == ["imports/flanker/Flanker_task.yaml", "imports/flanker_2/Flanker_task.yaml"]
+        assert paths == ["imports/flanker/Flanker_task.yaml"] * 2 + ["imports/flanker_2/Flanker_task.yaml"]
+        assert "Thank you!" in (tmp_path / paths[0]).read_text()
     finally:
         httpd.shutdown()
 
@@ -350,6 +396,8 @@ def test_a_folder_names_the_experiment_file_inside(tmp_path):
     with pytest.raises(ImportError_, match=r"'ep_nolist' is a folder: import the experiment file inside it "
                                            r"\(Stroop.ebs3\)"):
         import_experiment(d)
+    with pytest.raises(ImportError_, match="'Stroop.ebs3' is a file, not a folder"):     # --out naming a file
+        import_experiment(FIX / "psychopy/stroop.psyexp", d / "Stroop.ebs3")
 
 
 def test_mcp_import_platform_and_name(tmp_path):

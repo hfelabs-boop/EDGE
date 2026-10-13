@@ -279,12 +279,18 @@ def _analyze_stream(path: Path, meta: dict[str, Any], events: list[dict[str, Any
         delivered = [e for e in events if device in e.get("delivered", {})
                      and t_first - period <= e["time"] <= t_last - period]
         by_label: dict[str, float] = {}
+        prev_t: float | None = None
         for t, val in trig:
+            busy_until, prev_t = prev_t, t
             cands = [e for e in delivered if str(e.get("code")) == str(val) or e.get("label") == val]
             if not cands:
                 continue
             best = min(cands, key=lambda e: abs(_marker_error(e, t, device)))
             err = _marker_error(best, t, device)
+            if err > 0 and busy_until is not None and period and t - busy_until <= 1.5 * period:
+                # a trigger channel carries one code per sample: a marker sent together with the one before it
+                # (e.g. a gaze event on a stimulus onset) lands on the next sample; count from when it was free
+                err = min(err, t - busy_until)
             if abs(err) < 0.5:
                 res.append(err)
                 lab = str(best.get("label"))

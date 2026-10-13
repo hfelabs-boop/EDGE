@@ -461,7 +461,10 @@ class Experiment:
                 if c.only_if:
                     _check_expr(c.only_if if c.only_if.startswith("$") else "$" + c.only_if,
                                 f"routines.{rid}.{c.id}.if", issues)
-            _check_seconds(routine.duration, f"routines.{rid}.duration", issues, "duration", positive=True)
+            # duration 0 on a screen of code, variables or markers only is the usual "do this, then go on"
+            shows = any(getattr(comp_types.get(c.type), "category", "") in ("stimulus", "response")
+                        for c in routine.components)
+            _check_seconds(routine.duration, f"routines.{rid}.duration", issues, "duration", positive=shows)
             if isinstance(routine.end_if, str) and routine.end_if.strip():
                 _check_expr(routine.end_if if routine.end_if.startswith("$") else "$" + routine.end_if,
                             f"routines.{rid}.end_if", issues)

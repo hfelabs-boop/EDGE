@@ -215,9 +215,11 @@ _LIBRARY = re.compile(r"jspsych|(^|/)plugin-[^/]*$|\.min\.js$|(^|/)(jquery|boots
                       r"seedrandom|require)([.-][\w.-]*)?\.js$", re.I)
 
 
-def extract_js(source: str, folder: Path | None = None, res: ImportResult | None = None) -> str:
+def extract_js(source: str, folder: Path | None = None, res: ImportResult | None = None,
+               libraries: list[str] | None = None) -> str:
     """The JavaScript of a page in page order: inline scripts and, when ``folder`` is given, the experiment's
-    own script files next to the page (``<script src="experiment.js">``, the usual jsPsych project layout)."""
+    own script files next to the page (``<script src="experiment.js">``, the usual jsPsych project layout).
+    Local files skipped as libraries (jsPsych, its plugins…) are added to ``libraries``."""
     if "<script" not in source.lower():
         return source
     parts = []
@@ -226,14 +228,18 @@ def extract_js(source: str, folder: Path | None = None, res: ImportResult | None
         if not m:
             parts.append(body)
         elif folder is not None:
-            parts.append(_local_script(m.group(1), folder, res))
+            parts.append(_local_script(m.group(1), folder, res, libraries))
     return "\n".join(parts)
 
 
-def _local_script(src: str, folder: Path, res: ImportResult | None) -> str:
+def _local_script(src: str, folder: Path, res: ImportResult | None, libraries: list[str] | None = None) -> str:
     rel = src.split("?")[0].split("#")[0].strip()
-    if not rel or re.match(r"[a-z][\w+.-]*:|//", rel, re.I) or _LIBRARY.search(rel):
-        return ""                                         # online, or a library: nothing of the experiment
+    if not rel or re.match(r"[a-z][\w+.-]*:|//", rel, re.I):
+        return ""                                         # online: nothing of the experiment
+    if _LIBRARY.search(rel):
+        if libraries is not None and (folder / rel).is_file():
+            libraries.append(rel)
+        return ""                                         # a library: nothing of the experiment
     f = (folder / rel).resolve()
     if folder.resolve() not in f.parents or not f.is_file():
         if res is not None:
@@ -696,10 +702,13 @@ def _survey_html(plugin: str, t: dict[str, Any], res: ImportResult, where: str) 
 
 def import_jspsych(path: Path) -> ImportResult:
     res = ImportResult({}, path, "jsPsych")
-    js = extract_js(read_text(path), path.parent, res)     # inline code and the page's own script files
+    libraries: list[str] = []
+    js = extract_js(read_text(path), path.parent, res, libraries)     # inline code and the page's own scripts
     env, timeline = collect(js, res)
     if timeline is None:
-        res.note("unsupported", "timeline", "no jsPsych timeline found (no jsPsych.run or jsPsych.init)")
+        res.note("unsupported", "timeline", "no jsPsych timeline found: the code never calls jsPsych.run or "
+                 "jsPsych.init" + (f"; if the experiment's code is in {', '.join(libraries[-3:])} (EDGE took it for "
+                                   "part of jsPsych), import that file instead" if libraries else ""))
         timeline = []
     conv = _Conv(res, env)
     flow = conv.items(timeline, "flow")
@@ -746,7 +755,6 @@ def looks_like_jspsych(path: Path) -> bool:
     if path.suffix.lower() not in (".html", ".htm", ".js"):
         return False
     try:
-        return "jsPsych" in path.read_text(encoding="utf-8", errors="ignore") or \
-            "jspsych" in path.read_text(encoding="utf-8", errors="ignore").lower()
+        return "jspsych" in read_text(path).lower()
     except OSError:
         return False

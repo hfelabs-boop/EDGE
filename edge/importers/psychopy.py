@@ -17,7 +17,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
-from .base import Ids, ImportError_, ImportResult, ident, key_name, num, portable_path
+from .base import Ids, ImportError_, ImportResult, ident, key_name, num, portable_path, read_text
 
 NOTE_HZ = {"C": 261.63, "Csh": 277.18, "D": 293.66, "Dsh": 311.13, "E": 329.63, "F": 349.23, "Fsh": 369.99,
            "G": 392.0, "Gsh": 415.3, "A": 440.0, "Ash": 466.16, "B": 493.88}
@@ -478,7 +478,7 @@ def _check_eyetracking(root: ET.Element, res: ImportResult) -> None:
 
 def looks_like_psychopy(path: Path) -> bool:
     try:
-        head = path.read_text(encoding="utf-8", errors="ignore")[:500]
+        head = read_text(path)[:500]
     except OSError:
         return False
     return "<PsychoPy" in head

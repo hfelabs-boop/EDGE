@@ -193,7 +193,7 @@ def find_sessions(path: str | Path, include_dry_runs: bool = False) -> list[Path
     out = []
     for s in sorted(p.rglob("session.json")):
         root = s.parent
-        if not include_dry_runs and "dry_runs" in root.parts:
+        if not include_dry_runs and "dry_runs" in root.relative_to(p).parts:     # not the folders above p
             continue
         out.append(root)
     return out
@@ -1203,13 +1203,24 @@ def export_many(path: str | Path, formats: Iterable[str] = ("csv", "xlsx"), out_
     if len(groups) > 1:
         notes.insert(0, f"this folder holds {len(groups)} different experiments ({', '.join(groups)}): "
                         "each gets its own set of files")
+    tests = [st for st in sessions if st.meta.get("dry_run")] if not include_dry_runs else []
+    if tests:       # test runs next to the participants' data (earlier EDGE versions saved 'edge run --dry-run' there)
+        shown = ", ".join(st.name for st in tests[:3]) + (" …" if len(tests) > 3 else "")
+        notes.append(f"{len(tests)} of these sessions are test runs with a virtual participant ({shown}), but they "
+                     f"are not in the dry_runs folder, so they are exported as participants: move them into "
+                     f"{Path(path) / 'dry_runs'} to leave them out")
     out = Path(out_dir) if out_dir else Path(path) / "exports"
     out.mkdir(parents=True, exist_ok=True)
     files: list[Path] = []
-    n_trials = 0
+    n_trials = n_rows = 0
     for exp_name, sts in groups.items():
         tables = merged_tables(sts, layout)
-        n_trials += len(tables["trials"][1])
+        rows = tables["trials"][1]
+        n_rows += len(rows)
+        # trials = loop iterations, as in the report, preflight and the lock (screens outside loops, such as
+        # instructions, have rows too; the long layout has one row per screen)
+        n_trials += len({(r.get("session_folder"), r.get("trial_key")) for r in rows if r.get("loop")}) \
+            if layout == "long" else sum(1 for r in rows if r.get("loop"))
         if name:
             stem = name if len(groups) == 1 else f"{name}_{_safe_name(exp_name)}"
         else:
@@ -1217,7 +1228,7 @@ def export_many(path: str | Path, formats: Iterable[str] = ("csv", "xlsx"), out_
         files += _write_all(tables, formats, out, stem, sts, notes)
     participants = {(str(st.meta.get("experiment")), str((st.meta.get("participant") or {}).get("participant")))
                     for st in sessions}
-    return {"sessions": len(sessions), "participants": len(participants), "trials": n_trials,
+    return {"sessions": len(sessions), "participants": len(participants), "trials": n_trials, "rows": n_rows,
             "experiments": list(groups), "files": [str(f) for f in files], "skipped": skipped, "notes": notes}
 
 

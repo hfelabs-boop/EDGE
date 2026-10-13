@@ -328,7 +328,7 @@ def test_merged_tables_tell_sessions_apart_and_dictionary_covers_all_rows(tmp_pa
     overall = [r for r in summary if r["factor"] == "(all)"]
     assert len(overall) == 3 and len({r["session_folder"] for r in overall}) == 3
     dd = {r["column"]: r for r in csv.DictReader((tmp_path / "out" / "all_dictionary.csv").open(encoding="utf-8-sig"))}
-    n_rows = res["trials"]
+    n_rows = res["rows"]
     assert int(dd["participant"]["n"]) == n_rows and json.loads(dd["participant"]["levels"]) == ["001", "002"]
     # BIDS: the two folders of 001/1 become run-1 and run-2 instead of overwriting each other
     beh = sorted(p.name for p in (tmp_path / "out" / "bids").rglob("*_beh.tsv"))

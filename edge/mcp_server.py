@@ -194,7 +194,8 @@ def _strict_arguments(mcp: FastMCP) -> None:
             import difflib
             hints = [f"'{x}'" + (f" (did you mean '{c[0]}'?)" if (c := difflib.get_close_matches(x, sorted(known), 1)) else "")
                      for x in unknown]
-            res = {"ok": False, "error": f"{name} has no argument {', '.join(hints)}; nothing was changed",
+            res = {"ok": False, "error": f"{name} has no argument {', '.join(hints)}; nothing was changed"
+                   + ("" if all("did you mean" in h for h in hints) else f" (its arguments: {', '.join(sorted(known))})"),
                    "arguments": sorted(known)}
             convert = k.get("convert_result", a[1] if len(a) > 1 else False)
             return t.fn_metadata.convert_result(res) if convert else res
@@ -849,8 +850,9 @@ def create_server(root: str | Path = ".") -> FastMCP:
     def import_experiment(source: str, out_dir: str = "", platform: str = "", name: str = "") -> dict[str, Any]:
         """Import a PsychoPy (.psyexp), E-Prime (generated .ebs3/.ebs2 script, plus List .txt exports next to it),
         OpenSesame (.osexp/.opensesame) or jsPsych (.html/.js) experiment from the workspace. platform (psychopy,
-        eprime, opensesame, jspsych) is detected when left out; name renames the experiment. An earlier import in
-        the output folder is never overwritten (the new one goes to <folder>_2). Returns the new EDGE experiment
+        eprime, opensesame, jspsych) is detected when left out; name renames the experiment. Importing the same file
+        again updates an earlier import nobody changed since; one that was edited is never overwritten (the new one
+        goes to <folder>_2). Returns the new EDGE experiment
         path, what was converted, and items that need manual work. Follow with dry_run."""
         from .importers import ImportError_, import_experiment as do_import
         try:

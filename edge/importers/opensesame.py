@@ -144,9 +144,11 @@ def import_opensesame(path: Path) -> ImportResult:
                 raw = next((t.partition("=")[2] for t in tokens[1:] if t.startswith("text=")), "")
                 style: dict[str, Any] = {}
                 if str(kv.get("html", "yes")).lower() != "no":
-                    raw, style, dropped = html_to_text(raw, collapse=False)
+                    raw, style, dropped = html_to_text(raw, collapse=False, variable=r"\[\w+\]")
                     if dropped:
                         res.note("approx", where, f"text styling not kept: {', '.join(dropped)}")
+                    if "color" in style:
+                        style["color"] = _vars(style["color"])       # <span color=[ink]> -> $ink
                 fs = kv.get("font_size", font_size)
                 c = {"id": f"text{n}", "type": "text", "text": _val(raw) if raw else "", "pos": pos,
                      "color": style.get("color", color),

@@ -245,11 +245,12 @@ class _HTMLText(HTMLParser):
             self.runs.append(eff)
 
 
-def html_to_text(h: str, collapse: bool = True) -> tuple[str, dict[str, Any], list[str]]:
+def html_to_text(h: str, collapse: bool = True, variable: str | None = None) -> tuple[str, dict[str, Any], list[str]]:
     """What a text component should show for simple HTML: the text (``<br>`` and paragraphs become line breaks,
     ``&amp;`` becomes ``&``), the styling a text component can carry (color, height in px, bold, italic) when it
     applies to all of the text, and a list of the styling that could not be kept. ``collapse``: runs of spaces and
-    line breaks in the source count as one space, as in a browser."""
+    line breaks in the source count as one space, as in a browser. ``variable``: a pattern for colours that name an
+    experiment variable (OpenSesame's ``[ink]``), which are returned as written for the caller to convert."""
     if not has_html(h):
         return h, {}, []
     p = _HTMLText(collapse)
@@ -265,7 +266,9 @@ def html_to_text(h: str, collapse: bool = True) -> tuple[str, dict[str, Any], li
             style[prop] = vals[0]
     if "color" in style:
         c = css_color(style["color"])
-        if c is None:
+        if c is None and variable and re.fullmatch(variable, str(style["color"]).strip()):
+            style["color"] = str(style["color"]).strip()
+        elif c is None:
             p.dropped.add(f"colour '{style['color']}' (write it as #rrggbb)")
             del style["color"]
         else:

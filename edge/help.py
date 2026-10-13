@@ -34,8 +34,11 @@ class HelpNotFound(KeyError):
 
 
 def docs_dir() -> Path:
+    # docs/ next to the package in a source checkout, edge/docs in an installed copy (setup.py copies it).
+    # In an installed copy the folder next to the package is site-packages, where another package's stray
+    # docs/ folder must not stand in for EDGE's guides: only a folder holding EDGE's own guides counts.
     for cand in (PACKAGE_DIR.parent / "docs", PACKAGE_DIR / "docs"):
-        if cand.is_dir():
+        if (cand / "EXPERIMENT_FORMAT.md").is_file():
             return cand
     return PACKAGE_DIR.parent / "docs"
 

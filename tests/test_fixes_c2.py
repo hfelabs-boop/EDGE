@@ -15,6 +15,7 @@ import yaml
 from edge.cli import main
 from edge.engine import run_experiment
 from edge.model import Experiment
+from edge.participant import VirtualParticipant
 from edge.storage import (DocumentError, carry_comments, dumps, export_bundle, import_bundle, load_document, loads,
                           save_document)
 from edge.templates import TEMPLATES, write_template
@@ -27,7 +28,10 @@ EXAMPLES = ROOT / "examples"
 def dry_run(doc, tmp_path):
     exp = Experiment.from_dict(doc, base_dir=tmp_path)
     assert [str(i) for i in exp.validate() if i.level == "error"] == []
-    s = run_experiment(exp, dry_run=True, data_dir=str(tmp_path / "data"), log=lambda *a: None)
+    # a fixed virtual participant: test runs otherwise get a new simulated person each time, who now and
+    # then misses a response (as people do), and these tests check what the wizard built, not that
+    s = run_experiment(exp, dry_run=True, data_dir=str(tmp_path / "data"), log=lambda *a: None,
+                       virtual_participant=VirtualParticipant(seed=0))
     assert not s["errors"]
     data = Path(s["data_dir"])
     rows = list(csv.DictReader((data / "trials.csv").open(encoding="utf-8")))

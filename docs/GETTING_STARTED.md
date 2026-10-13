@@ -109,7 +109,7 @@ From a terminal it's the same:
 
 ```bash
 edge run study.yaml -p 001 -s 1          # participant 001, session 1
-edge report data/001_1_study_*           # timing and synchronization check
+edge report study.yaml                   # its newest session: timing and synchronization check
 edge export data/ --formats csv,xlsx     # one table for all participants
 ```
 
