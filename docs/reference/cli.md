@@ -317,7 +317,7 @@ edge bundle [-h] [--out OUT] experiment
 | argument | description |
 |---|---|
 | `experiment` | experiment file |
-| `--out` | bundle path (default: <experiment>.edgez) |
+| `--out` | bundle file, or a folder to put <experiment>.edgez in (default: <experiment>.edgez next to the experiment) |
 
 ## edge unbundle
 

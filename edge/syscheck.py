@@ -387,7 +387,7 @@ def check_software(exp: Any = None) -> list[Check]:
     if find_spec("pyglet") is None:
         out.append(Check("software:pyglet", "error", "The window library (pyglet) is not installed",
                          "Without it EDGE can't open the experiment window: real sessions fail at the start "
-                         "(test runs with --dry-run still work).", 'pip install "edge-experiments[display]"'))
+                         "(test runs with --dry-run still work).", f'"{sys.executable}" -m pip install "pyglet>=2.0"'))
     if exp is not None:
         from .devices import device_registry
         reg = device_registry()
@@ -401,7 +401,7 @@ def check_software(exp: Any = None) -> list[Check]:
                 out.append(Check(f"software:{d.id}", "error" if d.required else "warning",
                                  f"Device '{d.id}' ({d.type}) can't be used here: {why or 'missing ' + pkg}",
                                  "" if d.required else "It is optional, so the session would run without it.",
-                                 f"pip install {pkg}  (see Devices in the docs)"))
+                                 f'"{sys.executable}" -m pip install {pkg}  (see Devices in the docs)'))
     if not out:
         out.append(Check("software", "ok", "Everything the window and devices need is installed" if exp is not None
                          else "Everything the window needs is installed"))

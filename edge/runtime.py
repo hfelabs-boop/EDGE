@@ -139,7 +139,8 @@ def planned_marker_labels(exp: Experiment, limit: int = 2000) -> dict[str, int |
                         rows = select_rows(load_conditions(cond, exp.base_dir), node.select) or [{}]
                     except Exception:
                         rows = [{}]
-                walk(node.children, [{**c, **r} for c in contexts for r in rows][:limit])
+                from itertools import islice      # (never the whole product of big nested trial lists)
+                walk(node.children, list(islice(({**c, **r} for c in contexts for r in rows), limit)))
             elif isinstance(node, Branch):
                 walk(node.then, contexts)
                 walk(node.else_, contexts)

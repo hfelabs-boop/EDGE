@@ -112,14 +112,34 @@ def _safe_load(text: str) -> Any:
         loader.dispose()
 
 
-def unshare(data: Any) -> Any:
+MAX_VALUES = 2_000_000      # an experiment, its aliases written out; far more is a file made to exhaust memory
+
+
+def unshare(data: Any, limit: int = MAX_VALUES) -> Any:
     """A copy in which no two places share one dict or list (YAML anchors and aliases, or a template that
-    reuses a definition), so editing one routine can never change another."""
-    if isinstance(data, dict):
-        return {k: unshare(v) for k, v in data.items()}
-    if isinstance(data, list):
-        return [unshare(v) for v in data]
-    return data
+    reuses a definition), so editing one routine can never change another.
+
+    A ``DocumentError`` (without the file name) for an alias inside the part it names (it would never end)
+    and for aliases nested so that writing them out gives more than ``limit`` values."""
+    budget = [limit]
+    open_: set[int] = set()
+
+    def copy(v: Any) -> Any:
+        budget[0] -= 1
+        if budget[0] < 0:
+            raise DocumentError(f"its aliases (*name) repeat parts so often that it would hold more than {limit:,} "
+                                "values: write the repeated parts out instead")
+        if not isinstance(v, (dict, list)):
+            return v
+        if id(v) in open_:
+            raise DocumentError("an alias (*name) points back into the part that contains it, so that part would "
+                                "never end: remove that alias")
+        open_.add(id(v))
+        try:
+            return {k: copy(x) for k, x in v.items()} if isinstance(v, dict) else [copy(x) for x in v]
+        finally:
+            open_.discard(id(v))
+    return copy(data)
 
 
 def dumps(doc: dict[str, Any], fmt: str = "yaml") -> str:
@@ -131,6 +151,11 @@ def dumps(doc: dict[str, Any], fmt: str = "yaml") -> str:
 def loads(text: str, fmt: str = "yaml", source: str = "<string>") -> dict[str, Any]:
     try:
         data = json.loads(text) if fmt == "json" else unshare(_safe_load(text))
+    except DocumentError as e:            # aliases that never end or write out to millions of values
+        raise DocumentError(f"{source}: {e}") from None
+    except RecursionError:
+        raise DocumentError(f"{source}: it is nested too deeply to read (lists or mappings inside each other "
+                            "hundreds of times)") from None
     except json.JSONDecodeError as e:
         raise DocumentError(f"{source}: invalid JSON at line {e.lineno}, column {e.colno}: {e.msg}") from None
     except yaml.YAMLError as e:
@@ -308,6 +333,7 @@ class _Layout:
         self.inside: set[int] = set()
         self.multi_start: set[int] = set()
         self.ends: dict[int, int] = {}
+        self._seen: set[int] = set()
         root = yaml.compose(text, Loader=_Loader)
         if root is not None:
             self._visit(root, (), set())
@@ -320,9 +346,9 @@ class _Layout:
         self.ends[n.end_mark.line] = max(self.ends.get(n.end_mark.line, 0), n.end_mark.column)
 
     def _visit(self, n: Any, path: tuple, stack: set[int]) -> None:
-        if id(n) in stack:
-            return
-        stack = stack | {id(n)}
+        if id(n) in self._seen:      # an alias: its anchor's lines are mapped already (each node once, so
+            return                   # aliases of aliases can't make this take forever)
+        self._seen.add(id(n))
         if isinstance(n, yaml.ScalarNode):
             s, e = n.start_mark, n.end_mark
             if e.line > s.line:
@@ -558,7 +584,14 @@ def export_bundle(path: str | Path, out: str | Path | None = None) -> dict[str, 
     """Pack the experiment + referenced files into a ``.edgez`` zip. Missing files are reported."""
     loaded = load_document(path)
     base = loaded.path.parent
-    out = Path(out) if out else loaded.path.with_suffix(".edgez")
+    if out:      # a folder (existing, or written with a trailing /) gets <name>.edgez; a new folder is made
+        folder = str(out).endswith(("/", "\\")) or Path(out).is_dir()
+        out = Path(out) / f"{loaded.path.stem}.edgez" if folder else Path(out)
+        if not out.suffix:
+            out = out.with_suffix(".edgez")
+        out.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        out = loaded.path.with_suffix(".edgez")
     files = sorted(referenced_files(loaded.doc, base))
     included, missing = [], []
     text = None

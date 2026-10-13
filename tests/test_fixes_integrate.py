@@ -148,3 +148,81 @@ def test_timing_test_says_when_it_left_an_existing_file_alone(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "timing_test.yaml already exists there, so it was left as it is" in out and "timing_test_2.yaml" in out
     assert (tmp_path / "timing_test.yaml").read_text().endswith("# mine\n")
+
+
+def test_terminal_wizard_offers_response_boxes(capsys):
+    # the wizard has a 'buttons' response (wizard#19) but the terminal question listed only keys/mouse/rating/none
+    from edge.launcher import ask_wizard
+    answers = iter(["demo", "word", "buttons", "LEFT, left, l", "RIGHT, right, r", ""])
+    asked = []
+
+    def ask(q, default):
+        asked.append(q)
+        return next(answers, "")
+    a = ask_wizard(ask)
+    assert any("keys / buttons / mouse / rating / none" in q for q in asked)
+    assert "stimulus, correct button, condition" in capsys.readouterr().out
+    assert a["response"]["kind"] == "buttons" and a["stimulus"]["items"][0]["correct"] == "left"
+
+
+# ---------------------------------------------------------------- copying YAML aliases (docs#16) stays safe
+def test_aliases_that_never_end_or_explode_are_refused_quickly(tmp_path):
+    import time
+    import pytest
+    from edge.storage import DocumentError, loads
+    head = "name: x\nroutines: {r: {duration: 1, components: []}}\nflow: [r]\n"
+    with pytest.raises(DocumentError, match="points back into the part that contains it"):
+        loads(head + "variables: &v {a: *v}\n", source="loop.yaml")
+    bomb = head + 'variables:\n  a0: &a0 ["lol","lol","lol","lol","lol","lol","lol","lol","lol"]\n' + "".join(
+        f"  a{i}: &a{i} [" + ",".join([f"*a{i - 1}"] * 9) + "]\n" for i in range(1, 9))
+    t = time.monotonic()
+    with pytest.raises(DocumentError, match="bomb.yaml: its aliases"):
+        loads(bomb, source="bomb.yaml")                   # was: hours of work and all the memory
+    assert time.monotonic() - t < 10
+    with pytest.raises(DocumentError, match="nested too deeply"):
+        loads(head + "variables: {a: " + "[" * 3000 + "]" * 3000 + "}\n", source="deep.yaml")
+    # an ordinary alias is still a copy, not a link
+    doc = loads(head.replace("routines: {r: {duration: 1, components: []}}", "routines: {r: &r {duration: 1}, s: *r}"))
+    doc["routines"]["s"]["duration"] = 2
+    assert doc["routines"]["r"]["duration"] == 1
+
+
+# ---------------------------------------------------------------- deferred parts of wizard#2, wizard#7, mcp#19, data#18
+def test_hand_written_key_names_that_never_match_are_pointed_out(tmp_path):
+    from edge.model import Experiment
+    doc = {"routines": {"t": {"components": [
+        {"id": "resp", "type": "keyboard", "keys": ["F", "j", "Enter"], "correct": "F", "end_routine": True},
+        {"id": "late", "type": "keyboard", "keys": ["space"], "correct": "None", "duration": 0},
+        {"id": "box", "type": "device_response", "keys": {"left": "Left"}, "duration": 1}]}},
+        "flow": ["t"]}
+    warns = [str(i) for i in Experiment.from_dict(doc, base_dir=tmp_path).validate() if i.level == "warning"]
+    assert any("'F' is not a key name" in w and "'f'" in w for w in warns)
+    assert any("'Enter' is not a key name" in w and "'return'" in w for w in warns)
+    assert any("'Left' is not a key name" in w for w in warns)
+    assert any("routines.t.late.duration" in w and "0 s closes before anyone can answer" in w for w in warns)
+    assert not any("'j'" in w or "space" in w.split("(")[0] for w in warns)
+
+
+def test_bundle_out_can_be_a_folder_or_a_new_path(tmp_path, capsys):
+    from edge.cli import main
+    from edge.templates import write_template
+    exp = write_template("blank", tmp_path / "study")
+    (tmp_path / "existing").mkdir()
+    assert main(["bundle", str(exp), "--out", str(tmp_path / "new" / "deeper" / "x.edgez")]) == 0
+    assert main(["bundle", str(exp), "--out", str(tmp_path / "existing")]) == 0
+    assert main(["bundle", str(exp), "--out", str(tmp_path / "plain")]) == 0
+    assert (tmp_path / "new" / "deeper" / "x.edgez").is_file()
+    assert (tmp_path / "existing" / f"{exp.stem}.edgez").is_file() and (tmp_path / "plain.edgez").is_file()
+
+
+def test_install_hints_use_this_python_and_names_pip_can_find(monkeypatch):
+    import sys
+    import importlib.util
+    from edge.cli import friendly_run_error
+    from edge.syscheck import check_software
+    msg = friendly_run_error(ImportError("No module named 'pyglet'"))
+    assert f'"{sys.executable}" -m pip install "pyglet' in msg and "edge-experiments[display]" not in msg
+    real = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: None if name == "pyglet" else real(name, *a))
+    fix = next(c.fix for c in check_software() if c.id == "software:pyglet")
+    assert fix.startswith(f'"{sys.executable}" -m pip install')

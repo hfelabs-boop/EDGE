@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .. import expressions
 from ..backends.base import InputEvent
 from .base import Component
 
@@ -14,6 +15,39 @@ def _key_list(v: Any) -> list[str] | None:
     if isinstance(v, str):
         return [k.strip() for k in v.split(",") if k.strip()]
     return [str(k) for k in v]
+
+
+# what people write for a key -> the name a key press has in EDGE
+KEY_ALIASES = {"enter": "return", "esc": "escape", "spacebar": "space", " ": "space", "arrowleft": "left",
+               "arrowright": "right", "arrowup": "up", "arrowdown": "down", "leftarrow": "left", "rightarrow": "right",
+               "uparrow": "up", "downarrow": "down"}
+
+
+def _key_name_issues(keys: Any, correct: Any, where: str) -> list[Any]:
+    """Key names a key press never has (``F``, ``Enter``): the response would never be accepted, while a test run
+    (whose virtual participant presses exactly the keys listed) looks fine."""
+    from ..model import Issue
+    names = _key_list(keys) if not expressions.is_expr(keys) else None
+    vals = [k for k in names or [] if not expressions.is_expr(k)]
+    if isinstance(correct, str) and not expressions.is_expr(correct) and correct.strip().lower() not in ("none", ""):
+        vals.append(correct)
+    out = []
+    for k in dict.fromkeys(vals):
+        want = KEY_ALIASES.get(k.strip().lower(), k.strip().lower())
+        if want != k:
+            out.append(Issue("warning", where, f"'{k}' is not a key name EDGE uses: a key press is called '{want}', "
+                                               f"so '{k}' never matches and the answer is not taken",
+                             hint=f"write {want} (key names are lower case: f, j, space, return, left …)"))
+    return out
+
+
+def _window_issues(spec: Any, where: str) -> list[Any]:
+    from ..model import Issue
+    d = spec.duration
+    if isinstance(d, (int, float)) and not isinstance(d, bool) and d == 0:
+        return [Issue("warning", f"{where}.duration", "a response window of 0 s closes before anyone can answer",
+                      hint="leave the duration out to wait for the answer, or give the time limit in seconds")]
+    return []
 
 
 class Keyboard(Component):
@@ -39,6 +73,12 @@ class Keyboard(Component):
         "response_marker": {"type": "str", "default": None,
                             "help": "marker sent at the moment of the response, e.g. $f'resp_{resp.keys}'"},
     }
+
+    @classmethod
+    def validate_spec(cls, spec, where, exp):
+        issues = super().validate_spec(spec, where, exp)
+        return issues + _key_name_issues(spec.props.get("keys"), spec.props.get("correct"), where) \
+            + _window_issues(spec, where)
 
     def prepare(self) -> None:
         super().prepare()
@@ -212,7 +252,10 @@ class DeviceResponse(Component):
         elif not inputs and not spec.props.get("keys"):
             issues.append(Issue("warning", where, "there is no input device (button box, TTL input, voice key) to respond with",
                                 hint="add one under Devices, or give keyboard stand-ins with 'keys'"))
-        return issues
+        stand_ins = spec.props.get("keys")
+        if isinstance(stand_ins, dict):     # keyboard stand-ins {input: key}
+            issues += _key_name_issues([str(v) for v in stand_ins.values()], None, where)
+        return issues + _window_issues(spec, where)
 
 
 class Mouse(Component):

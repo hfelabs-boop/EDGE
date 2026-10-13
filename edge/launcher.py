@@ -457,9 +457,10 @@ def ask_wizard(ask: Callable[[str, str], str] | None = None) -> dict[str, Any]:
     a: dict[str, Any] = {}
     a["name"] = get("Name of the experiment", "my_experiment")
     kind = get("What do participants see or hear? (word / picture / sound / shape)", "word", _choice(STIMULUS_KINDS))
-    rkind = get("How do they respond? (keys / mouse / rating / none)", "keys", _choice(RESPONSE_KINDS))
+    rkind = get(f"How do they respond? ({' / '.join(RESPONSE_KINDS)})", "keys", _choice(RESPONSE_KINDS))
     items = []
-    print("List the stimuli, one per line as: stimulus, correct key, condition  (empty line to finish)")
+    answer = "correct button" if rkind == "buttons" else "correct key"
+    print(f"List the stimuli, one per line as: stimulus, {answer}, condition  (empty line to finish)")
     while True:
         line = get("  stimulus", "")
         if not line:

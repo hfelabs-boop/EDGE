@@ -175,7 +175,8 @@ def friendly_run_error(e: Exception) -> str:
         return ("no screen is available to open the experiment window on (for example over SSH or in a "
                 "container). Run it on the computer with the monitor, or use 'edge run --dry-run' to test.")
     if "pyglet" in text and ("no module" in text or "import" in text):
-        return "the window library is missing. Install it with:  pip install \"edge-experiments[display]\""
+        # this Python's pip (EDGE may live in its own environment); EDGE itself is not on PyPI, pyglet is
+        return f'the window library is missing. Install it with:  "{sys.executable}" -m pip install "pyglet>=2.0"'
     if "connect" in text or "device" in text or "timeout" in text:
         return ("a device could not be reached. Check that it is switched on and connected, or start with "
                 "simulated hardware (--simulate-devices / 'Simulated' in the builder).")
@@ -938,7 +939,7 @@ def main(argv: list[str] | None = None) -> int:
 
     bu = sub.add_parser("bundle", help="pack an experiment and its files into a .edgez archive")
     bu.add_argument("experiment", help="experiment file")
-    bu.add_argument("--out", help="bundle path (default: <experiment>.edgez)")
+    bu.add_argument("--out", help="bundle file, or a folder to put <experiment>.edgez in (default: <experiment>.edgez next to the experiment)")
     bu.set_defaults(fn=cmd_bundle)
 
     ub = sub.add_parser("unbundle", help="extract a .edgez archive")
