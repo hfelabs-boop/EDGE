@@ -551,9 +551,18 @@ def cmd_import(a: argparse.Namespace) -> int:
         return 2
     n_unsup = sum(n["level"] == "unsupported" for n in res.notes)
     n_approx = sum(n["level"] == "approx" for n in res.notes)
+    errors = [n for n in res.notes if n["level"] == "error"]
     print(f"imported {res.platform} experiment -> {path}")
+    for n in res.notes:
+        if n["where"] == "output":            # saved next to an earlier import, which was left untouched
+            print(f"note: {n['message']}")
     print("converted: " + ", ".join(f"{v} {k}" for k, v in sorted(res.stats.items())))
     print(f"{n_approx} item(s) converted approximately, {n_unsup} not converted: see {path.parent / 'IMPORT_REPORT.md'}")
+    if errors:
+        print(f"it won't run until {len(errors)} problem(s) are fixed, first: {errors[0]['where']}: "
+              f"{errors[0]['message']} (all are listed in the report)")
+        print(f"next:  fix them, then  edge validate {shlex_quote(str(path))}")
+        return 1
     print(f"next:  edge run {shlex_quote(str(path))} --dry-run --report")
     return 0
 

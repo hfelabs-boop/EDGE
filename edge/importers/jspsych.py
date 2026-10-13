@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .base import Ids, ImportResult, ident, key_name, ms
+from .base import Ids, ImportResult, has_html, html_to_text, ident, key_name, ms, read_text
 
 
 # =========================================================================== JS literal parser
@@ -209,11 +209,45 @@ class JSParser:
         return out
 
 
-def extract_js(source: str) -> str:
-    if "<script" in source.lower():
-        blocks = re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", source, re.S | re.I)
-        return "\n".join(blocks)
-    return source
+_SCRIPT = re.compile(r"<script\b([^>]*)>(.*?)</script\s*>", re.S | re.I)
+# script files that are libraries, not the experiment: jsPsych itself, its plugins, common helpers
+_LIBRARY = re.compile(r"jspsych|(^|/)plugin-[^/]*$|\.min\.js$|(^|/)(jquery|bootstrap|lodash|underscore|d3|papaparse|"
+                      r"seedrandom|require)([.-][\w.-]*)?\.js$", re.I)
+
+
+def extract_js(source: str, folder: Path | None = None, res: ImportResult | None = None) -> str:
+    """The JavaScript of a page in page order: inline scripts and, when ``folder`` is given, the experiment's
+    own script files next to the page (``<script src="experiment.js">``, the usual jsPsych project layout)."""
+    if "<script" not in source.lower():
+        return source
+    parts = []
+    for attrs, body in _SCRIPT.findall(source):
+        m = re.search(r"\bsrc\s*=\s*['\"]([^'\"]+)['\"]", attrs, re.I)
+        if not m:
+            parts.append(body)
+        elif folder is not None:
+            parts.append(_local_script(m.group(1), folder, res))
+    return "\n".join(parts)
+
+
+def _local_script(src: str, folder: Path, res: ImportResult | None) -> str:
+    rel = src.split("?")[0].split("#")[0].strip()
+    if not rel or re.match(r"[a-z][\w+.-]*:|//", rel, re.I) or _LIBRARY.search(rel):
+        return ""                                         # online, or a library: nothing of the experiment
+    f = (folder / rel).resolve()
+    if folder.resolve() not in f.parents or not f.is_file():
+        if res is not None:
+            res.note("unsupported", "scripts", f"the page loads '{src}', which "
+                     + ("was not found" if folder.resolve() in f.parents else "is outside the page's folder")
+                     + ", so its code was not read: put it next to the HTML file and import again")
+        return ""
+    if f.stat().st_size > 2_000_000:
+        if res is not None:
+            res.note("approx", "scripts", f"'{src}' is too large to be the experiment's own code and was not read")
+        return ""
+    if res is not None:
+        res.note("info", "scripts", f"read the experiment's script '{src}'")
+    return read_text(f)
 
 
 def collect(js: str, res: ImportResult) -> tuple[dict[str, Any], Any]:
@@ -225,7 +259,7 @@ def collect(js: str, res: ImportResult) -> tuple[dict[str, Any], Any]:
         p.i = m.end()
         try:
             env[m.group(1)] = p.value()
-        except (ValueError, IndexError, AttributeError):
+        except Exception:        # a tolerant parser: code it can't read is skipped (functions are noted later)
             continue
     for m in re.finditer(r"\b([A-Za-z_$][\w$]*)\.push\(\s*", js):
         p = JSParser(js)
@@ -237,7 +271,7 @@ def collect(js: str, res: ImportResult) -> tuple[dict[str, Any], Any]:
                 p.i += 1
                 v = p.value()
             pushes.setdefault(m.group(1), []).append(v)
-        except (ValueError, IndexError, AttributeError):
+        except Exception:
             continue
     for name, items in pushes.items():
         if isinstance(env.get(name), list):
@@ -245,20 +279,17 @@ def collect(js: str, res: ImportResult) -> tuple[dict[str, Any], Any]:
         elif name not in env:
             env[name] = items
     timeline = None
-    m = re.search(r"jsPsych\.run\(\s*", js)
+    m = re.search(r"jsPsych\.run\(\s*", js) or re.search(r"jsPsych\.init\(\s*", js)
     if m:
         p = JSParser(js)
         p.i = m.end()
-        timeline = p.value()
-    else:
-        m = re.search(r"jsPsych\.init\(\s*", js)
-        if m:
-            p = JSParser(js)
-            p.i = m.end()
-            cfg = p.value()
-            timeline = cfg.get("timeline") if isinstance(cfg, dict) else None
-    if timeline is None:
-        timeline = env.get("timeline")
+        try:
+            v = p.value()
+        except Exception:
+            v = None
+        timeline = v.get("timeline") if isinstance(v, dict) else v      # init({timeline: ...}) / run(timeline)
+    if timeline is None and env.get("timeline") is not None:
+        timeline = env["timeline"]
         res.note("approx", "timeline", "jsPsych.run/init not found; used a variable named 'timeline'")
     return env, timeline
 
@@ -296,19 +327,19 @@ def _plugin(t: Any) -> str:
     return str(t or "")
 
 
-def _strip_html(h: str) -> tuple[str, bool]:
-    """Text content of simple HTML, and whether it was 'simple' (no images/tables/inputs)."""
-    complex_ = bool(re.search(r"<(img|table|input|svg|canvas|video|audio|iframe)\b", h, re.I))
-    text = re.sub(r"<br\s*/?>|</p>|</div>", "\n", h, flags=re.I)
-    text = re.sub(r"<[^>]+>", "", text)
-    text = htmllib.unescape(text)
-    text = "\n".join(line.strip() for line in text.splitlines()).strip()
-    return text, not complex_
+_COMPLEX = re.compile(r"<(img|table|input|svg|canvas|video|audio|iframe)\b", re.I)
+_KEYBOARD_FAMILY = ("html-keyboard-response", "image-keyboard-response", "audio-keyboard-response",
+                    "html-slider-response", "image-slider-response", "video-keyboard-response")
 
 
-def _font_px(h: str) -> float | None:
-    m = re.search(r"font-size\s*:\s*(\d+(?:\.\d+)?)px", h)
-    return float(m.group(1)) if m else None
+def _deref(v: Any, env: dict[str, Any]) -> tuple[Any, str | None]:
+    """Follow references to declared variables; also returns the variable's name (it names the routine or loop)."""
+    name = None
+    for _ in range(30):
+        if not (isinstance(v, Ref) and v.name in env):
+            break
+        name, v = v.name, env[v.name]
+    return v, name
 
 
 def _choices(v: Any) -> Any:
@@ -329,11 +360,49 @@ def _value_text(v: Any) -> Any:
     return v
 
 
+def _html_columns(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Timeline-variable columns that hold HTML (e.g. "<p style='color:blue'>BLUE</p>"): the text, and the styling a
+    text component can show, go into new columns next to the original one (stimulus_text, stimulus_color), which
+    still serves HTML pages. Returns {column: {"spec": text component properties, "dropped": styling not kept}}."""
+    out: dict[str, dict[str, Any]] = {}
+    taken = {k for r in rows for k in r}
+    for col in sorted({k for r in rows for k, v in r.items() if has_html(v)}):
+        parsed = [html_to_text(str(r[col])) if r.get(col) is not None else ("", {}, []) for r in rows]
+
+        def new_col(suffix: str) -> str:
+            name, i = f"{col}_{suffix}", 2
+            while name in taken:
+                name, i = f"{col}_{suffix}{i}", i + 1
+            taken.add(name)
+            return name
+
+        tcol = new_col("text")
+        for r, (text, _, _) in zip(rows, parsed):
+            r[tcol] = text
+        spec: dict[str, Any] = {"text": "$" + tcol}
+        for prop, default in (("color", "black"), ("height", 40), ("bold", False), ("italic", False)):
+            vals = [st.get(prop) for _, st, _ in parsed]
+            if all(v is None for v in vals):
+                continue
+            if len({repr(v) for v in vals}) == 1:
+                spec[prop] = vals[0]
+            else:                                  # differs between rows: a column of its own
+                pcol = new_col(prop)
+                for r, v in zip(rows, vals):
+                    r[pcol] = default if v is None else v
+                spec[prop] = "$" + pcol
+        out[col] = {"spec": spec, "dropped": sorted({d for _, _, ds in parsed for d in ds})}
+    return out
+
+
 class _Conv:
     def __init__(self, res: ImportResult, env: dict[str, Any]):
         self.res, self.env = res, env
         self.ids = Ids()
         self.routines: dict[str, Any] = {}
+        self.data: dict[str, dict[str, Any]] = {}     # routine -> the jsPsych 'data' fields saved with it
+        self.tv_stack: list[tuple[set[str], dict[str, dict[str, Any]]]] = []   # enclosing timeline variables
+        self.noted_columns: set[str] = set()
         self.pages = 0
         self.fullscreen = False
 
@@ -347,36 +416,84 @@ class _Conv:
             + body + "</body></html>")
         return rel
 
-    def trial(self, t: dict[str, Any], where: str) -> list[Any]:
+    def tv_column(self, col: str) -> dict[str, Any] | None:
+        """How a text component shows timeline variable ``col``: {} for plain text, None when its values are unknown."""
+        for cols, html in reversed(self.tv_stack):
+            if col in cols:
+                return html.get(col, {})
+        return None
+
+    def text_stim(self, stim: Any, w: str) -> dict[str, Any]:
+        c: dict[str, Any] = {"id": "stim", "type": "text"}
+        if isinstance(stim, str) and not stim.startswith("$"):
+            text, style, dropped = html_to_text(stim)
+            c.update(text=_placeholders(text), **style)
+            if _COMPLEX.search(stim):
+                self.res.note("approx", w, "HTML stimulus with images/tables shown as text; consider an html component")
+            if dropped:
+                self.res.note("approx", w, f"stimulus styling not kept: {', '.join(dropped)}")
+        elif isinstance(stim, str):                              # a timeline variable
+            col = stim[1:]
+            info = self.tv_column(col)
+            if info is None:
+                c["text"] = stim
+                self.res.note("approx", w, f"the stimulus comes from timeline variable '{col}', whose values are not "
+                              "in this file: if they hold HTML, its tags will be shown as text")
+            elif info:
+                c.update(info["spec"])
+                if col not in self.noted_columns:
+                    self.noted_columns.add(col)
+                    new = [v[1:] for v in info["spec"].values() if str(v).startswith("$")]
+                    self.res.note("info", w, f"timeline variable '{col}' holds HTML: its text and styling were put in "
+                                  f"the columns {', '.join(new)}")
+                if info["dropped"]:
+                    self.res.note("approx", w, f"stimulus styling not kept: {', '.join(info['dropped'])}")
+            else:
+                c["text"] = stim
+        elif isinstance(stim, (int, float)) and not isinstance(stim, bool):
+            c["text"] = str(stim)
+        # a function is not converted (noted with the trial's other functions): the text is left to fill in
+        return c
+
+    def keep_data(self, t: dict[str, Any], rids: list[str], w: str) -> None:
+        """jsPsych's per-trial ``data`` (task: 'response' …) is saved with each of the trial's routines."""
+        data = t.get("data")
+        if not isinstance(data, dict):
+            return
+        fields: dict[str, Any] = {}
+        for k, v in data.items():
+            v, key = _tv(v), ident(k)
+            if isinstance(v, (Func, Ref, Call)):
+                self.res.note("unsupported", w, f"data field '{k}' is computed by JavaScript and was not saved")
+            elif isinstance(v, dict) or (isinstance(v, list) and not all(isinstance(x, (str, int, float, bool))
+                                                                         for x in v)):
+                self.res.note("approx", w, f"data field '{k}' holds nested values and was not saved")
+            elif v != f"${key}":       # a timeline variable of the same name is saved with every trial anyway
+                fields[key] = v
+        for rid in rids:
+            self.data[rid] = fields
+
+    def trial(self, t: dict[str, Any], where: str, hint: str | None = None) -> list[Any]:
         t = {k: _tv(v) for k, v in _resolve(t, self.env).items()}
-        if "timeline" in t:
-            return [self.node(t, where)]
         plugin = _plugin(t.get("type"))
-        rid = self.ids.make(t.get("name") or plugin.replace("-", "_") or "trial", "trial")
-        w = f"{where}.{rid}"
+        rid = self.ids.make(t.get("name") or hint or plugin.replace("-", "_") or "trial", "trial")
+        page_ids: list[str] = []
+        if plugin == "instructions":
+            pages = t.get("pages") or []
+            pages = pages if isinstance(pages, list) else [pages]
+            page_ids = [self.ids.make(f"{rid}_p{i + 1}") for i in range(len(pages))]
+        w = f"routines.{page_ids[0] if page_ids else rid}"
+        handled = {"on_load", "conditional_function"} | ({"trial_duration"} if plugin in _KEYBOARD_FAMILY else set())
         for k, v in t.items():
-            if isinstance(v, Func) and k not in ("on_load",):
-                self.res.note("unsupported", w, f"'{k}' is a JavaScript function and was not converted")
+            if isinstance(v, Func) and k not in handled:
+                self.res.note("unsupported", w, f"'{k}' is a JavaScript function and was not converted"
+                              + ("; write what it shows in the stimulus component" if k == "stimulus" else ""))
         comps: list[dict[str, Any]] = []
         routine: dict[str, Any] = {"components": comps}
         stim = _value_text(t.get("stimulus", ""))
-        if plugin in ("html-keyboard-response", "image-keyboard-response", "audio-keyboard-response",
-                      "html-slider-response", "image-slider-response", "video-keyboard-response"):
+        if plugin in _KEYBOARD_FAMILY:
             if plugin.startswith("html"):
-                if isinstance(stim, str) and not stim.startswith("$"):
-                    text, simple = _strip_html(stim)
-                    c: dict[str, Any] = {"id": "stim", "type": "text", "text": _placeholders(text)}
-                    fp = _font_px(stim)
-                    if fp:
-                        c["height"] = fp
-                    if not simple:
-                        self.res.note("approx", w, "HTML stimulus with images/tables shown as text; "
-                                      "consider an html component")
-                    comps.append(c)
-                else:
-                    comps.append({"id": "stim", "type": "text", "text": stim, "x_note": "HTML stripped at runtime"})
-                    self.res.note("approx", w, "stimulus comes from a timeline variable containing HTML; "
-                                  "EDGE shows it as text (tags are not stripped automatically)")
+                comps.append(self.text_stim(stim, w))
             elif plugin.startswith("image"):
                 c = {"id": "stim", "type": "image", "image": stim}
                 if t.get("stimulus_width") and t.get("stimulus_height"):
@@ -411,14 +528,14 @@ class _Conv:
                         k["end_routine"] = True
                     comps.append(k)
             if t.get("prompt"):
-                ptext, _ = _strip_html(str(t["prompt"]))
+                ptext, pstyle, _ = html_to_text(str(t["prompt"]))
                 comps.append({"id": "prompt", "type": "text", "text": _placeholders(ptext), "pos": [0, -200],
-                              "height": 24})
+                              "height": 24, **{k: v for k, v in pstyle.items() if k != "height"}})
             td = t.get("trial_duration")
             if isinstance(td, Func):
                 routine["duration"] = 0.5
-                self.res.note("approx", w, "trial_duration is computed by a function; set to 0.5 s. For a random "
-                              "duration use e.g. $random.choice([0.25, 0.5])")
+                self.res.note("approx", w, "trial_duration is computed by a JavaScript function, which was not "
+                              "converted; set to 0.5 s. For a random duration use e.g. $random.choice([0.25, 0.5])")
             elif td is not None:
                 routine["duration"] = ms(td) if not isinstance(td, str) else td
             elif not any(c.get("end_routine") for c in comps):
@@ -434,20 +551,17 @@ class _Conv:
             prompt = str(t.get("prompt") or "")
             comps.append({"id": "page", "type": "html", "end_routine": True,
                           "file": self.page(f"<div>{_tpl(stim_html)}</div><form>{buttons}</form>{prompt}", rid)})
-            if t.get("trial_duration") is not None:
+            if t.get("trial_duration") is not None and not isinstance(t["trial_duration"], Func):
                 routine["duration"] = ms(t["trial_duration"])
         elif plugin == "instructions":
-            pages = t.get("pages") or []
-            out = []
-            for i, pg in enumerate(pages if isinstance(pages, list) else [pages]):
-                prid = self.ids.make(f"{rid}_p{i + 1}")
+            for prid, pg in zip(page_ids, pages):
                 self.routines[prid] = {"components": [{"id": "page", "type": "html", "end_routine": True,
                                                        "file": self.page(_tpl(str(pg)), prid)}]}
-                out.append(prid)
-            self.res.count("routines", len(out))
-            if t.get("allow_backward", True):
-                self.res.note("approx", w, "instruction pages are shown forward only")
-            return out
+            self.res.count("routines", len(page_ids))
+            if t.get("allow_backward", True) and page_ids:
+                self.res.note("approx", w, f"instruction pages ({', '.join(page_ids)}) are shown forward only")
+            self.keep_data(t, page_ids, w)
+            return page_ids
         elif plugin.startswith("survey"):
             comps.append({"id": "survey", "type": "html", "end_routine": True,
                           "file": self.page(_survey_html(plugin, t, self.res, w), rid)})
@@ -455,44 +569,58 @@ class _Conv:
             self.fullscreen = bool(t.get("fullscreen_mode", True))
             return []
         elif plugin in ("preload", "call-function", "browser-check"):
-            self.res.note("info", w, f"'{plugin}' is not needed in EDGE and was skipped")
+            self.res.note("info", f"timeline.{rid}", f"'{plugin}' is not needed in EDGE and was skipped")
             return []
         else:
-            self.res.note("unsupported", w, f"plugin '{plugin}' has no EDGE conversion yet")
+            self.res.note("unsupported", f"timeline.{rid}", f"plugin '{plugin}' has no EDGE conversion yet")
             return []
         if t.get("post_trial_gap"):
             self.res.note("approx", w, f"post_trial_gap of {t['post_trial_gap']} ms not converted; "
                           "add a blank routine if the gap matters")
         self.routines[rid] = routine
         self.res.count("routines")
-        cond = t.get("conditional_function")
-        if isinstance(cond, Func):
+        self.keep_data(t, [rid], w)
+        if isinstance(t.get("conditional_function"), Func):
             self.res.note("unsupported", w, "conditional_function not converted; use a branch or component 'if'")
         return [rid]
 
-    def node(self, n: Any, where: str) -> Any:
-        n = _resolve(n, self.env)
+    def node(self, n: Any, where: str, hint: str | None = None, depth: int = 0) -> Any:
+        n, name = _deref(n, self.env)
+        hint = name or hint
+        if depth > 40:
+            return []
         if isinstance(n, list):
-            return [x for item in n for x in self.items(item, where)]
+            return [x for item in n for x in self.items(item, where, depth + 1)]
         if not isinstance(n, dict):
             return []
         if "timeline" not in n:
-            return self.trial(n, where)
-        children = []
-        for item in n["timeline"] if isinstance(n["timeline"], list) else [n["timeline"]]:
-            children += self.items(item, where)
+            return self.trial(n, where, hint)
+        timeline, _ = _deref(n["timeline"], self.env)      # its items keep their names (they name routines)
+        n = {k: _resolve(v, self.env) for k, v in n.items() if k != "timeline"}
         tv = n.get("timeline_variables")
         reps = n.get("repetitions", 1)
+        rows, cols, html = None, set(), {}
+        if isinstance(tv, list):
+            rows = [{ident(k): (v if not isinstance(v, (Ref, Func, Call)) else str(v)) for k, v in row.items()}
+                    for row in tv if isinstance(row, dict)]
+            cols = {k for r in rows for k in r}
+            html = _html_columns(rows)
+        self.tv_stack.append((cols, html))
+        try:
+            children = []
+            for item in timeline if isinstance(timeline, list) else [timeline]:
+                children += self.items(item, where, depth + 1)
+        finally:
+            self.tv_stack.pop()
         if tv is None and reps in (1, None) and not n.get("randomize_order"):
             if isinstance(n.get("loop_function"), Func):
-                self.res.note("unsupported", where, "loop_function not converted; use a state machine "
-                              "(repeat a state until a condition holds)")
+                self.res.note("unsupported", f"timeline.{hint or 'timeline'}", "loop_function not converted; use a "
+                              "state machine (repeat a state until a condition holds)")
             return children
-        lid = self.ids.make(n.get("name") or "trials", "loop")
+        lid = self.ids.make(n.get("name") or hint or "trials", "loop")
         node: dict[str, Any] = {"loop": lid}
-        if isinstance(tv, list):
-            node["conditions"] = [{ident(k): (v if not isinstance(v, (Ref, Func, Call)) else str(v))
-                                   for k, v in row.items()} for row in tv if isinstance(row, dict)]
+        if rows is not None:
+            node["conditions"] = rows
         order = "random" if n.get("randomize_order") else "sequential"
         if isinstance(n.get("sample"), dict):
             st = n["sample"].get("type")
@@ -508,11 +636,13 @@ class _Conv:
         self.res.count("loops")
         return [node]
 
-    def items(self, item: Any, where: str) -> list[Any]:
-        item = _resolve(item, self.env)
+    def items(self, item: Any, where: str, depth: int = 0) -> list[Any]:
+        item, name = _deref(item, self.env)
+        if depth > 40:
+            return []
         if isinstance(item, list):
-            return [x for i in item for x in self.items(i, where)]
-        r = self.node(item, where)
+            return [x for i in item for x in self.items(i, where, depth + 1)]
+        r = self.node(item, where, name, depth + 1)
         return r if isinstance(r, list) else [r]
 
 
@@ -566,25 +696,26 @@ def _survey_html(plugin: str, t: dict[str, Any], res: ImportResult, where: str) 
 
 def import_jspsych(path: Path) -> ImportResult:
     res = ImportResult({}, path, "jsPsych")
-    js = extract_js(path.read_text(encoding="utf-8", errors="replace"))
+    js = extract_js(read_text(path), path.parent, res)     # inline code and the page's own script files
     env, timeline = collect(js, res)
     if timeline is None:
-        res.note("unsupported", "timeline", "no jsPsych timeline found")
+        res.note("unsupported", "timeline", "no jsPsych timeline found (no jsPsych.run or jsPsych.init)")
         timeline = []
     conv = _Conv(res, env)
     flow = conv.items(timeline, "flow")
-    for f in re.findall(r"<script[^>]+src=['\"]([^'\"]+)['\"]", path.read_text(encoding="utf-8", errors="ignore")):
-        if "jspsych" not in f.lower() and not f.startswith("http"):
-            res.note("approx", "scripts", f"local script '{f}' was not analysed (only inline code is read)")
     window: dict[str, Any] = {"size": [1280, 720], "background": "#ffffff", "units": "px", "fullscreen": conv.fullscreen}
     res.doc = {"name": ident(path.stem), "description": f"Imported from jsPsych ({path.name})",
                "settings": {"window": window}, "devices": [], "variables": {}, "routines": conv.routines, "flow": flow}
     res.doc = _sanitize(res.doc, res, "experiment")
-    # jsPsych pages are black text on white; make converted text readable
-    for r in conv.routines.values():
+    keys = list(dict.fromkeys(k for d in conv.data.values() for k in d))
+    for rid, r in res.doc["routines"].items():
         for c in r["components"]:
             if c["type"] == "text":
-                c.setdefault("color", "black")
+                c.setdefault("color", "black")   # jsPsych pages are black text on white
+        if keys:   # the trial's 'data' fields, and empty ones where jsPsych has none (no stale values)
+            fields = conv.data.get(rid, {})
+            r["components"].append({"id": "data", "type": "variable", "when": "start",
+                                    "set": {k: fields.get(k) for k in keys}})
     return res
 
 

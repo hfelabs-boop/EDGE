@@ -273,7 +273,7 @@ def save_document(path: str | Path, doc: dict[str, Any], expected_fingerprint: s
             old = p.read_text(encoding="utf-8-sig")
         except (OSError, UnicodeDecodeError):
             old = ""
-        if "#" in old:
+        if re.search(r"(?m)(^|\s)#", old):         # a comment (not just a colour such as '#111111')
             text = carry_comments(old, text)
     if backup and p.exists():
         if p.read_text(encoding="utf-8-sig") == text:
@@ -637,10 +637,11 @@ def import_bundle(bundle: str | Path, dest_dir: str | Path, overwrite: bool = Fa
         while other.exists():
             other, n = dest.with_name(f"{dest.name}_{n}"), n + 1
         shown = sorted({t.relative_to(dest).as_posix() for t in differ})
-        raise DocumentError(f"{dest} already has {', '.join(shown[:6])}{' …' if len(shown) > 6 else ''}, different "
-                            f"from the bundle's {'copy' if len(shown) == 1 else 'copies'}. Nothing was unpacked, so "
-                            f"nothing of yours was replaced: unpack into a new folder instead (e.g. {other}), or move "
-                            "those files away first.")
+        raise DocumentError(f"the folder {dest.name or dest} already has {', '.join(shown[:6])}"
+                            f"{' …' if len(shown) > 6 else ''}, different from the bundle's "
+                            f"{'copy' if len(shown) == 1 else 'copies'}. Nothing was unpacked, so nothing of yours was "
+                            f"replaced: unpack into a new folder instead (e.g. {other.name}), or move those files "
+                            "away first.")
     for t, data in writes:
         if t.is_file():
             if t.read_bytes() == data:

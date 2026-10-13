@@ -5,7 +5,6 @@ import json
 import os
 import shutil
 import stat
-import sys
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace

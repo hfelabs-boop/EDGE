@@ -846,14 +846,16 @@ def create_server(root: str | Path = ".") -> FastMCP:
         return edit(path, lambda d: d.add_rule(routine, when, do, repeat, name or None), f"rule in {routine}")
 
     @tool
-    def import_experiment(source: str, out_dir: str = "", platform: str = "") -> dict[str, Any]:
+    def import_experiment(source: str, out_dir: str = "", platform: str = "", name: str = "") -> dict[str, Any]:
         """Import a PsychoPy (.psyexp), E-Prime (generated .ebs3/.ebs2 script, plus List .txt exports next to it),
-        OpenSesame (.osexp/.opensesame) or jsPsych (.html/.js) experiment from the workspace. Returns the new EDGE
-        experiment path, what was converted, and items that need manual work. Follow with dry_run."""
+        OpenSesame (.osexp/.opensesame) or jsPsych (.html/.js) experiment from the workspace. platform (psychopy,
+        eprime, opensesame, jspsych) is detected when left out; name renames the experiment. An earlier import in
+        the output folder is never overwritten (the new one goes to <folder>_2). Returns the new EDGE experiment
+        path, what was converted, and items that need manual work. Follow with dry_run."""
         from .importers import ImportError_, import_experiment as do_import
         try:
             path, res = do_import(ws.path(source), ws.path(out_dir, must_exist=False) if out_dir else None,
-                                  platform or None)
+                                  platform or None, name or None)
         except ImportError_ as e:
             raise EditError(str(e)) from None
         doc = ExperimentDoc.open(path)

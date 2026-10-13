@@ -17,7 +17,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
-from .base import Ids, ImportResult, ident, key_name, num
+from .base import Ids, ImportError_, ImportResult, ident, key_name, num, portable_path
 
 NOTE_HZ = {"C": 261.63, "Csh": 277.18, "D": 293.66, "Dsh": 311.13, "E": 329.63, "F": 349.23, "Fsh": 369.99,
            "G": 392.0, "Gsh": 415.3, "A": 440.0, "Ash": 466.16, "B": 493.88}
@@ -180,7 +180,7 @@ def _component(el: ET.Element, res: ImportResult, where: str, space_default: str
             res.note("approx", w, "editable textbox converted to static text; collect typed input with an html form")
     elif tag == "ImageComponent":
         comp["type"] = "image"
-        img = g("image", as_str=True)
+        img = _file(g("image", as_str=True), res, w)
         comp["image"] = img
         if isinstance(img, str) and img and not img.startswith("$"):
             res.assets.add(img)
@@ -258,7 +258,7 @@ def _component(el: ET.Element, res: ImportResult, where: str, space_default: str
         elif num(snd) != snd:
             comp["sound"] = num(snd)
         else:
-            comp["sound"] = snd
+            comp["sound"] = snd = _file(snd, res, w)
             res.assets.add(snd)
         vol = g("volume")
         if vol not in (None, ""):
@@ -326,8 +326,22 @@ def _component(el: ET.Element, res: ImportResult, where: str, space_default: str
     return comp
 
 
+def _file(v: Any, res: ImportResult, where: str) -> Any:
+    """A file name from the experiment, with Windows backslashes made portable (noted)."""
+    p = portable_path(v)
+    if p != v:
+        res.note("info", where, f"Windows path '{v}' written as '{p}' so it works on every computer")
+    return p
+
+
 def import_psychopy(path: Path) -> ImportResult:
-    tree = ET.parse(path)
+    try:
+        tree = ET.parse(path)
+    except ET.ParseError as e:
+        line = (getattr(e, "position", None) or (None,))[0]
+        raise ImportError_(f"{path.name} could not be read: the file is incomplete or damaged"
+                           + (f" (the problem is on line {line})" if line else "")
+                           + ". Open it in PsychoPy, save it again and import the saved file.") from None
     root = tree.getroot()
     res = ImportResult({}, path, f"PsychoPy {root.get('version', '')}".strip())
     settings_el = root.find("Settings")
@@ -417,7 +431,7 @@ def import_psychopy(path: Path) -> ImportResult:
                         node["conditions"] = cf
                         res.note("approx", f"flow.{lid}", "conditions file chosen by an expression; check it")
                     else:
-                        node["conditions"] = cf
+                        node["conditions"] = cf = _file(cf, res, f"flow.{lid}")
                         res.assets.add(cf)
                 reps = _value(lp.text("nReps", "1"), "num", res, lid)
                 if reps not in (None, 1):

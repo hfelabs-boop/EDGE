@@ -13,10 +13,19 @@ from __future__ import annotations
 import re
 import shlex
 import tarfile
+import zlib
 from pathlib import Path
 from typing import Any
 
-from .base import Ids, ImportResult, ident, key_name, ms, num
+from .base import Ids, ImportError_, ImportResult, decode_text, html_to_text, ident, key_name, ms, num, read_text
+
+
+def _split(s: str) -> list[str]:
+    """Shell-like split of a script line; a line cut short (an unclosed quote) is split on spaces."""
+    try:
+        return shlex.split(s, posix=True)
+    except ValueError:
+        return s.split()
 
 
 def _val(s: str) -> Any:
@@ -66,6 +75,9 @@ def parse_script(script: str) -> tuple[dict[str, str], dict[str, dict[str, Any]]
             continue
         if line.startswith("define "):
             parts = line.split()
+            if len(parts) < 2:          # a file cut short in the middle of a definition
+                cur = None
+                continue
             cur = {"type": parts[1], "set": {}, "lines": []}
             items[parts[2] if len(parts) > 2 else parts[1]] = cur
             continue
@@ -108,6 +120,7 @@ def import_opensesame(path: Path) -> ImportResult:
     W = int(num(exp_vars.get("width", "1024")) or 1024)
     H = int(num(exp_vars.get("height", "768")) or 768)
     fg = str(_val(exp_vars.get("foreground", "white")))
+    font_size = _val(exp_vars.get("font_size", "18"))
     ids = Ids()
     routines: dict[str, Any] = {}
 
@@ -116,10 +129,9 @@ def import_opensesame(path: Path) -> ImportResult:
         for line in item["lines"]:
             if not line.startswith("draw "):
                 continue
-            try:
-                tokens = shlex.split(line[5:], posix=True)
-            except ValueError:
-                tokens = line[5:].split()
+            tokens = _split(line[5:])
+            if not tokens:
+                continue
             kind, kv = tokens[0], _kv(tokens[1:])
             x = kv.get("x", 0)
             y = kv.get("y", 0)
@@ -127,8 +139,23 @@ def import_opensesame(path: Path) -> ImportResult:
             color = kv.get("color", fg)
             n = len(comps) + 1
             if kind == "textline":
-                comps.append({"id": f"text{n}", "type": "text", "text": kv.get("text", ""), "pos": pos, "color": color,
-                              "height": kv.get("font_size", 18) * 1.33 if isinstance(kv.get("font_size", 18), (int, float)) else 24})
+                # OpenSesame shows text as simple HTML (<br>, <b>, <i>, <span color=..>); font_size is in pixels,
+                # like EDGE's text height
+                raw = next((t.partition("=")[2] for t in tokens[1:] if t.startswith("text=")), "")
+                style: dict[str, Any] = {}
+                if str(kv.get("html", "yes")).lower() != "no":
+                    raw, style, dropped = html_to_text(raw, collapse=False)
+                    if dropped:
+                        res.note("approx", where, f"text styling not kept: {', '.join(dropped)}")
+                fs = kv.get("font_size", font_size)
+                c = {"id": f"text{n}", "type": "text", "text": _val(raw) if raw else "", "pos": pos,
+                     "color": style.get("color", color),
+                     "height": style.get("height") or (fs if isinstance(fs, (int, float)) or str(fs).startswith("$")
+                                                       else 18)}
+                for flag in ("bold", "italic"):
+                    if style.get(flag) or kv.get(f"font_{flag}") in ("yes", 1, True):
+                        c[flag] = True
+                comps.append(c)
             elif kind == "fixdot":
                 comps.append({"id": f"fix{n}", "type": "fixation", "shape": "circle", "radius": 6, "pos": pos,
                               "fill": color})
@@ -258,8 +285,9 @@ def import_opensesame(path: Path) -> ImportResult:
             runs = []
             for line in item["lines"]:
                 if line.startswith("run "):
-                    parts = shlex.split(line[4:]) if '"' in line else line[4:].split(None, 1)
-                    runs.append((parts[0], _cond(parts[1]) if len(parts) > 1 else None))
+                    parts = _split(line[4:]) if '"' in line else line[4:].split(None, 1)
+                    if parts:
+                        runs.append((parts[0], _cond(parts[1]) if len(parts) > 1 else None))
             i = 0
             while i < len(runs):
                 child, cond = runs[i]
@@ -296,8 +324,8 @@ def import_opensesame(path: Path) -> ImportResult:
             rows: dict[int, dict[str, Any]] = {}
             for line in item["lines"]:
                 if line.startswith("setcycle "):
-                    parts = shlex.split(line[9:]) if '"' in line else line[9:].split(None, 2)
-                    if len(parts) >= 3:
+                    parts = _split(line[9:]) if '"' in line else line[9:].split(None, 2)
+                    if len(parts) >= 3 and parts[0].isdigit():
                         rows.setdefault(int(parts[0]), {})[ident(parts[1])] = _val(parts[2] if '"' not in line else f'"{parts[2]}"')
             cycles = int(num(s.get("cycles", len(rows) or 1)) or 1)
             table = [rows.get(i, {}) for i in range(max(cycles, len(rows)))]
@@ -344,20 +372,28 @@ def import_opensesame(path: Path) -> ImportResult:
 
 def _read(path: Path, res: ImportResult) -> tuple[str, dict[str, bytes]]:
     pool: dict[str, bytes] = {}
-    if tarfile.is_tarfile(path):
+    try:
+        is_tar = tarfile.is_tarfile(path)
+    except (OSError, EOFError, zlib.error):
+        is_tar = False
+    if not is_tar:
+        return read_text(path), pool
+    try:
         with tarfile.open(path) as tar:
             script = ""
             for m in tar.getmembers():
                 if m.name.endswith("script.opensesame"):
-                    script = tar.extractfile(m).read().decode("utf-8", errors="replace")  # type: ignore[union-attr]
+                    script = decode_text(tar.extractfile(m).read())  # type: ignore[union-attr]
                 elif m.isfile() and "/pool/" in "/" + m.name:
                     key = m.name.split("pool/", 1)[1].replace("\\", "/").lstrip("/")
                     parts = [x for x in key.split("/") if x not in ("", ".")]
                     if not parts or ".." in parts or (len(parts[0]) > 1 and parts[0][1] == ":"):
                         continue                  # a file that would land outside the experiment folder
                     pool["/".join(parts)] = tar.extractfile(m).read()  # type: ignore[union-attr]
-            return script, pool
-    return path.read_text(encoding="utf-8", errors="replace"), pool
+    except (tarfile.TarError, OSError, EOFError, zlib.error):
+        raise ImportError_(f"{path.name} could not be read: the archive is incomplete or damaged. Open it in "
+                           "OpenSesame, save it again and import the saved file.") from None
+    return script, pool
 
 
 def looks_like_opensesame(path: Path) -> bool:

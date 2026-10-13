@@ -836,9 +836,11 @@ def prepare_files(doc: dict[str, Any], folder: Path, made: list[str] | None = No
     notes = []
     made = write_placeholders(doc, folder) if made is None else made
     if made:
-        notes.append(f"Made {len(made)} stand-in picture{'s' if len(made) > 1 else ''} "
+        many = len(made) > 1
+        notes.append(f"Made {len(made)} stand-in picture{'s' if many else ''} "
                      f"({', '.join(made[:6])}{' …' if len(made) > 6 else ''}) so you can try the experiment now: "
-                     "replace them with your real pictures, under the same names.")
+                     f"replace {'them' if many else 'it'} with your real picture{'s' if many else ''}, under the same "
+                     f"name{'s' if many else ''}.")
     sounds = sorted({v for r in _rows(doc.get("flow")) for v in r.values()
                      if isinstance(v, str) and v.lower().endswith(_SOUND_FILES) and not (folder / v).exists()})
     if sounds:

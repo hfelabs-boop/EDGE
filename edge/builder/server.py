@@ -665,8 +665,9 @@ def make_handler(app: BuilderApp):
                     try:
                         return self._json(app.play.start(body["experiment"], base, body.get("routine"),
                                                          int(body.get("max_trials") or 5)))
-                    except (ValueError, KeyError) as e:
-                        return self._json({"ok": False, "error": str(e).strip("'\"")})
+                    except (ValueError, KeyError) as e:     # the message itself (a KeyError's str() adds quotes)
+                        msg = e.args[0] if e.args and isinstance(e.args[0], str) else str(e)
+                        return self._json({"ok": False, "error": msg})
                 if u.path == "/api/survey/render":
                     from ..survey import render_html, validate
                     spec = body.get("spec") or {}
