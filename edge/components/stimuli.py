@@ -9,7 +9,7 @@ from .base import Component
 # Hints for the builder: pickers, sliders and icons instead of free text.
 FONTS = ["Arial", "Helvetica", "Verdana", "Times New Roman", "Georgia", "Courier New", "DejaVu Sans",
          "Noto Sans", "Noto Sans Hebrew", "David", "Segoe UI"]
-SHAPE_ICONS = {"rect": "▭", "circle": "◯", "ellipse": "⬭", "polygon": "⬠", "line": "╱", "cross": "✚"}
+SHAPE_ICONS = {"rect": "▭", "circle": "◯", "ellipse": "⬭", "triangle": "△", "polygon": "⬠", "line": "╱", "cross": "✚"}
 
 _VISUAL_COMMON = {
     "pos": {"type": "vec2", "default": [0, 0], "help": "position (window units, origin centre)"},
@@ -85,10 +85,10 @@ class Text(VisualComponent):
 
 class Shape(VisualComponent):
     type_name = "shape"
-    description = "Rectangle, circle, ellipse, polygon, line or cross."
+    description = "Rectangle, circle, ellipse, triangle, polygon, line or cross."
     props_schema = {
-        "shape": {"type": "choice", "choices": ["rect", "circle", "ellipse", "polygon", "line", "cross"], "default": "rect", "icons": SHAPE_ICONS, "help": "rect, circle, ellipse, polygon, line or cross"},
-        "size": {"type": "vec2", "default": [100, 100], "help": "width, height (rect/ellipse) or size (cross)"},
+        "shape": {"type": "choice", "choices": ["rect", "circle", "ellipse", "triangle", "polygon", "line", "cross"], "default": "rect", "icons": SHAPE_ICONS, "help": "rect, circle, ellipse, triangle, polygon, line or cross"},
+        "size": {"type": "vec2", "default": [100, 100], "help": "width, height (rect/ellipse/triangle) or size (cross)"},
         "radius": {"type": "float", "default": 50, "min": 1, "max": 400, "step": 1, "length": True, "help": "circle radius"},
         "vertices": {"type": "list", "default": [], "help": "polygon vertices [[x,y],...]"},
         "start": {"type": "vec2", "default": [-50, 0], "help": "line start point [x, y] (shape: line)"},
@@ -111,7 +111,12 @@ class Shape(VisualComponent):
         return d
 
     def make_stim(self):
-        return self.backend.make_shape(self.p["shape"], **self.stim_props())
+        props = self.stim_props()
+        if self.p["shape"] == "triangle":           # pointing up, filling the size box
+            w, h = props["size"] if isinstance(props["size"], (list, tuple)) else (props["size"], props["size"])
+            props["vertices"] = [(0, h / 2), (-w / 2, -h / 2), (w / 2, -h / 2)]
+            return self.backend.make_shape("polygon", **props)
+        return self.backend.make_shape(self.p["shape"], **props)
 
 
 class Fixation(Shape):

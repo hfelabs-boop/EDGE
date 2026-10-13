@@ -104,6 +104,7 @@ function shapeGlyph(kind) {
   if (kind === "rect") el("rect", {x: 4, y: 6, width: 16, height: 12, rx: 1});
   else if (kind === "circle") el("circle", {cx: 12, cy: 12, r: 7.5});
   else if (kind === "ellipse") el("ellipse", {cx: 12, cy: 12, rx: 9, ry: 5.5});
+  else if (kind === "triangle") el("path", {d: "M12 5l8 14H4z"});
   else if (kind === "polygon") el("path", {d: "M12 4l8 6-3 9H7l-3-9z"});
   else if (kind === "line") el("path", {d: "M5 19L19 5"});
   else if (kind === "cross") el("path", {d: "M12 5v14M5 12h14"});

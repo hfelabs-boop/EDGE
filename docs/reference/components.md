@@ -75,12 +75,12 @@ Records (data columns `<id>.<name>`):
 
 ### shape
 
-Rectangle, circle, ellipse, polygon, line or cross.
+Rectangle, circle, ellipse, triangle, polygon, line or cross.
 
 | property | type | default | description |
 |---|---|---|---|
-| `shape` | choice: rect / circle / ellipse / polygon / line / cross | `rect` | rect, circle, ellipse, polygon, line or cross |
-| `size` | vec2 | `[100, 100]` | width, height (rect/ellipse) or size (cross) |
+| `shape` | choice: rect / circle / ellipse / triangle / polygon / line / cross | `rect` | rect, circle, ellipse, triangle, polygon, line or cross |
+| `size` | vec2 | `[100, 100]` | width, height (rect/ellipse/triangle) or size (cross) |
 | `radius` | float | `50` | circle radius |
 | `vertices` | list |  | polygon vertices [[x,y],...] |
 | `start` | vec2 | `[-50, 0]` | line start point [x, y] (shape: line) |

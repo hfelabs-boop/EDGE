@@ -41,6 +41,10 @@ ALLOWED_OPS: frozenset[str] = frozenset({
     "remove_rule", "set_measures", "add_survey"})
 
 
+# operations whose item settings may also be given at the top level; they are moved into this argument
+PROPS_ARG = {"add_component": "properties", "update_component": "set_props"}
+
+
 class EditError(ValueError):
     pass
 
@@ -1431,6 +1435,13 @@ def apply_operations(doc: ExperimentDoc, operations: list[dict[str, Any]], *,
         elif name in ALLOWED_OPS:
             fn = getattr(doc, name)
             sig = inspect.signature(fn)
+            if name in PROPS_ARG:                   # {"op": "add_component", "ctype": "shape", "shape": "rect"}:
+                stray = {k: args.pop(k) for k in [k for k in args if k not in sig.parameters]}   # item settings
+                if stray:                           # given beside the operation instead of inside "properties"
+                    into = PROPS_ARG[name]
+                    if args.get(into) is not None and not isinstance(args[into], dict):
+                        return fail(i, name, f"operation {i} ({name}): '{into}' must be an object")
+                    args[into] = {**stray, **(args.get(into) or {})}
             try:
                 sig.bind(**args)
             except TypeError:

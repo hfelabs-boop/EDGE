@@ -2019,6 +2019,7 @@ function drawScreen(cv, rid, t, opts = {}) {
       ctx.lineWidth = numOr(c.line_width, shape === "cross" ? 4 : 2);
       const sz = Array.isArray(c.size) ? [conv(c.size[0], "x"), conv(c.size[1], "y")] : [conv(numOr(c.size, shape === "cross" ? 40 : 100), "y"), conv(numOr(c.size, 100), "y")];
       const r = conv(numOr(c.radius, 50), "y");
+      const tri = [[0, sz[1] / 2], [-sz[0] / 2, -sz[1] / 2], [sz[0] / 2, -sz[1] / 2]];
       if (shape === "circle") box(c, r, r);
       else if (shape === "polygon" && Array.isArray(c.vertices) && c.vertices.length) { const m = Math.max(10, ...c.vertices.flatMap(([vx, vy]) => [Math.abs(conv(vx, "x")), Math.abs(conv(vy, "y"))])); box(c, m, m); }
       else if (shape === "cross") box(c, sz[0] / 2, sz[0] / 2);
@@ -2029,6 +2030,7 @@ function drawScreen(cv, rid, t, opts = {}) {
       else if (shape === "line") { const a = pos(c.start || [-50, 0]), b = pos(c.end || [50, 0]); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
         box(c, Math.max(6, Math.abs(a[0]), Math.abs(b[0])), Math.max(6, Math.abs(a[1]), Math.abs(b[1]))); }
       else if (shape === "cross") { const s = sz[0] / 2; ctx.beginPath(); ctx.moveTo(-s, 0); ctx.lineTo(s, 0); ctx.moveTo(0, -s); ctx.lineTo(0, s); ctx.stroke(); }
+      else if (shape === "triangle") { ctx.beginPath(); tri.forEach(([vx, vy], i) => i ? ctx.lineTo(vx, vy) : ctx.moveTo(vx, vy)); ctx.closePath(); ctx.fill(); if (c.line_color) ctx.stroke(); }
       else if (shape === "polygon" && Array.isArray(c.vertices) && c.vertices.length) { ctx.beginPath(); c.vertices.forEach(([vx, vy], i) => i ? ctx.lineTo(conv(vx, "x"), conv(vy, "y")) : ctx.moveTo(conv(vx, "x"), conv(vy, "y"))); ctx.closePath(); ctx.fill(); }
     } else if (c.type === "image" && typeof c.image === "string" && c.image && !isExpr(c.image) && (base || !opts.doc)) {
       const img = imgCache(c.image, base);
@@ -2438,7 +2440,7 @@ function itemWords(c) {
       const col = isExpr(c.color) ? (String(c.color).match(/^\$([A-Za-z_]\w*)$/) ? ` in the colour from “${c.color.slice(1)}”` : " in a computed colour") : "";
       return w + col; }
     case "image": return valueWords(c.image, "picture") ? `the picture from ${valueWords(c.image, "picture").replace("the trial list's", "the trial list's column")}` : c.image ? `the picture ${String(c.image).split("/").pop()}` : "a picture (not chosen yet)";
-    case "shape": return `a ${({rect: "rectangle", circle: "circle", ellipse: "ellipse", line: "line", polygon: "polygon", cross: "cross"})[c.shape || "rect"] || "shape"}`;
+    case "shape": return `a ${({rect: "rectangle", circle: "circle", ellipse: "ellipse", triangle: "triangle", line: "line", polygon: "polygon", cross: "cross"})[c.shape || "rect"] || "shape"}`;
     case "fixation": return "a fixation cross";
     case "sound": return typeof c.sound === "number" ? `a ${c.sound} Hz tone` : valueWords(c.sound, "sound") ? `the sound from ${valueWords(c.sound, "sound")}` : c.sound ? `the sound ${String(c.sound).split("/").pop()}` : "a sound";
     case "html": return c.file ? `the web page ${String(c.file).split("/").pop()}` : "a web page";
@@ -2493,7 +2495,7 @@ function describeRoutine(rid, {plain = isSimple()} = {}) {
     const special = startOf(c);
     let what = w;
     if (n > 1) {
-      const m = what.match(/^an? (fixation cross|rectangle|circle|ellipse|line|polygon|cross|picture|sound)\b/);
+      const m = what.match(/^an? (fixation cross|rectangle|circle|ellipse|triangle|line|polygon|cross|picture|sound)\b/);
       what = m ? `${n} ${m[1].endsWith("cross") ? m[1] + "es" : m[1] + "s"}${what.slice(m[0].length)}` : `${what} (${n} of them)`;
     }
     if (!chain) chain = (special ? `${special[0].toUpperCase()}${special.slice(1)} it ` : st > 0 ? `At ${fmtS(st)} it ` : "") + (c.type === "sound" ? "" : "shows ") + what;
