@@ -19,14 +19,14 @@ steps:
   - title: Add a rule
     body: |
       In Properties, find **Rules · react while the screen runs** and click **Add a rule**.
-    target: "#props"
+    target: "#props [data-fkey='rule:add']"
     check: {rule: {routine: trial}}
   - title: Say when
     body: |
-      Set the rule's **When** to `$t > 1.5 and resp.keys is None` and press Tab: 1.5 s into the trial,
-      if no key has been pressed yet. The line under it says the same in words.
-    target: "#props"
-    check: {rule: {routine: trial, when_contains: "resp.keys"}}
+      Click the rule's **When** box and replace `$t > 1` with `$t > 1.5 and resp.keys is None`, then press
+      Tab: 1.5 s into the trial, if no key has been pressed yet. The line under it says the same in words.
+    target: "#props [data-fkey='rule:0:when']"
+    check: {rule: {routine: trial, when_contains: "resp.keys", valid: true}}
   - title: Say what to do
     body: |
       Under **Do**, change **End the screen** to **Start an item**, then pick **hint** in the menu next
@@ -41,7 +41,7 @@ steps:
       First make sure the rule's item is **hint** (not `fix`). Then double-click the **feedback** card,
       click **fb** on the timeline, and set **Only if** (`if`) to `$practice.n < 6`, so feedback is shown
       only for the first six practice trials. Any formula works, for example `$word == 'RED'`.
-    target: "#props"
+    target: "#props [data-prop=if], #flow .scard[data-rid=feedback]"
     avoid: "#flow .scard[data-rid=feedback]"
     check: {component: {routine: feedback, type: text, prop: if, exists: true}}
   - title: Check the summary
@@ -51,3 +51,4 @@ steps:
       **Start test run** to finish.
     target: "#btn-dryrun"
     check: {dry_run: true}
+    advance: manual

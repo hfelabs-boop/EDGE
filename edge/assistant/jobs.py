@@ -237,7 +237,8 @@ def execute(req: AssistantRequest, conv: Conversation, provider: Provider, cfg: 
                           vision=caps.vision, result_cap=MAX_RESULT_LOCAL if small else MAX_RESULT_CLOUD,
                           emit=sink.from_provider)
         work.assistant_code -= set(req.reviewed_code or ())       # read by a person: the researcher's code now
-        ctx.assistant_code = (work.assistant_code | history_code(ctx.folder)) - set(req.reviewed_code or ())
+        ctx.assistant_code = (work.assistant_code | history_code(ctx.folder)) - set(req.reviewed_code or ()) \
+            - reviewed_code(ctx.folder)
         ledger.data_roots = ctx.data_roots
         limits = Limits.for_provider(provider.local, opts)
         ctx.max_tool_calls = limits.max_tool_calls
@@ -274,6 +275,43 @@ def history_code(folder: Path | None, limit: int = 2000) -> set[str]:
     except OSError:
         pass
     return out
+
+
+def reviewed_code(folder: Path | None) -> set[str]:
+    """Hashes of assistant-written code a person has marked as read (<experiment folder>/.edge/assistant/
+    reviewed.json): kept next to the experiment, so it holds in every browser and in the terminal."""
+    if folder is None:
+        return set()
+    f = Path(folder) / ".edge" / "assistant" / "reviewed.json"
+    try:
+        data = json.loads(f.read_text(encoding="utf-8")) if f.is_file() and f.stat().st_size < 2_000_000 else []
+    except (OSError, ValueError):
+        return set()
+    return {h for h in data if isinstance(h, str) and len(h) == 64} if isinstance(data, list) else set()
+
+
+def mark_code_reviewed(folder: Path, hashes: Any) -> set[str]:
+    """Record that a person has read these pieces of code (their hashes). → all reviewed hashes."""
+    new = {h for h in (hashes or ()) if isinstance(h, str) and len(h) == 64 and all(c in "0123456789abcdef" for c in h)}
+    have = reviewed_code(folder)
+    if new - have:
+        d = Path(folder) / ".edge" / "assistant"
+        d.mkdir(parents=True, exist_ok=True)
+        have |= new
+        (d / "reviewed.json").write_text(json.dumps(sorted(have)[-5000:]), encoding="utf-8")
+    return have
+
+
+def unread_code(folder: Path | None, doc: dict[str, Any], reviewed: Any = ()) -> list[dict[str, str]]:
+    """Code components of ``doc`` that the assistant wrote (history.jsonl) and nobody has marked as read, here
+    (reviewed.json) or in the browser (``reviewed``: hashes). → [{"routine", "id", "hash"}]"""
+    from .tools import code_hashes
+    written = history_code(folder)
+    if not written:
+        return []
+    done = reviewed_code(folder) | {str(x) for x in (reviewed or ())}
+    return [{"routine": rid, "id": cid, "hash": h} for (rid, cid), h in code_hashes(doc or {}).items()
+            if h in written and h not in done]
 
 
 def normalized_base(experiment: dict[str, Any], exp_path: Path | None) -> dict[str, Any]:

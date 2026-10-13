@@ -270,3 +270,140 @@ def test_documentation_screenshots_are_1440_by_900():
         assert data[:8] == b"\x89PNG\r\n\x1a\n", name
         assert struct.unpack(">II", data[16:24]) == (1440, 900), name
         assert name in (ROOT / "tools" / "ui_check" / "screenshots.js").read_text(), name
+
+
+# ---------------------------------------------------------------- QA round 2 (static checks of the fixes)
+def _src(name: str) -> str:
+    return (STATIC / name).read_text()
+
+
+def _fn(src: str, name: str) -> str:
+    i = src.index(f"function {name}(")
+    m = re.search(r"\n(?:async )?function \w+\(|\n/\* =+|\n(?:const|let) \w+ = ", src[i + 10:])
+    return src[i: i + 10 + (m.start() if m else len(src))]
+
+
+def test_drawing_a_device_never_writes_to_the_document():
+    """inspector.js used `d.options ||= {}` while drawing: the YAML got `options: {}` and 'Tested' was lost."""
+    src = _src("inspector.js")
+    assert "d.options ||= {};" not in src and "const opts = d.options || {};" in src
+
+
+def test_try_it_and_test_run_ask_about_unread_assistant_code_first():
+    app, simple, asst = _src("app.js"), _src("simple.js"), _src("assistant.js")
+    assert "if (!(await assistantCodeGate())) return;" in _fn(app, "dryRun")
+    assert "assistantCodeGate()" in _fn(simple, "startPlay") and "r.unread_code" in _fn(simple, "startPlay")
+    assert "reviewed_code: reviewedCodeHashes()" in _fn(app, "dryRun")
+    gate = _fn(app, "assistantCodeGate")
+    assert "Review it" in gate and "I've read it" in gate and "/api/assistant/reviewed" in gate
+    # the panel merges what the server knows, and "I've read it" is stored next to the experiment
+    assert "/api/assistant/code?exp=" in asst and '"/api/assistant/reviewed"' in _fn(asst, "markReviewed")
+    assert "serverCode.written" in _fn(asst, "unreviewedCode")
+
+
+def test_try_it_toast_and_data_alerts_use_builder_words():
+    simple, app = _src("simple.js"), _src("app.js")
+    assert "Try it couldn't start: ${builderWords(" in simple
+    assert "(OK|WARNING|ERROR|COMPUTER|NOTE)" in app and "cap(builderWords(v.replace(" in app
+
+
+def test_try_it_end_panel_does_not_restart_on_the_participants_last_key():
+    fin = _fn(_src("simple.js"), "finishPlay")
+    assert 'end.querySelector(".pe-title")?.focus()' in fin and "again.focus()" not in fin
+    assert "e.detail === 0 && Date.now() - endedAt < 1000" in fin
+
+
+def test_tested_and_tried_are_restored_with_their_time():
+    app = _src("app.js")
+    rt = _fn(app, "restoreTested")
+    assert "r.tried" in rt and "S.triedAt" in rt
+    assert "S.tested?.restored ? clock(S.tested.at) : ago(S.tested?.at)" in app
+
+
+def test_save_a_copy_takes_its_files_and_is_checked_again():
+    save = _fn(_src("app.js"), "save")
+    assert "&copy_from=" in save and "if (newPath) validate();" in save and "S.exp.name = slug" in save
+
+
+def test_sessions_of_a_sibling_experiment_are_not_ours():
+    body = _fn(_src("app.js"), "sessionBelongs")
+    assert "f.name === s.experiment" in body
+
+
+def test_list_footer_for_a_loop_without_rows():
+    assert "(no rows: the screens just repeat)" in _src("build.js")
+
+
+def test_timeline_names_give_way_last():
+    css = _src("components.css")
+    assert re.search(r"\.timeline \.tl-label b \{[^}]*flex: 0 0 auto; max-width: 60%", css)
+    assert re.search(r"\.timeline \.tl-label span \{[^}]*flex: 1 1 0; min-width: 0", css)
+
+
+def test_breadcrumb_focus_ring_is_inset():
+    assert re.search(r"#crumbs \.crumb:focus-visible \{[^}]*outline-offset: -2px", _src("build.css"))
+
+
+def test_position_grid_is_one_radio_group():
+    pg = _fn(_src("widgets.js"), "placeGrid")
+    assert 'role: "radiogroup"' in pg and 'role: "radio"' in pg and "aria-checked" in pg and "aria-pressed" not in pg
+    assert "ArrowRight" in pg and "Home" in pg and "End" in pg and "tabIndex = k === j ? 0 : -1" in pg
+
+
+def test_backspace_never_deletes_from_a_menu_and_never_adds_a_key():
+    app, insp = _src("app.js"), _src("inspector.js")
+    on = _fn(app, "onKey")
+    assert '.menu, [role=menu], [role=listbox], .popover' in on
+    kc = _fn(insp, "inspKeyChips")
+    assert 'e.key === "Backspace" || e.key === "Delete"' in kc and "e.stopPropagation()" in kc
+
+
+def test_focus_returns_to_the_card_or_page_after_leaving_a_view():
+    app, build = _src("app.js"), _src("build.js")
+    assert "subViewReturnKey(S.view)" in app and "BUILD.forceFocus" in _fn(build, "buildFocusFallback")
+    assert "focusWorkspace(ws);" in app and 'page.querySelector("h1")' in _fn(app, "focusWorkspace")
+    assert 'leaveSubView("story")' in _fn(build, "timelineKeys")         # Esc on a timeline row goes up
+    scan = _fn(build, "scanHardware")
+    assert "ui.announce(found.length" in scan and ".focus(" in scan
+
+
+def test_coach_shrinks_only_for_real_controls_and_never_covers_a_menu():
+    app = _src("app.js")
+    place = _fn(app, "placeCoach")
+    assert "overlap(cand[0].x, cand[0].y, 5)" in place and "#canvas" in place
+    assert '[".menu", 8]' in app
+    assert re.search(r"\.menu \{ position: fixed; z-index: calc\(var\(--z-coach\) \+ 1\)", _src("components.css"))
+    assert "function isFullyInView(" in app and "coachScroll(st)" in _fn(app, "checkTutorial")
+    assert 'EDGE.companion.current() === "assistant"' in app and "dialogUp" in _fn(app, "updateCoach")
+
+
+def test_tutorial_steps_that_end_on_a_result_wait_for_next():
+    """The explanation of a test run or of the YAML must stay until the researcher presses Next or Finish."""
+    tuts = {t["id"]: t for t in _tutorials()}
+    for tid in ("eyetracking", "html_questionnaire", "rules_and_feedback", "data_and_export"):
+        assert tuts[tid]["steps"][-1].get("advance") == "manual", tid
+    rules = tuts["rules_and_feedback"]["steps"]
+    assert "replace `$t > 1`" in rules[2]["body"] and rules[2]["check"]["rule"]["valid"] is True
+    assert rules[1]["target"] == "#props [data-fkey='rule:add']" and rules[4]["target"].startswith("#props [data-prop=if]")
+    assert tuts["eyetracking"]["steps"][4]["target"] == "#props [data-prop=marker]"
+    assert "`<>`" in tuts["data_and_export"]["steps"][-1]["body"]
+    assert tuts["trial_lists"]["steps"][5]["target"] == "#btn-undo"
+
+
+def test_reloaded_and_home_proposals_can_be_shown_again():
+    asst = _src("assistant.js")
+    assert "restoreProposal(m, path)" in _fn(asst, "loadTranscript")
+    assert 'job.phase === "reloaded"' in asst and "Show again" in asst
+    assert "HOME_PENDING" in _fn(asst, "buildIt") and "You have an unapplied design for" in asst
+
+
+def test_try_one_screen_says_what_runs_and_in_words_names_unknown_results():
+    build = _src("build.js")
+    assert "function triedTogether(" in build and "tryOneLabel(rid)" in _src("app.js")
+    assert "doesn't have" in _fn(build, "unknownResult") and "unknownResult(s)" in _fn(build, "exprInWords")
+
+
+def test_preflight_words_for_devices_and_the_verdict():
+    m = _src("measures.js")
+    assert '"no-go": "Not ready yet"' in m and "NO-GO" not in m
+    assert "not answering" in _fn(m, "pfItemText")

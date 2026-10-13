@@ -34,7 +34,8 @@ const ui = (() => {
   const layerFor = (anchor) => {
     // menus and popovers opened from inside a dialog must sit above that dialog
     const inDialog = anchor instanceof Element && anchor.closest(".scrim, #modal");
-    return inDialog || document.querySelector(".scrim") ? "calc(var(--z-dialog) + 1)" : "";
+    // above the tutorial coach too: an open menu is what the step asks to use (the coach never covers its items)
+    return inDialog || document.querySelector(".scrim") ? "calc(var(--z-coach) + 1)" : "";
   };
 
   /* ---------------------------------------------------------------- focus */

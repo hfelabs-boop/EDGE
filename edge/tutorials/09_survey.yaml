@@ -19,11 +19,15 @@ steps:
       * a follow-up question that appears only for some answers.
 
       Press **Next**.
+  - title: Open the task screen
+    body: |
+      Double-click the **task** card to open the screen.
+    target: "#flow .scard[data-rid=task]"
+    check: {view: screen}
   - title: Add a survey
     body: |
-      Double-click the **task** card to open the screen, then click **Survey / questionnaire** under
-      **Add** on the left. Because the task screen already has something on it, EDGE gives the survey
-      its own screen, **questionnaire**, right after the task.
+      Click **Survey / questionnaire** under **Add** on the left. Because the task screen already has
+      something on it, EDGE gives the survey its own screen, **questionnaire**, right after the task.
     target: ".pal-item[data-type=survey]"
     check: {component: {type: survey}}
   - title: Open the survey editor

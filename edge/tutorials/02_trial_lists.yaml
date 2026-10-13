@@ -61,7 +61,7 @@ steps:
       back to your typed rows.
 
       Don't remove the `key` column instead: the key press item reads its correct answer from it.
-    target: "#list-editor"
+    target: "#btn-undo"
     check: {loop: {id: trials, conditions_kind: list, columns: [key]}}
   - title: Trial lists from a spreadsheet
     body: |

@@ -296,8 +296,13 @@ const Assistant = (() => {
     st.convFromThisPage = false;
     for (const m of st.msgs) {
       // a request that was still running when the page reloaded: follow it again (the builder kept it), or say so
-      if (m.live && m.role === "assistant" && m.jobId && !String(m.jobId).startsWith("pending-") && !m.state && !m.text) resumeJob(m, path);
-      else if (m.live && m.role === "assistant" && !m.state && !m.text) { m.state = "failed"; m.error = "Interrupted when the page reloaded. Ask again."; }
+      // (persist() keeps `inflight` until the job finishes; `live` is only for this page)
+      const running = (m.inflight || m.live) && m.role === "assistant" && !m.state && !m.text;
+      if (running && m.jobId && !String(m.jobId).startsWith("pending-")) resumeJob(m, path);
+      else if (running) { m.state = "failed"; m.error = "Interrupted when the page reloaded. Ask again."; delete m.inflight; }
+      else delete m.inflight;
+      // a proposal that was shown but neither applied nor discarded when the page reloaded: it can be shown again
+      if (m.role === "assistant" && (m.state === "preview" || m.state === "conflict") && m.jobId && !st.jobs.has(m.jobId)) restoreProposal(m, path);
       delete m.live;     // cards from an earlier page session are history now
     }
   }
@@ -311,6 +316,25 @@ const Assistant = (() => {
     st.jobs.set(job.id, job);
     st.job = job;
     setTimeout(() => { startTick(); renderHeadAndState(); renderLog(); poll(job); }, 0);
+  }
+  /* The builder keeps a finished job for half an hour: fetch its result and offer Show again (a conflict when the
+     experiment changed since it was proposed). Gone (restarted, too old): the one-line summary stays. */
+  function restoreProposal(m, path, {show = false} = {}) {
+    const prev = st.msgs[st.msgs.indexOf(m) - 1];
+    const job = {id: m.jobId, status: "done", message: prev && prev.role === "user" ? prev.text : "", atts: (prev && prev.atts) || [], focus: null, path,
+      baseSnapshot: null, basedOn: null, events: [], steps: [], notes: [], since: 0, started: Date.now(), elapsed: 0,
+      result: null, error: null, phase: "reloaded", node: null, msg: m, resumed: true};
+    aapi(`/api/assistant/job?id=${enc(m.jobId)}&since=0&wait=0`).then((j) => {
+      if (st.jobs.has(m.jobId)) { const had = st.jobs.get(m.jobId); if (show && had.result && had.phase === "reloaded") showAgain(had); return; }
+      if (!j || !j.result || !j.result.experiment || keyFor(path) !== st.key) return;
+      job.result = j.result;
+      for (const ev of j.events || []) addEvent(job, ev);
+      const now = safe(() => EDGE.snapshot(), "");
+      job.baseSnapshot = m.baseHash && now && sha256(now) === m.baseHash ? now : (m.baseHash ? "{}" : now);
+      st.jobs.set(job.id, job);
+      renderLog();
+      if (show) showAgain(job);
+    }).catch(() => { /* gone: the summary line says what it was */ });
   }
   function persist() {
     if (!st.key) return;
@@ -385,20 +409,40 @@ const Assistant = (() => {
     }
     return out;
   }
+  /* What the server knows (.edge/assistant/history.jsonl and reviewed.json next to the experiment): the gate holds
+     in every browser, and "I've read it" in one browser counts in all of them. */
+  const serverCode = {path: null, written: new Set(), reviewed: new Set(), at: 0};
+  async function syncCode(path = docPath()) {
+    if (!path) { serverCode.path = null; serverCode.written = new Set(); serverCode.reviewed = new Set(); return; }
+    try {
+      const r = await aapi(`/api/assistant/code?exp=${encodeURIComponent(path)}`);
+      Object.assign(serverCode, {path, written: new Set(r.written || []), reviewed: new Set(r.reviewed || []), at: Date.now()});
+    } catch { return; }
+    for (const job of st.jobs.values()) refreshJob(job);
+    safe(() => EDGE.emit("assistant:code", {unread: unreviewedCode().length}));
+  }
   function unreviewedCode(doc) {
-    const written = new Set(listPref("assistant.code"));
+    const here = serverCode.path && serverCode.path === docPath();
+    const written = new Set([...listPref("assistant.code"), ...(here ? serverCode.written : [])]);
     if (!written.size) return [];
-    const reviewed = new Set(listPref("assistant.reviewed"));
+    const reviewed = new Set([...listPref("assistant.reviewed"), ...(here ? serverCode.reviewed : [])]);
     return codeComponents(doc || safe(() => EDGE.doc())).map((x) => ({...x, hash: codeHash(x.comp)}))
-      .filter((x) => written.has(x.hash) && !reviewed.has(x.hash)).map(({routine, id}) => ({routine, id}));
+      .filter((x) => written.has(x.hash) && !reviewed.has(x.hash)).map(({routine, id, hash}) => ({routine, id, hash}));
   }
   function markReviewed(routine, id) {
     const c = codeComponents(safe(() => EDGE.doc())).find((x) => x.routine === routine && x.id === id);
     if (!c) return false;
-    prefs.set("assistant.reviewed", [...new Set([...listPref("assistant.reviewed"), codeHash(c.comp)])].slice(-500));
+    const hash = codeHash(c.comp);
+    prefs.set("assistant.reviewed", [...new Set([...listPref("assistant.reviewed"), hash])].slice(-500));
+    serverCode.reviewed.add(hash);
+    const path = docPath();
+    if (path) aapi("/api/assistant/reviewed", {exp: path, hashes: [hash]}).catch(() => {});
     for (const job of st.jobs.values()) refreshJob(job);
+    safe(() => EDGE.emit("assistant:code", {unread: unreviewedCode().length}));
     return true;
   }
+  /* The hashes this browser knows were read, for the server's own check (Try it, test runs, the preflight). */
+  function reviewedHashes() { return [...new Set([...listPref("assistant.reviewed"), ...serverCode.reviewed])].slice(-500); }
 
   /* ================================================================ the panel: skeleton */
   const panelEl = () => document.getElementById("assistant-panel");
@@ -961,7 +1005,7 @@ const Assistant = (() => {
       atts: job.atts.map((a) => ({name: a.name, kind: a.kind, short: shortPreview(a.preview), summary: (a.preview && a.preview.summary) || ""}))};
     pushMsg(userMsg);
     job.id = "pending-" + Date.now();
-    job.msg = {role: "assistant", text: "", time: nowClock(), live: true, jobId: job.id};
+    job.msg = {role: "assistant", text: "", time: nowClock(), live: true, inflight: true, jobId: job.id};
     st.jobs.set(job.id, job);
     pushMsg(job.msg);
     st.job = job;
@@ -972,7 +1016,7 @@ const Assistant = (() => {
     const body = {experiment: EDGE.doc(), path: path || undefined, message: text,
       attachments: job.atts.map((a) => a.file).filter(Boolean), focus: focus || undefined, conversation_id: st.convId || undefined,
       recap: !st.convFromThisPage && st.msgs.length > 2 ? recap().slice(0, -1) : undefined,
-      options: {reviewed_code: listPref("assistant.reviewed").slice(-500)}};
+      options: {reviewed_code: reviewedHashes()}};
     let r;
     try {
       r = await aapi("/api/assistant/ask", body);
@@ -999,6 +1043,7 @@ const Assistant = (() => {
     job.id = r.job_id;
     job.msg.jobId = job.id;
     st.jobs.set(job.id, job);
+    persist();                // a reload from now on follows this job again
     if (r.conversation_reset && st.convId) {
       st.msgs.splice(st.msgs.length - 2, 0, {role: "note", text: "This is a new conversation for the assistant (the model or the builder changed). It got a summary of the earlier messages."});
     }
@@ -1083,6 +1128,7 @@ const Assistant = (() => {
   function finishJob(job) {
     if (job.finished) { refreshJob(job); return; }
     job.finished = true;
+    if (job.msg) delete job.msg.inflight;
     job.elapsed = (Date.now() - job.started) / 1000;
     if (st.job === job) st.job = null;
     const res = job.result, msg = job.msg;
@@ -1102,7 +1148,14 @@ const Assistant = (() => {
         rememberWritten(res.review);
         msg.n = (res.changes || []).length;
         decideApply(job);
-      } else job.phase = "answer";
+      } else {
+        job.phase = "answer";
+        // a change that couldn't be made: the request is back in the box, to rephrase it
+        const failed = (job.steps || []).some((x) => x.kind === "tool" && x.state === "failed");
+        if (failed && st.els.input && !st.els.input.value.trim() && job.message && job.path === docPath()) {
+          st.els.input.value = job.message; autosize(st.els.input); updateSendState();
+        }
+      }
     }
     persist();
     renderHeadAndState();
@@ -1166,6 +1219,8 @@ const Assistant = (() => {
     st.previewJob = job;
     job.phase = conflict ? "conflict" : "preview";
     job.msg.state = "preview";
+    if (!job.msg.baseHash && job.baseSnapshot) job.msg.baseHash = sha256(job.baseSnapshot);      // to show it again after a reload
+    persist();
     const dry = res.dry_run || null;          // its test run of exactly this version counts once applied unchanged
     EDGE.proposal.start({doc: res.experiment, marks: computeMarks(base, res.experiment), label: `Assistant: ${shortTitle(res)}`,
       summary: (res.summary && res.summary.title) || "", conflict, jobId: job.id, count: (res.changes || []).length,
@@ -1186,6 +1241,7 @@ const Assistant = (() => {
     } else {
       job.phase = "discarded";
       job.msg.state = "discarded";
+      clearHomePending(job.path);
       if (!job.discardedServer) for (const id of job.chain || [job.id]) aapi("/api/assistant/discard", {id}).then(() => call("renderFiles")).catch(() => {});
       job.discardedServer = true;
     }
@@ -1196,11 +1252,12 @@ const Assistant = (() => {
   }
   function markApplied(job, auto) {
     job.phase = "applied";
+    clearHomePending(job.path);
     job.appliedAt = nowClock();
     job.msg.state = "applied";
     job.msg.time = job.appliedAt;
     st.lastAppliedAt = Date.now();
-    if (!job.discardedServer) for (const id of job.chain || [job.id]) aapi("/api/assistant/applied", {id}).catch(() => {});
+    if (!job.discardedServer) Promise.all((job.chain || [job.id]).map((id) => aapi("/api/assistant/applied", {id}).catch(() => {}))).then(() => syncCode());
     persist();
     refreshJob(job);
     safe(() => EDGE.emit("assistant", {busy: false, path: job.path, status: job.status, phase: "applied"}));   // the canvas callout (W2)
@@ -1423,6 +1480,9 @@ const Assistant = (() => {
     } else if (job.phase === "conflict" && live) {
       foot.append(btn("Ask again with my changes", () => askAgain(job), {kind: "primary", ic: "refresh"}),
         btn("Apply anyway", () => applyFromCard(job, true)), btn("Discard", () => EDGE.proposal.discard(), {kind: "ghost"}));
+    } else if (job.phase === "reloaded") {
+      foot.append(h("span", {class: "state"}, icon("info"), "Not applied: the page was reloaded"));
+      if (res.experiment && job.path === docPath() && !st.job) foot.append(btn("Show again", () => showAgain(job), {kind: "primary"}));
     } else if (job.phase === "discarded") {
       foot.append(h("span", {class: "state"}, icon("close"), "Discarded"));
       if (!(res.files_created || []).length && res.experiment && job.path === docPath() && !st.job) foot.append(btn("Show again", () => showAgain(job), {kind: "ghost"}));
@@ -1456,7 +1516,7 @@ const Assistant = (() => {
   function applyFromCard(job, force = false) { if (st.previewJob === job && EDGE.proposal.active()) EDGE.proposal.apply({force}); }
   function showAgain(job) {
     if (EDGE.proposal.active()) EDGE.proposal.discard();
-    job.discardedServer = true;
+    if (job.phase !== "reloaded") job.discardedServer = true;      // after a reload the builder still has it, undiscarded
     job.basedOn = null;
     startPreview(job, job.baseSnapshot !== EDGE.snapshot());
     refreshJob(job);
@@ -1567,6 +1627,7 @@ const Assistant = (() => {
     H.el = el;
     H.compact = !!compact;
     restoreHomeDraft();
+    checkHomePending();
     if (!H.text && !H.atts.length) H.expanded = false;
     H.placeholder = (H.placeholder + 1) % HOME_EXAMPLES.length;
     renderHome();
@@ -1594,8 +1655,8 @@ const Assistant = (() => {
       icon(configured ? "assistant" : "settings"), configured ? "Build it" : "Set up the assistant");
     build.addEventListener("click", () => (configured ? buildIt() : openSettings()));
     if (!full) {
-      el.replaceChildren(h("section", {class: "describe compact card", "aria-label": "Describe a new experiment"},
-        h("span", {class: "lead-ic", "aria-hidden": "true"}, icon("assistant")), ta, build));
+      el.replaceChildren(...[pendingNotice(), h("section", {class: "describe compact card", "aria-label": "Describe a new experiment"},
+        h("span", {class: "lead-ic", "aria-hidden": "true"}, icon("assistant")), ta, build)].filter(Boolean));
       restoreFocus(el, hadFocus, caret);
       return;
     }
@@ -1650,13 +1711,62 @@ const Assistant = (() => {
       if (H.compact && H.expanded && !H.text && !H.atts.length && card.isConnected && !card.contains(document.activeElement)
         && !document.querySelector(".scrim")) { H.expanded = false; renderHome(); }
     }, 200));
-    el.replaceChildren(card);
+    el.replaceChildren(...[pendingNotice(), card].filter(Boolean));
     renderHomeAtts();
     autosizeHome(ta);
     restoreFocus(el, hadFocus, caret);
   }
   /* The Home draft (text, name, attached files) survives a reload or a closed tab until Build it. */
   const HOME_DRAFT = "assistant.homeDraft";
+  /* After Build it: the design the assistant is making for a path that has no YAML file yet. */
+  const HOME_PENDING = "assistant.homePending";
+  function clearHomePending(path) {
+    const p = prefs.get(HOME_PENDING, null);
+    if (p && (!path || p.path === path)) prefs.set(HOME_PENDING, null);
+    const shown = st.home.pending;
+    if (shown && (!path || shown.path === path)) { st.home.pending = null; renderHome(); }
+  }
+  async function checkHomePending() {
+    const H = st.home;
+    const p = prefs.get(HOME_PENDING, null);
+    H.pending = null;
+    if (!p || !p.path || p.path === docPath()) return;
+    let files = [];
+    try { files = ((await api("/api/files")).files || []).map((f) => (typeof f === "string" ? f : f.path)); } catch { return; }
+    if (files.includes(p.path)) { clearHomePending(p.path); return; }      // saved meanwhile: it is in Your experiments
+    const saved = prefs.get(keyFor(p.path), null);
+    const msgs = (saved && Array.isArray(saved.messages)) ? saved.messages : [];
+    if (!msgs.some((m) => m.role === "assistant" && m.jobId)) { clearHomePending(p.path); return; }
+    H.pending = p;
+    renderHome();
+  }
+  function pendingNotice() {
+    const p = st.home.pending;
+    if (!p) return null;
+    const showIt = btn("Show it", async () => {
+      const path = await EDGE.newExperiment({name: p.name, doc: {name: p.name, description: "", routines: {}, flow: []}, save: false, go: "build"});
+      st.home.pending = null; renderHome();
+      if (path !== p.path) { EDGE.toast("Couldn't open it under the same name. Describe it again."); return; }
+      open({});
+      const m = [...st.msgs].reverse().find((x) => x.role === "assistant" && x.jobId && (x.state === "preview" || x.state === "conflict"));
+      const job = m && st.jobs.get(m.jobId);
+      if (job && job.result) showAgain(job);
+      else if (m) restoreProposal(m, path, {show: true});
+    }, {kind: "primary"});
+    const discard = btn("Discard", async () => {
+      const saved = prefs.get(keyFor(p.path), null);
+      for (const m of (saved && saved.messages) || []) if (m.jobId && m.role === "assistant") aapi("/api/assistant/discard", {id: m.jobId}).catch(() => {});
+      for (const a of p.atts || []) if (a.exp && a.file) await aapi("/api/assistant/detach", {exp: a.exp, file: a.file}).catch(() => {});
+      prefs.set(keyFor(p.path), null);
+      clearHomePending(p.path);
+      st.home.pending = null;
+      renderHome();
+      EDGE.toast((p.atts || []).length ? `Discarded the design. Files you attached may still be in ${p.name}/.` : "Discarded the design.");
+    }, {kind: "ghost"});
+    return h("div", {class: "alert assistant home-pending", role: "status"}, icon("assistant"),
+      h("div", {}, h("b", {}, `You have an unapplied design for “${p.name}”.`), p.text ? h("span", {class: "t-small t-2"}, ` “${p.text.length > 120 ? p.text.slice(0, 117) + "…" : p.text}”`) : null,
+        h("div", {class: "actions"}, showIt, discard)));
+  }
   function saveHomeDraft() {
     const H = st.home;
     const atts = H.atts.filter((a) => a.state === "ok").map((a) => ({id: a.id, name: a.name, kind: a.kind, exp: a.exp, file: a.file, stored: a.stored || {},
@@ -1752,6 +1862,8 @@ const Assistant = (() => {
     try { path = await EDGE.newExperiment({name, doc: {name, description: "", routines: {}, flow: []}, save: false, go: "build"}); }
     catch (e) { showErr(`Couldn't start the experiment: ${errText(e)}`); return; }
     const reserved = H.path;
+    // until its proposal is applied or discarded, Home offers it again (a reload or a closed tab loses nothing)
+    prefs.set(HOME_PENDING, {path, name: path.split("/")[0], text: text.slice(0, 300), atts: atts.map((a) => ({exp: a.exp, file: a.file, name: a.name})), at: Date.now()});
     Object.assign(H, {text: "", atts: [], path: null, name: "", nameEdited: false, expanded: false});
     saveHomeDraft();
     // a new experiment from Home starts a new conversation, even if an earlier, never-saved try used the same name
@@ -2100,6 +2212,7 @@ const Assistant = (() => {
   /* ================================================================ wiring */
   function onDocLoaded(d) {
     const path = d && "path" in d ? d.path : docPath();
+    syncCode(path);
     if (keyFor(path) === st.key) return;
     persist();
     loadTranscript(path);
@@ -2110,6 +2223,8 @@ const Assistant = (() => {
   }
   function onDocSaved(d) {
     const path = d && d.path;
+    if (path) clearHomePending(path);
+    if (path && serverCode.path !== path) syncCode(path);
     if (!path || keyFor(path) === st.key) return;
     /* an untitled experiment got its name: the conversation moves with it */
     const oldKey = st.key;
@@ -2165,6 +2280,8 @@ const Assistant = (() => {
     get lastAppliedAt() { return st.lastAppliedAt; },
     unreviewedCode,
     markReviewed,
+    reviewedHashes,
+    syncCode,
     refresh: refreshStatus,
     codeHash,
   };

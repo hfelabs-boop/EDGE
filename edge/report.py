@@ -28,7 +28,10 @@ def analyze_session(path: str | Path) -> dict[str, Any]:
     rep: dict[str, Any] = {"session": root.name, "experiment": meta.get("experiment"), "timing": meta.get("timing"),
                            "aborted": meta.get("aborted"), "errors": meta.get("errors", []), "streams": {},
                            "warnings": meta.get("warnings", []), "display": meta.get("display") or {},
-                           "computer": [c for c in meta.get("system_checks") or [] if c.get("level") in ("warning", "error")],
+                           # a test run or a Try it in the builder never needs a screen: the computer checks are for real sessions
+                           "computer": [] if meta.get("dry_run") or meta.get("backend") in ("headless", "browser")
+                           or "dry_runs" in root.resolve().parts else
+                           [c for c in meta.get("system_checks") or [] if c.get("level") in ("warning", "error")],
                            "incomplete": incomplete, "stop_reason": _stop_reason(meta),
                            "crash": (meta.get("crash") or {}).get("what"),
                            "dry_run": bool(meta.get("dry_run")), "simulated_devices": _simulated(meta),

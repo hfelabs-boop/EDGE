@@ -60,3 +60,4 @@ steps:
       Tip: write `{{participant}}` or any trial-list column in the HTML to show it on the page.
     target: "#btn-dryrun"
     check: {dry_run: true}
+    advance: manual

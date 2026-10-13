@@ -196,7 +196,9 @@ builder doesn't offer them as trial lists.
 * It avoids Python **code** items. If it writes one, the result says "Python code written by the assistant —
   read it before running participants", it is **not** test-run — not in that request and not in any later one
   (also after you apply it, also from the terminal) until you press **I've read it** — and the Run page warns
-  until then. Code runs with your rights on this computer: read it as you would a script someone sent you.
+  until then. **Try it** and **Start test run** ask first as well (*Review it* / *I've read it*), in every
+  browser: "read" is kept next to the experiment (`.edge/assistant/reviewed.json`), not only in this browser.
+  Code runs with your rights on this computer: read it as you would a script someone sent you.
 * Web pages it adds or changes are listed for review when they run scripts or contact other servers (a script,
   `onload`/`onerror` and other `on…` attributes, `javascript:` links, embedded frames, forms or pictures that
   send to or load from another address, automatic redirects).

@@ -63,18 +63,27 @@ def _typo_doc(root: Path) -> dict:
     return doc
 
 
+def _runtime_typo_doc(root: Path) -> dict:
+    """The same typo, but past the checker: since QA round 2 resp.cor is an error before running, unless a code item
+    could add results the check can't see (then it is a warning and the experiment stops while it runs)."""
+    doc = _typo_doc(root)
+    doc["routines"]["instructions"]["components"].append({"id": "noop", "type": "code", "on_begin": "pass"})
+    return doc
+
+
 # ---------------------------------------------------------------- runtime errors, in words
 def test_checker_catches_a_misspelt_result_name(server):
     url, root, _ = server
     issues = _post(url + "/api/validate", {"experiment": _typo_doc(root), "path": "stroop/stroop.yaml"})[1]["issues"]
     hit = [i for i in issues if "resp.cor" in i["message"]]
-    assert hit and hit[0]["level"] == "warning" and "Did you mean resp.corr?" in hit[0]["message"]
+    # an error since QA round 2: it always stops the experiment at that line
+    assert hit and hit[0]["level"] == "error" and "Did you mean resp.corr?" in hit[0]["message"]
     assert hit[0]["where"] == "routines.feedback.fb.text"
 
 
 def test_test_run_that_stops_answers_200_in_plain_words(server):
     url, root, _ = server
-    status, r = _post(url + "/api/dryrun", {"experiment": _typo_doc(root), "path": "stroop/stroop.yaml"})
+    status, r = _post(url + "/api/dryrun", {"experiment": _runtime_typo_doc(root), "path": "stroop/stroop.yaml"})
     assert status == 200 and r["ok"] is False and r["stopped"] is True
     assert "error" not in r          # api() in the page would throw on an "error" key: the problem is under "problem"
     p = r["problem"]
@@ -86,7 +95,7 @@ def test_test_run_that_stops_answers_200_in_plain_words(server):
 
 def test_try_it_ends_with_the_problem_and_saves_next_to_the_experiment(server):
     url, root, _ = server
-    doc = _typo_doc(root)
+    doc = _runtime_typo_doc(root)
     assert _post(url + "/api/play/start", {"experiment": doc, "path": "stroop/stroop.yaml"})[1]["ok"]
     for key in ("space", "r"):
         time.sleep(0.6)
@@ -113,13 +122,13 @@ def test_try_it_ends_with_the_problem_and_saves_next_to_the_experiment(server):
 def test_last_test_restores_tested_after_a_reload(server):
     url, root, _ = server
     doc = yaml.safe_load((root / "stroop/stroop.yaml").read_text())
-    assert _post(url + "/api/last_test", {"experiment": doc, "path": "stroop/stroop.yaml"})[1] == {"found": False}
+    assert _post(url + "/api/last_test", {"experiment": doc, "path": "stroop/stroop.yaml"})[1]["found"] is False
     r = _post(url + "/api/dryrun", {"experiment": doc, "path": "stroop/stroop.yaml"})[1]
     assert r["ok"]
     t = _post(url + "/api/last_test", {"experiment": doc, "path": "stroop/stroop.yaml"})[1]
     assert t["found"] and t["trials"] == r["n_trials"] and t["path"].startswith("stroop/data/dry_runs/")
     doc["routines"]["thanks"]["duration"] = 3          # another document: not tested
-    assert _post(url + "/api/last_test", {"experiment": doc, "path": "stroop/stroop.yaml"})[1] == {"found": False}
+    assert _post(url + "/api/last_test", {"experiment": doc, "path": "stroop/stroop.yaml"})[1]["found"] is False
 
 
 # ---------------------------------------------------------------- an empty trial list
@@ -156,7 +165,7 @@ def test_try_it_loop_ends_on_an_error_frame_and_main_button_tries_everything():
 
 def test_sessions_belong_by_folder_not_by_name():
     body = function_body(js("app.js"), "sessionBelongs")
-    assert "if (dir) return" in body
+    assert "startsWith(dir)" in body and "s.experiment === S.exp.name" in body   # by folder, and not a sibling's (round 2)
 
 
 # ---------------------------------------------------------------- words
@@ -298,3 +307,98 @@ def test_stroop_is_in_the_examples_gallery():
     assert names[:2] == ["blank", "stroop"]
     for t in public_templates().values():
         assert "(routines)" not in t.get("description", "") and "sim_eyetracker" not in t.get("description", "")
+
+
+# ---------------------------------------------------------------- QA round 1, second pass (rechecked in a browser)
+def test_measure_filter_with_a_misspelt_result_is_caught(tmp_path):
+    from edge.model import Experiment
+    from edge.scope import scope_issues
+    doc = yaml.safe_load((ROOT / "examples/stroop/stroop.yaml").read_text())
+    doc["measures"][0]["trials"] = "$resp.cor == 1"
+    issues = scope_issues(Experiment.from_dict(doc))
+    hit = [i for i in issues if i.where.startswith("measures.")]
+    assert hit and "Did you mean resp.corr?" in hit[0].message
+
+
+def test_go_there_puts_the_keyboard_in_the_field_with_the_problem():
+    body = function_body(js("app.js"), "gotoIssue")
+    assert 'data-prop="${prop}"' in body and ".focus(" in body
+
+
+def test_storyboard_is_one_tab_stop_with_arrow_keys_and_insert_items_in_the_menu():
+    src = js("build.js")
+    rov = function_body(src, "storyRoving")
+    assert "x.tabIndex = x === active ? 0 : -1" in rov and '"Home"' in rov
+    assert "storyRoving(el)" in function_body(src, "renderStoryboard")
+    menu = function_body(src, "nodeMenu")
+    assert "Add a step before…" in menu and "Add a step after…" in menu
+
+
+def test_delete_and_undo_keep_the_keyboard_on_the_storyboard():
+    src = js("build.js")
+    assert "BUILD.focusKey = flowNodeKey(" in function_body(src, "removeFromFlow")
+    for fn in ("undo", "redo"):
+        assert "focusChangedStep(steps)" in function_body(js("app.js"), fn)
+
+
+def test_crumbs_that_had_to_shrink_make_the_toolbar_tight():
+    body = function_body(js("build.js"), "fitToolbar")
+    assert "#crumbs .crumb-t, #crumbs .crumb.here" in body and "scrollWidth > e.clientWidth" in body
+    assert "max-width: 60%" not in js("build.css")
+
+
+def test_workflow_diagram_wraps_to_the_canvas_instead_of_shrinking():
+    src = js("build.js")
+    fn = function_body(src, "layoutMachine")
+    m = ("{start:'a', states:{a:{next:[{goto:'b'}]}, b:{next:[{goto:'c'}]}, c:{next:[{goto:'d'}]}, d:{next:[{goto:'end'}]}}}")
+    out = _node(fn + f"\nconst p = layoutMachine({m}, 700); delete p._rows;"
+                     "console.log(JSON.stringify(Object.values(p).map((q) => [q.x + q.w, q.row])));")
+    boxes = json.loads(out)
+    assert max(r for _, r in boxes) >= 1 and all(right <= 700 for right, _ in boxes)
+    assert "BUILD.zoom = Math.max(all ? 0.3 : 0.85" in src
+
+
+def test_reload_during_an_assistant_job_follows_it_again():
+    src = js("assistant.js")
+    assert "inflight: true" in src
+    load = function_body(src, "loadTranscript")
+    assert "m.inflight || m.live" in load and "resumeJob(m, path)" in load
+    assert "delete job.msg.inflight" in function_body(src, "finishJob")
+
+
+def test_a_change_that_could_not_be_made_puts_the_request_back():
+    body = function_body(js("assistant.js"), "finishJob")
+    assert 'x.state === "failed"' in body and "st.els.input.value = job.message" in body.split('job.phase = "answer"')[1]
+
+
+def test_wizard_keys_keep_focus_and_the_preview_never_goes_stale():
+    src = js("simple.js")
+    assert 'old.replaceWith(nu); nu.querySelector("#wiz-keys")?.focus' in src
+    prev = function_body(src, "wizPreview")
+    assert prev.count("wizEstError(") == 2 and "wizPlainThumb()" in prev
+    assert "Go to step" in function_body(src, "wizEstError")
+    assert "r = e.data;" in function_body(src, "createFromWizard")
+
+
+def test_run_page_words_and_footer():
+    src = js("app.js")
+    fn = function_body(src, "builderWords") + function_body(src, "relPath")
+    out = _node("global.S={root:''};" + fn + "\nconsole.log(builderWords(\"it would run WITHOUT recording it (edge test-device shows the details)\"));")
+    assert "edge" not in out and "WITHOUT" not in out and "Test this device" in out
+    assert "pfItemText(bad[0] || s.items[0], bw)" in js("measures.js") and "return bw(it.text)" in js("measures.js")
+    assert re.search(r"\.run-foot \{ position: sticky; bottom: calc\(-1 \* var\(--sp-8\)\)", js("pages.css"))
+
+
+def test_value_source_beside_a_control_is_compact_and_survey_editor_starts_at_a_question():
+    css = js("pages.css")
+    assert ".field.nolabel > .ctl-row > .srcbtn.fixed .src-words { display: none; }" in css
+    assert 'setTimeout(() => SV.dlg?.querySelector(".sv-pick' in js("survey.js")
+
+
+def test_survey_tutorial_opens_the_task_screen_before_the_add_palette():
+    tut = yaml.safe_load((ROOT / "edge/tutorials/09_survey.yaml").read_text())
+    titles = [s["title"] for s in tut["steps"]]
+    i = titles.index("Open the task screen")
+    assert titles[i + 1] == "Add a survey" and tut["steps"][i]["check"] == {"view": "screen"}
+    runner = (ROOT / "tools/ui_check/tutorials.js").read_text()
+    assert "s.manual && s.check" in runner      # advance: manual steps are played: the check, then Next

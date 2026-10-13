@@ -180,6 +180,60 @@ def check_display_driver(adapters: list[str] | None = None) -> list[Check]:
     return [Check("display_driver", "ok", "Display: " + ", ".join(adapters))]
 
 
+_PROBE = r"""
+import json, ctypes
+out = {}
+try:
+    import pyglet
+    try:
+        out["audio"] = type(pyglet.media.get_audio_driver()).__name__
+    except Exception as e:
+        out["audio_error"] = str(e)[:200]
+    w = pyglet.window.Window(width=32, height=32, visible=False)
+    from pyglet import gl
+    r = gl.glGetString(gl.GL_RENDERER)
+    out["renderer"] = ctypes.cast(r, ctypes.c_char_p).value.decode("utf-8", "replace") if r else ""
+    w.close()
+except Exception as e:
+    out["error"] = f"{type(e).__name__}: {e}"[:300]
+print(json.dumps(out))
+"""
+
+
+def probe_graphics(timeout: float = 10.0) -> dict[str, Any]:
+    """The OpenGL renderer and the sound driver, as the experiment window will see them, from a short-lived process
+    with an invisible window (the builder itself never opens one). {} when that can't be found out."""
+    import json
+    try:
+        r = subprocess.run([sys.executable, "-c", _PROBE], capture_output=True, text=True, timeout=timeout,
+                           creationflags=0x08000000 if IS_WIN else 0)
+        line = (r.stdout or "").strip().splitlines()[-1:] or ["{}"]
+        out = json.loads(line[0])
+        return out if isinstance(out, dict) else {}
+    except Exception:
+        return {}
+
+
+def check_graphics_and_sound(uses_sound: bool, probe: dict[str, Any] | None = None) -> list[Check]:
+    """Software rendering (llvmpipe, a virtual screen: no vsync, so timing can't be trusted) and no sound device, found
+    before the session instead of in its report."""
+    if probe is None:
+        if no_display_reason() is not None:
+            return []           # 'No screen found' says it already
+        probe = probe_graphics()
+    out: list[Check] = []
+    renderer = str(probe.get("renderer") or "")
+    if renderer:
+        out += check_display_driver([renderer])
+    drv = str(probe.get("audio") or "")
+    if drv and "Silent" in drv:
+        out.append(Check("sound_device", "warning" if uses_sound else "info", "No sound device",
+                         "No sound output was found on this computer, so sounds will not play." if uses_sound else
+                         "No sound output was found on this computer (this experiment plays no sounds).",
+                         "Connect headphones or speakers, or check the sound settings, then check again."))
+    return out
+
+
 def no_display_reason() -> str | None:
     """Why no experiment window can open on this computer right now (None: a screen is there, or the window
     library is missing, which the software check reports)."""
@@ -416,18 +470,30 @@ def run_checks(exp: Any = None, quick: bool = False, software: bool = True) -> l
     serial_types = {"serial_inputs", "ttl_serial", "trigger_adapter", "mindware", "labjack"}
     uses_usb = bool(exp is not None and any(d.type in serial_types for d in exp.devices))
     used_ports = {str(d.options.get("port") or "") for d in (exp.devices if exp is not None else []) if d.type in serial_types}
+    uses_sound = bool(exp is not None and any(c.type == "sound" for r in exp.routines.values() for c in r.components))
     out: list[Check] = []
     for fn in (*((lambda: check_software(exp),) if software and not quick else ()),
                check_power, lambda: check_usb_suspend(uses_usb), check_timer, check_keyboard,
                lambda: check_screens(window, dpi=dpi_scale(), fso=fullscreen_optimizations_disabled()),
                lambda: check_serial(used=used_ports or None),
-               *(() if quick else (check_display_driver,))):
+               *(() if quick else (lambda: _display_checks(uses_sound),))):
         try:
             out.extend(fn())
         except Exception:   # a check that can't run on this computer is simply skipped
             continue
     order = {"error": 0, "warning": 1, "info": 2, "ok": 3}
     return sorted(out, key=lambda c: order.get(c.level, 9))
+
+
+def _display_checks(uses_sound: bool) -> list[Check]:
+    """The display driver from the system's own tools, else (no glxinfo, a virtual screen) from the probe."""
+    found = check_display_driver()
+    if found and any(c.level != "ok" for c in found):
+        return found + [c for c in check_graphics_and_sound(uses_sound) if c.id != "display_driver"]
+    probed = check_graphics_and_sound(uses_sound)
+    if any(c.id == "display_driver" for c in probed):
+        found = [c for c in found if c.id != "display_driver"]
+    return found + probed
 
 
 FIXES: dict[str, Callable[[str], str]] = {}

@@ -96,6 +96,7 @@ def test_session_records_warnings_display_and_focus(tmp_path):
     assert meta["warnings"] == [] and "display" in meta and meta["system_checks"] == []   # dry runs skip the computer check
     meta["warnings"] = ["the experiment window lost keyboard focus 2 time(s) (first 3.0 s into the session)"]
     meta["system_checks"] = [{"id": "battery", "level": "warning", "title": "Running on battery", "fix": "Plug in"}]
+    meta.update(dry_run=False, backend="pyglet")     # as a real session records it (test runs and tries never report them)
     (Path(s["data_dir"]) / "session.json").write_text(json.dumps(meta))
     v = "\n".join(analyze_session(s["data_dir"])["verdict"])
     assert "lost keyboard focus 2 time(s)" in v and "COMPUTER: Running on battery → Plug in" in v

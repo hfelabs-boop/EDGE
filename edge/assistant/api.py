@@ -19,8 +19,9 @@ from .config import (CLOUD, PROVIDERS, ConfigError, has_consent, load_config, pr
 from .errors import AssistantError, error
 from .jobs import AssistantService, Busy
 
-GET_ROUTES = {"status", "models", "preview", "suggest_path", "job", "conversation"}
-POST_ROUTES = {"config", "consent", "test", "list_models", "attach", "detach", "ask", "cancel", "discard", "applied"}
+GET_ROUTES = {"status", "models", "preview", "suggest_path", "job", "conversation", "code"}
+POST_ROUTES = {"config", "consent", "test", "list_models", "attach", "detach", "ask", "cancel", "discard", "applied",
+               "reviewed"}
 
 
 _SERVICE_LOCK = threading.Lock()
@@ -360,6 +361,30 @@ def r_applied(app: Any, q: dict[str, str], body: Any) -> tuple[Any, int]:
     except ValueError as e:
         raise BadRequest(str(e)) from None
     return {"status": job.status}, 200
+
+
+def _code_folder(app: Any, rel: Any) -> Path:
+    if not isinstance(rel, str) or not rel:
+        raise BadRequest("the request needs ?exp=… (the experiment's path)")
+    return app.safe_path(rel).parent
+
+
+def r_code(app: Any, q: dict[str, str], body: Any) -> tuple[Any, int]:
+    """Code the assistant wrote for this experiment (hashes from history.jsonl) and the code a person has read
+    (reviewed.json): the panel's "hasn't been reviewed" state, the same in every browser."""
+    from .jobs import history_code, reviewed_code
+    folder = _code_folder(app, q.get("exp"))
+    return {"written": sorted(history_code(folder)), "reviewed": sorted(reviewed_code(folder))}, 200
+
+
+def r_reviewed(app: Any, q: dict[str, str], body: Any) -> tuple[Any, int]:
+    """I've read it: the code with these hashes runs from now on (Try it, test runs, the preflight)."""
+    from .jobs import mark_code_reviewed
+    folder = _code_folder(app, body.get("exp"))
+    hashes = body.get("hashes")
+    if not isinstance(hashes, list) or not hashes or len(hashes) > 200:
+        raise BadRequest("'hashes' must be a list of code hashes (at most 200)")
+    return {"reviewed": sorted(mark_code_reviewed(folder, hashes))}, 200
 
 
 def r_conversation(app: Any, q: dict[str, str], body: Any) -> tuple[Any, int]:

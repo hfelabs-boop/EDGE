@@ -328,8 +328,11 @@ function field(name, p, value, onChange, opts = {}) {
         const v = String(field.value || "").trim();
         let w = v ? inspInWords(v.startsWith("$") ? v : "$" + v, kind) : "";
         if (w === "a computed value") w = "";
-        if (w && kind === "value") w = `${name === "text" ? "Shows" : "Uses"} ${w}`;
+        const bad = /^uses \S+, which /.test(w);       // resp.cor: a result the component doesn't have
+        if (bad) w = `This ${w}`;
+        else if (w && kind === "value") w = `${name === "text" ? "Shows" : "Uses"} ${w}`;
         say.textContent = w && w !== v ? `In words: ${w}.` : ""; say.hidden = !say.textContent;
+        say.classList.toggle("bad", bad);
       };
       field.addEventListener("input", upd); upd();
       input = h("div", {class: "expr-wrap"}, field, say);
@@ -383,8 +386,9 @@ function inspSourceButton({name, prop, label, type, p, value, col, cols, source,
   const words = {fixed: "Same on every trial", column: "Trial list", formula: "Formula"}[source];
   const b = h("button", {type: "button", class: "srcbtn " + source, "aria-haspopup": "menu", "aria-expanded": "false", "data-fkey": "src:" + prop,
     "aria-label": `${label}: ${source === "fixed" ? "the same on every trial" : source === "column" ? `from the trial list column “${col}”` : "a formula"}. Change where the value comes from`,
-    title: "Where the value comes from"},
-  source === "column" ? icon("loop") : source === "formula" ? icon("code") : null, words);
+    title: `${words}: where the value comes from`},
+  source === "column" ? icon("loop") : source === "formula" ? icon("code") : h("span", {class: "src-compact", "aria-hidden": "true"}, icon("more")),
+  h("span", {class: "src-words"}, words));
   b.onclick = () => {
     if (!inspEditable()) return;
     const items = [{head: "Value comes from"},
@@ -451,7 +455,11 @@ function inspKeyChips(value, onChange, id) {
   const add = h("input", {class: "kc-add", id, placeholder: keys.length ? "+ key" : "Press a key to add it", "aria-label": "Add a key: press it", readonly: "",
     onkeydown: (e) => {
       if (e.key === "Tab" || e.key === "Escape") return;
-      if (e.key === "Backspace" && keys.length) { e.preventDefault(); onChange(keys.slice(0, -1)); return; }
+      if (e.key === "Backspace" || e.key === "Delete") {     // removes the last key; with no keys left, nothing (never adds "backspace")
+        e.preventDefault(); e.stopPropagation();
+        if (keys.length && e.key === "Backspace") onChange(keys.slice(0, -1));
+        return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey || ["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) return;
       e.preventDefault();
       const k = keyName(e);
@@ -637,7 +645,7 @@ function renderScreenProps(el, rid) {
       {label: "Open", icon: "screen", shortcut: "Enter", run: () => (typeof openScreen === "function" ? openScreen(rid) : EDGE.setView("screen", {routine: rid}))},
       {label: "Rename…", icon: "design", shortcut: "F2", run: rename},
       {label: "Duplicate screen", icon: "duplicate", run: () => inspDuplicateScreen(rid)},
-      {label: "Try only this screen (5 trials)", icon: "play", run: () => (typeof tryNow === "function" ? tryNow("screen") : startPlay(rid))},
+      {label: `Try only this screen${typeof tryOneLabel === "function" ? tryOneLabel(rid) : " (5 trials)"}`, icon: "play", run: () => (typeof tryNow === "function" ? tryNow("screen") : startPlay(rid))},
       inspAssistant()?.open && !EDGE.prefs.get("assistant.hidden", false) ? {label: "Ask the assistant about this screen", icon: "assistant", run: () => inspAssistant().open({focus: {kind: "routine", routine: rid}})} : null,
       {sep: true},
       {label: "Delete screen", icon: "trash", danger: true, run: () => deleteRoutine(rid)},
@@ -1169,6 +1177,9 @@ function renderRulesEditor(el, r) {
       h("button", {type: "button", class: "btn ghost icon sm", "aria-label": `Delete rule ${i + 1}`, title: "Delete rule",
         onclick: () => { if (!inspEditable()) return; rules.splice(i, 1); if (!rules.length) delete r.rules; commit("Delete a rule"); inspUndoToast("Deleted the rule."); }}, icon("trash"))));
     const when = h("input", {class: "input expr", id: wid, list: "expr-vars", value: rule.when || "", placeholder: "$t > 3", spellcheck: "false", "data-fkey": `rule:${i}:when`,
+      // the example a new rule starts with is selected, so typing replaces it instead of adding to it
+      onfocus: (e) => { if (e.target.value === "$t > 1") { e.target._sel = true; e.target.select(); } },
+      onmouseup: (e) => { if (e.target._sel) { e.preventDefault(); e.target._sel = false; } },
       onchange: (e) => inspLater(() => { const v = e.target.value.trim(); rule.when = v ? (v.startsWith("$") ? v : "$" + v) : "$False"; commit("Change a rule"); })});
     const say = rule.when ? inspInWords(rule.when) : "";
     put(box, when, say && say !== rule.when ? h("div", {class: "say"}, `In words: ${say}.`) : null, repeat, h("div", {class: "route-goto"}, h("b", {}, "Do")));
@@ -1252,11 +1263,16 @@ function renderDeviceProps(el, d, index) {
   }
   if ((info.capabilities || []).includes("input")) con.append(h("p", {class: "t-caption"},
     "Its inputs can be responses: add “Button box / external input” to a screen. Name the inputs below (e.g. 1: left, 2: right); an input named “light” is a light sensor on the screen, and the session report then measures the real display latency."));
-  d.options ||= {};
+  // read only: drawing the panel never writes to the document (an empty options: {} would change its fingerprint)
+  const opts = d.options || {};
   const more = [];
   for (const [k, p] of Object.entries(info.options || {})) {
-    if (SIM_TUNING.has(k) && isSimple() && d.options[k] === undefined) continue;
-    const f = field(k, p, d.options[k], (v) => { if (v === null || v === undefined || v === "") delete d.options[k]; else d.options[k] = v; commit(`Change the device “${d.id}”`); },
+    if (SIM_TUNING.has(k) && isSimple() && opts[k] === undefined) continue;
+    const f = field(k, p, opts[k], (v) => {
+      if (v === null || v === undefined || v === "") { if (d.options) { delete d.options[k]; if (!Object.keys(d.options).length) delete d.options; } }
+      else (d.options ||= {})[k] = v;
+      commit(`Change the device “${d.id}”`);
+    },
       {noExpr: true, label: DEVICE_OPT_WORDS[k] || inspCapWords(k), fkey: "opt:" + k, prop: "options." + k, hasBase: !!base, baseValue: base?.options?.[k]});
     if (SIM_TUNING.has(k) && isSimple()) more.push([f, true]); else con.append(f);
   }

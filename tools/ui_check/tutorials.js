@@ -100,9 +100,10 @@ const PLAYS = {
     async (x) => { await x.click("#props .more-row"); await x.fill("#props [data-prop=max_repeat] input[data-fkey='mr:ink']", 2); },
     async (x) => { await x.click("#flow .frame.loop >> text=Open list"); },
     async (x) => { await x.click("#list-editor .seg >> text=Every combination"); },
+    async (x, page) => { await page.keyboard.press("Control+z"); await sleep(600); },
     null,
     async (x) => { await x.click("#btn-dryrun"); await x.waitIdle(); },
-    async (x) => { await x.click("[data-tab=data]"); await x.click("#ws-data [role=radio][data-value=tests]"); },
+    async (x) => { await x.click("[data-tab=data]"); await x.click("#ws-data [role=radio][data-value=tests]"); await x.click("#ws-data .sess-row >> nth=0").catch(() => {}); },
   ],
   workflow_practice: [
     null,
@@ -150,7 +151,7 @@ const PLAYS = {
   ],
   data_and_export: [
     async (x) => { await x.click("#btn-dryrun"); await x.waitIdle(); },
-    async (x) => { await x.click("[data-tab=data]"); await x.click("#ws-data [role=radio][data-value=tests]"); await x.click("#ws-data .ds-list button >> nth=0").catch(() => {}); },
+    async (x) => { await x.click("[data-tab=data]"); await x.click("#ws-data [role=radio][data-value=tests]"); await x.click("#ws-data .sess-row >> nth=0").catch(() => {}); },
     async (x) => { await x.click("#ws-data [role=tab] >> text=Summary"); await x.click("#ws-data [role=tab] >> text=What each column means"); },
     async (x, page) => { await x.click(page.locator("#data-detail button", { hasText: "Export" }).first()); await page.keyboard.press("Escape"); },
     async (x) => { await x.click("#nav-build"); },
@@ -174,7 +175,8 @@ const PLAYS = {
   ],
   survey_builder: [
     null,
-    async (x) => { await x.dblclick("#flow .scard"); await x.click(".pal-item[data-type=survey]"); },
+    async (x) => { await x.dblclick("#flow .scard"); },
+    async (x) => { await x.click(".pal-item[data-type=survey]"); },
     async (x) => { await x.click("#props >> text=Edit questions", { wait: 1200 }); },
     async (x, page) => {
       await x.click(x.dialog().locator("button", { hasText: "From the library" }), { wait: 1000 });
@@ -243,7 +245,7 @@ async function stepState(page) {
       covered = ix * iy > 0.5 * a.width * a.height;
     }
     const reveal = c && c.querySelector(".coach-reveal:not([hidden])");
-    return { i: T.i, n: T.tut ? T.tut.steps.length : 0, title: st && st.title, target: sel || null, check: st && st.check || null,
+    return { i: T.i, n: T.tut ? T.tut.steps.length : 0, title: st && st.title, target: sel || null, check: st && st.check || null, manual: !!(st && st.advance === "manual"),
       visible: sel ? !!t : null, covered, reveal: reveal ? reveal.innerText.trim() : null,
       passedAtStart: !!(st && st.check && tutorialCheck(st.check)), done: !!(c && c.classList.contains("done")) };
   });
@@ -292,7 +294,12 @@ async function runTutorial(browser, base, id, { ask = false } = {}) {
       } catch (e) { rec.notes.push("action failed: " + String(e.message || e).split("\n")[0]); }
       rec.notes.push(...notes.slice(mark));
       // the check fires (the coach moves on by itself), or the step has none and we press Next / Finish
-      if (s.check && play !== "ask" || (play === "ask" && ask)) {
+      if (s.manual && s.check) {
+        // advance: manual — the step has more to read after the checked action: the check marks it done, then Next
+        rec.fired = await page.waitForFunction(() => !!T.passed, null, { timeout: 20000 }).then(() => true, () => false);
+        if (!rec.fired) { rec.notes.push("check did not fire; pressed Skip step"); await x.click("#coach >> text=Skip step").catch(() => {}); }
+        else await x.click("#coach .coach-next");
+      } else if (s.check && play !== "ask" || (play === "ask" && ask)) {
         rec.fired = await page.waitForFunction((k) => !T.tut || T.i > k, i, { timeout: 20000 }).then(() => true, () => false);
         if (!rec.fired) { rec.notes.push("check did not fire; pressed Skip step"); await x.click("#coach >> text=Skip step").catch(() => {}); }
       } else if (play !== "ask") {

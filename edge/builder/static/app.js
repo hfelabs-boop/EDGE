@@ -104,6 +104,9 @@ function builderWords(t) {
     .replace(/'?edge support-bundle'?/gi, "Make a support bundle")
     .replace(/'?edge validate'?/gi, "the Problems list")
     .replace(/'?edge doctor'?/gi, "Check this computer")
+    .replace(/\(?'?edge test-device'? shows the details\)?/gi, "(Test, then Test this device, shows the details)")
+    .replace(/'?edge devices'? lists them/gi, "Add device lists them")
+    .replace(/\bWITHOUT\b/g, "without")
     .replace(/:?\s*in the experiment file add\s+measures:\s*\[.*$/s, " on the Measures page.")
     .replace(/\(edge lock \/ Lock in the builder\)/gi, "(the Lock button)")
     .replace(/'?edge lock'?/gi, "Lock")
@@ -178,8 +181,11 @@ function undo() {
   if (!S.history.length) return;
   const label = stepLabel("undo");
   S.future.push(S._snapshot); S.futureLabels.push(S.historyLabels.pop() ?? null);
+  const steps = typeof flowNodeKeys === "function" ? flowNodeKeys() : null;
   S._snapshot = S.history.pop(); S.rev = (S.rev || 0) + 1;
-  S.exp = JSON.parse(S._snapshot); fixSelection(); setDirty(true); renderAll(); scheduleValidate();
+  S.exp = JSON.parse(S._snapshot); fixSelection(); setDirty(true);
+  if (steps) focusChangedStep(steps);
+  renderAll(); scheduleValidate();
   ui.announce(`Undid: ${label}`);
   EDGE.emit("doc:changed", {label: "Undo"});
 }
@@ -187,8 +193,11 @@ function redo() {
   if (S.proposal || !S.future.length) return;
   const label = stepLabel("redo");
   S.history.push(S._snapshot); S.historyLabels.push(S.futureLabels.pop() ?? null);
+  const steps = typeof flowNodeKeys === "function" ? flowNodeKeys() : null;
   S._snapshot = S.future.pop(); S.rev = (S.rev || 0) + 1;
-  S.exp = JSON.parse(S._snapshot); fixSelection(); setDirty(true); renderAll(); scheduleValidate();
+  S.exp = JSON.parse(S._snapshot); fixSelection(); setDirty(true);
+  if (steps) focusChangedStep(steps);
+  renderAll(); scheduleValidate();
   ui.announce(`Redid: ${label}`);
   EDGE.emit("doc:changed", {label: "Redo"});
 }
@@ -432,6 +441,31 @@ async function askExperimentName({title = "Name this experiment", ok = "Create",
     ok, transform: unique, validate: (v) => (v ? null : "Type a name first.")});
   return name || null;
 }
+/* A workspace switch (Alt+2, the tabs, Close and go Home, New experiment): focus never stays on <body> or in the page that
+   was left; it goes to the new page's heading (Build: its view's own place) and the page's name is announced. */
+const WS_NAMES = {home: "Home", build: "Build", measures: "Measures", test: "Test", run: "Run", data: "Data"};
+function focusWorkspace(ws) {
+  const page = $(`#body > main.ws[data-ws="${ws}"]`);
+  if (!page) return;
+  ui.announce(WS_NAMES[ws] || ws);
+  const go = () => {
+    if (S.ws !== ws || overlayOpen?.() || document.querySelector(".menu:not([hidden]):not(.static)")?.offsetParent) return;
+    const a = document.activeElement;
+    const lost = !a || a === document.body || !a.isConnected || a.offsetParent === null || (a.closest?.("main.ws") && a.closest("main.ws") !== page);
+    if (!lost) return;
+    let t = null;
+    if (ws === "build" && typeof buildFocusFallback === "function") {
+      BUILD.focusIn = true; buildFocusFallback(currentBuildView(), true);
+      if (page.contains(document.activeElement)) return;
+    }
+    t = page.querySelector("h1");
+    if (!t) return;
+    if (!t.hasAttribute("tabindex")) t.setAttribute("tabindex", "-1");
+    t.focus({preventScroll: true});
+  };
+  go();
+  for (const ms of [0, 150, 500]) setTimeout(go, ms);     // pages that fill in a moment later (Measures, Run), a menu closing
+}
 function shortRoot() {
   const r = (S.root || "").replace(/^\/home\/[^/]+|^\/Users\/[^/]+|^\/root(?=\/|$)|^[A-Z]:\\Users\\[^\\]+/, "~");
   if (r.length <= 44) return r;
@@ -458,21 +492,27 @@ async function save(asNew = false, opts = {}) {
   if (S.proposal) { toast("Apply or discard the assistant's changes first"); return false; }
   if (S.noDoc) return false;
   let path = S.path;
+  const nameBefore = S.exp.name;
   if (!path || asNew) {
+    const copying = asNew && !!S.path;
     const slug = await askExperimentName({title: asNew ? "Save a copy" : "Name this experiment", ok: asNew ? "Save the copy" : "Save",
-      suggest: asNew ? `${docName()} copy` : (["experiment", "my_experiment", "untitled"].includes(S.exp.name) ? "" : S.exp.name)});
+      suggest: asNew ? `${docName()} copy` : (["experiment", "my_experiment", "untitled"].includes(S.exp.name) ? "" : S.exp.name),
+      help: copying ? `It gets its own folder${S.root ? ` in ${shortRoot()}` : ""}, with a copy of the trial lists, pictures, sounds and pages it uses. Data already collected stays with the original.` : undefined});
     if (!slug) return false;
     path = `${slug}/${slug}.yaml`;
     if (!asNew && (!S.exp.name || ["experiment", "my_experiment", "untitled"].includes(S.exp.name))) S.exp.name = slug;
+    if (copying) S.exp.name = slug;       // its data files and Data page are told apart from the original's
   }
   const newPath = path !== S.path;
+  const copyFrom = asNew && S.path && newPath ? S.path : null;
   const fp = newPath ? "" : (S.fingerprint || "");
   const label = encodeURIComponent(opts.label || S.saveLabel || "Saved by you");
   setSaveState("saving");
   let r, rev0 = S.rev;                      // an edit made while the request is on its way stays unsaved
   try {
-    r = await api(`/api/experiment?path=${encodeURIComponent(path)}&fingerprint=${fp}&label=${label}${newPath ? "&new=1" : ""}`, S.exp);
+    r = await api(`/api/experiment?path=${encodeURIComponent(path)}&fingerprint=${fp}&label=${label}${newPath ? "&new=1" : ""}${copyFrom ? `&copy_from=${encodeURIComponent(copyFrom)}` : ""}`, S.exp);
   } catch (e) {
+    if (copyFrom) S.exp.name = nameBefore;
     if (e.status === 409 && newPath) {      // never replace another experiment by saving under its name
       setSaveState(); toast(`There is already an experiment at ${path}: save it under another name.`, {tone: "warning", ms: 8000}); return false;
     }
@@ -493,7 +533,10 @@ async function save(asNew = false, opts = {}) {
   if (later) saveDraft(); else clearDraft();
   EDGE.prefs.set("last", path); rememberRecent(path);
   renderDocName(); setDirty(later); clearAlert("external"); clearAlert("draft");
-  toast(opts.toast || (newPath ? `Saved as ${path}` : "Saved. The previous version is in History."), {tone: "success"});
+  const missing = (r.missing || []).length;
+  toast(opts.toast || (copyFrom ? `Saved a copy as ${path}${(r.copied || []).length ? ` with ${countWord(r.copied.length, "file")}` : ""}.${missing ? ` ${countWord(missing, "file")} couldn't be copied: see Problems.` : ""}`
+    : newPath ? `Saved as ${path}` : "Saved. The previous version is in History."), {tone: missing ? "warning" : "success", ms: missing ? 8000 : undefined});
+  if (newPath) validate();                  // its files are looked up in the new folder now
   S.savedAt = Date.now(); if (!opts.keepFresh) S.fresh = null;
   refreshFiles().then(() => { if (S.ws === "home") renderHome(); renderShell(); });
   checkTutorial();
@@ -602,6 +645,7 @@ async function closeExperiment() {
   await loadPlaceholder();
   EDGE.prefs.set("last", null);
   EDGE.go("home");
+  focusWorkspace("home");            // also when Home was already the page underneath: never <body>
 }
 
 /* ---------------- Open (quick open, §W21) */
@@ -896,6 +940,13 @@ function gotoIssue(i) {
     S.view = "screen"; S.sel = cid ? {kind: "component", routine: m[1], id: cid} : {kind: "routine", routine: m[1]};
     if (cid && typeof revealCompTime === "function") revealCompTime(findComp(m[1], cid));
     renderAll(); syncHash(); EDGE.pulse($("#inspector"));
+    // keyboard focus goes to the field the problem is about (or the inspector), never back to <body>
+    const prop = cid && (w.match(/^routines\.[^.[]+\.[^.[]+\.([A-Za-z_]\w*)/) || [])[1];
+    setTimeout(() => {
+      const first = (root) => root && ["textarea", "input:not([type=hidden]):not([readonly])", "select", "input", "button"].map((q) => root.querySelector(q)).find(Boolean);
+      const f = (prop && first($(`#props [data-prop="${prop}"]`))) || first($("#props"));
+      f?.focus({preventScroll: false});
+    }, 0);
     return;
   }
   const d = w.match(/^devices(?:\.|\[)([^.\]]+)/);
@@ -1013,6 +1064,34 @@ function tryNow(scope = "all") {
   if (scope === "screen" && !S.routine) scope = "all";
   if (typeof tryIt === "function") return tryIt(scope);    // simple.js: starts at once, no chooser
 }
+/* Python the assistant wrote runs only after a person has read it (docs/ASSISTANT.md): Try it and Start test run ask
+   first, in every browser (the server knows the code from history.jsonl and refuses it too, see unread_code). */
+function unreadAssistantCode() {
+  try { return (window.Assistant?.unreviewedCode?.(S.exp)) || []; } catch { return []; }
+}
+function reviewedCodeHashes() {
+  try { return (window.Assistant?.reviewedHashes?.()) || []; } catch { return []; }
+}
+async function assistantCodeGate(list = unreadAssistantCode()) {
+  if (!list || !list.length) return true;
+  const one = list.length === 1;
+  const body = h("div", {},
+    h("p", {}, "It runs Python on this computer with full access, so it doesn't run, not in Try it and not in a test run, until you have read it."),
+    h("ul", {class: "plain"}, list.map((c) => h("li", {}, icon("code"), ` “${c.routine}” › ${c.id}`))));
+  const v = await ui.dialog({title: one ? "Code written by the assistant hasn't been reviewed" : `${list.length} pieces of code written by the assistant haven't been reviewed`,
+    icon: "warning", size: "sm", body, initialFocus: "footer .btn:not(.primary)", buttons: [
+      {label: "Cancel", value: null, left: true},
+      {label: one ? "Review it" : "Review them", value: "review"},
+      {label: "I've read it", value: "read", kind: "primary"}]});
+  if (v === "review") { EDGE.select({kind: "component", routine: list[0].routine, id: list[0].id}, {pulse: true}); return false; }
+  if (v !== "read") return false;
+  for (const c of list) { try { window.Assistant?.markReviewed?.(c.routine, c.id); } catch { /* no assistant panel */ } }
+  const hashes = list.map((c) => c.hash).filter((x) => /^[0-9a-f]{64}$/.test(x || ""));
+  if (S.path && hashes.length) { try { await api("/api/assistant/reviewed", {exp: S.path, hashes}); } catch { /* said by the next check */ } }
+  ui.announce(one ? "Marked the code as read." : "Marked the code as read.");
+  return true;
+}
+
 /* A Try-it session finished (simple.js finishPlay sets S.triedAt and emits "tried"): the readiness checklist counts it. */
 function onTried() { if (S.ws === "test") renderReadiness(); renderShell(); }
 
@@ -1033,7 +1112,10 @@ async function restoreTested() {
   const path = S.path, snap = JSON.stringify(S.exp);
   let r;
   try { r = await api("/api/last_test", {experiment: S.exp, path, saved: !S.dirty}); } catch { return; }
-  if (!r || !r.found || S.path !== path || S.tested || JSON.stringify(S.exp) !== snap) return;
+  if (!r || S.path !== path || S.tested || JSON.stringify(S.exp) !== snap) return;
+  // a Try it of this very version (Data › Tests & tries lists it) counts for Next steps and Test after a reload too
+  if (r.tried && !S.triedAt) { S.triedAt = Date.parse(r.tried.at) || Date.now(); EDGE.emit("tried", {at: S.triedAt, restored: true}); }
+  if (!r.found) { renderShell(); if (S.ws === "test") renderTestPage(); return; }
   S.tested = {snapshot: snap, rev: S.rev, at: Date.parse(r.at) || Date.now(), ok: !!r.ok, trials: r.trials, restored: true};
   renderShell(); if (S.ws === "test") renderTestPage();
   EDGE.emit("tested", {ok: !!r.ok, restored: true});
@@ -1041,13 +1123,20 @@ async function restoreTested() {
 async function dryRun() {
   S.strict = true; renderIssues();
   if (S.testing) return;
+  if (!(await assistantCodeGate())) return;
   S.testing = true;
   const btn = $("#btn-dryrun");
   if (btn) { btn.style.minWidth = btn.offsetWidth + "px"; btn.setAttribute("aria-busy", "true"); btn.lastChild.textContent = "Testing…"; btn.prepend(h("span", {class: "spin"})); }
   renderShell(); if (S.ws === "test") renderTestPage();
   const snap = JSON.stringify(S.exp);
   try {
-    const r = await api("/api/dryrun", {experiment: S.exp, path: S.path});
+    const r = await api("/api/dryrun", {experiment: S.exp, path: S.path, reviewed_code: reviewedCodeHashes()});
+    if (!r.ok && r.unread_code) {        // code the server knows the assistant wrote (another browser, the terminal)
+      S.testing = false;
+      try { window.Assistant?.syncCode?.(); } catch { /* no assistant panel */ }
+      if (await assistantCodeGate(r.unread_code)) { setTimeout(() => dryRun(), 0); }
+      return;
+    }
     if (!r.ok && r.stopped) {           // it ran, and the experiment itself stopped with an error (§4.1 #6)
       S.tested = {snapshot: snap, rev: S.rev, at: Date.now(), ok: false};
       S.lastResults = {error: r.problem?.text || "stopped", stopped: r};
@@ -1258,7 +1347,14 @@ function sessionBelongs(s) {
   if (D.allExp || !S.path || S.noDoc) return true;
   const dir = sessionDir();
   // by folder: another experiment with the same `name` must not show up here; test runs and tries live in <folder>/data/dry_runs
-  if (dir) return String(s.path || "").replace(/\\/g, "/").startsWith(dir);
+  if (dir) {
+    if (!String(s.path || "").replace(/\\/g, "/").startsWith(dir)) return false;
+    // the same folder can hold several experiments (stroop.yaml, stroop_v2.yaml) writing to one data/ folder:
+    // a session of another experiment in this folder is theirs; one under an older name of this experiment is ours
+    if (!s.experiment || s.experiment === S.exp.name) return true;
+    const folder = (S.path || "").replace(/[^/]*$/, "");
+    return !(S.files || []).some((f) => f.path !== S.path && f.path.replace(/[^/]*$/, "") === folder && f.name === s.experiment);
+  }
   return s.experiment === S.exp.name;
 }
 /* Test runs and tries are not participants: "Test run" / "Your try" instead of "001 · 1". */
@@ -1337,12 +1433,13 @@ async function renderData() {
     h("span", {class: "grow"}),
     h("button", {class: "btn sm", "aria-haspopup": "menu", onclick: (e) => exportMenu(e.currentTarget, D.sel)}, icon("export"), "Export", icon("chev-down")));
   const alerts = h("div", {class: "data-alerts"});
-  const norm = (x) => String(x).replace(/^(OK|WARNING|ERROR):\s*/i, "").trim().toLowerCase();
+  const norm = (x) => String(x).replace(/^(OK|WARNING|ERROR|COMPUTER|NOTE):\s*/i, "").trim().toLowerCase();
   const said = new Set();
   for (const v of t.report?.verdict || []) {
     const ok = v.startsWith("OK"), bad = /^ERROR\b/.test(v);
     said.add(norm(v));
-    alerts.append(h("div", {class: "alert " + (ok ? "success" : bad ? "danger" : "warning")}, icon(ok ? "success" : bad ? "error" : "warning"), h("div", {}, cap(v.replace(/^(OK|WARNING|ERROR):\s*/i, "").replace(/synchronization/g, "synchronisation")) + (ok ? "." : ""))));
+    // every alert in builder words: no "WARNING:" / "COMPUTER:" prefixes, no command lines (§4)
+    alerts.append(h("div", {class: "alert " + (ok ? "success" : bad ? "danger" : "warning")}, icon(ok ? "success" : bad ? "error" : "warning"), h("div", {}, cap(builderWords(v.replace(/^(OK|WARNING|ERROR|COMPUTER|NOTE):\s*/i, "").replace(/\s*→\s*/g, ". ").replace(/synchronization/g, "synchronisation"))) + (ok ? "." : ""))));
   }
   for (const w of t.report?.warnings || []) {
     const text = typeof w === "string" ? w : w.message || JSON.stringify(w);
@@ -1982,7 +2079,7 @@ const TOUR_REVEAL = [
   [/data-tab=data|#nav-data|#data-/, () => null],
   [/#btn-import|#btn-versions|#btn-bundle|#btn-new|#btn-open|#menu-/, () => ({place: "the Experiment menu", go: () => ui.menu($("#docname"), $("#menu-experiment")), proxy: "#docname"})],
   [/#assistant-|#companion/, (start) => {
-    if (!assistantOn()) return null;
+    if (!assistantOn() || EDGE.companion.current() === "assistant") return null;      // already open: nothing to reveal
     if (start) { EDGE.companion.open("assistant"); return null; }
     return {place: "the Assistant", go: () => EDGE.companion.open("assistant"), proxy: "#assistant-toggle"};
   }],
@@ -2073,10 +2170,38 @@ function renderCoach(stepStart = true) {
   updateCoach();
   if (stepStart) for (const ms of [180, 420, 900]) setTimeout(() => { if (T.tut && T.tut.steps[T.i] === st) { if (st.target) markCoachTargets(st.target); updateCoach(); } }, ms);
   if (stepStart) ui.announce(`Step ${T.i + 1} of ${steps.length}: ${st.title.replace(/[*`]/g, "")}`);
-  // centred, so a sticky footer (Properties' Delete bar) or the fold doesn't hide it
-  if (stepStart && T.target && !isInView(T.target)) T.target.scrollIntoView({block: "center", inline: "nearest"});
+  // centred, so a sticky footer (Properties' Delete bar), the status bar or the fold doesn't hide it
+  if (stepStart) T.scrolled = new WeakSet();
+  coachScroll(st);
 }
 const isInView = (x) => { const r = x.getBoundingClientRect(); return r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; };
+/* Really visible: inside its scroll container, above the status bar and a sticky footer (Properties' Delete bar).
+   A target taller than its container counts when its top is visible. */
+function isFullyInView(x) {
+  if (!x || !isShown(x)) return false;
+  const r = x.getBoundingClientRect();
+  let top = 0, bottom = innerHeight;
+  const sb = $("#statusbar"); if (sb && isShown(sb)) bottom = Math.min(bottom, sb.getBoundingClientRect().top);
+  for (let p = x.parentElement; p && p !== document.body; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if (/(auto|scroll|hidden)/.test(oy) && p.scrollHeight > p.clientHeight + 1) {
+      const pr = p.getBoundingClientRect(); top = Math.max(top, pr.top); bottom = Math.min(bottom, pr.bottom);
+      const foot = [...p.querySelectorAll(":scope > .insp-foot, :scope .insp-foot, :scope > .run-foot")].find((f) => isShown(f) && !f.contains(x) && getComputedStyle(f).position === "sticky");
+      if (foot) bottom = Math.min(bottom, foot.getBoundingClientRect().top);
+      break;
+    }
+  }
+  if (r.height > bottom - top) return r.top >= top && r.top < bottom - 24;
+  return r.top >= top - 1 && r.bottom <= bottom + 1;
+}
+/* Bring the step's control into view once (centred, so a sticky footer or the status bar doesn't hide it), also when
+   it only appears later in the step (click text on the timeline → Starts at). `scroll_to:` names more to show. */
+function coachScroll(st) {
+  for (const el of [T.target, ...(st && st.scroll_to ? coachTargets(st.scroll_to).filter(isShown).slice(0, 1) : [])]) {
+    if (!el || T.scrolled?.has(el)) continue;
+    if (!isFullyInView(el)) { el.scrollIntoView({block: "center", inline: "nearest"}); (T.scrolled ||= new WeakSet()).add(el); }
+  }
+}
 function coachShowMe() {
   const st = T.tut?.steps[T.i]; if (!st?.target) return;
   markCoachTargets(st.target, true);
@@ -2088,7 +2213,10 @@ function coachShowMe() {
 function updateCoach() {
   const c = $("#coach"); if (!c || c.classList.contains("done")) return;
   const rv = c.querySelector(".coach-reveal");
-  const need = T.target ? null : T.need;
+  // a dialog the step opened (Import, Assistant settings, the consent) is the step in progress: no "First open …" over it
+  const dialogUp = !!document.querySelector(".scrim > .dialog");
+  const need = T.target || dialogUp ? null : T.need;
+  if (dialogUp) document.querySelectorAll("[data-coach-proxy]").forEach((x) => { x.classList.remove("coach-proxy"); delete x.dataset.coachProxy; });
   if (rv) {
     if (need && !need.same) {
       const key = need.place;
@@ -2108,7 +2236,8 @@ const COACH_AVOID = [
   [".scrim > .dialog > footer", 6], [".scrim > .dialog .wiz-foot", 6], [".sv-right", 4], [".sv-form", 2], [".sv-list", 1],
   ["#data-sessions .sess-list", 4], ["#data-table", 2], ["#data-detail .data-tabs", 3], [".source-actions", 5],
   ["#list-editor .le-head", 2], ["#list-editor .le-grid", 1], ["#list-editor .fac", 2], ["#props .insp-foot", 3],
-  [".dg-layer .dg-name", 3], [".dg-layer", 1], [".sm-add", 3], ["#assistant-settings .field", 2]];
+  [".dg-layer .dg-name", 3], [".dg-layer", 1], [".sm-add", 3], ["#assistant-settings .field", 2],
+  [".menu", 8], [".popover", 6]];       // an open menu is what the step is about: never covered
 function coachAvoidRects(target, dlg) {
   const out = [];
   const st = T.tut?.steps?.[T.i];
@@ -2116,7 +2245,8 @@ function coachAvoidRects(target, dlg) {
   for (const [sel, w] of list) for (const e of coachTargets(sel)) if (isShown(e)) out.push({r: e.getBoundingClientRect(), w});
   if (target && target !== dlg) {
     const r = target.getBoundingClientRect();
-    const big = r.width * r.height > innerWidth * innerHeight * 0.3;      // a whole area (#flow, #props): can't be avoided, only preferred
+    // a whole area (#flow, #props, the trial list): can't be avoided, only preferred
+    const big = r.width * r.height > innerWidth * innerHeight * 0.2 || (r.width > innerWidth * 0.4 && r.height > innerHeight * 0.4);
     out.push({r, w: big ? 0.5 : 6});
   }
   if (dlg) out.push({r: dlg.getBoundingClientRect(), w: 0.5});
@@ -2160,17 +2290,32 @@ function placeCoach(c, target) {
     const right = S.ws === "build" && !document.body.classList.contains("shared-right") ? ($("#inspector")?.offsetWidth || 0) + 16 : 16;
     [[vw - cw - right, bottom0 - ch], [vw - cw - m, bottom0 - ch], [m + 48, bottom0 - ch], [vw - cw - m, top0], [m + 48, top0]]
       .forEach(([x, y], i) => { [x, y] = clamp(x, y); cand.push({x, y, side: "none", arrow: 0, pref: (visible ? 9 : 0) + i}); });
-    const overlap = (x, y) => avoid.reduce((sum, {r, w}) => {
+    // free places on the canvas or the page (its empty part, often in the middle): before shrinking the coach
+    const area = [...document.querySelectorAll("#canvas, #body > main.ws:not([hidden])")].find(isShown);
+    if (area) {
+      const a = area.getBoundingClientRect();
+      for (const fy of [0.5, 0.15, 0.85]) for (const fx of [0.5, 0.15, 0.85]) {
+        let [x, y] = clamp(a.left + (a.width - cw) * fx, a.top + (a.height - ch) * fy);
+        cand.push({x, y, side: "none", arrow: 0, pref: (visible ? 10 : 1) + (fx !== 0.5) + (fy !== 0.5)});
+      }
+    }
+    const overlap = (x, y, minW = 0) => avoid.reduce((sum, {r, w}) => {
+      if (w < minW) return sum;
       const ox = Math.max(0, Math.min(x + cw, r.right) - Math.max(x, r.left)), oy = Math.max(0, Math.min(y + ch, r.bottom) - Math.max(y, r.top));
       return sum + w * ox * oy;
     }, 0);
     for (const k of cand) k.score = overlap(k.x, k.y) + k.pref * 400;
     cand.sort((a, b) => a.score - b.score);
-    return {best: cand[0], hard: overlap(cand[0].x, cand[0].y)};
+    // the best place that covers nothing it must not cover, before any place that does
+    const clear = cand.find((k) => overlap(k.x, k.y, 5) <= 2000);
+    if (clear && clear !== cand[0]) return {best: clear, hard: overlap(clear.x, clear.y, 5)};
+    // only what must never be covered counts for shrinking (weight ≥ 5: the step's target, dialog buttons, a menu): a whole area (#flow, #props,
+    // a table, the dialog) can't be avoided anyway, and the step's words matter more than a corner of it
+    return {best: cand[0], hard: overlap(cand[0].x, cand[0].y, 5)};
   };
   c.classList.remove("compact");
   let {best, hard} = attempt();
-  // nothing fits without covering what the step needs: shrink to the title and the buttons (Show the step expands it)
+  // nothing fits without covering a control the step needs: shrink to the title and the buttons (Show the step expands it)
   if (hard > 2000 && !keepOpen && !c.classList.contains("done")) {
     c.classList.add("compact");
     const again = attempt();
@@ -2189,6 +2334,7 @@ function checkTutorial() {
   const st = T.tut.steps[T.i];
   if (!st) return;
   if (st.target) markCoachTargets(st.target);          // re-apply after re-renders replaced the DOM
+  if (Date.now() - (T.lastInput || 0) > 500 && !document.activeElement?.matches?.("input, textarea, select")) coachScroll(st);
   updateCoach();
   if (!st.check || T.passed) return;
   if (tutorialCheck(st.check)) {
@@ -2250,7 +2396,9 @@ const TUTORIAL_CHECKS = {
     (r.rules || []).some((rule) => (!c.when_contains || (rule.when || "").includes(c.when_contains)) &&
       (!c.action || (Array.isArray(rule.do) ? rule.do : [rule.do]).some((a) => (typeof a === "string" ? a : Object.keys(a || {})[0]) === c.action
         // an action that names an item counts once one is chosen (and, with target:, the right one)
-        && (typeof a !== "object" || !a || (a[c.action] !== "" && a[c.action] != null && (!c.target || a[c.action] === c.target))))))),
+        && (typeof a !== "object" || !a || (a[c.action] !== "" && a[c.action] != null && (!c.target || a[c.action] === c.target))))))
+      // valid: the rule's formula has no problem (typing after a pre-filled "$t > 1" would leave "$t > 1$t > 1.5 …")
+      && (!c.valid || !(S.issues || []).some((i) => i.level === "error" && String(i.where || "").startsWith(`routines.${rid}.rules`)))),
   dry_run: () => !!S.lastDryRun && S.lastDryRun >= (T.startedAt || 0),
   tab_open: (name) => S.tab === name,
   saved: () => !!S.savedAt && S.savedAt >= (T.startedAt || 0),
@@ -2329,7 +2477,7 @@ function renderTestChip() {
   const parts = {
     none: [open(["Not tested yet"]), h("span", {class: "sep"}, "·"), now],
     testing: [h("span", {class: "spin"}), "Testing…"],
-    passed: [open([icon("success"), `Tested ${ago(S.tested?.at)}`], "ok")],
+    passed: [open([icon("success"), `Tested ${S.tested?.restored ? clock(S.tested.at) : ago(S.tested?.at)}`], "ok")],
     failed: [open([icon("error"), "The last test run found problems"], "danger"), h("span", {class: "sep"}, "·"), now],
     changed: [open([h("span", {class: "dot warn"}), "Changed since the last test"], "warning"), h("span", {class: "sep"}, "·"), now],
     "changed-failed": [open([h("span", {class: "dot warn"}), "Changed since the last test"], "warning"), h("span", {class: "sep"}, "·"), now],
@@ -2699,7 +2847,7 @@ function tryMenu() {
   const scr = S.ws === "build" && S.view === "screen" && S.routine;
   ui.menu($("#btn-try-menu"), [
     {label: S.proposal ? "Try the proposed version" : "Try the whole experiment", icon: "play", shortcut: `${MOD} Enter`, run: () => tryNow("all")},
-    scr ? {label: `Try only “${S.routine}”${loopsAround(S.routine).length ? " (5 trials)" : ""}`, icon: "screen", run: () => tryNow("screen")} : null,
+    scr ? {label: `Try only “${S.routine}”${tryOneLabel(S.routine)}`, icon: "screen", run: () => tryNow("screen")} : null,
     {sep: true},
     {label: "Start a test run (virtual participant)", icon: "test", shortcut: `${MOD} Shift Enter`, run: () => dryRun()},
     {label: "Check for problems now", icon: "checklist", run: async () => { await validate(); openProblems(); }},
@@ -2995,7 +3143,13 @@ function onKey(e) {
   if (key === "[" || key === "]") { e.preventDefault(); stepScreen(key === "]" ? 1 : -1); return; }
   if (key === "/" && S.view === "screen") { e.preventDefault(); if (typeof quickAdd === "function") quickAdd(); else openPalette("", {only: "add"}); return; }
   if (key === "F2") { e.preventDefault(); renameSelection(); return; }
-  if ((key === "Delete" || (key === "Backspace" && S.sel?.kind === "component")) && S.sel) { e.preventDefault(); deleteSelection(); }
+  if ((key === "Delete" || (key === "Backspace" && S.sel?.kind === "component")) && S.sel) {
+    // never from inside a menu, a popover or a control of the Properties panel: Backspace there means "back", not
+    // "delete this item" (the Value comes from menu, the key box)
+    const a = document.activeElement;
+    if (a?.closest?.(".menu, [role=menu], [role=listbox], .popover") || (a?.closest?.("#props, #inspector") && a.matches?.("button, input, select, textarea, [role=radio], [role=option], [role=menuitem], [tabindex]"))) return;
+    e.preventDefault(); deleteSelection();
+  }
 }
 
 /* ================================================================== wiring */
@@ -3052,7 +3206,7 @@ function wire() {
   $("#btn-try-test").onclick = () => tryNow("all");
   $("#btn-try-one").onclick = (e) => {
     const order = routineInFlowOrder();
-    ui.menu(e.currentTarget, order.length ? order.map((rid) => ({label: `“${rid}”${loopsAround(rid).length ? " (5 trials)" : ""}`, icon: "screen", run: () => { S.routine = rid; tryNow("screen"); }}))
+    ui.menu(e.currentTarget, order.length ? order.map((rid) => ({label: `“${rid}”${tryOneLabel(rid)}`, icon: "screen", run: () => { S.routine = rid; tryNow("screen"); }}))
       : [{label: "No screens yet", disabled: true}]);
   };
   // companion column
@@ -3220,6 +3374,7 @@ const EDGE = (() => {
       if (ws === "home") refreshFiles().then(() => { if (S.ws === "home") renderHome(); });
       if (changed) setSaveState(S._saveState);       // the status bar's "Saved 10:42" only where a document is open
       if (changed) { const m = $(`#body > main.ws[data-ws="${ws}"]`); if (m) m.scrollTop = 0; }
+      if (changed) focusWorkspace(ws);
     },
     ws() { return S.ws; },
     setView(view, opts = {}) {
@@ -3236,6 +3391,15 @@ const EDGE = (() => {
         if (S.routine && !(S.sel && S.sel.routine === S.routine)) S.sel = {kind: "routine", routine: S.routine};
       }
       const changed = S.view !== view;
+      // back up to the Storyboard from a screen, a trial list or a diagram: the card or frame it was opened from gets
+      // the keyboard focus, whatever had it (a grid cell, a timeline row, Done)
+      if (changed && view === "story" && ["screen", "list", "diagram"].includes(S.view) && typeof subViewReturnKey === "function") {
+        const a = document.activeElement;
+        if (!a || a === document.body || !a.isConnected || $("#ws-build")?.contains(a)) {
+          const k = subViewReturnKey(S.view);
+          if (k) { BUILD.focusKey = k; BUILD.forceFocus = k; }
+        }
+      }
       S.view = view;
       if (view === "source") S.tab = "source"; else if (S.tab === "source") S.tab = null;
       if (S.path && (view === "story" || view === "screen")) { const k = "view." + S.path; E.prefs.set(k, {...(E.prefs.get(k, {}) || {}), view}); }
@@ -3313,7 +3477,7 @@ const EDGE = (() => {
         setDirty(true);
       }
       S.fresh = path;
-      if (go) { S.view = "story"; E.go(go); }
+      if (go) { S.view = "story"; E.go(go); focusWorkspace(go); }
       return path;
     },
     isFresh() { return !!S.fresh && S.fresh === S.path; },

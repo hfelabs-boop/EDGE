@@ -394,8 +394,8 @@ In Properties, find **Rules · react while the screen runs** and click **Add a r
 
 **3. Say when**
 
-Set the rule's **When** to `$t > 1.5 and resp.keys is None` and press Tab: 1.5 s into the trial,
-if no key has been pressed yet. The line under it says the same in words.
+Click the rule's **When** box and replace `$t > 1` with `$t > 1.5 and resp.keys is None`, then press
+Tab: 1.5 s into the trial, if no key has been pressed yet. The line under it says the same in words.
 
 **4. Say what to do**
 
@@ -468,7 +468,8 @@ Press **Next** once the dialog is closed.
 
 **7. The same setting in the file**
 
-In Expert mode the Build view switch has **YAML**: the experiment file itself. Click it and find,
+In Expert mode the Build view switch has **YAML** (in a narrow window, the `<>` button): the
+experiment file itself. Click it and find,
 under `settings:` › `data:`, the lines
 
 ```
@@ -542,13 +543,16 @@ This experiment has a placeholder **task** screen. After it you'll add a questio
 
 Press **Next**.
 
-**2. Add a survey**
+**2. Open the task screen**
 
-Double-click the **task** card to open the screen, then click **Survey / questionnaire** under
-**Add** on the left. Because the task screen already has something on it, EDGE gives the survey
-its own screen, **questionnaire**, right after the task.
+Double-click the **task** card to open the screen.
 
-**3. Open the survey editor**
+**3. Add a survey**
+
+Click **Survey / questionnaire** under **Add** on the left. Because the task screen already has
+something on it, EDGE gives the survey its own screen, **questionnaire**, right after the task.
+
+**4. Open the survey editor**
 
 In **Properties**, click **Edit questions**. The editor has three columns: the questions on the
 left, the selected question in the middle, and on the right the **real page** participants will
@@ -556,20 +560,20 @@ see. You can click through it.
 
 Press **Next** when you've had a look.
 
-**4. Add a validated questionnaire**
+**5. Add a validated questionnaire**
 
 Click **From the library**, search for `life` and press **Add** on the *Satisfaction With Life
 Scale (SWLS)*. Its five items, the 7-point scale and the scoring (`swls_total`, with interpretive
 bands) come with it.
 
-**5. Your own multiple-choice question**
+**6. Your own multiple-choice question**
 
 Click **Add a question** › **Multiple choice (checkboxes)**. In the middle column set **Question**
 to *Which of these do you do at least once a week?* and **Options (one per line)** to `Sport`,
 `Music`, `Reading`, `None of these`. Set **Exclusive option** to *None of these* and the
 **Data name** to `weekly`.
 
-**6. A follow-up with display logic**
+**7. A follow-up with display logic**
 
 Click **Add a question** › **Number**: data name `sport_hours`, question *How many hours of sport
 per week?*. Under **Show it** choose **Only if weekly: …**, then **includes** and **Sport**.
@@ -577,14 +581,14 @@ per week?*. Under **Show it** choose **Only if weekly: …**, then **includes** 
 In the preview, tick *Sport* in the earlier question and watch the follow-up appear. Then press
 **Next**.
 
-**7. Test it**
+**8. Test it**
 
 Click **Done**, then open **Test** and click **Start test run**. The virtual participant fills in
 the survey; in the data preview you'll find `survey.weekly`, one 0/1 column per option
 (`weekly_sport` …), `sport_hours` (empty when Sport wasn't ticked), the five SWLS items,
 `swls_total` and `swls_total_band`.
 
-**8. Try it yourself**
+**9. Try it yourself**
 
 Press **Try it** (top right) to fill in the survey yourself. Leave a required question empty and
 press **Next** to see the plain-language check.

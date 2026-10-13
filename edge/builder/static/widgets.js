@@ -197,17 +197,39 @@ function vecInput(name, p, value, onChange, live, comp) {
   return h("div", {class: "st-vecwrap"}, row, ...extra);
 }
 
+/* Nine standard places as one control: a radio group with one Tab stop; the arrow keys move and choose in 2D, Home and
+   End jump to the top-left and bottom-right corners. */
 function placeGrid(cur, onChange, u) {
   const [W, H] = winSize();
-  const grid = h("div", {class: "placegrid", role: "group", "aria-label": "Put it in a standard place"});
+  const grid = h("div", {class: "placegrid", role: "radiogroup", "aria-label": "Position on screen"});
+  const cells = [], values = [];
   for (const [yy, ny] of [[H / 3, "top"], [0, "middle"], [-H / 3, "bottom"]])
     for (const [xx, nx] of [[-W / 3, "left"], [0, "centre"], [W / 3, "right"]]) {
       const v = [roundU(toUnits(xx, "x", u), u), roundU(toUnits(yy, "y", u), u)];
       const on = Math.abs(cur[0] - v[0]) < 1e-6 && Math.abs(cur[1] - v[1]) < 1e-6;
       const label = ny === "middle" && nx === "centre" ? "Centre of the screen" : `${ny} ${nx}`.replace(/^./, (c) => c.toUpperCase());
-      grid.append(h("button", {type: "button", class: "pg-cell" + (on ? " on" : ""), "aria-label": label, "aria-pressed": on ? "true" : "false", title: label,
-        onclick: (e) => { e.preventDefault(); onChange(v); }}));
+      const i = cells.length;
+      const cell = h("button", {type: "button", class: "pg-cell" + (on ? " on" : ""), role: "radio", "aria-label": label, "aria-checked": on ? "true" : "false",
+        title: label, tabindex: "-1", "data-fkey": "pg:" + i, onclick: (e) => { e.preventDefault(); onChange(v); }});
+      cells.push(cell); values.push(v);
+      grid.append(cell);
     }
+  const sel = cells.findIndex((c) => c.getAttribute("aria-checked") === "true");
+  cells[sel >= 0 ? sel : 4].tabIndex = 0;
+  grid.addEventListener("keydown", (e) => {
+    const i = cells.indexOf(document.activeElement);
+    if (i < 0) return;
+    const r = Math.floor(i / 3), c = i % 3;
+    const to = {ArrowRight: [r, Math.min(2, c + 1)], ArrowLeft: [r, Math.max(0, c - 1)], ArrowDown: [Math.min(2, r + 1), c], ArrowUp: [Math.max(0, r - 1), c],
+      Home: [0, 0], End: [2, 2]}[e.key];
+    if (!to) return;
+    e.preventDefault(); e.stopPropagation();
+    const j = to[0] * 3 + to[1];
+    if (j === i) return;
+    cells.forEach((x, k) => { x.tabIndex = k === j ? 0 : -1; });
+    cells[j].focus();
+    onChange(values[j]);
+  });
   return grid;
 }
 

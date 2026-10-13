@@ -542,6 +542,20 @@ const PF_GO = {experiment: ["Show the problems", () => (typeof openProblems === 
   test_run: ["Go to Test", () => EDGE.go("test")], measures: ["Go to Measures", () => EDGE.go("measures")],
   computer: ["Check this computer", () => (typeof computerDialog === "function" ? computerDialog() : null)],
   software: ["Check this computer", () => (typeof computerDialog === "function" ? computerDialog() : null)]};
+/* A preflight row in plain words. Devices lead with what they are, in Simple mode without ids or driver names:
+   "Eye tracker (Gazepoint): not answering. The eye tracker isn't answering…" (§4). */
+function pfItemText(it, bw) {
+  if (!it.device_type || S.mode === "expert") return bw(it.text);
+  const label = (typeof DEVICE_LABEL !== "undefined" && DEVICE_LABEL[it.device_type]) || it.device_type;
+  const dev = (S.exp?.devices || []).find((d) => d.id === it.device_id);
+  const name = dev && typeof deviceLabel === "function" ? deviceLabel(dev) : label;
+  if (it.level === "ok") return `${name}: answers`;
+  if (it.simulator) return `${name}: EDGE's simulator, not real hardware, so its data would be made up`;
+  let why = bw(String(it.why || "")).replace(/\s*matching \[[^\]]*\]/g, "").replace(/\bwithin (\d+(?:\.\d+)?) s\b/g, (m, n) => `within ${+n} s`)
+    .replace(/^device '[^']*'\s*(\([^)]*\))?\s*(is )?/i, "");
+  why = why ? why[0].toUpperCase() + why.slice(1) : "";
+  return `${name}: not answering.${why ? " " + (/[.?!]$/.test(why) ? why : why + ".") : ""}`;
+}
 function preflightBox(onVerdict) {
   const box = h("div", {class: "pf"}, h("p", {class: "pf-busy t-small t-2"}, h("span", {class: "spin"}), " Checking the experiment, a test run with a virtual participant, the lock and this computer…"));
   const ICON = {ok: "success", info: "dot", warning: "warning", error: "error"};
@@ -550,7 +564,7 @@ function preflightBox(onVerdict) {
     // code the assistant wrote and nobody has read yet: the server skips the test run (it would run that code)
     const A = window.Assistant;
     let unreviewed = 0, reviewed = [];
-    try { unreviewed = A?.unreviewedCode?.()?.length || 0; reviewed = EDGE.prefs.get("assistant.reviewed", []) || []; } catch { /* no assistant */ }
+    try { unreviewed = A?.unreviewedCode?.()?.length || 0; reviewed = A?.reviewedHashes?.() || EDGE.prefs.get("assistant.reviewed", []) || []; } catch { /* no assistant */ }
     try { r = await api("/api/preflight", {path: S.path, unreviewed, reviewed_code: Array.isArray(reviewed) ? reviewed.slice(-500) : []}); }
     catch (e) { box.replaceChildren(h("div", {class: "alert warning"}, icon("warning"), h("div", {}, "The check couldn't run: " + e.message))); onVerdict("go with warnings"); return; }
     // its test run ran the saved file: when that is what's open, it counts as tested (status bar, Test page, Next steps)
@@ -562,25 +576,25 @@ function preflightBox(onVerdict) {
       EDGE.emit("tested", {ok: tr.status === "ok", preflight: true});
     }
     const tone = {"go": "success", "go with warnings": "warning", "no-go": "danger"}[r.verdict] || "info";
-    const word = {"go": "GO: ready for participants", "go with warnings": "GO, with something to check", "no-go": "NO-GO: not ready yet"}[r.verdict] || r.verdict;
+    const word = {"go": "Ready for participants", "go with warnings": "Ready, with something to check", "no-go": "Not ready yet"}[r.verdict] || r.verdict;
     const out = [h("div", {class: "pf-verdict alert " + tone, role: "status"}, icon(tone === "success" ? "success" : tone === "danger" ? "error" : "warning"),
       h("div", {}, h("b", {}, word), h("span", {class: "t-caption"}, ` · checked in ${r.seconds} s`)))];
     const list = h("div", {class: "pf-list"});
+    // device and computer errors in plain words (§4.4); the exception text only in Expert mode
+    const bw = (x) => {
+      let t = typeof builderWords === "function" ? builderWords(x) : String(x ?? "");
+      const m = S.mode !== "expert" && typeof runStartWords === "function" ? t.match(/\(?\b(\w+(?:Error|Exception)):\s*(.*)$/) : null;
+      if (m) t = (t.slice(0, m.index).replace(/[\s:(]+$/, "") ? t.slice(0, m.index).replace(/[\s:(]+$/, "") + ": " : "") + runStartWords(`${m[1]}: ${m[2]}`);
+      return t;
+    };
     for (const s of r.sections) {
       const bad = s.items.filter((i) => i.level !== "ok");
       const status = s.status === "info" ? "info" : s.status;
       const summary = h("summary", {}, icon(ICON[status] || "dot", "pf-ic"), h("span", {class: "pf-t"}, s.title.replace(/ \(virtual participant\)$/, "")),
-        h("span", {class: "pf-s t-caption"}, (bad[0] || s.items[0])?.text || ""), icon("chev-right", "chev"));
+        h("span", {class: "pf-s t-caption"}, (bad[0] || s.items[0]) ? pfItemText(bad[0] || s.items[0], bw) : ""), icon("chev-right", "chev"));
       const sec = h("details", {class: "pf-sec s-" + status, open: s.status === "error" || s.status === "warning" ? "" : null}, summary);
       for (const it of (bad.length ? bad : s.items)) {
-        // device and computer errors in plain words (§4.4); the exception text only in Expert mode
-        const bw = (x) => {
-          let t = typeof builderWords === "function" ? builderWords(x) : String(x ?? "");
-          const m = S.mode !== "expert" && typeof runStartWords === "function" ? t.match(/\(?\b(\w+(?:Error|Exception)):\s*(.*)$/) : null;
-          if (m) t = (t.slice(0, m.index).replace(/[\s:(]+$/, "") ? t.slice(0, m.index).replace(/[\s:(]+$/, "") + ": " : "") + runStartWords(`${m[1]}: ${m[2]}`);
-          return t;
-        };
-        const row = h("div", {class: "pf-item l-" + it.level}, h("div", {}, bw(it.text),
+        const row = h("div", {class: "pf-item l-" + it.level}, h("div", {}, pfItemText(it, bw),
           it.detail ? h("div", {class: "t-caption"}, bw(it.detail)) : null, it.hint ? h("div", {class: "t-small pf-hint"}, bw(it.hint)) : null,
           it.crash && typeof crashBox === "function" ? crashBox(it.crash) : null));
         if (it.fixable) row.append(h("button", {type: "button", class: "btn sm", onclick: async (e) => { e.currentTarget.disabled = true; e.currentTarget.textContent = "Fixing…";

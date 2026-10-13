@@ -145,6 +145,32 @@ function loopsAround(rid, doc = S.exp) {
   return best || [];
 }
 
+/* The screens before rid in the same trial whose results rid reads ("feedback" reads resp.corr from "trial"):
+   "Try only this screen" runs them together, as the server does (edge/play.py single_screen_plan). */
+function triedTogether(rid, doc = S.exp) {
+  let sibs = null;
+  const walk = (nodes) => (nodes || []).some((n) => {
+    if (isRoutineNode(n)) { if (routineOfNode(n) === rid) { sibs = nodes; return true; } return false; }
+    if (!n || typeof n !== "object") return false;
+    return walk(n.children) || walk(n.then) || walk(n.else) || Object.values(n.states || {}).some((st) => walk(st && st.run));
+  });
+  walk(doc.flow);
+  if (!sibs) return [rid];
+  const names = sibs.map((n) => (isRoutineNode(n) ? routineOfNode(n) : null));
+  const i = names.indexOf(rid);
+  const src = JSON.stringify((doc.routines || {})[rid] || {});
+  const reads = (other) => ((doc.routines || {})[other]?.components || []).some((c) => c && c.id && new RegExp(`(^|[^A-Za-z0-9_.])${String(c.id).replace(/[^A-Za-z0-9_]/g, "")}\\.[A-Za-z_]`).test(src));
+  let first = i;
+  for (let j = i - 1; j >= 0; j--) { if (!names[j] || !(doc.routines || {})[names[j]]) break; if (reads(names[j])) first = j; }
+  return names.slice(first, i + 1).filter(Boolean);
+}
+/* "“feedback” (with “trial”, 5 trials)": the Try-one menus say what really runs. */
+function tryOneLabel(rid) {
+  const t = triedTogether(rid);
+  const parts = [t.length > 1 ? `with ${t.slice(0, -1).map((x) => `“${x}”`).join(", ")}` : "", loopsAround(rid).length ? "5 trials" : ""].filter(Boolean);
+  return parts.length ? ` (${parts.join(", ")})` : "";
+}
+
 /* ================================================================== plain words for formulas (SPEC W4 "In words") */
 const FIELD_WORDS = {n: "trial number", accuracy: "accuracy", mean_rt: "mean response time", rt: "response time", keys: "key", corr: "correct",
   total: "number of trials", state: "phase", visit: "visit", clicked: "clicked item", response: "answer", value: "value"};
@@ -231,6 +257,21 @@ function unwrapParens(t) {
   }
   return t;
 }
+/* resp.cor: a result the component doesn't have (it stops the experiment at that line) → "resp.cor, which a key press
+   doesn't have" in the words, never a condition that reads as if it worked. */
+const TYPE_THING = {keyboard: "a key press", mouse: "a mouse response", slider: "a rating slider", text: "a text", image: "a picture",
+  sound: "a sound", shape: "a shape", fixation: "a fixation cross", device_response: "a device response", gaze_roi: "a gaze area"};
+function unknownResult(s) {
+  const types = {};
+  for (const r of Object.values(S.exp?.routines || {})) for (const c of r.components || []) if (c && c.id) types[c.id] = c.type;
+  for (const m of String(s).replace(/'[^']*'|"[^"]*"/g, "''").matchAll(/(?:^|[^\w.])([A-Za-z_]\w*)\.([A-Za-z_]\w*)/g)) {
+    const [, a, b] = m;
+    const outs = S.schema?.components?.[types[a]]?.known_outputs;
+    if (!Array.isArray(outs) || !outs.length || outs.includes(b) || ["get", "items", "keys", "values"].includes(b)) continue;
+    return `uses ${a}.${b}, which ${TYPE_THING[types[a]] || `“${a}”`} doesn't have`;
+  }
+  return null;
+}
 /* "$resp.corr == 1" -> "the response was correct"; "$word" -> "the trial list's “word”"; else "a computed value".
    kind "value" (a text, colour or number from a formula): "$'Correct!' if resp.corr else 'Wrong!'" →
    "“Correct!” when the response was correct, otherwise “Wrong!”". */
@@ -239,6 +280,8 @@ function exprInWords(v, kind = "condition") {
   const s = String(v).slice(1).trim();
   const resp = responseIds();
   let m;
+  const bad = unknownResult(s);
+  if (bad) return bad;
   const tern = splitTernary(s);
   if (tern) {
     const [a, c, b] = tern.map(unwrapParens);
@@ -314,6 +357,7 @@ function renderBuild() {
   else if (view === "diagram") renderDiagram($("#diagram"));
   BUILD.focusKey = null;
   buildFocusFallback(view);
+  BUILD.forceFocus = null;
 }
 /* Keyboard focus never drops to <body> when a view changes or the focused card goes away (open a screen, Esc back,
    Delete, Undo): it goes to the matching place of the new view (§3.7). */
@@ -327,9 +371,13 @@ function buildFocusFallback(view, later = false) {
   // once more after the late re-renders (validation, a trial list being read), which can replace what got focus
   if (!later) { clearTimeout(BUILD.focusT); BUILD.focusT = setTimeout(() => buildFocusFallback(currentBuildView(), true), 150); }
   const a = document.activeElement;
-  if (!BUILD.focusIn || (a && a !== document.body && a.isConnected) || overlayOpen?.()) return;
   const root = $("#ws-build"); if (!root) return;
   const byKey = (k) => (k ? root.querySelector(`[data-fkey="${CSS.escape(k)}"]`) : null);
+  if (BUILD.forceFocus && !later && !overlayOpen?.()) {      // leaving a sub-view: the place it was opened from
+    const t0 = byKey(BUILD.forceFocus);
+    if (t0) { if (t0 !== a) t0.focus({preventScroll: true}); t0.scrollIntoView?.({block: "nearest"}); return; }
+  }
+  if (!BUILD.focusIn || (a && a !== document.body && a.isConnected) || overlayOpen?.()) return;
   let t = null;
   if (view === "story") {
     const k = BUILD.lastFkey || "";
@@ -379,8 +427,12 @@ function renderBuildToolbar(view) {
 function fitToolbar() {
   const tb = $("#build-toolbar"); if (!tb || !tb.clientWidth) return;
   tb.classList.remove("tight1", "tight2");
-  if (tb.scrollWidth > tb.clientWidth + 1) tb.classList.add("tight1");
-  if (tb.scrollWidth > tb.clientWidth + 1) tb.classList.add("tight2");
+  // tight when the bar overflows, or when the crumbs had to shrink their names (they shrink before the bar overflows)
+  const edge = () => tb.getBoundingClientRect().right - parseFloat(getComputedStyle(tb).paddingRight || 0) + 1;
+  const tight = () => [...tb.children].some((c) => c.getBoundingClientRect().width && c.getBoundingClientRect().right > edge())
+    || [...tb.querySelectorAll("#crumbs .crumb-t, #crumbs .crumb.here")].some((e) => e.offsetParent && e.scrollWidth > e.clientWidth + 1);
+  if (tight()) tb.classList.add("tight1");
+  if (tight()) tb.classList.add("tight2");
 }
 function updateBuildEst() {
   const el = $("#est"); if (!el || !S.exp) return;
@@ -388,6 +440,15 @@ function updateBuildEst() {
   const est = storyEstimate(updateBuildEst);
   el.textContent = est && !est.error ? EDGE.fmt.estimate(est) : est ? "" : "Estimating…";
   el.className = "t-caption";
+}
+/* The storyboard key of what a sub-view was opened for: the trial list's or workflow's frame, the screen's card. */
+function subViewReturnKey(from) {
+  let path = null, routine = false;
+  if (from === "list") path = listPathNow();
+  else if (from === "diagram") path = diagramPathNow();
+  else if (from === "screen" && S.routine) { walkFlow((n, p) => { if (!path && isRoutineNode(n) && routineOfNode(n) === S.routine) path = p; }); routine = true; }
+  if (!path) return null;
+  return (storyDensity() === "list" ? "row:" : routine ? "card:" : "frame:") + path.join(".");
 }
 function leaveSubView(to) {
   const back = to || (BUILD.returnView && !["list", "diagram"].includes(BUILD.returnView) ? BUILD.returnView : "story");
@@ -742,7 +803,7 @@ async function scanHardware(el) {
     const r = await api("/api/scan?timeout=1.5");
     const found = [];
     for (const [sec, items] of Object.entries(r)) for (const it of items || []) found.push([sec, it]);
-    const out = [h("div", {class: "t-overline pal-cat"}, found.length ? `Found (${found.length})` : "Nothing found")];
+    const out = [h("div", {class: "t-overline pal-cat", id: "scan-found", tabindex: "-1"}, found.length ? `Found (${found.length})` : "Nothing found")];
     if (!found.length) out.push(h("p", {class: "dev-none"}, `Looked for ${Object.keys(r).map((k) => names[k] || k).join(", ")}. Check that the device is on and connected, then look again.`));
     for (const [sec, it] of found) {
       const {suggested, ...rest} = it;
@@ -755,8 +816,15 @@ async function scanHardware(el) {
         suggested ? btn("Add", () => addDevice(suggested.type, suggested.options || {}), {ic: "plus"}) : null));
     }
     el.replaceChildren(...out);
+    // say what was found, and take focus there (the first Add button, else the heading): the More menu that started it is gone
+    const firstName = (row) => row.querySelector(".dev-name")?.textContent || "";
+    const rows = [...el.querySelectorAll(".scan-row")];
+    ui.announce(found.length ? `Found ${countWord(found.length, "device")}: ${rows.slice(0, 3).map(firstName).join(", ")}${found.length > 3 ? ", …" : ""}.` : "No devices found.");
+    const target = el.querySelector(".scan-row .btn") || el.querySelector("#scan-found");
+    if (target && el.isConnected && target.offsetParent !== null) target.focus({preventScroll: false});
   } catch (e) {
     el.replaceChildren(h("div", {class: "alert danger"}, icon("error"), h("div", {}, h("b", {}, "Couldn't look for devices"), e.message)));
+    ui.announce("Couldn't look for devices.");
   } finally { b?.removeAttribute("aria-busy"); }
 }
 
@@ -968,6 +1036,36 @@ function renderStoryboard(el) {
     if (unused.length) out.push(notShownRow(unused));
     el.replaceChildren(...out);
   });
+  storyRoving(el);
+}
+/* Roving tabindex (§3.7): the storyboard is one Tab stop. Arrow keys move between the steps and the insert targets
+ * (+), Home/End jump to the first or last step; the ⋯ menu of a step also has "Add a step before / after". */
+function storyRoving(el) {
+  if (!el || storyDensity() === "list") return;
+  const stops = [...el.querySelectorAll(".scard, .frame-head > .lbl, .sm-name, .srow-main, .ins, .frame-head .actions button, .scard-more")];
+  if (!stops.length) return;
+  const nodes = stops.filter((x) => !x.matches(".ins, .frame-head .actions button, .scard-more"));
+  const active = nodes.find((x) => x === document.activeElement) || stops.find((x) => x === document.activeElement)
+    || nodes.find((x) => x.classList.contains("selected") || x.closest(".frame.selected > .frame-head") || x.getAttribute("aria-current")) || nodes[0] || stops[0];
+  for (const x of stops) x.tabIndex = x === active ? 0 : -1;
+  if (el.dataset.roving) return;
+  el.dataset.roving = "1";
+  el.addEventListener("focusin", (e) => {
+    const t = e.target;
+    if (!t.matches?.(".scard, .frame-head > .lbl, .sm-name, .srow-main, .ins")) return;
+    for (const x of el.querySelectorAll("[tabindex='0']")) if (x !== t && x.matches(".scard, .frame-head > .lbl, .sm-name, .srow-main, .ins")) x.tabIndex = -1;
+    t.tabIndex = 0;
+  });
+  el.addEventListener("keydown", (e) => {            // the insert targets take part in the arrow keys too
+    if (!e.target.classList?.contains("ins") || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const dir = {ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down"}[e.key];
+    if (dir) { e.preventDefault(); moveStoryFocus(e.target, dir); return; }
+    if (e.key === "Home" || e.key === "End") {
+      const all = storyFocusables().filter((x) => !x.classList.contains("ins"));
+      const t = e.key === "Home" ? all[0] : all[all.length - 1];
+      if (t) { e.preventDefault(); t.focus(); }
+    }
+  });
 }
 function emptyFlow() {
   const a = buildAssistant();
@@ -1117,7 +1215,7 @@ function openNode(n, path) {
   if (n.statemachine !== undefined) return openDiagram(path);
   selectNode(n, path);
 }
-function storyFocusables() { return [...document.querySelectorAll("#flow .scard, #flow .frame-head > .lbl, #flow .sm-name, #flow .srow-main")].filter((x) => x.offsetParent !== null); }
+function storyFocusables() { return [...document.querySelectorAll("#flow .scard, #flow .frame-head > .lbl, #flow .sm-name, #flow .srow-main, #flow[data-density='cards'] .ins")].filter((x) => x.offsetParent !== null); }
 function moveStoryFocus(from, dir) {
   const all = storyFocusables();
   const i = all.indexOf(from); if (i < 0) return;
@@ -1448,6 +1546,10 @@ function nodeMenu(e, path) {
       {label: "Remove the condition (keep its screens)", run: () => unwrapNode(path)},
       {label: "Remove from the experiment", icon: "trash", danger: true, shortcut: "Delete", run: () => removeFromFlow(path)}];
   }
+  // the insert targets of the storyboard, for the keyboard and for anyone who can't hit the small +
+  const lp = path.slice(0, -1), at = path[path.length - 1];
+  if (bEditable() && typeof at === "number") items.splice(1, 0, {label: "Add a step before…", icon: "plus", run: () => flowInsertMenu(anchor, lp, at)},
+    {label: "Add a step after…", icon: "plus", run: () => flowInsertMenu(anchor, lp, at + 1)});
   return ui.menu(anchor, items.filter(Boolean));
 }
 
@@ -1458,8 +1560,36 @@ function removeFromFlow(path) {
   list.splice(index, 1);
   if (S.sel?.path && pathStartsWith(S.sel.path, path)) S.sel = null;
   if (S.sel?.kind === "routine" && isRoutineNode(n) && S.sel.routine === routineOfNode(n) && !S.sel.path) S.sel = null;
+  // keyboard focus goes to the next step, or the previous one when the last step was removed (never to <body>)
+  const lp = path.slice(0, -1), j = index < list.length ? index : index - 1;
+  if (j >= 0) BUILD.focusKey = flowNodeKey(list[j], [...lp, j]);
+  else if (lp.length > 1) BUILD.focusKey = "frame:" + lp.slice(0, -1).join(".");
   commit(`Remove “${nodeName(n)}” from the experiment`);
   undoToast(isRoutineNode(n) ? `Removed “${routineOfNode(n)}” from the experiment.` : `Removed ${nodeWords(n)} from the experiment.`);
+}
+function flowNodeKey(n, path) { return (isRoutineNode(n) ? "card:" : "frame:") + path.join("."); }
+/* Every step of the storyboard by its focus key, with what it is: after an undo or redo, the step that came back
+ * (or changed) gets the keyboard focus. */
+function flowNodeKeys(nodes = S.exp?.flow || [], path = [], out = new Map()) {
+  (nodes || []).forEach((n, i) => {
+    const p = [...path, i];
+    out.set(flowNodeKey(n, p), JSON.stringify(isRoutineNode(n) ? routineOfNode(n) : nodeName(n)));
+    if (n && typeof n === "object") {
+      if (Array.isArray(n.children)) flowNodeKeys(n.children, [...p, "children"], out);
+      if (Array.isArray(n.then)) flowNodeKeys(n.then, [...p, "then"], out);
+      if (Array.isArray(n.else)) flowNodeKeys(n.else, [...p, "else"], out);
+    }
+  });
+  return out;
+}
+function focusChangedStep(before) {
+  const a = document.activeElement;
+  if (!before || S.ws !== "build" || S.view !== "story" || (a && a !== document.body && !a.closest?.("#flow"))) return;
+  const after = flowNodeKeys();
+  for (const [k, v] of after) if (before.get(k) !== v) { BUILD.focusKey = k; return; }
+  if (after.size < before.size) {           // a step went away: the last one that is still there
+    const keys = [...after.keys()]; if (keys.length) BUILD.focusKey = keys[keys.length - 1];
+  }
 }
 function unwrapNode(path) {
   if (!bEditable()) return;
@@ -2164,7 +2294,12 @@ function timelineKeys(e, rid, c, el) {
     renameItem(rid, c);
     return;
   }
-  if (e.key === "Escape") { done(); S.sel = {kind: "routine", routine: rid}; renderAll(); }
+  if (e.key === "Escape") {
+    done();
+    // Esc: go up one level. An item selected → the screen; the screen itself → back to the Storyboard (its card gets focus)
+    if (S.sel?.kind === "component") { S.sel = {kind: "routine", routine: rid}; renderAll(); }
+    else leaveSubView("story");
+  }
 }
 async function renameItem(rid, c) {
   if (!bEditable()) return;
@@ -2544,6 +2679,8 @@ function renderListEditor(el) {
   const reps = +n.repeats || 1;
   const rows = loopRowsFor(n);
   const count = h("p", {class: "le-count t-caption"}, n.staircase ? `Runs until ${plural(n.staircase.reversals ?? 8, "reversal")} or ${plural(n.staircase.max_trials ?? 100, "trial")}.`
+    // no `conditions` at all: the screens just repeat (30 repeats = 30 trials); `conditions: []` really is 0 trials
+    : n.conditions === undefined || n.conditions === null ? `${plural(reps, "repeat")} = ${plural(reps, "trial")} of “${routinesInside(n).join("”, “") || "nothing yet"}” (no rows: the screens just repeat)`
     : Array.isArray(rows) ? `${plural(rows.length, "row")}${reps !== 1 ? ` × ${reps} repeats` : ""} = ${plural(rows.length * reps, "trial")} of “${routinesInside(n).join("”, “") || "nothing yet"}”` : "");
   keepFocus(el, () => el.replaceChildren(
     h("div", {class: "le-head"}, h("span", {class: "label", id: "le-src-lbl"}, "Rows come from"), seg),
@@ -2956,7 +3093,9 @@ function openDiagram(path) {
   if (!(S.sel && ["machine", "state"].includes(S.sel.kind) && samePath(S.sel.path, path))) S.sel = {kind: "machine", path};
   if (S.view === "diagram") renderAll(); else setBuildView("diagram", {path});
 }
-function layoutMachine(m) {
+/* Phases left to right in the order they run; when they don't fit the canvas at 100 % they wrap onto the next row
+ * (readable text instead of a diagram shrunk to 50 %). Each position knows its row, for routing the arrows. */
+function layoutMachine(m, width = 0, LEFT = 48) {
   const names = Object.keys(m.states || {});
   const col = {}, queue = [m.start];
   if (m.start in (m.states || {})) col[m.start] = 0;
@@ -2969,12 +3108,28 @@ function layoutMachine(m) {
   }
   let maxc = Math.max(0, ...Object.values(col));
   for (const n of names) if (!(n in col)) col[n] = ++maxc;
-  const rows = {}, pos = {};
-  const W = 180, H = 72, GX = 150, GY = 70;
-  for (const n of names) { const c = col[n]; rows[c] = (rows[c] || 0); pos[n] = {x: 24 + c * (W + GX), y: 40 + rows[c] * (H + GY), w: W, h: H}; rows[c]++; }
+  const W = 180, H = 72, GX = 130, GY = 70, ARC = 64, UNDER = 64;
   const endCol = Math.max(0, ...Object.values(col)) + 1;
-  pos.end = {x: 24 + endCol * (W + GX), y: 40 + H / 2 - 20, w: 88, h: 40, end: true};
-  for (const p of Object.values(pos)) p.y += 56;   // room for routes that arc over the phases
+  const perRow = width > 0 ? Math.max(2, Math.floor((width - LEFT - 24 + GX) / (W + GX))) : endCol + 1;
+  const stack = {};
+  for (const n of names) stack[col[n]] = (stack[col[n]] || 0) + 1;
+  const rowOf = (c) => Math.floor(c / perRow), nRows = rowOf(endCol) + 1;
+  const rowH = [];
+  for (let r = 0; r < nRows; r++) {
+    let k = 1;
+    for (const [c, v] of Object.entries(stack)) if (rowOf(+c) === r) k = Math.max(k, v);
+    rowH.push(ARC + k * H + (k - 1) * GY + UNDER);
+  }
+  const rowY = rowH.map((_, r) => rowH.slice(0, r).reduce((a, b) => a + b, 0));
+  const pos = {}, seen = {};
+  const at = (c) => ({x: LEFT + (c % perRow) * (W + GX), row: rowOf(c)});
+  for (const n of names) {
+    const c = col[n], k = seen[c] = (seen[c] || 0) + 1, a = at(c);
+    pos[n] = {x: a.x, y: rowY[a.row] + ARC + (k - 1) * (H + GY), w: W, h: H, row: a.row, col: c};
+  }
+  const e = at(endCol);
+  pos.end = {x: e.x, y: rowY[e.row] + ARC + H / 2 - 20, w: 88, h: 40, end: true, row: e.row, col: endCol};
+  pos._rows = rowY.map((y, r) => ({top: y, bottom: y + rowH[r]}));
   return pos;
 }
 function phaseRuns(st) {
@@ -2985,9 +3140,15 @@ function renderDiagram(el) {
   const path = diagramPathNow();
   const m = path && nodeAt(path);
   if (!el || !m || m.statemachine === undefined) return;
-  const pos = layoutMachine(m);
+  const avail = el.clientWidth || $("#ws-build")?.clientWidth || 0;
+  let pos = layoutMachine(m, avail);
+  // routes that jump more than one row (or back up) run along the left margin: make room for it and its label
+  const far = Object.entries(m.states || {}).some(([n, st]) => (st.next?.length ? st.next : [{goto: "end"}])
+    .some((t) => { const a = pos[n], b = pos[(typeof t === "string" ? t : t.goto)] || pos.end; return b && b.row !== a.row && b.row !== a.row + 1; }));
+  if (far) pos = layoutMachine(m, avail, 112);
+  const rowsY = pos._rows; delete pos._rows;
   const W = Math.max(...Object.values(pos).map((p) => p.x + p.w)) + 24;
-  const H = Math.max(...Object.values(pos).map((p) => p.y + p.h)) + 110;
+  const H = rowsY[rowsY.length - 1].bottom + 8;
   const NS = "http://www.w3.org/2000/svg";
   const mk = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
   const svg = mk("svg", {width: W, height: H, viewBox: `0 0 ${W} ${H}`, class: "dg-svg", "aria-hidden": "true"});
@@ -2999,6 +3160,7 @@ function renderDiagram(el) {
   defs.append(marker, marker2); svg.append(defs);
   const layer = h("div", {class: "dg-layer", style: `width:${W}px;height:${H}px`});
   layer.append(svg);
+  let lane = 0;                     // routes along the left margin each get their own lane
   for (const [name, st] of Object.entries(m.states || {})) {
     const a = pos[name];
     const nx = (st.next?.length ? st.next : [{goto: "end"}]).map((t) => typeof t === "string" ? {goto: t} : t);
@@ -3008,7 +3170,26 @@ function renderDiagram(el) {
       let label = t.if ? exprInWords(t.if) : nx.length > 1 ? "otherwise" : "";
       if (t.goto === name && st.max_visits) label += `${label ? " · " : ""}at most ${plural(st.max_visits, "time")}`;
       let d, lx, ly;
-      if (t.goto === name) {          // the same phase again
+      if (b.row !== a.row && t.goto !== name) {
+        if (b.row === a.row + 1) {     // on to the next row: down into the gap under this row, across, down into the phase
+          const gy = rowsY[a.row].bottom - 24 - i * 12, x2 = b.x + b.w / 2;
+          // a phase stacked under this one: leave by the right side and go down the gap between the columns
+          const stacked = Object.values(pos).some((p) => p !== a && p.col === a.col && p.row === a.row && p.y > a.y);
+          if (stacked) {
+            const y1 = a.y + a.h / 2 + (i - (nx.length - 1) / 2) * 14, xr = a.x + a.w + 28 + i * 10;
+            d = `M${a.x + a.w},${y1} L${xr},${y1} L${xr},${gy} L${x2},${gy} L${x2},${b.y}`;
+            lx = (xr + x2) / 2; ly = gy - 12;
+          } else {
+            const x1 = a.x + a.w / 2 + (i - (nx.length - 1) / 2) * 14;
+            d = `M${x1},${a.y + a.h} L${x1},${gy} L${x2},${gy} L${x2},${b.y}`;
+            lx = (x1 + x2) / 2; ly = gy - 12;
+          }
+        } else {                       // further down, or back up: out of the left side, along the margin, into the phase
+          const mx = 12 + (lane++ % 4) * 8, y1 = a.y + a.h / 2 + (i - (nx.length - 1) / 2) * 14, y2 = b.y + b.h / 2 + (b.row < a.row ? 10 : -10);
+          d = `M${a.x},${y1} L${mx},${y1} L${mx},${y2} L${b.x},${y2}`;
+          lx = 58; ly = (y1 + y2) / 2;
+        }
+      } else if (t.goto === name) {          // the same phase again
         const x = a.x + a.w * 0.7, y = a.y;
         d = `M${x - 28},${y} C${x - 46},${y - 58} ${x + 34},${y - 58} ${x + 12},${y}`;
         lx = x - 8; ly = y - 66;
@@ -3016,7 +3197,8 @@ function renderDiagram(el) {
         const y1 = a.y + a.h / 2 + (i - (nx.length - 1) / 2) * 14;
         const y2 = b.y + b.h / 2;
         d = `M${a.x + a.w},${y1} C${a.x + a.w + 60},${y1} ${b.x - 60},${y2} ${b.x},${y2}`;
-        lx = (a.x + a.w + b.x) / 2; ly = Math.min(y1, y2) - 22;
+        // level: the label above the arrow; down to a phase below: on the middle of the curve (labels never stack)
+        lx = (a.x + a.w + b.x) / 2; ly = Math.abs(y2 - y1) > 30 ? (y1 + y2) / 2 + 8 : Math.min(y1, y2) - 22;
       } else if (b.x > a.x) {          // forward, skipping phases: arc over the top
         const y = Math.min(a.y, b.y) - 26 - i * 14;
         d = `M${a.x + a.w / 2},${a.y} C${a.x + a.w / 2},${y - 24} ${b.x + b.w / 2},${y - 24} ${b.x + b.w / 2},${b.y}`;
@@ -3068,12 +3250,13 @@ function renderDiagram(el) {
     h("div", {class: "dg-top"}, h("p", {class: "t-2"}, "After a phase finishes, its routes are checked from top to bottom; the first one that is true is taken."), tools),
     vp,
     h("p", {class: "t-caption dg-foot"}, "Click a phase to edit it in Properties. Arrows are routes; dashed arrows mean “otherwise”. Ctrl + wheel zooms.")));
-  // Fit shows every phase and route (down to the 30 % zoomTo allows); on first open the width fits, down to 50 %
+  // Fit shows every phase and route (down to the 30 % zoomTo allows). On first open the phases already wrap to the
+  // canvas width, so it opens at 100 % (the text stays readable) unless it is taller than the canvas.
   const fit = (all = false) => {
     if (BUILD.zoom == null) {
       const w = vp.clientWidth - 8, hh = vp.clientHeight - 8;
       const k = all && hh > 40 ? Math.min(w / W, hh / H) : w / W;
-      BUILD.zoom = Math.max(all ? 0.3 : 0.5, Math.min(1, k));
+      BUILD.zoom = Math.max(all ? 0.3 : 0.85, Math.min(1, k));
     }
     applyZoom();
   };

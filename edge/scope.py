@@ -236,21 +236,23 @@ def scope_issues(exp) -> list:
     ctypes = {c.id: c.type for r in exp.routines.values() for c in r.components}
 
     def check_attrs(src: str, where: str, scope: set[str]) -> None:
-        """A component result that doesn't exist, and is close to one that does: resp.cor → resp.corr."""
+        """A component result that doesn't exist (resp.cor → resp.corr): it always stops the experiment at that line,
+        so it is an error (a warning only when code components might add results the check can't see)."""
         from .diagnostics import TYPE_WORDS, _outputs_of
         for obj, attr in _attr_uses(src):
             if obj in scope or obj not in ctypes:
                 continue
             outs = _outputs_of(ctypes[obj])
-            if not outs or attr in outs:
+            if not outs or attr in outs or hasattr(dict, attr):      # resp.get('rt') reads the results as a dict
                 continue
-            close = difflib.get_close_matches(attr, outs, n=1, cutoff=0.6)
-            if not close or (where, f"{obj}.{attr}") in seen:
+            if (where, f"{obj}.{attr}") in seen:
                 continue
             seen.add((where, f"{obj}.{attr}"))
+            close = difflib.get_close_matches(attr, outs, n=1, cutoff=0.6)
             thing = TYPE_WORDS.get(str(ctypes[obj]), f"'{obj}'")
-            issues.append(Issue("warning", where,
-                                f"this uses {obj}.{attr}, but {thing} has no '{attr}'. Did you mean {obj}.{close[0]}?",
+            issues.append(Issue("warning" if has_code else "error", where,
+                                f"this uses {obj}.{attr}, but {thing} has no '{attr}'"
+                                + (f". Did you mean {obj}.{close[0]}?" if close else ""),
                                 hint=f"the results of '{obj}': {', '.join(outs)}"))
 
     def report(src: str, where: str, scope: set[str], unknown_scope: str | None, enclosing: list[str],
@@ -381,4 +383,9 @@ def scope_issues(exp) -> list:
                                 report(src, f"{sw}.next[{j}]", scope, unknown, enclosing)
 
     walk(exp.flow, set(), None, [], "flow")
+    # a measure's trial filter (trials: "$resp.corr == 1") reads the same results: resp.cor is caught here too
+    for i, m in enumerate(exp.measures or []):
+        if isinstance(m, dict) and isinstance(m.get("trials"), str):
+            for src in _expr_sources(m["trials"], bare=True):
+                check_attrs(src, f"measures.{m.get('id') or i}.trials", set())
     return issues

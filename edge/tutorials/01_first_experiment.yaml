@@ -78,6 +78,7 @@ steps:
       appears right after the cross. You can also drag the bars on the timeline, and press the play
       button under the preview to play the screen at real speed.
     target: ".pal-item[data-type=fixation]"
+    scroll_to: "#props [data-prop=start]"
     check: {component: {routine: trial, type: text, prop: start, value: 0.5}}
   - title: Open the trial list
     body: |

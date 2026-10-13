@@ -42,7 +42,7 @@ steps:
       Click **left_box** on the timeline and set **Event marker** (`marker`) to `squares_on`. At the
       exact screen refresh that shows the squares, EDGE sends this event to every device: TTL triggers,
       LSL, the eye tracker's own data file. It's written to the event log too.
-    target: "#timeline"
+    target: "#props [data-prop=marker]"
     check: {component: {routine: look, type: shape, prop: marker, exists: true}}
   - title: Send markers to LabRecorder too
     body: |
@@ -57,4 +57,6 @@ steps:
       **Last test run**. The simulated tracker runs on its own drifting clock, and EDGE recovers the
       drift. The *triggers* column shows that every marker arrived, and *alignment* shows how precisely.
     target: "#btn-dryrun"
+    scroll_to: "#tab-results .res-more"
     check: {dry_run: true}
+    advance: manual

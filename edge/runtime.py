@@ -217,7 +217,7 @@ class Session:
         for w in getattr(self.backend, "warnings", ()) or ():
             self.log(f"[edge] WARNING: {w}")
             self.warnings.append(w)
-        if self.virtual_participant is None and self.backend.name != "headless":
+        if self.virtual_participant is None and self.backend.name not in ("headless", "browser"):     # not Try it
             try:     # the computer-level known issues (battery, USB suspend, monitors, serial latency …)
                 from .syscheck import run_checks
                 checks = run_checks(self.exp, quick=True)
@@ -230,7 +230,8 @@ class Session:
         if self.backend.refresh_rate > 300:
             self.log(f"[edge] WARNING: measured refresh rate {self.backend.refresh_rate:.0f} Hz: vsync is not "
                      "working, stimulus durations will not be frame-accurate (check GPU driver settings)")
-            self.errors.append("vsync appears disabled")
+            self.errors.append("vsync appears disabled: the screen isn't synchronised, so stimulus times can be off by a "
+                               "frame. Turn on vsync in the graphics card's settings, or run Check this computer")
         self._connect_devices()
         fields = {**self.participant, "experiment": self.exp.name}
         root = SessionData.make_dir(self.data_root, self.settings["data"]["filename"], fields)

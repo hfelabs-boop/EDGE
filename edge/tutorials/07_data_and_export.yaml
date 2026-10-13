@@ -41,6 +41,7 @@ steps:
 
       Press **Next**.
     target: "#data-detail"
+    avoid: "#data-detail .data-head"
   - title: Back to Build
     body: |
       Exports can also happen by themselves after every session. That is a setting of the experiment:
@@ -58,7 +59,8 @@ steps:
     advance: manual
   - title: The same setting in the file
     body: |
-      In Expert mode the Build view switch has **YAML**: the experiment file itself. Click it and find,
+      In Expert mode the Build view switch has **YAML** (in a narrow window, the `<>` button): the
+      experiment file itself. Click it and find,
       under `settings:` › `data:`, the lines
 
       ```
@@ -71,3 +73,4 @@ steps:
       **Apply YAML**; everything you do in the builder ends up in this file.
     target: "[data-tab=source]"
     check: {view: source}
+    advance: manual

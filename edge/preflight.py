@@ -76,24 +76,27 @@ def device_items(exp, timeout: float = 6.0) -> list[dict[str, Any]]:
     from .devtest import SIMULATORS, test_device
 
     def one(d) -> dict[str, Any]:
+        dev = {"device_id": d.id, "device_type": d.type}      # the builder words it from these (no ids in Simple mode)
         if d.type in SIMULATORS:
             return _item("warning", f"device '{d.id}' is EDGE's simulator ({d.type}), not real hardware: "
                                     "its data would be made up",
-                         "replace it with your device's driver (edge devices lists them) before running participants")
+                         "replace it with your device's driver (edge devices lists them) before running participants",
+                         simulator=True, **dev)
         try:
             r = test_device(d.type, d.id, dict(d.options), seconds=0.3, connect_timeout=timeout, marker=False)
         except Exception as e:     # a broken driver must not stop the preflight
             r = {"connected": False, "error": f"{type(e).__name__}: {e}"}
         if r.get("connected"):
-            return _item("ok", f"device '{d.id}' ({d.type}) answers")
+            return _item("ok", f"device '{d.id}' ({d.type}) answers", **dev)
         why = r.get("error") or "it did not answer"
+        extra = f". {r['hint'][:1].upper()}{r['hint'][1:]}" if r.get("hint") else ""
         if d.required:
             return _item("error", f"device '{d.id}' ({d.type}) is not reachable: {why}",
-                         "switch it on, check its cable/port/address (edge test-device shows the details); "
-                         "the session can't start without it" + (f". {r['hint']}" if r.get("hint") else ""))
+                         "Switch it on, check its cable/port/address (edge test-device shows the details); "
+                         "the session can't start without it" + extra, why=why, required=True, **dev)
         return _item("warning", f"device '{d.id}' ({d.type}) is not reachable: {why}",
-                     "it is optional, so the session would run WITHOUT recording it: switch it on and check its "
-                     "cable/port/address (edge test-device shows the details)" + (f". {r['hint']}" if r.get("hint") else ""))
+                     "Optional: the session can run without it, but would not record it. Switch it on and check its "
+                     "cable/port/address (edge test-device shows the details)" + extra, why=why, required=False, **dev)
 
     with ThreadPoolExecutor(max_workers=max(1, min(8, len(exp.devices)))) as pool:
         items = list(pool.map(one, exp.devices))
@@ -102,17 +105,13 @@ def device_items(exp, timeout: float = 6.0) -> list[dict[str, Any]]:
 
 def unread_assistant_code(path: str | Path, reviewed: Any = ()) -> list[str]:
     """Code components written by the assistant (their hashes are in .edge/assistant/history.jsonl) that nobody has
-    marked as read: they must not run, not even in a test run, until a person has read them."""
+    marked as read (.edge/assistant/reviewed.json, or ``reviewed``): they must not run, not even in a test run, until
+    a person has read them."""
     try:
-        from .assistant.jobs import history_code
-        from .assistant.tools import code_hashes
+        from .assistant.jobs import unread_code
         from .storage import load_document
         p = Path(path)
-        written = history_code(p.parent)
-        if not written:
-            return []
-        done = {str(x) for x in (reviewed or ())}
-        return [f"{rid}.{cid}" for (rid, cid), h in code_hashes(load_document(p).doc).items() if h in written and h not in done]
+        return [f"{c['routine']}.{c['id']}" for c in unread_code(p.parent, load_document(p).doc, reviewed)]
     except Exception:
         return []
 

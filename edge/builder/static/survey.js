@@ -133,7 +133,8 @@ function openSurveyEditor(index = 0) {
     if (S.ws === "build") renderAll();
   });
   renderSurveyEditor();
-  SV.dlg?.querySelector(".sv-pick[aria-current='true'], .sv-pick")?.focus();     // start at the selected question
+  // start at the selected question (after ui.dialog's own first focus, which ran before the questions existed)
+  setTimeout(() => SV.dlg?.querySelector(".sv-pick[aria-current='true'], .sv-pick")?.focus(), 0);
 }
 
 /* Commit a change; the editor redraws after the browser has moved focus (Tab), then gives focus back. */

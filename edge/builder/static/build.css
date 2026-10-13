@@ -28,12 +28,14 @@
 #build-toolbar.tight2 #crumbs .crumb:not(.here) { display: none; }
 #build-toolbar.tight2 #crumbs .crumb-sep { display: none; }
 #crumbs { display: flex; align-items: center; gap: 2px; }
+/* the focus ring stays inside #crumbs' overflow box (an outside ring was cut to a thin bar) */
+#crumbs .crumb:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 #crumbs .crumb { display: inline-flex; align-items: center; gap: var(--sp-2); height: 26px; padding: 0 var(--sp-3); margin: 0; border: 0; border-radius: var(--r-xs);
   background: none; color: var(--text-2); font: var(--fw-medium) var(--fs-small)/1 var(--font-sans); cursor: pointer; white-space: nowrap; min-width: 0; }
 #crumbs .crumb:hover { background: var(--surface-3); color: var(--text-1); }
 #crumbs .crumb { flex: 0 1 auto; overflow: hidden; min-width: 48px; }     /* never squeezed to one letter */
 #crumbs .crumb .crumb-t { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-#crumbs .crumb.here { color: var(--text-1); font-weight: var(--fw-semibold); cursor: default; flex: 0 0 auto; max-width: 60%; overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: 26px; }
+#crumbs .crumb.here { color: var(--text-1); font-weight: var(--fw-semibold); cursor: default; flex: 0 1 auto; min-width: 48px; overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: 26px; }
 #crumbs .crumb.here:hover { background: none; }
 #crumbs .crumb-sep { color: var(--text-3); width: 14px; height: 14px; flex: none; }
 #crumbs .crumb .ic { color: var(--text-3); }

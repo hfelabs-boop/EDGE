@@ -7,6 +7,7 @@ files only inside the directory it was started in.
 
 from __future__ import annotations
 
+import copy
 import json
 import mimetypes
 import re
@@ -208,8 +209,12 @@ def schema() -> dict[str, Any]:
     from ..model import DEFAULT_SETTINGS, LOOP_ORDERS
     from ..templates import public_templates
 
+    from ..diagnostics import _outputs_of
+    comps = {k: v.describe() for k, v in component_registry().items()}
+    for k, d in comps.items():      # results every component of this type has (resp.cor is a typo): [] when they vary
+        d["known_outputs"] = _outputs_of(k)
     return {
-        "components": {k: v.describe() for k, v in component_registry().items()},
+        "components": comps,
         "devices": {k: v.describe() for k, v in device_registry().items()},
         "loop_orders": list(LOOP_ORDERS),
         "templates": {k: {"name": v["name"], "description": v.get("description", "")} for k, v in public_templates().items()},
@@ -333,14 +338,42 @@ class BuilderApp:
         return {"experiment": loaded.doc, "fingerprint": loaded.fingerprint, "migrations": loaded.migrations}
 
     def save(self, rel: str, data: dict[str, Any], expected: str | None, force: bool,
-             label: str | None = None, new: bool = False) -> dict[str, Any]:
+             label: str | None = None, new: bool = False, copy_from: str | None = None) -> dict[str, Any]:
         p = self.safe_path(rel)
         if new and not force and p.exists():     # "Save as" a name that is taken: never replace the other file silently
             raise AlreadyExists(f"{rel} already exists: choose another name")
         label = " ".join(str(label or "").split())[:60] or "builder"
+        copied: dict[str, list[str]] = {"copied": [], "missing": []}
+        if copy_from:           # Save a copy: the files it uses go with it, before the copy is validated in its folder
+            copied = self.copy_files(data, self.safe_path(copy_from).parent, p.parent)
         fp = storage.save_document(p, data, expected_fingerprint=None if force or not expected else expected,
                                    label=label)
-        return {"saved": str(p.relative_to(self.root)), "fingerprint": fp}
+        return {"saved": str(p.relative_to(self.root)), "fingerprint": fp, **(copied if copy_from else {})}
+
+    def copy_files(self, data: dict[str, Any], src: Path, dst: Path) -> dict[str, list[str]]:
+        """Copy every file the experiment uses (trial lists, pictures, sounds, web pages and their assets: the same
+        walk as `edge bundle`) from its folder into the copy's folder. Participant data is not copied.
+        → {"copied": [...], "missing": [...]} (relative paths; missing: not found, or outside the folder)."""
+        import shutil
+        out: dict[str, list[str]] = {"copied": [], "missing": []}
+        src, dst = src.resolve(), dst.resolve()
+        if src == dst:
+            return out
+        try:
+            refs = storage.referenced_files(data, src)
+        except Exception:
+            refs = set()
+        for ref in sorted(refs):
+            a = (src / ref).resolve()
+            b = (dst / ref).resolve()
+            if src not in a.parents or dst not in b.parents or self.root not in b.parents or not a.is_file():
+                out["missing"].append(ref)
+                continue
+            if not b.exists():
+                b.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(a, b)
+            out["copied"].append(ref)
+        return out
 
     # --------------------------------------------------------------- import
     def import_source(self, source: str, out: str | None = None) -> dict[str, Any]:
@@ -484,6 +517,16 @@ class BuilderApp:
             n_trials = None
         return {"ok": True, "summary": summary, "report": rep, "trials": rows, "n_trials": n_trials, "log": logs}
 
+    def unread_code(self, data: dict[str, Any], rel: str | None, reviewed: Any = None) -> list[dict[str, str]]:
+        """Code components of this document the assistant wrote that nobody has marked as read."""
+        if not rel:
+            return []
+        try:
+            from ..assistant.jobs import unread_code
+            return unread_code(self.safe_path(rel).parent, data, reviewed or ())
+        except Exception:
+            return []
+
     def dry_runs_dir(self, data: dict[str, Any], rel: str | None) -> Path:
         """Where test runs and Try-it sessions go: <experiment folder>/<data dir>/dry_runs, as `edge run --dry-run`
         and MCP dry_run do, so Data › Tests & tries lists them; <root>/data/dry_runs for a never-saved experiment."""
@@ -499,39 +542,82 @@ class BuilderApp:
         return self.root / "data" / "dry_runs"
 
     def last_test(self, data: dict[str, Any], rel: str, saved: bool = False) -> dict[str, Any]:
-        """The newest test run of exactly this document (by its fingerprint in session.json), so a reload, the
-        assistant's test run or `edge run --dry-run` count as "tested" in the builder.
-        → {"found": False} or {"found": True, "ok", "at", "trials", "path"}"""
+        """The newest test run of exactly this document (by its fingerprint in session.json, or the experiment.yaml
+        the run saved, compared without empty defaults such as ``options: {}``), so a reload, the assistant's test
+        run or `edge run --dry-run` count as "tested" in the builder. Also the newest Try it of the whole experiment.
+        → {"found": False, "tried": …} or {"found": True, "ok", "at", "trials", "path", "tried": {"at"} | None}"""
         import hashlib
         from ..export import SessionTables, wide_trials
 
         def sha(doc: Any) -> str:
             return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).hexdigest()
-        want = {sha(data)}
+
+        def norm(doc: Any, try_copy: bool = False) -> str:
+            def clean(v: Any) -> Any:
+                if isinstance(v, dict):
+                    out = {k: clean(x) for k, x in v.items()}
+                    return {k: x for k, x in out.items() if x != {}}
+                if isinstance(v, list):
+                    return [clean(x) for x in v]
+                return v
+            d = clean(copy.deepcopy(doc)) if isinstance(doc, dict) else {}
+            if try_copy:         # a Try it runs a copy without exports (edge/play.py)
+                (d.get("settings") or {}).get("data", {}).pop("exports", None)
+                d = clean(d)
+            return json.dumps(d, sort_keys=True, default=str)
+
+        docs = [data]
         if saved:            # the open document is the file on disk: a run of the file counts too
             try:
-                want.add(sha(storage.load_document(self.safe_path(rel)).doc))
+                docs.append(storage.load_document(self.safe_path(rel)).doc)
             except Exception:
                 pass
+        want = {sha(d) for d in docs}
+        want_norm = {norm(d) for d in docs}
+        want_try = {norm(mouse_is_gaze(d), True) for d in docs}       # Try it runs that copy (play/start)
+
+        def same(sj: Path, info: dict[str, Any], try_copy: bool = False) -> bool:
+            if not try_copy and info.get("experiment_sha256") in want:
+                return True
+            y = sj.parent / "experiment.yaml"
+            try:
+                if not y.is_file() or y.stat().st_size > 5_000_000:
+                    return False
+                run_doc = storage.load_document(y).doc
+            except Exception:
+                return False
+            return norm(run_doc, try_copy) in (want_try if try_copy else want_norm)
+
         folder = self.dry_runs_dir(data, rel)
+        out: dict[str, Any] = {"found": False, "tried": None}
         if not folder.is_dir():
-            return {"found": False}
+            return out
+        tries = sorted((p for p in (folder / "try").glob("*/session.json")), key=lambda p: p.stat().st_mtime, reverse=True)
+        for sj in tries[:40]:
+            try:
+                info = json.loads(sj.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if same(sj, info, try_copy=True):
+                out["tried"] = {"at": info.get("ended") or info.get("started"), "path": str(sj.parent.relative_to(self.root))}
+                break
         runs = sorted((p for p in folder.glob("*/session.json")), key=lambda p: p.stat().st_mtime, reverse=True)
         for sj in runs[:40]:
             try:
                 info = json.loads(sj.read_text(encoding="utf-8"))
             except Exception:
                 continue
-            if info.get("experiment_sha256") not in want:
+            if not same(sj, info):
                 continue
             try:
                 n = sum(1 for r in wide_trials(SessionTables(sj.parent))[1] if r.get("loop"))
             except Exception:
                 n = None
             ok = not info.get("aborted") and not info.get("errors") and not info.get("crash")
-            return {"found": True, "ok": ok, "at": info.get("ended") or info.get("started"), "trials": n,
-                    "path": str(sj.parent.relative_to(self.root))}
-        return {"found": False}
+            out.update(found=True, ok=ok, at=info.get("ended") or info.get("started"), trials=n,
+                       path=str(sj.parent.relative_to(self.root)))
+            return out
+        return out
 
     # --------------------------------------------------------------- guided design
     def wizard(self, answers: dict[str, Any], save_as: str | None) -> dict[str, Any]:
@@ -688,7 +774,8 @@ POST_FIELDS: dict[str, dict[str, tuple[type | tuple[type, ...], bool]]] = {
     "/api/export": {"path": (str, True), "formats": (list, False), "layout": (str, False)},
     "/api/recording": {"experiment": (dict, True), "path": (str, False)},
     "/api/validate": {"experiment": (dict, True), "path": (str, False)},
-    "/api/dryrun": {"experiment": (dict, True), "path": (str, False), "participant": (dict, False)},
+    "/api/dryrun": {"experiment": (dict, True), "path": (str, False), "participant": (dict, False),
+                    "reviewed_code": (list, False)},
     "/api/last_test": {"experiment": (dict, True), "path": (str, True), "saved": (bool, False)},
     "/api/device_test": {"experiment": (dict, True), "path": (str, False), "id": (str, True), "seconds": ((int, float), False)},
     "/api/preflight": {"path": (str, True), "reviewed_code": (list, False), "unreviewed": (int, False)},
@@ -698,7 +785,8 @@ POST_FIELDS: dict[str, dict[str, tuple[type | tuple[type, ...], bool]]] = {
     "/api/run": {"path": (str, True), "participant": (dict, False), "fullscreen": (bool, False)},
     "/api/wizard": {"answers": (dict, False), "save_as": (str, False)},
     "/api/estimate": {"experiment": (dict, True), "path": (str, False)},
-    "/api/play/start": {"experiment": (dict, True), "path": (str, False), "routine": (str, False), "max_trials": ((int, float), False)},
+    "/api/play/start": {"experiment": (dict, True), "path": (str, False), "routine": (str, False), "max_trials": ((int, float), False),
+                        "reviewed_code": (list, False)},
     "/api/survey/render": {"spec": (dict, False), "path": (str, False)},
     "/api/survey/instrument": {"id": (str, True)},
     "/api/rename": {"experiment": (dict, True), "kind": (str, True), "old": (str, True), "new": (str, True),
@@ -716,11 +804,12 @@ POST_FIELDS: dict[str, dict[str, tuple[type | tuple[type, ...], bool]]] = {
     "/api/assistant/discard": {"id": (str, True)},
     "/api/assistant/applied": {"id": (str, True)},
     "/api/assistant/detach": {"exp": (str, True), "file": (str, True)},
+    "/api/assistant/reviewed": {"exp": (str, True), "hashes": (list, True)},
 }
 QUERY_FIELDS = {"/api/experiment": ["path"], "/api/restore": ["path"], "/api/upload": ["path"],
                 "/api/assistant/attach": ["exp", "name"], "/api/assistant/preview": ["exp", "file"],
                 "/api/assistant/job": ["id"], "/api/assistant/conversation": ["id"],
-                "/api/assistant/models": ["provider"]}
+                "/api/assistant/models": ["provider"], "/api/assistant/code": ["exp"]}
 RAW_BODY = {"/api/upload", "/api/assistant/attach"}      # the body is a file, not JSON
 ATTACH_LIMIT = 60 * 1024 * 1024
 
@@ -999,7 +1088,8 @@ def make_handler(app: BuilderApp):
                 if u.path == "/api/experiment":
                     try:
                         return self._json(app.save(q["path"], body, q.get("fingerprint"), q.get("force") == "1",
-                                                   q.get("label"), new=q.get("new") == "1"))
+                                                   q.get("label"), new=q.get("new") == "1",
+                                                   copy_from=q.get("copy_from") or None))
                     except storage.ConflictError as e:
                         return self._json({"error": str(e), "conflict": True}, 409)
                 if u.path == "/api/restore":
@@ -1012,6 +1102,15 @@ def make_handler(app: BuilderApp):
                     return self._json(app.recording(body["experiment"], body.get("path")))
                 if u.path == "/api/validate":
                     return self._json({"issues": app.validate(body["experiment"], body.get("path"))})
+                if u.path in ("/api/dryrun", "/api/play/start"):
+                    # Python the assistant wrote runs only after a person has read it (docs/ASSISTANT.md): not in a
+                    # test run, not in Try it, whichever browser or page asks
+                    unread = app.unread_code(body["experiment"], body.get("path"), body.get("reviewed_code"))
+                    if unread:
+                        names = ", ".join(f"“{c['routine']}” › {c['id']}" for c in unread[:4])
+                        return self._json({"ok": False, "unread_code": unread,
+                                           "error": f"Code written by the assistant hasn't been reviewed yet ({names}). "
+                                                    "Read it, then press I've read it: until then it doesn't run."})
                 if u.path == "/api/dryrun":
                     return self._json(app.dry_run(body["experiment"], body.get("path"), body.get("participant") or {}))
                 if u.path == "/api/last_test":

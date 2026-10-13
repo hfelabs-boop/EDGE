@@ -374,3 +374,4 @@ button.chg:focus-visible { outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) {
   .applied-line > .ic { animation: none; }
 }
+.home-pending { margin-bottom: var(--sp-4); }

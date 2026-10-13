@@ -90,9 +90,83 @@ def _jsonable(v: Any) -> Any:
 
 
 # ---------------------------------------------------------------- one screen with real trial values
+_BARE_KEYS = {"when", "end_if", "if", "start_if", "stop_if", "only_if", "start", "duration"}
+
+
+def _routine_reads(routine: dict[str, Any]) -> set[str]:
+    """Names the expressions of a routine read ($resp.corr → 'resp')."""
+    from . import expressions
+    out: set[str] = set()
+
+    def walk(v: Any, key: str = "") -> None:
+        if isinstance(v, str):
+            if v.startswith("$$"):
+                return
+            if v.startswith("$"):
+                out.update(expressions.names_in(v[1:]))
+            elif key in _BARE_KEYS and v.strip():
+                out.update(expressions.names_in(v))
+        elif isinstance(v, list):
+            for x in v:
+                walk(x, key)
+        elif isinstance(v, dict):
+            for k, x in v.items():
+                walk(x, str(k))
+    walk(routine)
+    return out
+
+
+def _routine_defines(routine: dict[str, Any]) -> set[str]:
+    """Names a routine gives a value: its components' results and the variables it sets."""
+    out: set[str] = set()
+    for c in (routine or {}).get("components") or []:
+        if isinstance(c, dict):
+            out.add(str(c.get("id")))
+            if c.get("type") == "variable" and isinstance(c.get("set"), dict):
+                out.update(str(k) for k in c["set"])
+    for rule in (routine or {}).get("rules") or []:
+        for a in (rule.get("do") or []) if isinstance(rule, dict) else []:
+            if isinstance(a, dict) and isinstance(a.get("set"), dict):
+                out.update(str(k) for k in a["set"])
+    return out
+
+
+def single_screen_plan(doc: dict[str, Any], routine_id: str) -> list[str]:
+    """The screens "only this screen" really has to run: the screen itself, and the screens before it in the same
+    trial (or the same part of the flow) whose results it reads. 'feedback' reads resp.corr from 'trial', so trying
+    it alone would stop on a name that doesn't exist yet: it is tried together with 'trial'."""
+    routines = doc.get("routines") or {}
+
+    def find(nodes: list[Any]) -> list[Any] | None:
+        for n in nodes or []:
+            if n == routine_id or (isinstance(n, dict) and n.get("routine") == routine_id):
+                return nodes
+            if isinstance(n, dict):
+                for kids in [n.get("children"), n.get("then"), n.get("else"),
+                             *[(st or {}).get("run") for st in (n.get("states") or {}).values()]]:
+                    r = find(kids or [])
+                    if r is not None:
+                        return r
+        return None
+
+    siblings = find(doc.get("flow") or []) or [routine_id]
+    names = [n if isinstance(n, str) else n.get("routine") if isinstance(n, dict) else None for n in siblings]
+    i = next(k for k, n in enumerate(names) if n == routine_id) if routine_id in names else 0
+    reads = _routine_reads(routines.get(routine_id) or {}) - _routine_defines(routines.get(routine_id) or {})
+    first = i
+    for j in range(i - 1, -1, -1):
+        rid = names[j]
+        if not rid or rid not in routines:
+            break         # a loop, a branch or a workflow in between: stop there
+        if reads & _routine_defines(routines[rid]):
+            first = j
+    return [n for n in names[first:i + 1] if n]
+
+
 def single_screen_experiment(doc: dict[str, Any], routine_id: str, max_trials: int = 5) -> dict[str, Any]:
     """A copy of the experiment whose flow runs just one screen, inside the loops it normally sits in
-    (so trial-list values are real), for at most ``max_trials`` rows."""
+    (so trial-list values are real), for at most ``max_trials`` rows. A screen that reads the results of an earlier
+    screen of the same trial ('feedback' reads resp.corr) runs together with it (:func:`single_screen_plan`)."""
     doc = copy.deepcopy(doc)
     if routine_id not in (doc.get("routines") or {}):
         raise KeyError(f"no screen called '{routine_id}'")
@@ -117,10 +191,11 @@ def single_screen_experiment(doc: dict[str, Any], routine_id: str, max_trials: i
         return None
 
     loops = find(doc.get("flow") or [], []) or []
-    node: Any = routine_id
+    screens = single_screen_plan(doc, routine_id)
+    node: Any = screens if len(screens) > 1 else routine_id
     for i, lp in enumerate(reversed(loops)):
         lp = {k: v for k, v in lp.items() if k not in ("children", "stop_if")}
-        lp["children"] = [node]
+        lp["children"] = list(node) if isinstance(node, list) else [node]
         if i == 0:
             if lp.get("staircase"):
                 lp["staircase"] = {**lp["staircase"], "max_trials": min(int(lp["staircase"].get("max_trials", 50)), max_trials)}
@@ -129,9 +204,25 @@ def single_screen_experiment(doc: dict[str, Any], routine_id: str, max_trials: i
         else:
             lp["stop_if"] = "$True"
         node = lp
-    doc["flow"] = [node]
+    doc["flow"] = list(node) if isinstance(node, list) else [node]
     doc.setdefault("settings", {}).setdefault("data", {})["exports"] = []
+    # what the experiment measures is summarised per participant: a single screen never needs it, and a measure
+    # of a trial list that isn't in this cut-down flow would stop it from starting
+    doc.pop("measures", None)
     return doc
+
+
+def _needs_the_rest(full: dict[str, Any], cut: dict[str, Any], routine: str, base_dir: Path, errors: list) -> list[str]:
+    """Names the chosen screen reads that only exist in the whole experiment (the trial list before a 'thanks'
+    screen: $trials.total): then the cut-down copy's errors are not the experiment's problems."""
+    from .model import Experiment
+    try:
+        if any(i.level == "error" for i in Experiment.from_dict(copy.deepcopy(full), base_dir=base_dir).validate()):
+            return []
+    except Exception:
+        return []
+    reads = _routine_reads((cut.get("routines") or {}).get(routine) or {})
+    return sorted(n for n in reads if any(f"'{n}'" in i.message for i in errors))
 
 
 # ---------------------------------------------------------------- a playing session
@@ -142,6 +233,7 @@ class Player:
                  max_trials: int = 5):
         from .model import Experiment
 
+        full = doc
         if routine:
             doc = single_screen_experiment(doc, routine, max_trials)
         else:
@@ -151,8 +243,15 @@ class Player:
         self.problem: dict[str, Any] | None = None
         self.exp = Experiment.from_dict(doc, base_dir=base_dir)
         errors = [i for i in self.exp.validate() if i.level == "error"]
+        if errors and routine:
+            outside = _needs_the_rest(full, doc, routine, base_dir, errors)
+            if outside:
+                raise ValueError(f"“{routine}” uses {', '.join('“' + n + '”' for n in outside)} from earlier in the "
+                                 "experiment, so it can only be tried as part of the whole experiment: use Try it "
+                                 "(whole experiment)")
         if errors:
-            raise ValueError("; ".join(f"{i.where}: {i.message}" for i in errors[:5]))
+            msgs = list(dict.fromkeys(i.message for i in errors))     # plain sentences, not validator paths
+            raise ValueError("; ".join(msgs[:3]) + (f" (and {len(msgs) - 3} more)" if len(msgs) > 3 else ""))
         from .model import window_size
         self.backend = BrowserBackend(size=window_size(self.exp.settings))
         self.data_root = data_root
@@ -162,6 +261,7 @@ class Player:
         self.started = time.time()
         self.runner: Any = None
         self.total: int | None = None           # expected trials, for "trial 3 of 18" in the Try-it bar
+        self.screens = single_screen_plan(doc, routine) if routine else []
         try:
             from .wizard import estimate_experiment
             self.total = int(estimate_experiment(self.exp).get("trials") or 0) or None
@@ -276,7 +376,7 @@ class PlayManager:
             self.player.stop()
             self.player.thread.join(timeout=3)
         self.player = Player(doc, base_dir, data_root or (self.root / "data" / "dry_runs" / "try"), routine, max_trials)
-        return {"ok": True, "size": list(self.player.backend.size)}
+        return {"ok": True, "size": list(self.player.backend.size), "screens": self.player.screens}
 
     def frame(self, since_sound: int = 0) -> dict[str, Any]:
         if self.player is None:

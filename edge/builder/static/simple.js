@@ -139,7 +139,13 @@ function renderWizard() {
       radio("resp", () => { r.kind = "rating"; }, "Rate on a scale", "e.g. 1 to 7", r.kind === "rating", "rating"),
       radio("resp", () => { r.kind = "none"; }, "No response", "Just watch or listen", r.kind === "none", "eye")));
     if (r.kind === "keys") {
-      const chips = typeof inspKeyChips === "function" ? inspKeyChips(r.keys || [], (v) => { r.keys = v; renderWizard(); wizPreview(); setTimeout(() => $("#wiz-keys")?.focus({preventScroll: true}), 0); }, "wiz-keys")
+      // a key press changes only the chips (not the whole step), so the box keeps the focus for the next key
+      const mkChips = () => inspKeyChips(r.keys || [], (v) => {
+        r.keys = v; const old = $("#wiz-keys")?.closest(".keychips"), nu = mkChips();
+        if (old) { old.replaceWith(nu); nu.querySelector("#wiz-keys")?.focus({preventScroll: true}); } else renderWizard();
+        wizPreview();
+      }, "wiz-keys");
+      const chips = typeof inspKeyChips === "function" ? mkChips()
         : h("input", {class: "input", id: "wiz-keys", value: (r.keys || []).join(" "), oninput: (e) => { r.keys = e.target.value.split(/[\s,]+/).filter(Boolean); wizPreview(); }});
       els.push(h("div", {class: "field"}, h("label", {for: "wiz-keys"}, "Keys participants may press"), chips,
         h("div", {class: "help"}, "Click the box and press the keys. Key names: letters, digits, space, left, right, up, down, return.")));
@@ -236,7 +242,11 @@ function wizPreview() {
     try {
       const r = await api("/api/wizard", {answers: wizardAnswers()});
       if (!W.dlg) return;
-      if (!r.ok) { W.est.className = "wiz-est t-small bad"; W.est.replaceChildren(icon("warning"), " ", r.error); return; }
+      if (!r.ok) {
+        wizEstError(r.error);
+        wizPlainThumb();       // the answers can't make an experiment yet: still show the first stimulus, never a stale one
+        return;
+      }
       W.est.className = "wiz-est t-small";
       const e = r.estimate || {};
       W.est.replaceChildren(`This makes ${EDGE.fmt.estimate({trials: e.trials, seconds: e.seconds}).replace(" · ", ", ")}.`);
@@ -246,8 +256,29 @@ function wizPreview() {
         try { drawThumbnail(r.experiment, W.thumb, {rid, path: null}); } catch { /* the preview is a nicety */ }
         W.thumb.setAttribute("aria-label", `Preview of one trial: screen “${rid}”`);
       }
-    } catch (e) { W.est.textContent = e.message; }
+    } catch (e) {
+      wizEstError(e.message);
+      wizPlainThumb();
+    }
   }, 250);
+}
+/* Why the answers can't make an experiment yet, with a button to the step where it is fixed ("… in step 2, …"). */
+function wizEstError(text) {
+  W.est.className = "wiz-est t-small bad";
+  const m = String(text || "").match(/\bin step (\d)\b/i), n = m ? +m[1] : 0;
+  W.est.replaceChildren(icon("warning"), " ", text || "",
+    n && n - 1 !== W.step ? h("div", {}, h("button", {type: "button", class: "btn sm", onclick: () => { W.step = n - 1; renderWizard(); wizPreview(); }}, `Go to step ${n}`)) : null);
+}
+/* A plain preview while the answers can't be turned into an experiment yet: the first stimulus, as words. */
+function wizPlainThumb() {
+  const cv = W.thumb, ctx = cv?.getContext?.("2d"); if (!ctx) return;
+  const first = (W.a?.stimulus?.items || []).find((it) => String(it.stimulus ?? "").trim());
+  ctx.setTransform(1, 0, 0, 1, 0, 0);     // drawThumbnail leaves its own scale behind
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
+  if (!first) return;
+  ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = `${Math.round(cv.height / 9)}px sans-serif`;
+  ctx.fillText(String(first.stimulus).split(/[\\/]/).pop().slice(0, 40), cv.width / 2, cv.height / 2);
+  cv.setAttribute("aria-label", `Preview of one trial: ${first.stimulus}`);
 }
 /* The trial screen of the generated experiment: "trial", or the first screen inside a trial list. */
 function wizTrialScreen(doc) {
@@ -285,11 +316,16 @@ async function createFromWizard() {
   if (btn) { btn.setAttribute("aria-busy", "true"); btn.disabled = true; }
   let r;
   try { r = await api("/api/wizard", {answers: a, save_as: `${name}/${name}.yaml`}); }
-  catch (e) { if (btn) { btn.removeAttribute("aria-busy"); btn.disabled = false; } return toast(e.message, {tone: "danger", ms: 8000}); }
+  catch (e) {
+    if (btn) { btn.removeAttribute("aria-busy"); btn.disabled = false; }
+    if (!e.data || e.data.ok !== false) return toast(e.message, {tone: "danger", ms: 8000});
+    r = e.data;                 // the answers can't make an experiment: said inside the wizard, below
+  }
   if (!r.ok) {
     if (btn) { btn.removeAttribute("aria-busy"); btn.disabled = false; }
     // said inside the wizard, next to the answers (a toast would cover the buttons), with a way to the step that fixes it
-    W.err = {text: r.error, step: /keys participants may press|response keys/i.test(r.error || "") ? 1 : undefined};
+    const st = (String(r.error || "").match(/\bin step (\d)\b/i) || [])[1];
+    W.err = {text: r.error, step: st ? +st - 1 : /keys participants may press|response keys/i.test(r.error || "") ? 1 : undefined};
     renderWizard(); W.pageEl.querySelector(".wiz-err")?.scrollIntoView({block: "nearest"});
     return;
   }
@@ -317,16 +353,23 @@ function tryIt(scope = "all") {
 
 async function startPlay(routine) {
   if (P.on) return;
+  if (typeof assistantCodeGate === "function" && !(await assistantCodeGate())) return;
   let r, err = null;
-  try { r = await api("/api/play/start", {experiment: S.exp, path: S.path, routine, max_trials: 5}); }
+  try { r = await api("/api/play/start", {experiment: S.exp, path: S.path, routine, max_trials: 5,
+    reviewed_code: typeof reviewedCodeHashes === "function" ? reviewedCodeHashes() : []}); }
   catch (e) { err = e.message; }
+  if (r && !r.ok && r.unread_code) {      // the server knows code the assistant wrote that nobody has read
+    try { window.Assistant?.syncCode?.(); } catch { /* no assistant panel */ }
+    if (typeof assistantCodeGate === "function" && await assistantCodeGate(r.unread_code)) startPlay(routine);
+    return;
+  }
   if (err !== null || !r?.ok) {
     // must-fix problems: show them where they are (the Problems popover), not as a raw message
     S.strict = true;
     try { if (typeof validate === "function") await validate(); } catch { /* the message below says it */ }
     const n = typeof problemGroups === "function" ? problemGroups().error.length : (S.issues || []).filter((i) => i.level === "error").length;
     if (n && typeof openProblems === "function") openProblems({reason: `Can't start yet: ${countWord(n, "thing")} to fix.`});
-    else toast(`Try it couldn't start: ${err || r?.error || "the experiment has a problem"}`, {tone: "danger", ms: 8000});
+    else toast(`Try it couldn't start: ${builderWords(err || r?.error || "the experiment has a problem")}`, {tone: "danger", ms: 8000});
     return;
   }
   P.on = true; P.sound = 0; P.size = r.size; P.routine = routine; P.last = null;
@@ -341,7 +384,9 @@ async function startPlay(routine) {
   let est = null;
   try { est = !routine && typeof storyEstimate === "function" ? storyEstimate(() => {}) : null; } catch { est = null; }
   P.inLoop = !!routine && typeof loopsAround === "function" && loopsAround(routine).length > 0;
-  const scope = routine ? ` · only “${routine}”${P.inLoop ? ", 5 trials" : ""}` : est && est.trials ? ` · ${countWord(est.trials, "trial")}` : "";
+  // a screen that reads an earlier screen's answer ("feedback" reads resp from "trial") is tried together with it
+  P.together = routine && Array.isArray(r.screens) && r.screens.length > 1 ? r.screens : null;
+  const scope = routine ? ` · ${playScopeName()}${P.inLoop ? ", 5 trials" : ""}` : est && est.trials ? ` · ${countWord(est.trials, "trial")}` : "";
   const stop = h("button", {type: "button", class: "btn sm play-stop", onclick: stopPlay}, icon("stop"), "Stop");
   put(el, h("div", {class: "play-bar"},
     h("span", {class: "play-title"}, h("b", {}, `Trying “${S.exp.name || docName()}”`), h("span", {class: "play-scope"}, scope)),
@@ -369,6 +414,8 @@ async function startPlay(routine) {
   playLoop(cv, frame);
 }
 
+/* "only “instructions”", or "“trial” and “feedback”" when the screen is tried with the one whose answer it reads */
+function playScopeName() { return P.together ? P.together.map((x) => `“${x}”`).join(" and ") : `only “${P.routine}”`; }
 function playMouse(e, cv, down) {
   if (!P.on) return;
   const r = cv.getBoundingClientRect();
@@ -414,7 +461,7 @@ function playCounter(f) {
   const el = document.querySelector("#play .play-scope"); if (!el) return;
   const total = f.trials || (P.routine && P.inLoop ? 5 : null), n = f.trial || 0;
   const counter = f.in_trial && n ? (total && n <= total ? `trial ${n} of ${total}` : `trial ${n}`) : null;
-  const text = P.routine ? ` · only “${P.routine}”` + (P.inLoop ? `, ${counter || countWord(total || 5, "trial")}` : "")
+  const text = P.routine ? ` · ${playScopeName()}` + (P.inLoop ? `, ${counter || countWord(total || 5, "trial")}` : "")
     : counter ? ` · ${counter}` : total ? ` · ${countWord(total, "trial")}` : "";
   if (el.textContent !== text) el.textContent = text;
 }
@@ -527,7 +574,10 @@ function finishPlay(f) {
     if (res.mean_rt != null) facts.push(`${Math.round(res.mean_rt * 1000)} ms mean`);
   }
   const end = $("#play-end");
-  const again = h("button", {type: "button", class: "btn primary", onclick: () => { closePlay(false); startPlay(P.routine); }}, icon("refresh"), "Try again");
+  // a participant's last Space or Enter must not start the whole try again: focus goes to the panel's title, and a key
+  // press on Try again in the first second after the end is ignored (a click always works)
+  const endedAt = Date.now();
+  const again = h("button", {type: "button", class: "btn primary", onclick: (e) => { if (e.detail === 0 && Date.now() - endedAt < 1000) return; closePlay(false); startPlay(P.routine); }}, icon("refresh"), "Try again");
   const data = h("button", {type: "button", class: "btn", onclick: () => {
     closePlay(false);
     const dir = String(res.data_dir || "").replace(/\\/g, "/").split("/").filter(Boolean).pop() || null;
@@ -537,7 +587,7 @@ function finishPlay(f) {
   const back = h("button", {type: "button", class: "btn", onclick: () => closePlay(true)}, "Back to editing");
   end.replaceChildren(
     h("div", {class: "pe-main"},
-      h("div", {class: "pe-head " + (f.error ? "bad" : res.aborted ? "stopped" : "ok")}, icon(f.error ? "error" : res.aborted ? "stop" : "success", "m"), h("b", {}, title), facts.length ? h("span", {class: "pe-facts"}, facts.join(" · ")) : null),
+      h("div", {class: "pe-head " + (f.error ? "bad" : res.aborted ? "stopped" : "ok")}, icon(f.error ? "error" : res.aborted ? "stop" : "success", "m"), h("b", {class: "pe-title", tabindex: "-1"}, title), facts.length ? h("span", {class: "pe-facts"}, facts.join(" · ")) : null),
       f.error ? stoppedBox(f.problem, f.error, {bare: true, before: () => closePlay(false)}) : null,
       f.error && S.mode === "expert" && (f.log || []).length ? h("details", {class: "pe-log"}, h("summary", {}, "Log"), h("pre", {class: "mono"}, (f.log || []).join("\n"))) : null,
       !f.error && res.note ? h("p", {class: "pe-note"}, "Times measured in a browser are approximate. Use Run with a participant for real data.") : null),
@@ -546,7 +596,7 @@ function finishPlay(f) {
   P.fit?.();
   end.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closePlay(true); } });
   P.release = ui.trapFocus(el);
-  setTimeout(() => again.focus(), 0);
+  setTimeout(() => end.querySelector(".pe-title")?.focus(), 0);
   ui.announce(`${title}${facts.length ? (/[.!?]$/.test(title) ? " " : ". ") + facts.join(", ") + "." : ""}`);
 }
 /* Close the overlay; "Back to editing" returns to the workspace, screen and selection you started from. */
@@ -681,7 +731,7 @@ function runBeforeView() {
     h("b", {}, code.length === 1 ? "Code written by the assistant hasn't been reviewed" : `${code.length} pieces of code written by the assistant haven't been reviewed`),
     h("ul", {class: "plain"}, code.map((c) => h("li", {}, `“${c.routine}” › ${c.id} `,
       h("button", {type: "button", class: "btn sm ghost", onclick: () => EDGE.select({kind: "component", routine: c.routine, id: c.id}, {pulse: true})}, "Review it"),
-      h("button", {type: "button", class: "btn sm ghost", onclick: () => { try { inspAssistantApi()?.markReviewed?.(c.routine, c.id); } catch { /* no assistant */ } renderRunPage(); }}, "I've read it")))),
+      h("button", {type: "button", class: "btn sm ghost", onclick: () => { try { inspAssistantApi()?.markReviewed?.(c.routine, c.id); } catch { /* no assistant */ } RUN.pfKey = ""; setTimeout(renderRunPage, 300); }}, "I've read it")))),
     h("p", {class: "t-caption"}, "Read the code before running real participants: it runs with full access to this computer."))));
   pre.append(runToday());
   // the sticky footer: [Start anyway] [Start session]

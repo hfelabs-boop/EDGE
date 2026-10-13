@@ -67,6 +67,11 @@ textarea.input.mono, textarea.input.expr { font-family: var(--font-mono); font-s
 input.input.mono { font-family: var(--font-mono); font-size: 13px; }
 /* the value-source token: hidden in Simple while the value is the same on every trial, until hover or focus */
 .srcbtn { flex: none; }
+.srcbtn .src-compact { display: none; }
+/* beside a control (position, size…) "Same on every trial" would squeeze the inputs: an icon with the words as its tooltip */
+.field.nolabel > .ctl-row > .srcbtn.fixed { padding: 0 var(--sp-2); }
+.field.nolabel > .ctl-row > .srcbtn.fixed .src-words { display: none; }
+.field.nolabel > .ctl-row > .srcbtn.fixed .src-compact { display: inline-flex; }
 .srcbtn .ic { width: 14px; height: 14px; }
 .srcbtn.column { color: var(--loop); }
 .srcbtn.formula { color: var(--accent-text); }
@@ -88,6 +93,7 @@ body.mode-simple .field:not(:hover):not(:focus-within) > .lbl-row > .srcbtn.fixe
 .expr-wrap { display: flex; flex-direction: column; gap: var(--sp-2); }
 .say { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-2); }
 .say[hidden] { display: none; }
+.say.bad { color: var(--danger); }
 /* switches */
 .field.switch-field { margin-bottom: var(--sp-5); }
 .field.switch-field .switch-row .lbl { font-size: var(--fs-body); }
@@ -408,6 +414,7 @@ table.grid.wiz-items .input { height: 28px; padding: 0 var(--sp-4); }
 .pe-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
 .pe-head { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
 .pe-head b { font-size: var(--fs-title-s); line-height: var(--lh-title-s); font-weight: var(--fw-semibold); }
+.pe-head .pe-title:focus:not(:focus-visible) { outline: none; }
 .pe-head > .ic { color: var(--success); }
 .pe-head.stopped > .ic { color: var(--text-2); }
 .pe-head.bad > .ic { color: var(--danger); }
@@ -459,7 +466,8 @@ table.grid.wiz-items .input { height: 28px; padding: 0 var(--sp-4); }
 .run-today > .btn { margin-left: calc(-1 * var(--sp-4)); }
 .run-today > .btn .ic { order: 2; }
 .ic.c-ok { color: var(--success); } .ic.c-warn { color: var(--warning-icon); } .ic.c-bad { color: var(--danger); }
-.run-foot { position: sticky; bottom: 0; z-index: var(--z-sticky); margin-top: auto; display: flex; align-items: center; gap: var(--sp-5);
+/* sticky at the very bottom of the page (the page's own 24 px bottom padding would leave a gap the text scrolls through) */
+.run-foot { position: sticky; bottom: calc(-1 * var(--sp-8)); z-index: var(--z-sticky); margin-top: auto; display: flex; align-items: center; gap: var(--sp-5);
   padding: var(--sp-4) var(--sp-4) var(--sp-4) var(--sp-6); background: var(--surface-1); border: 1px solid var(--border-subtle); border-radius: var(--r-lg); box-shadow: var(--e2); }
 .run-foot > p { margin: 0; flex: 1 1 auto; min-width: 0; }
 .run-foot > .grow { display: none; }

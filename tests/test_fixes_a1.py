@@ -389,5 +389,5 @@ def test_preflight_tries_the_devices(tmp_path):
                    DeviceSpec.from_dict({"id": "eeg", "type": "sim_eeg"})]
     items = {i["text"].split("'")[1]: i for i in device_items(E(), timeout=3)}
     assert items["box"]["level"] == "error" and "not reachable" in items["box"]["text"]
-    assert items["pedal"]["level"] == "warning" and "WITHOUT" in items["pedal"]["hint"]
+    assert items["pedal"]["level"] == "warning" and "but would not record it" in items["pedal"]["hint"]
     assert items["eeg"]["level"] == "warning" and "simulator" in items["eeg"]["text"]
