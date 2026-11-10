@@ -774,8 +774,10 @@ def create_server(root: str | Path = ".") -> FastMCP:
     @tool
     def import_experiment(source: str, out_dir: str = "", platform: str = "", name: str = "") -> dict[str, Any]:
         """Import a PsychoPy (.psyexp), E-Prime (generated .ebs3/.ebs2 script, plus List .txt exports next to it),
-        OpenSesame (.osexp/.opensesame) or jsPsych (.html/.js) experiment from the workspace. platform (psychopy,
-        eprime, opensesame, jspsych) is detected when left out; name renames the experiment. Importing the same file
+        OpenSesame (.osexp/.opensesame), jsPsych (.html/.js), Inquisit (.iqx/.exp), Presentation (.sce with its .pcl),
+        Psychtoolbox (.m, partial translation of common patterns) or Gorilla (task structure .json and/or spreadsheet
+        .csv/.xlsx) experiment from the workspace. platform (psychopy, eprime, opensesame, jspsych, inquisit,
+        presentation, psychtoolbox, gorilla) is detected when left out; name renames the experiment. Importing the same file
         again updates an earlier import nobody changed since; one that was edited is never overwritten (the new one
         goes to <folder>_2). Returns the new EDGE experiment
         path, what was converted, and items that need manual work. Follow with dry_run."""

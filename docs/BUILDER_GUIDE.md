@@ -93,7 +93,8 @@ always finds everything.
   it and runs a test run straight away.
 * **Start from an example**: Blank, Free viewing (eye tracking), Auditory oddball (EEG), Timing test for this
   computer, Contrast threshold (staircase), Online questionnaire.
-* **Import** from PsychoPy, E-Prime, OpenSesame or jsPsych (see [Importing](IMPORT.md)).
+* **Import** from PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Gorilla or Psychtoolbox
+  (see [Importing](IMPORT.md)).
 
 ## The storyboard
 

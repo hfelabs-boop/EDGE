@@ -970,10 +970,13 @@ def main(argv: list[str] | None = None) -> int:
     bk.add_argument("--restore", nargs="?", const="", help="restore the newest backup, or the given id")
     bk.set_defaults(fn=cmd_backups)
 
-    im = sub.add_parser("import", help="import a PsychoPy, E-Prime, OpenSesame or jsPsych experiment")
-    im.add_argument("source", help=".psyexp, .ebs3/.ebs2, .osexp/.opensesame, or jsPsych .html/.js")
+    im = sub.add_parser("import", help="import a PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, "
+                                       "Psychtoolbox or Gorilla experiment")
+    im.add_argument("source", help=".psyexp, .ebs3/.ebs2, .osexp/.opensesame, jsPsych .html/.js, Inquisit .iqx/.exp, "
+                                   "Presentation .sce, Psychtoolbox .m, or a Gorilla task .json / spreadsheet .csv/.xlsx")
     im.add_argument("--out", help="output folder (default: <source>_edge next to the source)")
-    im.add_argument("--platform", choices=["psychopy", "eprime", "opensesame", "jspsych"], help="force the source platform (normally detected)")
+    im.add_argument("--platform", choices=["psychopy", "eprime", "opensesame", "jspsych", "inquisit", "presentation",
+                                           "psychtoolbox", "gorilla"], help="force the source platform (normally detected)")
     im.add_argument("--name", help="name for the imported experiment")
     im.set_defaults(fn=cmd_import)
 

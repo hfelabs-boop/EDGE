@@ -1,0 +1,18 @@
+# one flanker trial; $arrows, $target and $code come from the TEMPLATE table
+trial {
+   trial_duration = 1500;
+   trial_type = first_response;
+   stimulus_event {
+      picture fixation;
+      time = 0;
+      duration = 400;
+   };
+   stimulus_event {
+      picture { text { caption = $arrows; font_size = 64; }; x = 0; y = 0; };
+      time = 500;
+      duration = 200;
+      target_button = $target;
+      code = $code;
+      port_code = 1;
+   };
+};

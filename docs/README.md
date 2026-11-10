@@ -26,7 +26,7 @@ terminal.
 | [Experiment format](EXPERIMENT_FORMAT.md) | complete reference of the YAML format: settings, components, timing, loops, workflows, rules, HTML pages |
 | [Devices and synchronization](DEVICES.md) | eye trackers, EEG, physiology, LSL, TTL; how clocks are aligned and verified |
 | [Data](DATA.md) | saving and loading, what is recorded, trial tables, summaries, exports |
-| [Importing](IMPORT.md) | bring experiments from PsychoPy, E-Prime, OpenSesame and jsPsych |
+| [Importing](IMPORT.md) | bring experiments from PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Gorilla and Psychtoolbox |
 | [Claude & VS Code (MCP)](MCP.md) | build and analyse experiments by describing them in plain language |
 
 ## Reference (generated from the code)

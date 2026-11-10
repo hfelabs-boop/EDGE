@@ -1,0 +1,48 @@
+# Stroop task -- PCL program
+# condition table: word, ink colour, correct button, port code
+array<string> words[3] = { "RED", "GREEN", "BLUE" };
+array<rgb_color> inks[3] = { rgb_color(255, 0, 0), rgb_color(0, 255, 0), rgb_color(0, 0, 255) };
+
+array<int> word_of[6] = { 1, 2, 3, 1, 2, 3 };
+array<int> ink_of[6]  = { 1, 2, 3, 2, 3, 1 };
+array<int> codes[6]   = { 11, 12, 13, 21, 22, 23 };
+
+array<int> order[12] = { 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6 };
+order.shuffle();
+
+output_file out = new output_file;
+out.open( logfile.subject() + "_stroop.txt" );
+out.print( "trial\tword\tink\tbutton\trt\n" );
+
+int n_correct = 0;
+
+instr_trial.present();
+
+loop int i = 1 until i > order.count() begin
+   int c = order[i];
+   word_text.set_caption( words[word_of[c]] );
+   word_text.set_font_color( inks[ink_of[c]] );
+   word_text.redraw();
+   word_event.set_target_button( ink_of[c] );
+   word_event.set_port_code( codes[c] );
+   word_event.set_event_code( words[word_of[c]] );
+
+   fix_trial.present();
+   stroop_trial.present();
+
+   stimulus_data last = stimulus_manager.last_stimulus_data();
+   if last.type() == stimulus_hit then
+      n_correct = n_correct + 1;
+      correct_trial.present();
+   else
+      wrong_trial.present();
+   end;
+   out.print( string(i) + "\t" + words[word_of[c]] + "\t" + string(ink_of[c]) + "\t" + string(last.reaction_time()) + "\n" );
+
+   iti_trial.set_duration( random(800, 1200) );
+   iti_trial.present();
+   i = i + 1;
+end;
+
+out.close();
+end_trial.present();

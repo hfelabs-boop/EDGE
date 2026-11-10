@@ -740,7 +740,7 @@ async function startWizard() {
   if (typeof openWizard === "function") openWizard();
 }
 
-/* ---------------- Import (PsychoPy, E-Prime, OpenSesame, jsPsych) and .edgez bundles */
+/* ---------------- Import (PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Psychtoolbox, Gorilla) and .edgez bundles */
 /* The experiment's folder keeps its sub-folders (img/blue.png stays img/blue.png); files chosen one by one are
  * put where the experiment looks for them by the server. The server also decides which file is the experiment. */
 function chooseImportFiles() {
@@ -751,7 +751,7 @@ function chooseImportFiles() {
   };
   ui.dialog({title: "Import an experiment", icon: "import", size: "sm",
     body: h("div", {class: "import-choose"},
-      h("p", {}, "From PsychoPy (.psyexp), E-Prime (.ebs3 or .ebs2, with its List .txt files), OpenSesame (.osexp) or jsPsych (.html), or an EDGE bundle (.edgez)."),
+      h("p", {}, "From PsychoPy (.psyexp), E-Prime (.ebs3 or .ebs2, with its List .txt files), OpenSesame (.osexp), jsPsych (.html), Inquisit (.iqx), Presentation (.sce with its .pcl), Psychtoolbox (.m) or Gorilla (task .json and spreadsheet), or an EDGE bundle (.edgez)."),
       h("p", {class: "t-2 t-small"}, "Choose the experiment's folder: its pictures, sounds and condition files come with it, sub-folders such as img/ included. Or choose the files themselves. You can also drop the folder on Home.")),
     buttons: [{label: "Cancel", value: null, left: true, kind: "ghost"}, {label: "Choose files…", value: "files"}, {label: "Choose a folder…", value: "folder", kind: "primary"}]})
     .then((v) => { if (v) pick(v === "folder"); });
@@ -775,7 +775,7 @@ async function droppedFiles(dt) {
   for (const e of entries) await walk(e, "");
   return out;
 }
-const IMPORT_RANK = [".edgez", ".psyexp", ".ebs3", ".ebs2", ".ebs", ".osexp", ".opensesame", ".html", ".htm", ".js", ".es3", ".es2", ".es"];
+const IMPORT_RANK = [".edgez", ".psyexp", ".ebs3", ".ebs2", ".ebs", ".osexp", ".opensesame", ".iqx", ".exp", ".sce", ".pcl", ".m", ".html", ".htm", ".js", ".json", ".xlsx", ".csv", ".es3", ".es2", ".es"];
 async function importFiles(files) {
   const items = (files || []).map((f) => (f && f.file ? f : {file: f, rel: f.webkitRelativePath || f.name}))
     .filter((x) => x.file && !/(^|\/)(\.|node_modules\/|__pycache__\/)/.test(x.rel));
@@ -783,7 +783,7 @@ async function importFiles(files) {
   const ext = (x) => { const m = x.file.name.toLowerCase().match(/\.[^.]+$/); return m ? m[0] : ""; };
   const ranked = items.filter((x) => IMPORT_RANK.includes(ext(x))).sort((a, b) => IMPORT_RANK.indexOf(ext(a)) - IMPORT_RANK.indexOf(ext(b)));
   const main = ranked[0];
-  if (!main) return toast("None of these files is a PsychoPy, E-Prime, OpenSesame or jsPsych experiment, or an EDGE bundle (.edgez).", {tone: "warning", ms: 6000});
+  if (!main) return toast("None of these files is a PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Psychtoolbox or Gorilla experiment, or an EDGE bundle (.edgez).", {tone: "warning", ms: 6000});
   if (!(await confirmLeaveDirty())) return;
   const bundle = ext(main) === ".edgez";
   const stem = main.file.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "_");
@@ -795,7 +795,7 @@ async function importFiles(files) {
       const up = await fetch(`/api/upload?path=${encodeURIComponent(base + "/source/" + x.rel)}`, {method: "POST", body: await x.file.arrayBuffer()});
       if (!up.ok && x === main) throw new Error((await up.json().catch(() => ({}))).error || `${x.rel} could not be copied`);
     }
-    r = await api("/api/import", {source: bundle ? `${base}/source/${main.rel}` : `${base}/source`, out: bundle ? undefined : base});
+    r = await api("/api/import", {source: bundle ? `${base}/source/${main.rel}` : `${base}/source`, out: bundle ? undefined : base, main: bundle ? undefined : main.rel});
   } catch (e) { busy.close(); return toast(`Import failed: ${e.message}`, {tone: "danger", ms: 10000}); }
   busy.close();
   if (r.bundle) {
@@ -1621,7 +1621,7 @@ function renderHomeStart(returning, withDescribe) {
       chip("home-blank", "file", "Blank experiment", blank), homeImportTarget(imb)));
     return;
   }
-  const imp2 = card("home-import", "import", "neutral", "Import", "PsychoPy, E-Prime, OpenSesame, jsPsych. Drop the files here.", imp);
+  const imp2 = card("home-import", "import", "neutral", "Import", "PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Gorilla, Psychtoolbox. Drop the files here.", imp);
   const wiz = card("home-wizard", "checklist", "accent", "Answer a few questions", "6 short pages, about 2 minutes. No AI needed.", wizard, !withDescribe);
   if (!withDescribe) wiz.querySelector(".txt").append(
     h("span", {class: "t-2 big-more"}, "What participants see, how they respond, the timing, practice and feedback, blocks, and any questionnaires or devices. You get a finished, tested experiment to adjust."),
@@ -3011,7 +3011,7 @@ function registerActions() {
   const docOpen = () => !S.noDoc;
   A("new", "New experiment…", () => EDGE.go("home"), {icon: "file"});
   A("open", "Open an experiment…", () => openDialog(), {icon: "folder", keys: `${MOD} O`});
-  A("import", "Import from PsychoPy, E-Prime, OpenSesame or jsPsych…", () => chooseImportFiles(), {icon: "import"});
+  A("import", "Import from PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Gorilla or Psychtoolbox…", () => chooseImportFiles(), {icon: "import"});
   A("save", "Save", () => save(), {icon: "save", keys: `${MOD} S`, when: docOpen});
   A("savecopy", "Save a copy…", () => save(true), {icon: "save", keys: `${MOD} Shift S`, when: docOpen});
   A("history", "History: saved versions…", () => versionsDialog(), {icon: "history", when: docOpen});
