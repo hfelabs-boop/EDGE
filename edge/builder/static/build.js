@@ -14,7 +14,7 @@
 /* ================================================================== icons and categories (SPEC §3.8) */
 const TYPE_ICON = {
   text: "text", image: "image", shape: "shape", fixation: "fixation", sound: "sound", html: "page", survey: "survey",
-  keyboard: "keyboard", device_response: "buttonbox", mouse: "mouse", slider: "rating",
+  keyboard: "keyboard", device_response: "buttonbox", mouse: "mouse", slider: "rating", microphone: "microphone", gamepad: "gamepad",
   gaze_roi: "eye", gaze_follow: "gazefollow", calibrate: "calibrate",
   marker: "marker", variable: "variable", code: "code", wait: "pause_blank",
 };
@@ -22,7 +22,7 @@ const DEVICE_ICON = {
   tobii: "eyetracker", gazepoint: "eyetracker", sim_eyetracker: "eyetracker", mouse_gaze: "eyetracker",
   gtec: "eeg", lsl_inlet: "eeg", sim_eeg: "eeg", mindware: "eeg", sim_physio: "eeg",
   trigger_adapter: "trigger", parallel_port: "trigger", ttl_serial: "trigger", ttl_loopback: "trigger", labjack: "trigger",
-  serial_inputs: "buttonbox", parallel_inputs: "buttonbox", sim_inputs: "buttonbox", voice_key: "buttonbox",
+  serial_inputs: "buttonbox", parallel_inputs: "buttonbox", sim_inputs: "buttonbox", voice_key: "microphone",
   lsl_markers: "marker", udp_messages: "marker",
 };
 const BUILD_CAT = {stimulus: "show", response: "respond", eyetracking: "eye", hardware: "hw", logic: "logic"};
@@ -178,7 +178,7 @@ const OP_WORDS = {">=": "is at least", "<=": "is at most", ">": "is more than", 
 function responseIds() {
   const out = new Set();
   for (const r of Object.values(S.exp?.routines || {})) for (const c of r.components || [])
-    if (["keyboard", "mouse", "slider", "device_response", "survey", "html", "gaze_roi"].includes(c.type)) out.add(c.id);
+    if (["keyboard", "mouse", "slider", "device_response", "survey", "html", "gaze_roi", "microphone", "gamepad"].includes(c.type)) out.add(c.id);
   return out;
 }
 function termWords(t, resp) {
@@ -260,7 +260,8 @@ function unwrapParens(t) {
 /* resp.cor: a result the component doesn't have (it stops the experiment at that line) → "resp.cor, which a key press
    doesn't have" in the words, never a condition that reads as if it worked. */
 const TYPE_THING = {keyboard: "a key press", mouse: "a mouse response", slider: "a rating slider", text: "a text", image: "a picture",
-  sound: "a sound", shape: "a shape", fixation: "a fixation cross", device_response: "a device response", gaze_roi: "a gaze area"};
+  sound: "a sound", shape: "a shape", fixation: "a fixation cross", device_response: "a device response", gaze_roi: "a gaze area",
+  microphone: "a voice recording", gamepad: "a gamepad response"};
 function unknownResult(s) {
   const types = {};
   for (const r of Object.values(S.exp?.routines || {})) for (const c of r.components || []) if (c && c.id) types[c.id] = c.type;
@@ -997,7 +998,8 @@ function screenSummary(rid) {
     const keys = Array.isArray(resp.keys) ? resp.keys.join(" / ") : typeof resp.keys === "string" && !isExpr(resp.keys) ? resp.keys : null;
     const what = {keyboard: keys ? (resp.keys.length === 1 || typeof resp.keys === "string" ? `waits for ${keys}` : keys) : "waits for a key",
       mouse: "waits for a click", slider: "waits for a rating", html: "waits for the form", survey: "waits for the answers",
-      gaze_roi: "waits for a look", device_response: "waits for a button"}[resp.type] || `ends with ${resp.id}`;
+      gaze_roi: "waits for a look", device_response: "waits for a button", gamepad: "waits for a gamepad button",
+      microphone: resp.stop_after_speech ? "records until they stop speaking" : "records their voice"}[resp.type] || `ends with ${resp.id}`;
     bits.push(what);
     if (typeof resp.duration === "number") bits.push(`max ${fmtS(numOr(resp.start, 0) + resp.duration)}`);
   }
@@ -1702,7 +1704,8 @@ async function addComponent(type, at, opts = {}) {
     S.routine = rid = nid; at = undefined;
   }
   const d = S.schema.components[type];
-  const base = {keyboard: "resp", device_response: "button", mouse: "click", slider: "rating", image: "picture", fixation: "fixation", html: "page"}[type] || type;
+  const base = {keyboard: "resp", device_response: "button", mouse: "click", slider: "rating", image: "picture", fixation: "fixation", html: "page",
+    microphone: "voice", gamepad: "pad"}[type] || type;
   const c = {id: uniqueId(base, new Set(comps(rid).map((x) => x.id))), type};
   for (const [k, p] of Object.entries(d.props)) if (p.required) c[k] = p.default ?? (p.type === "text" || p.type === "str" ? "" : null);
   if (type === "text") c.text = "Hello";
@@ -1717,6 +1720,8 @@ async function addComponent(type, at, opts = {}) {
   if (type === "marker") c.label = "event";
   if (type === "survey") { c.title = "A few questions"; c.questions = [{id: "q1", type: "likert", scale: "agree5", required: true, text: "I enjoyed the task."}]; c.end_routine = true; }
   if (type === "html") c.end_routine = true;
+  if (type === "gamepad") c.end_routine = true;
+  if (type === "microphone") { c.duration = 3.0; c.stop_after_speech = true; c.end_routine = true; }
   S.autoDur ||= new Set();
   if (d.visual && !["slider"].includes(type) && !comps(rid).some((x) => x.end_routine) && S.exp.routines[rid].duration == null) {
     c.duration = 1.0; S.autoDur.add(rid + "." + c.id);   // a placeholder so the screen can end; see below
@@ -2446,7 +2451,9 @@ function itemWords(c) {
     case "html": return c.file ? `the web page ${String(c.file).split("/").pop()}` : "a web page";
     case "survey": return `a survey (${plural((c.questions || []).filter((q) => q.type !== "page_break").length, "question")})`;
     case "keyboard": return `waits for ${keysWords(c.keys)}`;
-    case "mouse": return "waits for a click";
+    case "mouse": return (c.swipe || []).length ? `waits for a swipe (${[].concat(c.swipe).join(" or ")})` : "waits for a click or tap";
+    case "microphone": return c.stop_after_speech ? "records their answer until they stop speaking" : "records their voice";
+    case "gamepad": return Array.isArray(c.buttons) && c.buttons.length ? `waits for ${c.buttons.join(" or ")} on the gamepad` : "waits for a gamepad button";
     case "slider": return "a rating scale";
     case "device_response": return "waits for a button";
     case "gaze_roi": return "watches where they look";
@@ -2459,8 +2466,8 @@ function itemWords(c) {
     default: return friendlyName(c.type);
   }
 }
-const _RESPONSE_TYPES = new Set(["keyboard", "mouse", "slider", "html", "survey", "gaze_roi", "device_response"]);
-const _WAITS = new Set(["keyboard", "mouse", "gaze_roi", "device_response"]);
+const _RESPONSE_TYPES = new Set(["keyboard", "mouse", "slider", "html", "survey", "gaze_roi", "device_response", "microphone", "gamepad"]);
+const _WAITS = new Set(["keyboard", "mouse", "gaze_roi", "device_response", "microphone", "gamepad"]);
 /* Plain words for a screen (Simple), or the detailed technical sentence (Expert: plain=false). */
 function describeRoutine(rid, {plain = isSimple()} = {}) {
   const r = S.exp.routines[rid];

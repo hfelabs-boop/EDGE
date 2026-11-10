@@ -60,6 +60,7 @@ class HeadlessBackend(Backend):
         self._seq = itertools.count()
         self._mouse = (0.0, 0.0)
         self._buttons = [False, False, False]
+        self._axes: dict[int, dict[str, float]] = {}      # gamepad number -> stick/trigger positions
         self.sounds: list[dict[str, Any]] = []
         self.frame_jitter = list(frame_jitter or [])  # extra seconds added to given frame indices (tests)
         self.n_flips = 0
@@ -122,11 +123,39 @@ class HeadlessBackend(Backend):
     def move_mouse(self, pos: tuple[float, float], at: float) -> None:
         self.schedule(InputEvent("mouse", "move", at, True, pos))
 
+    def touch(self, pos: tuple[float, float], at: float, phase: str = "down", touch_id: int = 0) -> None:
+        """A finger on the touchscreen: phase down, move or up; ``touch_id`` tells fingers apart (multi-touch)."""
+        self.schedule(InputEvent("touch", phase, at, phase != "up", tuple(pos), meta={"id": int(touch_id)}))
+
+    def tap(self, pos: tuple[float, float], at: float, touch_id: int = 0) -> None:
+        self.touch(pos, at, "down", touch_id)
+        self.touch(pos, at + 0.06, "up", touch_id)
+
+    def gamepad(self, button: str, at: float, release_after: float | None = 0.1, index: int = 0) -> None:
+        self.schedule(InputEvent("gamepad", button, at, True, meta={"gamepad": index}))
+        if release_after is not None:
+            self.schedule(InputEvent("gamepad", button, at + release_after, False, meta={"gamepad": index}))
+
+    def move_stick(self, axis: str, value: float, at: float, index: int = 0) -> None:
+        """A stick or trigger moving: axis lx, ly, rx, ry (-1..1, up/right positive) or lt, rt (0..1)."""
+        self.schedule(InputEvent("gamepad_axis", axis, at, True, meta={"gamepad": index, "value": float(value)}))
+
+    def open_gamepads(self) -> list[str]:
+        return ["simulated gamepad"]
+
+    def gamepad_axes(self, index: int | None = None) -> dict[str, float]:
+        axes = self._axes
+        if index is None:
+            index = min(axes) if axes else 0
+        return dict(axes.get(int(index), {}))
+
     def poll_events(self) -> list[InputEvent]:
         now = self.clock()
         out = []
         while self._queue and self._queue[0][0] <= now:
             ev = heapq.heappop(self._queue)[2]
+            if ev.kind == "gamepad_axis":
+                self._axes.setdefault(int(ev.meta.get("gamepad") or 0), {})[ev.name] = float(ev.meta.get("value", 0.0))
             if ev.kind == "mouse":
                 if ev.pos is not None:
                     self._mouse = ev.pos

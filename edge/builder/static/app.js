@@ -48,7 +48,8 @@ const S = {
 const FRIENDLY = {
   text: ["Text", "Show"], image: ["Picture", "Show"], shape: ["Shape", "Show"], fixation: ["Fixation cross", "Show"],
   sound: ["Sound", "Show"], html: ["Web page / form", "Show"], survey: ["Survey / questionnaire", "Show"],
-  keyboard: ["Key press", "Responses"], device_response: ["Button box / external input", "Responses"], mouse: ["Mouse click", "Responses"], slider: ["Rating scale", "Responses"],
+  keyboard: ["Key press", "Responses"], device_response: ["Button box / external input", "Responses"], mouse: ["Mouse click / tap", "Responses"], slider: ["Rating scale", "Responses"],
+  microphone: ["Voice recording", "Responses"], gamepad: ["Gamepad / joystick", "Responses"],
   gaze_roi: ["Where they look", "Eye tracking"], gaze_follow: ["Follow the gaze", "Eye tracking"], calibrate: ["Calibrate eye tracker", "Eye tracking"],
   marker: ["Event marker", "Hardware"], variable: ["Set a variable", "Logic"], code: ["Python code", "Logic"], wait: ["Pause / blank", "Logic"],
 };

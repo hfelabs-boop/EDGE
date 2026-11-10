@@ -34,6 +34,8 @@ class BrowserBackend(HeadlessBackend):
         self._sound_seq = itertools.count(1)
         self.sound_events: list[dict[str, Any]] = []
         self.last_seen = master_now()
+        self.recording: dict[str, dict[str, Any]] = {}     # microphone items recording now: file -> options
+        self.audio_files: dict[str, str | None] = {}       # every file a microphone item asked for -> where it goes
 
     def set_background(self, color: Any) -> None:
         self.background = color
@@ -47,7 +49,8 @@ class BrowserBackend(HeadlessBackend):
         t = super().flip()
         with self.lock:
             self.frame = {"seq": self.n_flips, "t": t, "drawn": [[k, _jsonable(p)] for k, p in drawn],
-                          "background": self.background, "page": self.page_url}
+                          "background": self.background, "page": self.page_url,
+                          "record": [{"file": f, **o} for f, o in self.recording.items()]}
         return t
 
     def play_sound(self, source: Any, volume: float = 1.0, **kw: Any) -> Any:
@@ -62,13 +65,49 @@ class BrowserBackend(HeadlessBackend):
         """Called by the HTML component instead of opening a browser window."""
         self.page_url = url
 
+    # ------------------------------------------------------------ microphone (the browser records: responses.js)
+    def start_recording(self, file: str, options: dict[str, Any]) -> None:
+        with self.lock:
+            self.recording[file] = dict(options)
+            self.audio_files.setdefault(file, None)
+
+    def stop_recording(self, file: str, dest: str | None) -> None:
+        """The browser sees the file leave ``record`` and uploads it; it is saved at ``dest`` (in the session folder)."""
+        with self.lock:
+            self.recording.pop(file, None)
+            self.audio_files[file] = dest
+
+    def save_audio(self, file: str, data: bytes) -> str:
+        """Save a recording the browser made for a microphone item of this session (only those: nothing else)."""
+        if not (data[:4] == b"RIFF" and data[8:12] == b"WAVE"):
+            raise ValueError("the recording is not a WAV file")
+        deadline = master_now() + 2.0
+        while True:          # the browser can be quicker than the item's on_stop, which names the destination
+            with self.lock:
+                known, dest = file in self.audio_files, self.audio_files.get(file)
+            if dest or not known or master_now() > deadline:
+                break
+            time.sleep(0.02)
+        if not known:
+            raise ValueError("no microphone item of this Try it recorded that file")
+        if not dest:
+            raise ValueError("this Try it doesn't save data, so the recording isn't kept")
+        p = Path(dest)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(data)
+        return file
+
     # ------------------------------------------------------------ input from the browser
-    def push(self, kind: str, name: str, down: bool = True, pos: tuple[float, float] | None = None) -> None:
-        now = master_now()
+    def push(self, kind: str, name: str, down: bool = True, pos: tuple[float, float] | None = None,
+             meta: dict[str, Any] | None = None, ago: float = 0.0) -> None:
+        now = master_now() - ago
         if kind == "key" and name == "escape":
             self.escape_at = now
             return
-        self.schedule(InputEvent(kind, name, now, down, tuple(pos) if pos is not None else None))
+        self.schedule(InputEvent(kind, name, now, down, tuple(pos) if pos is not None else None, meta=dict(meta or {})))
+
+    def open_gamepads(self) -> list[str]:
+        return ["gamepad (browser)"]
 
     def snapshot(self, since_sound: int = 0) -> dict[str, Any]:
         self.last_seen = master_now()
@@ -391,9 +430,29 @@ class PlayManager:
     def input(self, ev: dict[str, Any]) -> dict[str, Any]:
         if self.player is None or not self.player.running:
             return {"ok": False}
+        meta: dict[str, Any] = {}
+        for k, kind in (("value", float), ("id", int), ("gamepad", int)):   # touch ids, stick values, gamepad numbers
+            v = ev.get(k)
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                meta[k] = kind(v)
+        pos = ev.get("pos")
+        if pos is not None and not (isinstance(pos, (list, tuple)) and len(pos) == 2
+                                    and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in pos)):
+            pos = None
+        ago = ev.get("ago")      # the browser noticed it a little after it happened (speech: the detector's delay)
+        ago = min(max(float(ago), 0.0), 5.0) if isinstance(ago, (int, float)) and not isinstance(ago, bool) else 0.0
         self.player.backend.push(str(ev.get("kind", "key")), str(ev.get("name", "")), bool(ev.get("down", True)),
-                                 ev.get("pos"))
+                                 pos, meta, ago)
         return {"ok": True}
+
+    def audio(self, file: str, data: bytes) -> dict[str, Any]:
+        """A recording of a microphone item, made by the browser during Try it (edge/builder/static/responses.js)."""
+        if self.player is None:
+            return {"ok": False, "error": "Try it isn't running"}
+        try:
+            return {"ok": True, "saved": self.player.backend.save_audio(file, data)}
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
 
     def stop(self) -> dict[str, Any]:
         if self.player is not None:

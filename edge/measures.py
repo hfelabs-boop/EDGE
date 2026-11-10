@@ -180,7 +180,7 @@ def suggest_measures(exp, plan: dict[str, Any] | None = None) -> list[dict[str, 
                 and isinstance(keys, list) and len(keys) == 1 and len(where.get(c["routine"]) or []) < deepest)
 
     responders = [c for c in plan["components"] if c["save"] and not c["disabled"]
-                  and c["type"] in ("keyboard", "device_response", "mouse", "slider", "gaze_roi")
+                  and c["type"] in ("keyboard", "device_response", "mouse", "slider", "gaze_roi", "gamepad", "microphone")
                   and (where.get(c["routine"]) or not has_loops)      # "press space to continue" isn't a measure
                   and not only_advances(c)]
     for c in responders:

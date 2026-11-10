@@ -31,6 +31,7 @@ BLOCKED_UPLOAD_SUFFIXES = {".py", ".pyw", ".pyc", ".pth", ".sh", ".bat", ".cmd",
                            ".dylib", ".vbs", ".scr", ".desktop", ".command", ".app", ".lnk"}
 ACTIVE_CONTENT = {"text/html", "image/svg+xml", "application/xhtml+xml", "text/xml", "application/xml"}
 MAX_JSON_BODY = 50 * 1024 * 1024
+AUDIO_UPLOAD_LIMIT = 100 * 1024 * 1024     # a Try-it recording (10 min of 44.1 kHz stereo is 106 MB; screens are shorter)
 
 
 def looks_like_experiment(d: Any) -> bool:
@@ -810,7 +811,7 @@ QUERY_FIELDS = {"/api/experiment": ["path"], "/api/restore": ["path"], "/api/upl
                 "/api/assistant/attach": ["exp", "name"], "/api/assistant/preview": ["exp", "file"],
                 "/api/assistant/job": ["id"], "/api/assistant/conversation": ["id"],
                 "/api/assistant/models": ["provider"], "/api/assistant/code": ["exp"]}
-RAW_BODY = {"/api/upload", "/api/assistant/attach"}      # the body is a file, not JSON
+RAW_BODY = {"/api/upload", "/api/assistant/attach", "/api/play/audio"}      # the body is a file, not JSON
 ATTACH_LIMIT = 60 * 1024 * 1024
 
 
@@ -1078,6 +1079,10 @@ def make_handler(app: BuilderApp):
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     dest.write_bytes(self._raw())
                     return self._json({"saved": str(dest.relative_to(app.root))})
+                if u.path == "/api/play/audio":
+                    # a microphone item's recording from Try it: saved only under a name that item asked for, into
+                    # that Try it's own session folder (edge/play.py BrowserBackend.save_audio), never a path from here
+                    return self._json(app.play.audio(q["file"], self._raw(AUDIO_UPLOAD_LIMIT)))
                 body = self._body_cached()
                 if u.path == "/api/import":
                     from ..importers import ImportError_

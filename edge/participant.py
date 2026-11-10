@@ -49,7 +49,7 @@ class VirtualParticipant:
         if not open_ended and self.rng.random() > self.respond_prob:
             return  # a missed response; only possible when the window times out
         if correct is not None and str(correct).strip().lower() in ("none", "") and can_time_out \
-                and component.type_name in ("keyboard", "device_response") and self.rng.random() < self.accuracy:
+                and component.type_name in ("keyboard", "device_response", "gamepad") and self.rng.random() < self.accuracy:
             return  # "no response" is the right answer (a no-go / standard trial): withhold, as people mostly do
         onset = component.t_start if component.t_start is not None else backend.clock()
         at = onset + self.rt()
@@ -83,6 +83,8 @@ class VirtualParticipant:
                 key = next((k for k, v in component.keymap.items() if v == name), None)
                 if key:
                     backend.press(key, at)
+        elif kind in ("microphone", "gamepad") or (kind == "mouse" and (component.swipes or component.p.get("record_touches"))):
+            respond_media(self, component, allowed, correct, backend, at)
         elif kind == "mouse":
             targets = [c for c in (component.p.get("clickable") or [])
                        if c in component.run.components and hasattr(component.run.components[c], "stim")]
@@ -109,3 +111,71 @@ def _routine_can_end_by_itself(component: Any) -> bool:
     answering can't leave the session waiting forever."""
     routine = getattr(getattr(component, "run", None), "routine", None)
     return routine is not None and (routine.duration is not None or bool(routine.end_if))
+
+
+def respond_media(vp: VirtualParticipant, component: Any, allowed: Any, correct: Any, backend: Any, at: float) -> None:
+    """Simulated speech, gamepad presses and touchscreen gestures (the microphone, gamepad and mouse items)."""
+    from .backends.base import InputEvent
+    rng = vp.rng
+    kind = component.type_name
+    if kind == "microphone":
+        # speak at ``at`` for about half a second: the item builds its simulated recording from this, and a voice key
+        # linked to it hears the same utterance a couple of milliseconds later
+        length = rng.uniform(0.35, 0.8)
+        backend.schedule(InputEvent("speech", "voice", at, True))
+        backend.schedule(InputEvent("speech", "voice", at + length, False))
+        if getattr(component, "vk_id", None):
+            dev = component.session.devices.get(component.vk_id)
+            t_on, t_off = at + rng.uniform(0.001, 0.004), at + length + 0.15
+            backend.schedule(InputEvent("device", component.vk_input, t_on, True, device=component.vk_id))
+            backend.schedule(InputEvent("device", component.vk_input, t_off, False, device=component.vk_id))
+            if dev is not None and "inputs" in dev.streams:
+                dev.emit("inputs", t_on, [component.vk_input, 1, ""], sync=False)
+                dev.emit("inputs", t_off, [component.vk_input, 0, ""], sync=False)
+    elif kind == "gamepad":
+        from .components.media_responses import STICK_DIRECTIONS
+        names = list(allowed) if allowed else (["stick_left", "stick_right"] if component.th is not None else ["a", "b"])
+        if correct is not None and str(correct) in names and rng.random() < vp.accuracy:
+            name = str(correct)
+        else:
+            name = rng.choice([n for n in names if n != str(correct)] or names)
+        pad = int(component.pad) if component.pad not in (None, "") else 0
+        if component.p.get("track"):         # the thumb rests on the stick and drifts a little
+            for k in range(4):
+                backend.move_stick("lx", round(rng.uniform(-0.3, 0.3), 3), at - 0.2 + 0.05 * k, index=pad)
+        if name in STICK_DIRECTIONS:
+            axis = ("r" if name.startswith("rstick") else "l") + ("x" if name.endswith(("left", "right")) else "y")
+            value = 0.95 if name.endswith(("right", "up")) else -0.95
+            backend.move_stick(axis, value * 0.5, at - 0.03, index=pad)
+            backend.move_stick(axis, value, at, index=pad)
+            backend.move_stick(axis, 0.0, at + 0.25, index=pad)
+        else:
+            backend.gamepad(name, at, index=pad)
+    elif kind == "mouse":
+        targets = [c for c in (component.p.get("clickable") or [])
+                   if c in component.run.components and hasattr(component.run.components[c], "stim")]
+        start = component.run.components[rng.choice(targets)].stim.props.get("pos", (0, 0)) if targets else (0.0, 0.0)
+        if not component.swipes:            # a tap on a target (record_touches is on)
+            if correct in targets and rng.random() < vp.accuracy:
+                start = component.run.components[correct].stim.props.get("pos", (0, 0))
+            if component.p.get("touch", True):
+                backend.tap(start, at)
+            else:
+                backend.click(start, at, button=(component.p.get("buttons") or ["left"])[0])
+            return
+        swipes = component.swipes
+        d = str(correct) if correct in swipes and rng.random() < vp.accuracy else \
+            rng.choice([s for s in swipes if s != correct] or swipes)
+        dist = float(component.p.get("swipe_distance") or 0.1) * backend.size[1] * 1.6
+        dx, dy = {"left": (-dist, 0.0), "right": (dist, 0.0), "up": (0.0, dist), "down": (0.0, -dist)}[d]
+        mid = (start[0] + dx / 2, start[1] + dy / 2)
+        end = (start[0] + dx, start[1] + dy)
+        if component.p.get("touch", True):
+            backend.touch(start, at, "down")
+            backend.touch(mid, at + 0.06, "move")
+            backend.touch(end, at + 0.12, "up")
+        else:
+            button = (component.p.get("buttons") or ["left"])[0]
+            backend.schedule(InputEvent("mouse", button, at, True, tuple(start)))
+            backend.move_mouse(mid, at + 0.06)
+            backend.schedule(InputEvent("mouse", button, at + 0.12, False, tuple(end)))

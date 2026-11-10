@@ -390,7 +390,8 @@ async function startPlay(routine) {
   const stop = h("button", {type: "button", class: "btn sm play-stop", onclick: stopPlay}, icon("stop"), "Stop");
   put(el, h("div", {class: "play-bar"},
     h("span", {class: "play-title"}, h("b", {}, `Trying “${S.exp.name || docName()}”`), h("span", {class: "play-scope"}, scope)),
-    h("span", {class: "play-hint"}, ((S.exp.devices || []).some((d) => ["tobii", "gazepoint", "sim_eyetracker", "mouse_gaze"].includes(d.type)) ? "Your mouse is your gaze · " : "") + "Respond like a participant · Esc stops"), h("span", {class: "grow"}), stop),
+    h("span", {class: "play-hint"}, ((S.exp.devices || []).some((d) => ["tobii", "gazepoint", "sim_eyetracker", "mouse_gaze"].includes(d.type)) ? "Your mouse is your gaze · " : "") + (playUsesMic() ? "Your microphone records · " : "") + "Respond like a participant · Esc stops"),
+    h("span", {class: "play-rec", hidden: ""}, icon("microphone"), "Recording"), h("span", {class: "grow"}), stop),
   h("div", {class: "play-stage"}, cv, frame),
   h("div", {class: "play-end", id: "play-end", hidden: ""}));
   const fit = () => {
@@ -404,6 +405,7 @@ async function startPlay(routine) {
   cv.addEventListener("mousedown", (e) => playMouse(e, cv, true));
   cv.addEventListener("mouseup", (e) => playMouse(e, cv, false));
   cv.addEventListener("mousemove", (e) => { if (!P._mv || Date.now() - P._mv > 40) { P._mv = Date.now(); playMouse(e, cv, null); } });
+  playMediaAttach(cv);      // touches, gamepads and the microphone (below)
   document.addEventListener("keydown", playKey, true);
   document.addEventListener("keyup", playKey, true);
   // a web page or survey screen has the keys: its bridge reports Esc (edge: "escape") from inside the frame
@@ -447,6 +449,7 @@ async function playLoop(cv, frame) {
     }
     if (!P.on) return;
     if (f.drawn) { P.last = f; drawPlayFrame(cv, f); }
+    playMediaFrame(f);
     if (f.trial !== undefined) playCounter(f);
     for (const snd of f.sounds || []) { P.sound = Math.max(P.sound, snd.id); playTrySound(snd); }
     if (f.page) { if (frame.dataset.src !== f.page) { frame.src = f.page; frame.dataset.src = f.page; } frame.classList.remove("hidden"); }
@@ -557,6 +560,7 @@ async function stopPlay() {
 function finishPlay(f) {
   if (!P.on) return;
   P.on = false;
+  playMediaDetach();
   document.removeEventListener("keydown", playKey, true); document.removeEventListener("keyup", playKey, true);
   if (P.onMsg) { window.removeEventListener("message", P.onMsg); P.onMsg = null; }
   S.triedAt = Date.now();
@@ -614,6 +618,167 @@ function closePlay(restore) {
     if (S.ws !== b.ws) EDGE.go(b.ws); else renderAll();
     if (P.opener && P.opener.isConnected) P.opener.focus?.();
   }
+}
+
+/* ================================================================== Try it: microphone, gamepads, touch
+ * A microphone item asks for a recording in the frame ({record: [{file, samplerate, channels, threshold_db, min_ms,
+ * release_ms}]}): the browser records the microphone (getUserMedia, raw samples so the file is a real WAV), tells the
+ * engine when speech starts and stops (the voice key's detector, the same thresholds) and, when the item stops, uploads
+ * the WAV to /api/play/audio, which saves it in this Try it's session folder under that name only. Gamepads come from
+ * the browser's Gamepad API (standard mapping: a b x y lb rb lt rt back start ls rs up down left right guide; sticks
+ * lx ly rx ry with up positive), touches from touch events (every finger, with its id). */
+const PM = {stream: null, ctx: null, src: null, recs: new Map(), pads: {}, micAsked: null, micError: null, touchT: {}};
+const PAD_NAMES = ["a", "b", "x", "y", "lb", "rb", "lt", "rt", "back", "start", "ls", "rs", "up", "down", "left", "right", "guide"];
+const playUsesMic = () => Object.values(S.exp?.routines || {}).some((r) => (r.components || []).some((c) => c.type === "microphone" && c.disabled !== true));
+
+function playMediaAttach(cv) {
+  cv.style.touchAction = "none";
+  const touch = (phase) => (e) => {
+    if (!P.on) return;
+    e.preventDefault();        // no emulated mouse clicks on top of the touches
+    const r = cv.getBoundingClientRect();
+    for (const t of e.changedTouches) {
+      if (phase === "move") { const last = PM.touchT[t.identifier] || 0; if (Date.now() - last < 30) continue; PM.touchT[t.identifier] = Date.now(); }
+      const x = (t.clientX - r.left - cv.width / 2) / P.scale, y = -(t.clientY - r.top - cv.height / 2) / P.scale;
+      api("/api/play/input", {kind: "touch", name: phase, down: phase !== "up", pos: [x, y], id: t.identifier}).catch(() => {});
+    }
+  };
+  cv.addEventListener("touchstart", touch("down"), {passive: false});
+  cv.addEventListener("touchmove", touch("move"), {passive: false});
+  cv.addEventListener("touchend", touch("up"), {passive: false});
+  cv.addEventListener("touchcancel", touch("up"), {passive: false});
+  PM.pads = {};
+  if (playUsesMic()) playMic();      // ask for the microphone now, not when the first recording should start
+}
+
+function playMic() {      // one request for the microphone per Try it (the browser asks the person once)
+  PM.micAsked ||= (async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("this browser can't record (it needs http://127.0.0.1 or localhost)");
+      PM.stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false}});
+    } catch (e) {
+      PM.micError = e && e.name === "NotAllowedError" ? "the microphone wasn't allowed" : (e && e.message) || "no microphone";
+      toast(`Try it can't record: ${PM.micError}. Voice recordings stay empty; allow the microphone and try again.`, {tone: "warning", ms: 9000});
+    }
+    return PM.stream;
+  })();
+  return PM.micAsked;
+}
+
+/* The voice key's detector (edge/devices/inputs.py VoiceDetector): loud for min_ms = onset, quiet for release_ms = offset. */
+function voiceDetector(sr, db, minMs, releaseMs, onEvent) {
+  const high = Math.pow(10, db / 20), low = high * 0.5, win = Math.max(1, Math.floor(sr * 0.002));
+  let on = false, cand = null, n = 0, peak = 0, k = 0;
+  return (samples) => {     // one block of samples; events say how long ago (s) they happened, before the block's end
+    const found = [];
+    for (let i = 0; i < samples.length; i++) {
+      peak = Math.max(peak, Math.abs(samples[i])); n++;
+      if (++k < win) continue;
+      const t = (n - win) / sr; k = 0;
+      if (!on) {
+        if (peak >= high) { if (cand === null) cand = t; if (t - cand >= minMs / 1000) { on = true; found.push([true, cand]); cand = null; } }
+        else cand = null;
+      } else if (peak < low) { if (cand === null) cand = t; if (t - cand >= releaseMs / 1000) { on = false; found.push([false, cand]); cand = null; } }
+      else cand = null;
+      peak = 0;
+    }
+    for (const [down, t] of found) onEvent(down, Math.max(0, n / sr - t));
+  };
+}
+
+async function playRecStart(o) {
+  const rec = {file: o.file, sr: 44100, ch: Math.max(1, Math.min(2, +o.channels || 1)), chunks: [], node: null, done: false};
+  PM.recs.set(o.file, rec);
+  const stream = await playMic();
+  if (!stream || rec.done) return;
+  try {
+    if (!PM.ctx || PM.ctx.state === "closed") {
+      // the item's sample rate if the browser can resample the microphone to it, else the microphone's own rate
+      try { PM.ctx = new AudioContext({sampleRate: +o.samplerate || 44100}); PM.src = PM.ctx.createMediaStreamSource(stream); }
+      catch { try { PM.ctx?.close(); } catch { /* not open */ } PM.ctx = new AudioContext(); PM.src = PM.ctx.createMediaStreamSource(stream); }
+    }
+    if (PM.ctx.state === "suspended") await PM.ctx.resume().catch(() => {});
+    rec.sr = PM.ctx.sampleRate;
+    const detect = voiceDetector(rec.sr, +o.threshold_db || -30, +o.min_ms || 15, +o.release_ms || 300,
+      (down, ago) => { if (!rec.done) api("/api/play/input", {kind: "speech", name: "voice", down, ago}).catch(() => {}); });
+    const node = PM.ctx.createScriptProcessor(1024, rec.ch, rec.ch);
+    node.onaudioprocess = (e) => {
+      if (rec.done) return;
+      const chans = [];
+      for (let c = 0; c < rec.ch; c++) chans.push(new Float32Array(e.inputBuffer.getChannelData(Math.min(c, e.inputBuffer.numberOfChannels - 1))));
+      rec.chunks.push(chans);
+      detect(chans[0]);
+    };
+    PM.src.connect(node); node.connect(PM.ctx.destination);      // (a script processor only runs while connected)
+    rec.node = node;
+  } catch (e) { PM.micError = e.message || String(e); toast(`Try it can't record: ${PM.micError}`, {tone: "warning", ms: 9000}); }
+}
+
+function wavBlob(rec) {
+  const n = rec.chunks.reduce((a, c) => a + c[0].length, 0), ch = rec.ch;
+  const buf = new ArrayBuffer(44 + n * ch * 2), v = new DataView(buf);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, "RIFF"); v.setUint32(4, 36 + n * ch * 2, true); str(8, "WAVE"); str(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true); v.setUint32(24, rec.sr, true);
+  v.setUint32(28, rec.sr * ch * 2, true); v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true);
+  str(36, "data"); v.setUint32(40, n * ch * 2, true);
+  let o = 44;
+  for (const chans of rec.chunks) for (let i = 0; i < chans[0].length; i++) for (let c = 0; c < ch; c++) {
+    const s = Math.max(-1, Math.min(1, chans[c][i])); v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); o += 2;
+  }
+  return new Blob([buf], {type: "audio/wav"});
+}
+
+async function playRecStop(file) {
+  const rec = PM.recs.get(file); if (!rec) return;
+  PM.recs.delete(file); rec.done = true;
+  try { rec.node?.disconnect(); } catch { /* already gone */ }
+  if (!rec.chunks.length) return;           // nothing was recorded (no microphone)
+  try {
+    const r = await fetch(`/api/play/audio?file=${encodeURIComponent(file)}`, {method: "POST", headers: {"Content-Type": "audio/wav"}, body: wavBlob(rec)});
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok && j.error) console.warn("recording not saved:", j.error);
+  } catch { /* the builder went away: nothing to keep it in */ }
+}
+
+function playPads() {
+  const pads = navigator.getGamepads ? [...navigator.getGamepads()] : [];
+  pads.forEach((gp, i) => {
+    if (!gp || !gp.connected) return;
+    const prev = PM.pads[i] || (PM.pads[i] = {b: [], a: {}});
+    const std = gp.mapping === "standard";
+    gp.buttons.forEach((b, k) => {
+      const down = !!b.pressed, name = std ? PAD_NAMES[k] || `button${k + 1}` : `button${k + 1}`;
+      if (down !== !!prev.b[k]) { prev.b[k] = down; api("/api/play/input", {kind: "gamepad", name, down, gamepad: i}).catch(() => {}); }
+      if (std && (k === 6 || k === 7)) axis(k === 6 ? "lt" : "rt", b.value);
+    });
+    gp.axes.forEach((v, k) => {
+      const name = std ? ["lx", "ly", "rx", "ry"][k] || `axis${k + 1}` : ["lx", "ly", "rx", "ry"][k] || `axis${k + 1}`;
+      axis(name, name === "ly" || name === "ry" ? -v : v);      // the browser's up is -1; EDGE's is +1
+    });
+    function axis(name, v) {
+      v = Math.round(v * 1000) / 1000;
+      if (Math.abs(v - (prev.a[name] ?? 0)) < 0.02) return;
+      prev.a[name] = v;
+      api("/api/play/input", {kind: "gamepad_axis", name, value: v, gamepad: i}).catch(() => {});
+    }
+  });
+}
+
+function playMediaFrame(f) {
+  const want = new Set((f.record || []).map((o) => o.file));
+  for (const o of f.record || []) if (!PM.recs.has(o.file)) playRecStart(o);
+  for (const file of [...PM.recs.keys()]) if (!want.has(file)) playRecStop(file);
+  playPads();
+  const rec = $("#play .play-rec");
+  if (rec) rec.hidden = !want.size;
+}
+
+function playMediaDetach() {
+  for (const file of [...PM.recs.keys()]) playRecStop(file);
+  try { PM.stream?.getTracks().forEach((t) => t.stop()); } catch { /* already stopped */ }
+  try { PM.ctx?.close(); } catch { /* already closed */ }
+  PM.stream = PM.ctx = PM.src = PM.micAsked = null; PM.micError = null; PM.pads = {};
 }
 
 /* ================================================================== Run with a participant (W11) */

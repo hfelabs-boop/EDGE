@@ -45,6 +45,7 @@ data/<participant>_<session>_<experiment>_<date>/
   events.jsonl         every marker with flip time, TTL code and per-device delivery time
   frames.csv           every screen flip
   streams/*.csv        device data: aligned time, device time, arrival time, channels
+  audio/*.wav          voice recordings (microphone items), one per screen; audio/manifest.csv lists them
   session.json         settings, devices, clock models, marker codebook, timing, seed, versions
   experiment.yaml      the exact experiment that ran
   exports/             extra formats from settings.data.exports (e.g. xlsx, bids)
@@ -165,6 +166,12 @@ measures, so two sessions of one participant stay apart), unions columns across 
 stable order, stacks the per-participant summaries, and writes a **sessions** table (date, aborted,
 dropped frames, devices, errors) for screening. A folder that holds several experiments gets one set
 of files per experiment, and a session folder that can't be read is skipped and named.
+
+Voice recordings (the `microphone` item) are listed in the trial tables (`<item>.file`, relative to
+the session folder). `edge export data/ --audio-manifest` also writes `exports/audio_manifest.csv`:
+one row per recording of every session, with its full path, trial, trial-list values, detected
+speech onset and empty `transcript` and `notes` columns to fill in (see
+[Devices](DEVICES.md#spoken-answers-touchscreens-and-gamepads)).
 
 To export automatically after every session, list the formats in the experiment:
 `settings: {data: {exports: [csv, xlsx, bids]}}`.

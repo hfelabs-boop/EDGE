@@ -15,7 +15,8 @@ const BASIC_PROPS = {
   text: ["text", "color", "height", "pos"], image: ["image", "size", "pos"], shape: ["shape", "size", "fill", "pos"],
   fixation: ["size", "fill"], sound: ["sound", "volume"], html: ["file", "html"], survey: ["questions", "title"], keyboard: ["keys", "correct"],
   device_response: ["device", "inputs", "correct", "keys"],
-  mouse: ["clickable", "correct"], slider: ["ticks", "labels"], gaze_roi: ["target", "pos", "radius", "dwell"],
+  mouse: ["clickable", "correct", "swipe"], slider: ["ticks", "labels"],
+  microphone: ["stop_after_speech", "voice_key"], gamepad: ["buttons", "correct", "axis_threshold"], gaze_roi: ["target", "pos", "radius", "dwell"],
   gaze_follow: ["target"], calibrate: ["device"], marker: ["label"], variable: ["set", "when"], wait: [],
 };
 const BASIC_TIMING = ["start", "duration", "end_routine"];
@@ -64,9 +65,27 @@ const PROP_WORDS = {
   dwell: ["Dwell time", "Seconds of looking that complete it. Empty: entering is enough."], show: ["Show the area (for testing)"],
   set: ["Set", "The new value of each variable; a value can be a formula."], when: ["When"],
   on_begin: ["Code when the screen starts"], on_frame: ["Code on every screen refresh"], on_end: ["Code when the screen ends"],
-  label: ["Marker label"], "mouse.correct": ["Correct item", "The name of the item that is the right answer."],
+  label: ["Marker label"], "mouse.correct": ["Correct item", "The name of the item that is the right answer (with swipes: the right direction)."],
   "device_response.keys": ["Keys that also count", "For Try it and piloting without the device: key, then the input it stands for."],
   "sound.sound": ["Sound", "A sound file, or a tone (a number in Hz)."], "fixation.size": ["Size"],
+  touch: ["Taps count as clicks", "On a touchscreen, a tap answers like a left click."],
+  swipe: ["Swipe directions", "Swiping left, right, up or down answers (separated by commas). None: a click or tap answers."],
+  swipe_distance: ["Shortest swipe", "A fraction of the screen height; shorter movements are taps."],
+  record_touches: ["Save every finger", "Every finger on the touchscreen, with its positions (multi-touch)."],
+  "mouse.track": ["Save the mouse path"], "mouse.buttons": ["Buttons that count"],
+  samplerate: ["Sample rate", "Samples per second: 44100 or 48000 for speech; 16000 is enough for transcription."],
+  channels: ["Channels", "1 = mono (one microphone), 2 = stereo."],
+  "microphone.device": ["Microphone", "Its name or number. Empty: the computer's default input."],
+  voice_key: ["Voice key that times it", "Empty: the experiment's voice key if it has one, else the onset is found in the recording."],
+  stop_after_speech: ["Stop when they stop speaking", "Ends the recording once they have spoken and then been quiet."],
+  threshold_db: ["Loudness that counts as speech", "In dB below full scale, e.g. -30."],
+  min_ms: ["Shortest sound that counts", "Milliseconds; shorter clicks are ignored."],
+  release_ms: ["Quiet that ends speech", "Milliseconds of quiet after which they stopped speaking."],
+  "gamepad.buttons": ["Buttons that count", "a, b, x, y, lb, rb, lt, rt, up, down, left, right; button1 … on a joystick. None: any."],
+  "gamepad.correct": ["Correct button"], axis_threshold: ["Stick push that answers", "0 to 1: pushing a stick this far answers (stick_left, stick_up …). Empty: buttons only."],
+  deadzone: ["Stick deadzone", "Stick positions closer to the centre than this count as 0."],
+  "gamepad.track": ["Save the stick positions"], gamepad: ["Which gamepad", "0 = the first. Empty: any."],
+  "gamepad.keys": ["Keys that also count", "For Try it and piloting without a gamepad: key, then the button it stands for."],
 };
 const CHOICE_WORDS = {auto: "Automatic", ltr: "Left to right", rtl: "Right to left", first: "The first", last: "The last", all: "All of them",
   start: "At the start", end: "At the end", webview: "An app window", browser: "The web browser", yes: "Yes", no: "No",
@@ -418,7 +437,7 @@ function inspScoredResponse(rid) {
   const upto = order.includes(rid) ? order.slice(0, order.indexOf(rid) + 1) : order;
   let hit = null;
   for (const r of upto) for (const c of S.exp.routines[r]?.components || [])
-    if (["keyboard", "mouse", "device_response"].includes(c.type) && c.correct !== undefined && c.correct !== null && c.correct !== "") hit = c.id;
+    if (["keyboard", "mouse", "device_response", "gamepad"].includes(c.type) && c.correct !== undefined && c.correct !== null && c.correct !== "") hit = c.id;
   return hit;
 }
 /* "Depends on whether the response was correct": Correct!/Wrong! feedback without typing a formula. */
@@ -692,7 +711,8 @@ function inspHowItEnds(rid) {
     ic = inspTypeIcon(resp.type);
     const what = {keyboard: `a key is pressed${typeof keysWords === "function" && resp.keys ? ` (${keysWords(resp.keys)})` : ""}`, mouse: "the participant clicks",
       slider: "the participant gives a rating", html: "the form is sent", survey: "the questions are answered", gaze_roi: "the participant looks at the area",
-      device_response: "a button is pressed"}[resp.type] || `“${resp.id}” finishes`;
+      device_response: "a button is pressed", gamepad: "a gamepad button is pressed",
+      microphone: resp.stop_after_speech ? "they stop speaking" : "the recording ends"}[resp.type] || `“${resp.id}” finishes`;
     parts.push(`When ${what}`);
     if (typeof resp.duration === "number") parts.push(`or after ${inspFmtSec(numOr(resp.start, 0) + resp.duration)} at most`);
   }
@@ -1599,7 +1619,8 @@ function updateExprVars() {
   walkFlow((n) => { if (n?.loop) ["accuracy", "n_correct", "mean_rt", "total"].forEach((k) => vars.add(`$${n.loop}.${k}`)); });
   Object.keys(S.exp.variables || {}).forEach((k) => vars.add("$" + k));
   const results = {keyboard: ["keys", "rt", "corr"], mouse: ["clicked", "x", "y", "rt", "corr"], slider: ["rating", "rt"],
-    gaze_roi: ["entered", "dwell_time", "completed", "first_entry"], html: ["submitted", "rt"], device_response: ["input", "rt", "corr"]};
+    gaze_roi: ["entered", "dwell_time", "completed", "first_entry"], html: ["submitted", "rt"], device_response: ["input", "rt", "corr"],
+    microphone: ["rt", "offset", "file", "duration"], gamepad: ["button", "rt", "corr", "axes"]};
   for (const r of Object.values(S.exp.routines)) for (const c of r.components || [])
     for (const k of results[c.type] || []) vars.add(`$${c.id}.${k}`);
   const key = [...vars].sort().join("|");

@@ -456,6 +456,14 @@ def check_software(exp: Any = None) -> list[Check]:
                                  f"Device '{d.id}' ({d.type}) can't be used here: {why or 'missing ' + pkg}",
                                  "" if d.required else "It is optional, so the session would run without it.",
                                  f'"{sys.executable}" -m pip install {pkg}  (see Devices in the docs)'))
+        mics = [c.id for r in exp.routines.values() for c in r.components if c.type == "microphone"]
+        if mics:
+            from .audio import have_sounddevice
+            if not have_sounddevice():
+                out.append(Check("software:microphone", "error", f"Voice recording ({', '.join(mics[:3])}) needs "
+                                 "sounddevice and numpy, which are not installed",
+                                 "Real sessions stop at the first recording; test runs simulate it and still work.",
+                                 f'"{sys.executable}" -m pip install "edge-experiments[audio]"  (or: pip install sounddevice numpy)'))
     if not out:
         out.append(Check("software", "ok", "Everything the window and devices need is installed" if exp is not None
                          else "Everything the window needs is installed"))

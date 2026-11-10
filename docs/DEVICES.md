@@ -154,6 +154,87 @@ TTL in and out); the amplifier ends of the Chronos adapters are covered by `trig
 *Status: decoding (Cedrus packets, character and line protocols, voice and light thresholds) is
 unit-tested; the drivers are untested on physical boxes.*
 
+### Spoken answers, touchscreens and gamepads
+Three more ways to answer, each an item you add to a screen from **Respond** in the builder.
+
+**Voice recording** (`microphone`). Records the participant's voice into a WAV file, one per screen,
+in the session folder: `audio/0012_naming_voice.wav` (the number is the trial row's `routine_index`,
+then the screen and the item). It finds when speech started and stopped with the same detector as
+the voice key, so you get the naming latency without listening to anything:
+
+| column | what it is |
+|---|---|
+| `voice.file` | the recording, relative to the session folder |
+| `voice.rt` | speech onset: seconds from the item's first frame until speech started (empty = nothing said) |
+| `voice.offset` | when speech ended (seconds from the same start) |
+| `voice.duration` | the length of the recording |
+| `voice.source` | what timed the onset: `voice_key`, `recording` (the detector on the file) or `browser` (Try it) |
+
+```yaml
+routines:
+  naming:
+    components:
+      - {id: word, type: text, text: $word, duration: 3}
+      - {id: voice, type: microphone, duration: 3, stop_after_speech: true, end_routine: true,
+         samplerate: 44100, channels: 1, response_marker: speech_onset}
+```
+
+It records for its duration, until the screen ends, or, with `stop_after_speech`, as soon as the
+participant has spoken and then been quiet for `release_ms` (300 ms). `threshold_db` (-30), `min_ms`
+(15) and `release_ms` tune the detector. With a `voice_key` device in the experiment, its onset times
+the answer (`voice_key: mic` names one; empty uses the experiment's voice key if it has one) and the
+microphone item still saves the recording; without one, the onset is found in the recording itself.
+
+Recording needs two Python packages: `pip install edge-experiments[audio]` (sounddevice and numpy).
+Without them a real session stops at the first recording with that message, and **Check this
+computer** and the pre-flight check warn before you start. **Test runs never need them**: the
+virtual participant "speaks" (a voiced sound at its response time), the item writes that simulated
+recording as a real WAV file and the detector times it, so you can check file names, columns and
+your analysis first. In **Try it** the browser records your microphone (it asks for permission
+once) and the recording is saved in the Try it session folder (`data/dry_runs/try/…`), like the rest
+of Try it's data. A sample rate the browser can't record at is replaced by the microphone's own.
+
+**For transcription**, every session gets `audio/manifest.csv`: one row per recording with its file,
+trial, trial-list values (the word to name), detected onset and empty `transcript` and `notes`
+columns. For a whole study at once: `edge export data --audio-manifest` writes
+`exports/audio_manifest.csv` with full paths.
+
+**Touchscreens** (`mouse`). A tap on a touchscreen answers like a left click: clickable items,
+`correct`, `rt`, `x`/`y` work the same, and `button` is `touch`. Turn it off with `touch: false`.
+`swipe: [left, right]` makes a swipe the answer instead (`swipe` column: its direction; `correct`
+can be a direction; RT is when the finger went down; with `clickable` the swipe must start on an
+item). `swipe_distance` (0.1 = a tenth of the screen height) separates swipes from taps. A mouse
+drag counts as a swipe too. `record_touches: true` saves every finger (`touches`: time, finger,
+down/move/up, x, y) and `n_touches` (most fingers at once). In the experiment window touchscreens
+work through the computer's own tap-to-click (Windows, macOS and Linux all send taps as clicks and
+swipes as drags), so taps and swipes work but only one finger is seen; multi-touch is recorded in
+Try it (the browser's touch events).
+
+**Gamepads and joysticks** (`gamepad`). Xbox, PlayStation and Switch Pro controllers, most USB
+gamepads, flight sticks. Buttons are called `a b x y lb rb lt rt back start guide ls rs` and the
+d-pad `up down left right`; a joystick's buttons are `button1`, `button2` …
+
+```yaml
+      - {id: pad, type: gamepad, buttons: [lb, rb], correct: $side, end_routine: true, duration: 2}
+      - {id: steer, type: gamepad, axis_threshold: 0.5, buttons: [stick_left, stick_right], track: true}
+```
+
+Columns: `button` (or the stick direction), `rt` from the item's first frame, `corr`, `time`,
+`axes` (stick and trigger positions at the answer: `lx ly rx ry` from -1 to 1, up and right
+positive, `lt rt` from 0 to 1), `gamepad` (its name) and, with `track: true`, `path` (time, lx, ly,
+rx, ry on every frame). `axis_threshold` makes pushing a stick that far an answer (`stick_left`,
+`stick_up`, `rstick_right` …); `deadzone` (0.1) treats small stick positions as 0; `gamepad: 0`
+listens to the first controller only; `keys: {f: lb, j: rb}` gives keyboard stand-ins for piloting.
+The experiment window uses pyglet's controller support, so no extra package is needed; the
+operating system reports gamepads to EDGE once per frame, so a gamepad's RT has the resolution of
+one frame (17 ms at 60 Hz), coarser than a keyboard or a response box. Try it uses the browser's
+Gamepad API (press a button once so the browser lets the page see the gamepad); test runs simulate
+presses and stick movements.
+
+*Status: the simulated recording, the detector, file outputs, swipes, multi-touch and the gamepad
+event mapping are tested; recording from a real microphone (sounddevice) and real gamepads in the
+experiment window are untested on hardware.*
+
 ### Closed loop
 Let another program steer a running experiment: a classifier reading EEG, a motion tracker, a robot,
 a script on another computer. It sends UDP packets (JSON objects, or plain text) to the

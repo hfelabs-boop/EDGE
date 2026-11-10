@@ -506,6 +506,13 @@ def cmd_export(a: argparse.Namespace) -> int:
         for note in res.get("notes") or []:       # several experiments, unreadable folders, BIDS renames
             print(f"note: {note}")
         print("\n".join(res["files"]))
+    if getattr(a, "audio_manifest", False):
+        from .audio import write_manifest
+        from .export import find_sessions
+        roots = [p] if (p / "session.json").exists() else find_sessions(p, a.include_dry_runs)
+        out = Path(a.out) if a.out else p / "exports"
+        f, n = write_manifest(roots, out / "audio_manifest.csv", absolute=True)
+        print(f"{f}  ({n} recording{'' if n == 1 else 's'} to transcribe)")
     return 0
 
 
@@ -940,6 +947,8 @@ def main(argv: list[str] | None = None) -> int:
     ex.add_argument("--name", help="start of the file names (default: the session folder's name, or "
                                    "<experiment>_all_<date> for a data folder)")
     ex.add_argument("--include-dry-runs", action="store_true", help="also include dry-run sessions")
+    ex.add_argument("--audio-manifest", action="store_true",
+                    help="also list every voice recording (microphone items) in audio_manifest.csv, for transcription")
     ex.set_defaults(fn=cmd_export)
 
     bu = sub.add_parser("bundle", help="pack an experiment and its files into a .edgez archive")

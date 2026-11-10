@@ -17,6 +17,7 @@ lsl = ["pylsl>=1.16"]
 tobii = ["tobii-research>=1.10"]
 serial = ["pyserial>=3.5"]
 inputs = ["pyserial>=3.5", "sounddevice>=0.4", "numpy>=1.24"]   # response boxes, voice key
+audio = ["sounddevice>=0.4", "numpy>=1.24"]   # microphone item: record spoken answers
 labjack = ["LabJackPython>=2.0"]
 gtec = []  # pygds ships with g.NEEDaccess; install it from g.tec's SDK
 mcp = ["mcp>=1.2,<2"]   # mcp 2 renamed FastMCP, which edge/mcp_server.py uses

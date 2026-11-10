@@ -142,7 +142,9 @@ help text.
 | | `survey` | questions (incl. `{instrument: phq9}` from the library), title, intro, language, scores, allow_back (see [Surveys](SURVEYS.md)) | every answer and score, submitted, rt |
 | response | `keyboard` | keys, store (first/last/all), correct, record_release, response_marker | keys, rt, corr, time, duration |
 | | `device_response` | device, inputs, correct, store, keys (keyboard stand-ins), response_marker: a button box, fMRI buttons, foot pedal, voice key or TTL line | input, rt, corr, time, device |
-| | `mouse` | buttons, clickable (component ids), correct, track, response_marker | x, y, button, clicked, rt, corr, path |
+| | `mouse` | buttons, clickable (component ids), correct, track, touch (taps count), swipe (directions), swipe_distance, record_touches, response_marker | x, y, button, clicked, rt, corr, path, swipe, touches, n_touches |
+| | `microphone` | samplerate, channels, device, voice_key, stop_after_speech, threshold_db, min_ms, release_ms, response_marker: a WAV file per screen in `audio/` (see [Devices](DEVICES.md#spoken-answers-touchscreens-and-gamepads)) | file, rt (speech onset), offset, duration, source |
+| | `gamepad` | buttons (a, b, x, y, lb, rb, lt, rt, up … or stick_left …), correct, axis_threshold, deadzone, track, gamepad, keys | button, rt, corr, time, axes, gamepad, path |
 | | `slider` | ticks, labels, granularity, require_confirm | rating, rt, history |
 | eye tracking | `gaze_roi` | device, target or pos+radius/size, dwell, show | entered, first_entry, dwell_time, entries, completed, rt |
 | | `gaze_follow` | device, target, offset, smoothing | |

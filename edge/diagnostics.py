@@ -198,7 +198,8 @@ TYPE_WORDS = {
     "keyboard": "a key press", "mouse": "a mouse response", "slider": "a rating slider", "text": "a text",
     "image": "a picture", "sound": "a sound", "shape": "a shape", "fixation": "a fixation cross",
     "html": "a web page", "survey": "a questionnaire", "device_response": "a device response",
-    "gaze_roi": "a gaze area", "calibrate": "a calibration", "marker": "a marker",
+    "gaze_roi": "a gaze area", "calibrate": "a calibration", "marker": "a marker", "microphone": "a voice recording",
+    "gamepad": "a gamepad response",
 }
 
 

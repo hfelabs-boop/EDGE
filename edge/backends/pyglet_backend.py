@@ -316,6 +316,8 @@ class PygletBackend(Backend):
         return t
 
     def close(self) -> None:
+        if getattr(self, "_pads", None) is not None:
+            self._pads.close()
         try:
             self.win.close()
         except Exception:
@@ -371,8 +373,25 @@ class PygletBackend(Backend):
 
     def poll_events(self) -> list[InputEvent]:
         self.win.dispatch_events()
+        if getattr(self, "_pads", None) is not None:
+            self._pads.poll()
         ev, self._events = self._events, []
         return ev
+
+    # Touchscreens: pyglet has no touch events, but Windows, macOS and Linux turn a tap into a left click (and a swipe
+    # into a drag), so taps and swipes reach the mouse item as mouse events. Multi-touch needs Try it (the browser).
+    def open_gamepads(self) -> list[str]:
+        if getattr(self, "_pads", None) is None:
+            from .gamepads import GamepadHub
+            self._pads = GamepadHub(self._events.append)
+            self._pads.open(self.win)
+        return list(self._pads.names)
+
+    def gamepad_axes(self, index: int | None = None) -> dict[str, float]:
+        pads = getattr(self, "_pads", None)
+        if pads is None or not pads.axes:
+            return {}
+        return dict(pads.axes.get(int(index) if index is not None else 0, {}))
 
     def mouse_pos(self) -> tuple[float, float]:
         return self._mouse

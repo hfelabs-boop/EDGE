@@ -1243,7 +1243,9 @@ events.jsonl         every marker: master-clock time, label, TTL code, delivery 
 frames.csv           every screen flip (frame-timing audit)
 streams/             device recordings: time (aligned master clock), device_time, arrival_time, channels
                      (each channel's units and the gaze coordinates: session.json -> devices -> streams)
-session.json         settings, devices, clock models, marker codebook, timing summary, seed
+audio/               spoken answers (microphone items): one WAV per screen, <routine_index>_<screen>_<item>.wav;
+                     audio/manifest.csv lists them with their trial, speech onset and an empty transcript column
+session.json        settings, devices, clock models, marker codebook, timing summary, seed
 experiment.yaml      the exact experiment that produced this data
 Times are in seconds. Re-export any time with:  edge export <this folder> --formats xlsx,bids
 """
@@ -1260,6 +1262,9 @@ def auto_export(session_dir: str | Path, settings: dict[str, Any]) -> list[Path]
     if "measures" in tables:
         files.append(write_delimited(st.root / "measures.csv", *tables["measures"]))
     (st.root / "README.txt").write_text(README_TXT, encoding="utf-8")
+    if (st.root / "audio").is_dir():      # spoken answers (microphone items): one row per recording, for transcribing
+        from .audio import write_manifest
+        files.append(write_manifest([st.root], st.root / "audio" / "manifest.csv")[0])
     wanted = settings.get("data", {}).get("exports") or []
     extra = [f for f in check_formats(wanted, need_packages=False) if f != "csv"] if wanted else []
     missing = missing_packages(extra)

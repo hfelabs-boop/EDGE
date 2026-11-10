@@ -20,7 +20,7 @@ from typing import Any, Callable
 
 @dataclass
 class InputEvent:
-    kind: str                 # "key" | "mouse" | "button"
+    kind: str                 # "key" | "mouse" | "touch" | "device" | "gamepad" | "gamepad_axis" | "speech"
     name: str                 # key name ("space", "f", "left") or mouse button
     time: float               # master clock
     down: bool = True
@@ -160,6 +160,17 @@ class Backend:
         return False
 
     def wait_for_key(self, keys: list[str] | None = None) -> InputEvent: raise NotImplementedError
+
+    # -------------------------------------------------------- gamepads and joysticks (the gamepad item)
+    # Button presses arrive from poll_events as InputEvent("gamepad", button, down, meta={"gamepad": index}) and stick
+    # or trigger movements as InputEvent("gamepad_axis", "lx" | "ly" | "rx" | "ry" | "lt" | "rt", meta={"value": v}).
+    def open_gamepads(self) -> list[str]:
+        """Start listening to the connected gamepads/joysticks; returns their names (index = the gamepad number)."""
+        return []
+
+    def gamepad_axes(self, index: int | None = None) -> dict[str, float]:
+        """The current stick and trigger positions of one gamepad (None = the first that has any)."""
+        return {}
 
     # -------------------------------------------------------- units
     def to_px(self, value: Any, units: str, monitor: dict[str, Any] | None = None, axis: str = "both") -> Any:

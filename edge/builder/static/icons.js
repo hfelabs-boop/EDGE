@@ -87,6 +87,8 @@ const EDGE_ICONS = {
   keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M7.5 14h9"/>',
   buttonbox: '<rect x="2.5" y="7" width="19" height="10" rx="3"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/>',
   mouse: '<rect x="6.5" y="3" width="11" height="18" rx="5.5"/><path d="M12 7v3"/>',
+  microphone: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21M8.5 21h7"/>',
+  gamepad: '<path d="M7.5 7h9a5 5 0 0 1 4.9 6l-.7 3.4a2.5 2.5 0 0 1-4.3 1.2L14.5 15.5h-5l-1.9 2.1a2.5 2.5 0 0 1-4.3-1.2L2.6 13A5 5 0 0 1 7.5 7z"/><path d="M7.5 10v3.5M5.75 11.75h3.5"/><path d="M15.5 11h.01M17.5 13h.01"/>',
   rating: '<path d="M4 12h16M4 9v6M20 9v6"/><circle cx="14.5" cy="12" r="2.5" class="fillbg"/>',
   eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
   gazefollow: '<circle cx="8.5" cy="12" r="5.5"/><circle cx="8.5" cy="12" r="2"/><path d="M15.5 12h6M18.5 9l3 3-3 3"/>',

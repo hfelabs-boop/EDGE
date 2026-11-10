@@ -403,6 +403,8 @@ table.grid.wiz-items .input { height: 28px; padding: 0 var(--sp-4); }
 .play-title b { font-weight: var(--fw-semibold); }
 .play-scope { color: var(--text-2); }
 .play-hint { color: var(--text-3); }
+.play-rec { display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--danger); font-weight: var(--fw-semibold); }
+.play-rec[hidden] { display: none; }
 .play-stop { flex: none; }
 .play-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
 #play-canvas { display: block; cursor: crosshair; }

@@ -11,7 +11,7 @@ edge/
   clock.py          the master clock
   events.py         markers and the event bus that routes them to every connected device
   components/       stimulus, response, eye-tracking, hardware and logic components (registry + plugins)
-  backends/         pyglet (OpenGL window) and headless (virtual clock or real-time)
+  backends/         pyglet (OpenGL window), headless (virtual clock or real-time), gamepads (pyglet.input)
   devices/          drivers + registry + base class (streams, sinks, threads, clock models), trigger adapters,
                     response inputs, UDP messages (closed loop), simulators
   sync.py           clock models: linear fit, round trip, arrival envelope
@@ -23,7 +23,9 @@ edge/
   mcp_server.py     MCP server: natural-language control from Claude / VS Code
   report.py         post-session timing / integrity / sync analysis
   align.py          external-recording alignment via TTL code sequences
-  participant.py    virtual participant for dry runs
+  participant.py    virtual participant for dry runs (keys, clicks, taps and swipes, speech, gamepad buttons)
+  audio.py          spoken answers: WAV files, speech onset/offset (the voice key's detector), simulated
+                    recordings for test runs, live recording (sounddevice), transcription manifests
   scan.py           hardware discovery
   importers/        PsychoPy, E-Prime, OpenSesame and jsPsych importers (`edge import`)
   templates.py      starter experiments (and hidden starting points for tutorials)

@@ -8,6 +8,8 @@ from .. import expressions
 from ..backends.base import InputEvent
 from .base import Component
 
+SWIPE_DIRECTIONS = ["left", "right", "up", "down"]
+
 
 def _key_list(v: Any) -> list[str] | None:
     if v in (None, "", [], "any"):
@@ -261,7 +263,8 @@ class DeviceResponse(Component):
 class Mouse(Component):
     type_name = "mouse"
     category = "response"
-    description = "Mouse clicks, optionally restricted to clickable components (e.g. images/shapes)."
+    description = ("Mouse clicks and touchscreen taps, optionally restricted to clickable components (e.g. images/shapes); "
+                   "a swipe in a given direction can be the response, and every finger on the screen can be saved.")
     outputs = {
         "clicked": {"desc": "Which target was clicked in {who}", "type": "text", "kind": "response"},
         "rt": {"desc": "Response time (s) of {who}, from its onset flip to the response", "units": "s",
@@ -270,52 +273,146 @@ class Mouse(Component):
                  "kind": "accuracy", "when": "correct"},
         "x": {"desc": "Horizontal response position in {who} (experiment units)", "type": "number", "kind": "response"},
         "y": {"desc": "Vertical response position in {who} (experiment units)", "type": "number", "kind": "response"},
-        "button": {"desc": "Mouse button used in {who}", "type": "text", "kind": "response"},
+        "button": {"desc": "Mouse button used in {who} (touch = a finger on a touchscreen)", "type": "text",
+                   "kind": "response"},
         "path": {"desc": "Mouse trajectory in {who} (time, x, y)", "type": "list", "kind": "response", "when": "track"},
+        "swipe": {"desc": "Direction of the swipe that answered {who} (left, right, up, down)", "type": "text",
+                  "kind": "response", "when": "swipe"},
+        "touches": {"desc": "Every finger on the touchscreen during {who} (time, finger, down/move/up, x, y)",
+                    "type": "list", "kind": "response", "when": "record_touches"},
+        "n_touches": {"desc": "Most fingers on the touchscreen at the same time during {who}", "type": "number",
+                      "kind": "other", "when": "record_touches"},
     }
     props_schema = {
         "buttons": {"type": "list", "default": ["left"], "help": "buttons that count as a response: left, middle, right"},
         "clickable": {"type": "list", "default": [], "help": "ids of components in this routine that can be clicked"},
-        "correct": {"type": "str", "default": None, "help": "id of the correct clickable component"},
+        "correct": {"type": "str", "default": None, "help": "id of the correct clickable component (with swipe: the correct direction)"},
         "track": {"type": "bool", "default": False, "help": "save the full mouse trajectory"},
+        "touch": {"type": "bool", "default": True, "help": "taps on a touchscreen count like clicks"},
+        "swipe": {"type": "list", "default": [],
+                  "help": "swipe directions that are the response, e.g. [left, right]; empty = clicks and taps"},
+        "swipe_distance": {"type": "float", "default": 0.1,
+                           "help": "shortest swipe, as a fraction of the screen height (shorter = a tap)"},
+        "record_touches": {"type": "bool", "default": False, "help": "save every finger's positions (multi-touch)"},
         "response_marker": {"type": "str", "default": None, "help": "marker sent at the moment of the click"},
     }
+
+    @classmethod
+    def validate_spec(cls, spec, where, exp):
+        from ..model import Issue
+        issues = super().validate_spec(spec, where, exp)
+        sw = spec.props.get("swipe")
+        sw = [sw] if isinstance(sw, str) and not expressions.is_expr(sw) else sw
+        if isinstance(sw, list):
+            for d in sw:
+                if isinstance(d, str) and not expressions.is_expr(d) and d.strip().lower() not in SWIPE_DIRECTIONS:
+                    issues.append(Issue("error", f"{where}.swipe", f"'{d}' isn't a swipe direction",
+                                        hint="left, right, up or down"))
+            corr = spec.props.get("correct")
+            if sw and isinstance(corr, str) and not expressions.is_expr(corr) and corr not in sw:
+                issues.append(Issue("warning", f"{where}.correct", f"the correct answer '{corr}' isn't one of the swipe "
+                                    f"directions ({', '.join(map(str, sw))}), so no answer is ever correct"))
+        dist = spec.props.get("swipe_distance")
+        if isinstance(dist, (int, float)) and not isinstance(dist, bool) and not 0 < dist <= 1:
+            issues.append(Issue("error", f"{where}.swipe_distance", "the swipe distance is a fraction of the screen "
+                                "height, more than 0 and at most 1", hint="0.1 = a tenth of the screen"))
+        return issues
 
     def prepare(self) -> None:
         super().prepare()
         self.out.update(x=None, y=None, button=None, clicked=None, rt=None, corr=None)
         self.path: list[tuple[float, float, float]] = []
+        sw = self.p.get("swipe") or []
+        self.swipes = [str(d).strip().lower() for d in ([sw] if isinstance(sw, str) else sw)]
+        self.starts: dict[Any, tuple[tuple[float, float], float]] = {}    # finger / button -> (where, when) it went down
+        self.touches: list[list[Any]] = []
+        self.fingers: set[int] = set()
+        self.max_fingers = 0
+        if self.swipes:
+            self.out["swipe"] = None
+        if self.p["record_touches"]:
+            self.out.update(touches=[], n_touches=0)
 
     def on_start(self, t: float) -> None:
-        self.session.notify_response_window(self, self.p["clickable"] or self.p["buttons"], self.p["correct"])
+        self.session.notify_response_window(self, self.swipes or self.p["clickable"] or self.p["buttons"], self.p["correct"])
 
     def on_frame(self, t: float) -> None:
         if self.p["track"]:
             x, y = self.backend.mouse_pos()
             self.path.append((round(t - self.t_start, 4), round(x, 1), round(y, 1)))
 
+    def _units(self, pos: tuple[float, float]) -> tuple[float, float]:
+        units = self.session.settings["window"]["units"]
+        return self.backend.from_px(pos, units, self.session.settings["window"].get("monitor"))
+
+    def _hit(self, pos: tuple[float, float]) -> str | None:
+        hit = None
+        for cid in self.p["clickable"] or []:
+            comp = self.run.components.get(cid)
+            if comp is not None and comp.status == 1 and hasattr(comp, "stim") and comp.contains(*pos):
+                hit = cid
+        return hit
+
     def on_event(self, ev: InputEvent) -> None:
-        if ev.kind != "mouse" or not ev.down or ev.name not in self.p["buttons"] or ev.pos is None:
+        if ev.pos is None:
+            return
+        if ev.kind == "touch":
+            if not self.p["touch"]:
+                return
+            fid = int((ev.meta or {}).get("id", 0))
+            if self.p["record_touches"] and self.t_start is not None and ev.time >= self.t_start:
+                x, y = self._units(ev.pos)
+                self.touches.append([round(ev.time - self.t_start, 4), fid, ev.name, round(x, 4), round(y, 4)])
+                if ev.name == "down":
+                    self.fingers.add(fid)
+                    self.max_fingers = max(self.max_fingers, len(self.fingers))
+                elif ev.name == "up":
+                    self.fingers.discard(fid)
+            key: Any = ("touch", fid)
+            phase = ev.name
+            button = "touch"
+        elif ev.kind == "mouse" and ev.name in self.p["buttons"]:
+            key, phase, button = ("mouse", ev.name), "down" if ev.down else "up", ev.name
+        else:
+            return
+        if self.finished:
+            return
+        if phase == "down":
+            self.starts[key] = (ev.pos, ev.time)
+            if not self.swipes:
+                self._respond(ev.pos, button, ev.time)
+        elif phase == "up" and self.swipes and key in self.starts:
+            (x0, y0), t0 = self.starts.pop(key)
+            dx, dy = ev.pos[0] - x0, ev.pos[1] - y0
+            if max(abs(dx), abs(dy)) < float(self.p["swipe_distance"] or 0.1) * self.backend.size[1]:
+                return                                   # a tap, not a swipe
+            d = ("right" if dx > 0 else "left") if abs(dx) >= abs(dy) else ("up" if dy > 0 else "down")
+            if d in self.swipes:
+                self._respond((x0, y0), button, t0, swipe=d, t_end=ev.time)
+
+    def _respond(self, pos: tuple[float, float], button: str, t: float, swipe: str | None = None,
+                 t_end: float | None = None) -> None:
+        if self.t_start is not None and t < self.t_start:
             return
         hit = None
         if self.p["clickable"]:
-            for cid in self.p["clickable"]:
-                comp = self.run.components.get(cid)
-                if comp is not None and comp.status == 1 and hasattr(comp, "stim") and comp.contains(*ev.pos):
-                    hit = cid
+            hit = self._hit(pos)
             if hit is None:
                 return
-        units = self.session.settings["window"]["units"]
-        x, y = self.backend.from_px(ev.pos, units, self.session.settings["window"].get("monitor"))
-        self.out.update(x=x, y=y, button=ev.name, clicked=hit, rt=self.rt(ev.time))
+        x, y = self._units(pos)
+        self.out.update(x=x, y=y, button=button, clicked=hit, rt=self.rt(t))
+        if swipe is not None:
+            self.out["swipe"] = swipe
         if self.p["correct"] is not None:
-            self.out["corr"] = int(hit == self.p["correct"])
+            self.out["corr"] = int((swipe if swipe is not None else hit) == self.p["correct"])
         self.finished = True
-        self.send_response_marker(ev.time)
+        self.send_response_marker(t_end if t_end is not None else t)
 
     def on_stop(self, t: float) -> None:
         if self.p["track"]:
             self.out["path"] = self.path
+        if self.p["record_touches"]:
+            self.out.update(touches=self.touches, n_touches=self.max_fingers)
 
 
 class Slider(Component):
@@ -383,7 +480,7 @@ class Slider(Component):
             self.marker.draw()
 
     def on_event(self, ev: InputEvent) -> None:
-        if ev.kind == "mouse" and ev.down and ev.pos is not None:
+        if ev.kind in ("mouse", "touch") and ev.down and ev.name != "move" and ev.pos is not None:
             x, y = ev.pos
             if abs(y - self.cy) <= self.h * 1.5 and abs(x - self.cx) <= self.w / 2 + self.h:
                 self._set(self._v_of(x), ev.time)
