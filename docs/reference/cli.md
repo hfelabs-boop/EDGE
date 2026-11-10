@@ -360,18 +360,18 @@ edge backups [-h] [--restore [RESTORE]] experiment
 
 ## edge import
 
-import a PsychoPy, E-Prime, OpenSesame or jsPsych experiment
+import a PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Psychtoolbox or Gorilla experiment
 
 ```
 edge import [-h] [--out OUT]
-                   [--platform {psychopy,eprime,opensesame,jspsych}]
+                   [--platform {psychopy,eprime,opensesame,jspsych,inquisit,presentation,psychtoolbox,gorilla}]
                    [--name NAME]
                    source
 ```
 
 | argument | description |
 |---|---|
-| `source` | .psyexp, .ebs3/.ebs2, .osexp/.opensesame, or jsPsych .html/.js |
+| `source` | .psyexp, .ebs3/.ebs2, .osexp/.opensesame, jsPsych .html/.js, Inquisit .iqx/.exp, Presentation .sce, Psychtoolbox .m, or a Gorilla task .json / spreadsheet .csv/.xlsx |
 | `--out` | output folder (default: <source>_edge next to the source) |
 | `--platform` | force the source platform (normally detected) |
 | `--name` | name for the imported experiment |

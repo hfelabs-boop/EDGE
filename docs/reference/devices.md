@@ -199,7 +199,7 @@ Records: `streams/<id>.eeg.csv`: simulated EEG plus a trigger channel (9 channel
 | `transport_jitter` | float | `0.002` | max simulated transport delay (s) |
 | `seed` | int | `0` |  |
 | `channels` | list | `['Fz', 'Cz', 'Pz', 'Oz', 'C3', 'C4', 'P3', 'P4']` |  |
-| `faults` | dict | `{'C4': 'line_noise', 'P4': 'flat', 'Oz': 'noisy'}` | channels that behave badly, to see the signal-quality display at work: {channel: line_noise | flat | noisy | railing}; {} for clean channels |
+| `faults` | dict |  | channels that behave badly, to see the signal-quality display at work, e.g. {C4: line_noise, P4: flat, Oz: noisy} (line_noise | flat | noisy | railing); empty = every channel clean |
 
 ## sim_eyetracker
 
