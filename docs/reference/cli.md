@@ -106,16 +106,17 @@ edge components [-h] [--json]
 
 ## edge scan
 
-discover connected hardware (LSL, serial, Tobii, Gazepoint)
+discover connected hardware and say what it is (USB/serial, LSL, eye trackers, gamepads, microphones, monitors, LabJack, parallel ports)
 
 ```
-edge scan [-h] [--timeout TIMEOUT] [--json]
+edge scan [-h] [--timeout TIMEOUT] [--json] [--watch]
 ```
 
 | argument | description |
 |---|---|
 | `--timeout` | seconds to listen for LSL streams |
 | `--json` | machine-readable output |
+| `--watch` | keep watching: print devices as they are plugged in and out |
 
 ## edge doctor
 
