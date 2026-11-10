@@ -131,6 +131,11 @@ class Backend:
     def make_shape(self, shape: str, **props: Any) -> Stim: raise NotImplementedError
     def make_image(self, **props: Any) -> Stim: raise NotImplementedError
     def make_movie(self, **props: Any) -> Stim: raise NotImplementedError
+    # procedural stimuli (edge.vision): kind grating | gabor | noise, props in px; dots: positions in px
+    def make_pattern(self, kind: str, **props: Any) -> Stim: raise NotImplementedError
+    def make_dots(self, **props: Any) -> Stim: raise NotImplementedError
+    # gamma: set_gamma(calibration, method) -> (applied method, note); linearize(v, channel) for procedural stimuli
+    linearize: Any = None
 
     def draw_calibration_target(self, x: float, y: float, r: float) -> None:
         outer = self.make_shape("circle", pos=(x, y), radius=r, fill="white")
@@ -186,7 +191,7 @@ class Backend:
             m = monitor or {}
             width_cm = float(m.get("width_cm", 53.0))
             dist = float(m.get("distance_cm", 60.0))
-            px_per_cm = w / width_cm
+            px_per_cm = float(m.get("width_px") or w) / width_cm     # width_px: the screen's, if the window is smaller
             return 2 * dist * math.tan(math.radians(v) / 2) * px_per_cm
         raise ValueError(f"unknown units '{units}'")
 

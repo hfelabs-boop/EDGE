@@ -2041,6 +2041,8 @@ function drawScreen(cv, rid, t, opts = {}) {
       ctx.strokeStyle = "#888"; ctx.setLineDash([6, 4]); ctx.strokeRect(-100, -75, 200, 150);
       ctx.scale(1, -1); ctx.fillStyle = "#888"; ctx.font = `${Math.max(22, minPx)}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText(c.image ? "picture from the trial list" : "no picture yet", 0, 0); box(c, 100, 75);
+    } else if (typeof drawStimPreview === "function" && drawStimPreview(ctx, c, {conv, W, H, minPx, t, st, base, box, doc})) {
+      /* video, gratings, Gabors, noise, dots: stimuli.js */
     } else if (c.type === "slider") {
       const sz = Array.isArray(c.size) ? c.size : [800, 30]; ctx.fillStyle = color(c.color, "#fff");
       ctx.fillRect(-sz[0] / 2, -2, sz[0], 4); box(c, sz[0] / 2, Math.max(10, sz[1] / 2));

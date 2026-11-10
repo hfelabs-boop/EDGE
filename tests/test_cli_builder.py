@@ -126,7 +126,7 @@ def test_builder_lists_pictures_and_sounds_next_to_the_experiment(server, tmp_pa
     res = _get(server + "/api/assets?kind=image&exp=stroop/stroop.yaml")
     assert res["folder"] == "images" and res["assets"][1]["folder"] == "images/sub"
     assert [a["path"] for a in _get(server + "/api/assets?kind=image")["assets"]] == ["stroop/images/cat.png", "stroop/images/sub/dog.JPG"]
-    for bad in ("kind=video", "kind=image&exp=../../etc/passwd"):
+    for bad in ("kind=nope", "kind=image&exp=../../etc/passwd"):
         with pytest.raises(urllib.error.HTTPError):
             _get(server + "/api/assets?" + bad)
 

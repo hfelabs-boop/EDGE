@@ -217,6 +217,10 @@ class Session:
         for w in getattr(self.backend, "warnings", ()) or ():
             self.log(f"[edge] WARNING: {w}")
             self.warnings.append(w)
+        from .gamma import apply_gamma         # the monitor's gamma calibration, if the experiment has one
+        self.gamma = apply_gamma(self)
+        from .video import require_decoder      # videos in the experiment window need FFmpeg: say so before starting
+        require_decoder(self)
         if self.virtual_participant is None and self.backend.name not in ("headless", "browser"):     # not Try it
             try:     # the computer-level known issues (battery, USB suspend, monitors, serial latency …)
                 from .syscheck import run_checks
@@ -499,6 +503,7 @@ class Session:
             "errors": self.errors,
             "warnings": self.warnings,
             "display": _jsonable(getattr(self.backend, "diagnostics", {}) or {}),
+            "gamma": getattr(self, "gamma", None),
             "system_checks": self.system_checks,
             "crash": self.crash,
             "environment": _environment(),

@@ -64,6 +64,7 @@ settings:
     units: px                 # px | norm | height | deg
     refresh_rate: null        # null = measure at startup
     monitor: {width_cm: 53, distance_cm: 60}   # for deg units
+    gamma: 2.2                # optional: the monitor's gamma, [r, g, b], or a calibration file (see below)
   participant: {participant: "001", session: "1", group: A}   # defaults; override on the command line
   data:
     dir: data
@@ -138,6 +139,11 @@ help text.
 | | `fixation` | size, line_width | |
 | | `image` | image, size | |
 | | `sound` | sound (file or Hz), volume, tone_duration | onset |
+| | `movie` | movie (file or $column), size, loop, volume, pos, opacity (see [Video](#video)) | onset, first_frame, duration, movie_duration, frames_shown, frames_dropped, frames_repeated, ended |
+| | `grating` | sf, sf_units (cycles/deg, cycles/px), phase, tf (drift, Hz), wave (sin/sqr), contrast, mask (none/circle/gauss/raisedcos), sigma, size, ori (see [Vision-science stimuli](#vision-science-stimuli-and-gamma)) | onset, duration, frames, sf_cpd, phase |
+| | `gabor` | sigma, sf, sf_units, phase, tf, contrast, ori, size (default 6 × sigma) | onset, duration, frames, sf_cpd, phase |
+| | `noise` | noise_type (white/pink/brown/binary), element_size, dynamic, update_frames, seed, contrast, mask | onset, duration, frames, seed, samples |
+| | `dots` | n_dots, coherence, direction, speed, dot_size, lifetime, noise_dots (same/random_walk/random_position), field_shape, size, seed | onset, duration, frames, seed, n_signal |
 | | `html` | file or html, display (auto/webview/browser), fullscreen, continue_button | every form field, submitted, rt |
 | | `survey` | questions (incl. `{instrument: phq9}` from the library), title, intro, language, scores, allow_back (see [Surveys](SURVEYS.md)) | every answer and score, submitted, rt |
 | response | `keyboard` | keys, store (first/last/all), correct, record_release, response_marker | keys, rt, corr, time, duration |
@@ -288,6 +294,108 @@ layout. Files (signatures, uploads, recordings, screenshots) are saved in the se
 a column `<survey id>.<question id>` (matrix items by item id); library questionnaires add their scores.
 Question text is used as written: a leading `$` is not an expression there. The full guide:
 [Surveys](SURVEYS.md).
+
+## Video
+
+```yaml
+- id: clip
+  type: movie
+  movie: videos/$clip_file        # a file next to the experiment, or $column from the trial list
+  size: [960, 540]                # empty: the video's own size
+  volume: 0.8                     # 0 mutes the sound track
+  loop: false                     # true: start again at the end, until the item's duration ends
+  end_routine: true               # the screen ends when the video ends
+  marker: video_on                # sent on the flip that shows the first frame
+```
+
+* **Frame-locked.** On every screen refresh EDGE shows the video frame whose time has come (frame *k* is shown
+  from *k / fps* seconds after the first frame), so a 30 fps video on a 60 Hz screen shows each frame for exactly
+  two refreshes. The item ends when the video does (unless it loops or its `duration` is shorter).
+* **What is recorded:** `onset` and `first_frame` (when the first frame appeared, at the flip),
+  `duration` (how long it was on the screen), `movie_duration` (the file's length), `frames_shown`,
+  `frames_dropped` (frames never shown although their time came: the decoder fell behind),
+  `frames_repeated` (refreshes on which a frame stayed longer than its time) and `ended` (1 if it played to the end).
+* **The experiment window** decodes with pyglet and FFmpeg (`pip install edge-experiments[video]`, plus FFmpeg's
+  shared libraries: Windows: a "shared" build from ffmpeg.org on PATH; macOS: `brew install ffmpeg`;
+  Ubuntu: `sudo apt install ffmpeg`). Without FFmpeg the session stops before it starts and says what to install.
+  The sound track plays through a second player started on the first frame; audio-video sync is good to a frame
+  or two, not to the millisecond (time sounds that must be exact with a `sound` item).
+* **Encode for the lab:** MP4 with H.264 (or WebM), without B-frames, at a frame rate that divides the monitor's
+  (30 or 60 fps on a 60 Hz screen): `ffmpeg -i in.mov -c:v libx264 -bf 0 -crf 18 -r 30 out.mp4`. EDGE notes files
+  with B-frames: FFmpeg-through-pyglet can skip some of their frames (the data then show them as dropped).
+* **Test runs** read the length, the picture size and the frame rate from the file's header (MP4/MOV, WebM/MKV,
+  AVI), so a screen with a video lasts as long as in the real session. When the length can't be read, test runs
+  use the item's `duration` (or 5 s) and validation says so.
+* **Try it** plays the video in the browser, kept in step with the engine (MP4 with H.264 and WebM play in every
+  browser; other formats show a placeholder there but play in the experiment window). The builder's preview shows
+  the frame at the moment you look at.
+* **Checks:** a missing file, a sound-only file (`.m4a`, or an `.mp4` without a picture: use a `sound` item),
+  a file that isn't a video, and every file named in a trial-list column.
+
+## Vision-science stimuli and gamma
+
+Gratings, Gabor patches, noise and random-dot kinematograms are items like any other: every property can be a
+`$column` of the trial list or a formula, and they work in the experiment window, test runs, Try it and the preview.
+
+```yaml
+- {id: grating, type: grating, sf: $sf, sf_units: cycles/deg, ori: $ori, contrast: $contrast,
+   tf: 4, mask: raisedcos, size: [6, 6], units: deg, duration: 0.5}
+- {id: target, type: gabor, sigma: 0.5, sf: 3, phase: 0.25, ori: 45, contrast: 0.2, units: deg, duration: 0.2}
+- {id: mask, type: noise, noise_type: pink, dynamic: true, update_frames: 2, contrast: 0.8, size: [8, 8], units: deg}
+- {id: rdk, type: dots, n_dots: 200, coherence: $coh, direction: $dir, speed: 5, dot_size: 0.1,
+   lifetime: 10, noise_dots: same, size: [10, 10], units: deg, duration: 1.5}
+```
+
+* **Patterns** are luminance modulations around the mean grey: intensity = 0.5 × (1 + contrast × pattern), in
+  linear light. `color` tints the bright parts (white = grey levels). Masks are transparent outside the patch;
+  use a mid-grey `background` so the edges don't show. `ori` turns the bars clockwise (0 = vertical bars);
+  `phase` is in cycles; a positive `tf` (Hz) drifts the bars to the right at `ori: 0`.
+* **gabor** is a grating in a Gaussian window of standard deviation `sigma`; its patch is 6 × sigma unless `size`
+  is given. A grating's `mask: gauss` uses `sigma` too (default: size / 6); `raisedcos` has a soft `edge`.
+* **noise:** white (uniform), pink (1/f amplitude spectrum, like natural images), brown (1/f²) or binary;
+  `element_size` sets the size of one check; `dynamic: true` draws a new sample every `update_frames` refreshes.
+* **dots:** `coherence` is the fraction of signal dots moving in `direction` (0 = right, 90 = up, counter-clockwise);
+  the others move as `noise_dots` says: `same` (each keeps a random direction), `random_walk` (a new direction every
+  frame) or `random_position` (re-plotted every frame). Dots that leave the aperture come back on the other side;
+  `lifetime` (frames, 0 = forever) re-plots old dots. `speed` is in window units per second.
+* **Seeds.** Without `seed`, noise and dots get one made from the session's seed, the screen and how many times
+  the item was shown, so a session with the same `settings.seed` shows exactly the same noise and dots; the seed
+  used is saved in the item's `seed` column. With `seed: 42` every showing is the same.
+* **Degrees** (`units: deg`, `sf_units: cycles/deg`) need the monitor's visible screen width and the viewing
+  distance: `settings.window.monitor: {width_cm, distance_cm}` (Experiment settings → Screen). EDGE assumes the
+  window fills the screen at its native resolution; if it doesn't, add `width_px` (the screen's width in pixels).
+  Validation notes when the defaults (53 cm, 60 cm) are still in place.
+* **numpy** computes the patterns (`pip install edge-experiments[vision]`); without it they are computed in plain
+  Python (slow for large patches) and pink/brown noise falls back to white noise. Try it draws the same gratings and
+  Gabors and the same dots; its noise has the same kind and grain but not the same pixels.
+
+### Gamma calibration
+
+A monitor's light is not proportional to the pixel value: L = L0 + k · v^γ, with γ around 2.2. Contrast is only
+linear when EDGE knows γ:
+
+```yaml
+settings:
+  window:
+    background: "#808080"
+    gamma: calibration/lab1.json      # or: 2.2   or: [2.1, 2.2, 2.3] (red, green, blue)
+    gamma_method: auto                # auto | ramp | stimuli
+```
+
+`monitor: {calibration: calibration/lab1.json}` works too. With `ramp` the graphics card's gamma table makes the
+whole screen linear (pictures and text too, as in PsychoPy); with `stimuli` only gratings, Gabors, noise and the
+background are corrected (their texture values go through the inverse of the measured curve); `auto` uses the
+table where the system allows it (Windows, macOS, X11 on Linux; not Wayland) and otherwise corrects the stimuli.
+session.json records which calibration was used, its file's SHA-256 and the method (`gamma`).
+
+**Measuring** takes ten minutes and a photometer: `edge gamma experiment.yaml --show` shows N grey levels full
+screen in the experiment window; type each luminance reading (cd/m²) into the window and press Enter. EDGE fits γ
+(and the black level), shows the fit and saves `calibration/monitor.json` next to the experiment (`--name lab1`,
+`--use` also sets `settings.window.gamma`). Readings taken elsewhere: `--readings "0.4,2,6.5,…"` (black to white)
+or `--csv readings.csv` (columns `level, luminance`, or `level, r, g, b` for each channel). In the builder:
+Experiment settings → Colour & gamma → Measure the monitor (full-screen patches in the browser, a reading per
+level, Fit, Save and use). Warm the monitor up for 30 minutes and turn off dynamic contrast, night light / True Tone
+and picture modes first.
 
 ## Live device values
 

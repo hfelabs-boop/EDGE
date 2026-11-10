@@ -152,7 +152,12 @@ def component_catalogue(full: bool) -> str:
         desc = cls.description if full else _first_sentence(cls.description)
         out.append(f"- {k} [{cls.category}] {_first_sentence(desc) if not full else desc}")
         if full or cls.category in ("stimulus", "response"):
-            props = [_prop(n, m, full) for n, m in cls.props_schema.items() if n != "marker"]
+            names = [n for n in cls.props_schema if n != "marker"]
+            common = ("pos", "opacity", "ori", "units")       # every visual item has them: named, not typed (compact)
+            short = not full and all(c in names for c in common)
+            props = [_prop(n, cls.props_schema[n], full) for n in names if not (short and n in common)]
+            if short:
+                props.append("pos/opacity/ori/units")
             if props:
                 out.append("  props: " + ", ".join(props))
         if cls.outputs:

@@ -309,6 +309,52 @@ Export the event times from the recording software as `time,code`, then:
 edge align data/001_1_study_2027-02-01_101500 biolab_events.csv   # the session folder 'edge run' printed
 ```
 
+## Video and vision science
+
+### Play a video and end the screen when it ends
+
+```yaml
+- {id: clip, type: movie, movie: videos/intro.mp4, end_routine: true, marker: video_on}
+```
+
+The data have `clip.first_frame` (when the first frame appeared) and `clip.frames_dropped`. A different video on
+each trial: `movie: $video` with a `video` column in the trial list. Encode videos as MP4 (H.264, `-bf 0`) at 30 or
+60 fps for a 60 Hz screen. See [Video](EXPERIMENT_FORMAT.md#video).
+
+### Contrast detection with a Gabor
+
+```yaml
+settings:
+  window: {units: deg, background: "#808080", monitor: {width_cm: 52, distance_cm: 57}, gamma: calibration/lab1.json}
+routines:
+  trial:
+    components:
+      - {id: fix, type: fixation, size: 0.5, duration: 0.5}
+      - {id: target, type: gabor, sigma: 0.4, sf: 4, ori: $ori, contrast: $contrast, start: 0.5, duration: 0.1}
+      - {id: resp, type: keyboard, keys: [left, right], correct: $answer, start: 0.5, end_routine: true}
+```
+
+Use a staircase on `contrast` for thresholds. Measure the monitor first (`edge gamma experiment.yaml --show`), or
+the contrast steps are not linear.
+
+### Motion coherence (random-dot kinematogram)
+
+```yaml
+- {id: rdk, type: dots, n_dots: 150, coherence: $coh, direction: $dir, speed: 6, dot_size: 0.12,
+   lifetime: 12, size: [8, 8], units: deg, duration: 1.0}
+- {id: resp, type: keyboard, keys: [left, right], correct: "$'left' if dir == 180 else 'right'", end_routine: true}
+```
+
+With `settings.seed` fixed, every participant sees exactly the same dots; the seed of each trial is in `rdk.seed`.
+
+### A drifting grating followed by a dynamic-noise mask
+
+```yaml
+- {id: grating, type: grating, sf: 2, tf: 4, mask: raisedcos, size: [6, 6], units: deg, duration: 0.5}
+- {id: mask, type: noise, noise_type: binary, dynamic: true, element_size: 0.2, size: [6, 6], units: deg,
+   start_after: grating, duration: 0.2}
+```
+
 ## Running
 
 ### A screenless study (sounds or physiology only)

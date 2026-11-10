@@ -199,8 +199,9 @@ ASSET_KINDS = {
     "audio": (".wav", ".mp3", ".ogg", ".flac", ".aiff", ".aif", ".m4a"),
     "html": (".html", ".htm"),
     "data": (".csv", ".tsv", ".xlsx", ".json", ".txt"),
+    "video": (".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi", ".mpg", ".mpeg", ".wmv", ".ogv"),
 }
-ASSET_FOLDERS = {"image": "images", "audio": "sounds", "html": "pages", "data": "conditions"}
+ASSET_FOLDERS = {"image": "images", "audio": "sounds", "html": "pages", "data": "conditions", "video": "videos"}
 
 
 def schema() -> dict[str, Any]:
@@ -791,6 +792,8 @@ POST_FIELDS: dict[str, dict[str, tuple[type | tuple[type, ...], bool]]] = {
     "/api/survey/instrument": {"id": (str, True)},
     "/api/rename": {"experiment": (dict, True), "kind": (str, True), "old": (str, True), "new": (str, True),
                     "routine": (str, False)},
+    "/api/gamma": {"path": (str, True), "levels": (list, True), "readings": ((list, dict), True), "name": (str, False),
+                   "monitor": (str, False), "save": (bool, False)},
     "/api/to_yaml": {},
     "/api/from_yaml": {"yaml": (str, True)},
     # the experiment assistant (edge/assistant/api.py)
@@ -861,6 +864,40 @@ def make_handler(app: BuilderApp):
                 self.wfile.write(body)
             except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                 pass      # the page went away (reloaded or closed) before the answer arrived
+
+        def _send_range(self, p: Path, ctype: str) -> None:
+            """Part of a video or sound file (HTTP Range: bytes=a-b), so the browser can seek in it."""
+            size = p.stat().st_size
+            m = re.match(r"bytes=(\d*)-(\d*)$", (self.headers.get("Range") or "").strip())
+            if not m or (not m.group(1) and not m.group(2)):
+                return self._send(200, p.read_bytes(), ctype)
+            if m.group(1):
+                a = int(m.group(1))
+                b = min(int(m.group(2)) if m.group(2) else size - 1, size - 1)
+            else:
+                a, b = max(0, size - int(m.group(2))), size - 1
+            if a >= size or a > b:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return None
+            with p.open("rb") as f:
+                f.seek(a)
+                data = f.read(b - a + 1)
+            self.send_response(206)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Range", f"bytes {a}-{b}/{size}")
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            try:
+                self.end_headers()
+                self.wfile.write(data)
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                pass
+            return None
 
         def _guard(self) -> bool:
             why = request_allowed(self.headers, self.command, urlparse(self.path).path, app.page_key)
@@ -995,6 +1032,8 @@ def make_handler(app: BuilderApp):
                         self.wfile.write(data)
                         return None
                     ctype = mimetypes.guess_type(str(p))[0] or "application/octet-stream"
+                    if self.headers.get("Range") and ctype.startswith(("video/", "audio/")):
+                        return self._send_range(p, ctype)        # a <video> element seeks with byte ranges
                     return self._send(200, p.read_bytes(), ctype, sandbox=ctype in ACTIVE_CONTENT)
                 if u.path == "/api/conditions":
                     from ..conditions import load_conditions
@@ -1127,6 +1166,12 @@ def make_handler(app: BuilderApp):
                     if not unread and int(body.get("unreviewed") or 0) > 0:      # written in this browser, not applied yet
                         unread = ["code by the assistant"]
                     return self._json(run_preflight(pp, golden=body.get("golden", True), skip_code=unread or None))
+                if u.path == "/api/gamma":       # fit photometer readings; save calibration/<name>.json
+                    from ..gamma import gamma_api
+                    try:
+                        return self._json(gamma_api(app.safe_path(body["path"]), body))
+                    except ValueError as e:
+                        return self._json({"error": str(e)}, 400)
                 if u.path == "/api/lock":
                     from ..reproduce import lock
                     return self._json(lock(app.safe_path(body["path"])))

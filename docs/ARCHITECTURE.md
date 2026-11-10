@@ -11,7 +11,11 @@ edge/
   clock.py          the master clock
   events.py         markers and the event bus that routes them to every connected device
   components/       stimulus, response, eye-tracking, hardware and logic components (registry + plugins)
-  backends/         pyglet (OpenGL window) and headless (virtual clock or real-time)
+  backends/         pyglet (OpenGL window; pyglet_media.py: video, procedural textures, dots, gamma ramp) and
+                    headless (virtual clock or real-time)
+  video.py          video files: header parsing (MP4/MOV, WebM/MKV, AVI), frame-locked playback bookkeeping
+  vision.py         gratings, Gabors, noise and random-dot fields, computed with numpy (plain Python fallback)
+  gamma.py          monitor gamma: fitting photometer readings, calibration files, settings checks, `edge gamma`
   devices/          drivers + registry + base class (streams, sinks, threads, clock models), trigger adapters,
                     response inputs, UDP messages (closed loop), simulators
   sync.py           clock models: linear fit, round trip, arrival envelope
