@@ -37,6 +37,8 @@ edge/
   wizard.py         design wizard: answers -> finished experiment; trial/duration estimates
   play.py           "Try it": BrowserBackend (real engine, frames published to the builder), single-screen runs
   monitor.py        live session monitor: what the experimenter sees while a participant runs
+  studyday.py       running a study day: participant queue, session notes, the day's run log, pause/stop with a reason
+  quality.py        live signal quality: EEG channels (RMS, line noise, flat, saturated, impedance), eye-tracker validity
   pitfalls.py       static checks for experiments that look fine but time or run wrong
   preflight.py      go / no-go before collecting data (`edge preflight`)
   reproduce.py      lock a piloted experiment and verify nothing changed since (`edge lock`, `edge verify`)
@@ -56,6 +58,7 @@ edge/
                     help, command palette, the EDGE namespace), ui.js (dialogs, menus, toasts), build.js +
                     stage.js (storyboard, screen editor, timeline, trial lists, diagram), inspector.js +
                     widgets.js (properties), simple.js (wizard, Try it, Run page), measures.js (Measures page),
+                    console.js (study day on the Run page: queue, notes, signal quality, experimenter window),
                     survey.js (survey editor), assistant.js (assistant panel); tokens.css, components.css,
                     icons.js (the design system)
   cli.py            `edge` command

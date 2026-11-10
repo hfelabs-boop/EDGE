@@ -59,7 +59,9 @@ settings:
   window:
     size: [1920, 1080]
     fullscreen: true
-    screen: 1                 # monitor index
+    screen: 1                 # monitor index: the one the participant faces (0 = main)
+    keep_focus: true          # take the keyboard back when another window gets it (false: the experimenter can
+                              # type in another window during the session; see BUILDER_GUIDE "Two monitors")
     background: "#808080"
     units: px                 # px | norm | height | deg
     refresh_rate: null        # null = measure at startup

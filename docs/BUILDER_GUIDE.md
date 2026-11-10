@@ -283,6 +283,8 @@ While a session runs, the **Run** page shows:
 * warnings: *no response on the last 5 trials*, a measure missing on more than 20 % of trials, values outside the
   expected range, a device that went silent;
 * **Stop session** ends it like Esc in the experiment window: everything so far is saved.
+* signal quality per EEG channel and for eye trackers, Pause / Resume, notes and the experimenter window: see
+  [Running a study day](#running-a-study-day).
 
 You can work elsewhere in the builder meanwhile: the red recording pill on the **Run** tab brings you back.
 
@@ -332,6 +334,93 @@ library questionnaire's items in for editing. See [Surveys](SURVEYS.md).
 During the session the page becomes the [live monitor](#live-session-monitor). Afterwards **See the data** opens
 the session on the Data page, and **Next participant** starts over with the next ID. If the window can't open (no
 monitor, a missing library) or a device can't be reached, the page says so in plain words.
+
+## Running a study day
+
+The **Run** page also runs a whole day of participants: who comes, in which order and group, what happened to
+each, and notes on every session.
+
+**Today's participants** (below *This session*) is the participant queue of this experiment:
+
+* **Plan participants** adds the next free IDs (after every ID that already has data or is planned, keeping the
+  zeros: 007, 008 …), their **Session**, and **Groups (counterbalancing)** given in turn: A, B, A, B … Each session
+  gets the group as the participant field `group`, so the experiment can use `$group` (for example to pick the
+  trial list: `conditions: $f"list_{group}.csv"`), and it is a column of the data.
+* **Import a list (CSV)** (the **⋯** menu) reads a list you prepared in Excel: a `participant` column (or `id`,
+  `subject`), and optionally `session`, `group` (or `condition`, `counterbalance`), `status` and `comment`; other
+  columns are passed to the session as participant fields too. **Export the list (CSV)** writes the list with every
+  participant's status, data folder and times.
+* Every row shows the status: **Planned**, **Running**, **Done**, **Stopped early** (with the reason) or
+  **No-show**. Change an ID, session, group or comment by typing in the row. The row's **⋯** menu marks a
+  **no-show**, plans someone again, moves them up or down, or removes them.
+* **Start 004** (the box at the top) or **Start** on a row starts that participant with the choices of *This
+  session* (real or simulated devices, full screen or a window). A session started with **Start session** for an
+  ID that is planned in the list is matched to it too.
+* **Run log of today** lists what happened, with the time: sessions started, finished, stopped (and why), pauses,
+  notes and no-shows.
+
+While a participant runs, the page shows above the live monitor:
+
+* where they are: the current **screen**, **trial n of about N**, their last response;
+* **Pause** / **Resume**: the session waits *before the next screen* (the participant sees "Paused. Please wait.",
+  markers `pause` and `resume` are recorded). A screen that waits for a key press is not interrupted.
+* **Stop session** asks for a **reason** (one click for the usual ones); it goes into the notes, the list and the
+  run log, and everything recorded so far is kept;
+* **Signal quality** of every device, every 2 seconds (see below);
+* **Notes**: type and press Enter. Each note keeps its time and how far into the session it was written (+4:12).
+  Pauses and stops are added automatically. You can change or delete notes during and after the session; they are
+  saved in the session folder as `notes.md` (readable) and `notes.json`, shown on the **Data** page above the
+  tables (where you can still add or change them), and exports have a `notes` column in the sessions table;
+* **Show their screen** (tick it before starting): a small copy of the participant's screen every 2 seconds.
+  Taking it costs a few milliseconds and can make the experiment miss a frame each time, so leave it off for
+  timing-critical studies.
+
+### Signal quality
+
+During a session, in **Test this device** and in `edge test-device`, every recorded signal is checked on its last
+2 seconds:
+
+* **EEG**, one tile per electrode, green (good), amber (check) or red (bad), with its size (RMS in µV), the mains
+  hum (50 or 60 Hz, whichever is stronger) and the impedance when available. Red means **flat** (not connected,
+  no signal), **saturated** (stuck at the amplifier's limit, an electrode off the head or "railing"), **very
+  noisy** (over 150 µV) or **strong line noise**; amber means noisy (over 50 µV) or some line noise. Hover over a
+  tile for the numbers and the reason. Trigger channels are left out.
+* **Impedance** is shown when the amplifier reports it: the simulated EEG; a g.tec amplifier through g.NEEDaccess
+  (`mode: gds`) measures it before recording when `impedance_at_start: true` is set, and in Test this device; an LSL
+  amplifier that publishes a stream of type `Impedance` on the same computer (`lsl_inlet`, option
+  `impedance_stream: auto`). Otherwise the card says *impedance: not available from this device* (the Unicorn's Python
+  API, for example, doesn't report it: use the Unicorn Suite's signal check).
+* **Eye trackers**: the share of valid samples (each eye, pupil size), how often tracking was lost and the longest
+  loss. Red when less than 60 % is valid or the participant isn't tracked right now.
+* Other signals (ECG, skin conductance …): flat or stuck at a limit.
+
+The simulated EEG has three bad channels on purpose, so you can see the display at work: C4 with 50 Hz hum, P4
+flat, Oz noisy (`faults: {}` in its options for clean channels).
+
+### Two monitors: the experimenter's screen
+
+With a second monitor, the participant sees only the experiment and you watch the session on the other screen:
+
+1. In **This session**, **Participant's monitor** lists the monitors of this computer (with their size): choose the
+   one the participant faces. It is saved in the experiment (`settings.window.screen`). If that monitor isn't
+   connected on the day, the experiment opens on the last one there is, and the session report says so.
+2. Start the session. **Experimenter window** (next to Pause) opens this console in its own browser window. In
+   Chrome and Edge, allow *window management* when asked and it opens on the other monitor; otherwise drag it there.
+   It shows the session, the signal quality and the notes, follows every session started on this computer, and
+   can start the next participant from the list.
+
+Things to know about the keyboard (the same on Windows, macOS and Linux): there is one keyboard focus. While the
+experiment runs, its window takes the keyboard back whenever another window gets it, so that the participant's key
+presses are never lost. You can still **click** in the experimenter window (Pause, Stop, the list), but typing goes
+back to the experiment. To write a longer note, press **Pause**: while paused the experiment window leaves the
+keyboard alone, and **Resume** gives it back to the participant. If the participant answers only with a response
+box, a mouse in the experiment window or another device (not the keyboard), you can set
+`settings.window.keep_focus: false` (in the experiment file, Expert mode): then the experiment window doesn't take
+the keyboard back and you can type at any time; key presses meant for the experiment while you type are lost, and
+the session report counts how often the window lost the keyboard. Some systems also limit how a window may take the
+focus (Windows may only flash the taskbar button; some Linux desktops ignore the request): click the experiment
+window once if it didn't get the keyboard. Notifications and pop-ups on the participant's monitor can steal focus
+too: turn them off for the day (Windows: Do not disturb; macOS: Focus).
 
 ## Data
 

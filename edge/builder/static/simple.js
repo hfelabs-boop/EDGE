@@ -687,7 +687,8 @@ function runBeforeView() {
   F.simulate ? h("p", {class: "t-caption run-note"}, "No hardware is used: every device is simulated. Use it for a pilot without the lab equipment.") : null);
   sess.append(segRow("Screen", "run-scr-l", [{value: "1", label: "Full screen"}, {value: "0", label: "In a window"}], F.fullscreen ? "1" : "0", (v) => { F.fullscreen = v === "1"; }));
   const mon = exp.settings?.window?.screen ?? 0;
-  sess.append(h("p", {class: "t-small run-monitor"}, h("span", {class: "label"}, "Monitor"), ` ${+mon === 0 ? "Main (1)" : `Monitor ${+mon + 1}`} `,
+  if (typeof participantScreenField === "function") sess.append(participantScreenField());      // console.js: the real monitors
+  else sess.append(h("p", {class: "t-small run-monitor"}, h("span", {class: "label"}, "Monitor"), ` ${+mon === 0 ? "Main (1)" : `Monitor ${+mon + 1}`} `,
     h("button", {type: "button", class: "linkbtn", onclick: () => (typeof openSettings === "function" ? openSettings("screen") : null)}, "Change")));
   const extraFields = Object.entries(exp.settings?.participant || {}).filter(([k]) => !["participant", "session"].includes(k));
   if (extraFields.length) {
@@ -746,7 +747,7 @@ function runBeforeView() {
     h("p", {class: "t-small t-2"}, blocked ? "Apply or discard the assistant's changes first." : `The experiment opens in its own window. Data is saved to ${runDataDir()} as it runs.`),
     h("span", {class: "grow"}), anyway, start);
   return h("div", {class: "run-page"}, runHead("Run with a participant", helpLink("BUILDER_GUIDE", "", "running a session")),
-    h("div", {class: "run-grid"}, sess, pre), foot);
+    h("div", {class: "run-grid"}, sess, pre), typeof studyDayCard === "function" ? studyDayCard() : "", foot);
 }
 function inspAssistantApi() { return window.Assistant || (typeof Assistant !== "undefined" ? Assistant : null); }
 function runUnreviewedCode() {
@@ -824,7 +825,8 @@ function runLiveView() {
     h("span", {class: "run-clock t-2", id: "run-clock"}, ""), h("span", {class: "grow"}), stop);
   const stLine = h("p", {class: "t-small t-2 run-stline", id: "run-stline"}, r.recovered ? "Found the session again after the page reloaded." : "Starting: opening the window and connecting devices…");
   const log = h("pre", {class: "run-log mono", id: "run-log"});
-  return h("div", {class: "run-live"}, runHead("Run with a participant"), h("section", {class: "card pad run-livecard"}, head, stLine, RUN.mon.el,
+  return h("div", {class: "run-live"}, runHead("Run with a participant"), h("section", {class: "card pad run-livecard"}, head, stLine,
+    typeof consoleLivePanel === "function" ? consoleLivePanel() : "", RUN.mon.el,      // console.js: pause, quality, notes
     h("details", {class: "run-logbox"}, h("summary", {}, "Log"), log)),
   h("p", {class: "t-caption run-note"}, "You can keep working: the recording pill on the Run tab brings you back here. Saved changes apply to the next participant."));
 }
@@ -861,6 +863,7 @@ function runPoll() {
 }
 function runLiveUpdate(st) {
   RUN.mon?.update(st);
+  if (typeof consoleLiveUpdate === "function") consoleLiveUpdate(st);
   const log = $("#run-log"); if (log) log.textContent = (st.output || []).slice(-40).join("\n");
   const line = $("#run-stline");
   if (line) line.textContent = st.stopping ? "Stopping: saving the data…" : st.running ? (st.monitor?.start ? "The experiment window is open." : "Starting: opening the window and connecting devices…") : "";
@@ -876,6 +879,7 @@ function runLiveUpdate(st) {
 const runMmss = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60) % 60).padStart(2, "0")}`;
 async function runStopSession() {
   if (!S.run?.running) return;
+  if (typeof studyStop === "function") return studyStop();       // console.js: stop with a reason
   const ok = await ui.confirm({title: "Stop this session?", message: "Everything recorded so far is kept.", ok: "Stop session", cancel: "Keep running", danger: true});
   if (!ok || !S.run?.running) return;
   const b = document.querySelector(".run-stopbtn");
@@ -917,7 +921,8 @@ function runAfterView() {
       h("button", {type: "button", class: "btn", "data-fkey": "run:next", onclick: () => { runClear(); RUN.form = null; renderRunPage(); }}, `Next participant${next ? ` (${next})` : ""}`),
       h("button", {type: "button", class: "btn ghost", onclick: () => { runClear(); EDGE.go("build"); }}, "Back to Build")),
     out.length ? h("details", {class: "run-logbox", open: why ? "" : null}, h("summary", {}, "Log"), h("pre", {class: "run-log mono"}, out.slice(-60).join("\n"))) : null);
-  return h("div", {class: "run-page"}, runHead("Run with a participant"), card);
+  const extra = typeof notesPanel === "function" ? [h("div", {class: "sd-after"}, notesPanel({run: r.id})), studyDayCard()] : [];
+  return h("div", {class: "run-page"}, runHead("Run with a participant"), card, ...extra);
 }
 /* A session that failed before anything was recorded: one message in plain words, Try again with the same participant. */
 function runNotStartedView(why, crash, out) {

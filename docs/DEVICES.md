@@ -199,9 +199,23 @@ Any expression can also read the **latest sample of any device**: `$devices.eeg.
   the speaker (inputs named `light` and `sound` on a response box, LabJack or voice key). The
   session report gives the **display latency**, the **audio latency** and the **trigger alignment**.
 
+### Signal quality and impedance
+
+Every device with a regularly sampled stream keeps its last 5 seconds, and `Device.quality()` computes from them
+(see `edge/quality.py`): per EEG channel the RMS (µV), 50/60 Hz line noise, flat, saturated / railing, and the
+impedance when the driver's `impedance()` returns it ({channel: kΩ}); for eye trackers the valid samples per eye,
+pupil validity and tracking losses. The live monitor sends it every 2 s (`quality` events), the Run page shows a
+green / amber / red channel grid, and `edge test-device` prints a summary line per stream. Impedance comes from:
+`sim_eeg` (simulated), `gtec` with `mode: gds` and `impedance_at_start: true` (pygds `GetImpedance`, before
+recording; also in Test this device), and `lsl_inlet` when an LSL stream of type `Impedance` is found on the same
+computer (option `impedance_stream: auto`, or the stream's name; off by default). Otherwise the display says "not available from this device".
+Thresholds can be changed per device with the option `quality: {noisy_warn_uv: 80, line_bad_uv: 20, …}` (names in
+`edge.quality.THRESHOLDS`). A driver can override `impedance()` / `impedance_note()`, or `quality()` itself.
+
 ### Simulators — `sim_eyetracker`, `sim_eeg`, `sim_physio`, `mouse_gaze`, `ttl_loopback`, `sim_inputs`
 Each simulator runs on its own clock with configurable offset, drift (ppm) and transport jitter,
-so dry runs exercise the full sync pipeline. `mouse_gaze` lets you build gaze-contingent tasks at
+so dry runs exercise the full sync pipeline. `sim_eeg` has a few bad channels on purpose (C4 50 Hz hum,
+P4 flat, Oz noisy) to show the signal-quality display; `faults: {}` makes every channel clean. `mouse_gaze` lets you build gaze-contingent tasks at
 your desk. `--dry-run` swaps every hardware driver for its simulator automatically.
 
 ## Writing a driver

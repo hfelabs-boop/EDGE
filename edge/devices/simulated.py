@@ -171,7 +171,11 @@ class SimEEG(_SimBase):
     description = "Simulated EEG amplifier (alpha rhythm + noise, with a trigger channel)."
     capabilities = {"stream", "markers"}
     options_schema = {**_SimBase.options_schema,
-                      "channels": {"type": "list", "default": ["Fz", "Cz", "Pz", "Oz", "C3", "C4", "P3", "P4"]}}
+                      "channels": {"type": "list", "default": ["Fz", "Cz", "Pz", "Oz", "C3", "C4", "P3", "P4"]},
+                      "faults": {"type": "dict", "default": {"C4": "line_noise", "P4": "flat", "Oz": "noisy"},
+                                 "help": "channels that behave badly, to see the signal-quality display at work: "
+                                         "{channel: line_noise | flat | noisy | railing}; {} for clean channels"}}
+    FAULT_IMPEDANCE = {"line_noise": 45.0, "flat": 900.0, "noisy": 18.0, "railing": 2000.0}
 
     @classmethod
     def planned_streams(cls, options=None):
@@ -182,14 +186,35 @@ class SimEEG(_SimBase):
     def connect(self) -> None:
         super().connect()
         chans = list(self.options["channels"])
+        faults = self.options.get("faults")
+        self._faults = {str(k): str(v) for k, v in faults.items()} if isinstance(faults, dict) else {}
+        self._imp = {c: round(self.FAULT_IMPEDANCE.get(self._faults.get(c, ""), self.rng.uniform(3.0, 8.0)), 1)
+                     for c in chans}
         self.add_stream("eeg", chans + ["TRIG"], self.options["srate"], "EEG", units=["uV"] * len(chans) + ["code"])
+
+    def _value(self, c: str, t: float, alpha: float) -> float:
+        v = alpha * (1.5 if c.startswith(("O", "P")) else 0.5) + self.rng.gauss(0, 5)
+        fault = self._faults.get(c)
+        if fault == "flat":
+            return 0.0
+        if fault == "line_noise":
+            return v + 40 * math.sin(2 * math.pi * 50 * t)
+        if fault == "noisy":
+            return v + self.rng.gauss(0, 60)
+        if fault == "railing":
+            return 3200.0
+        return v
 
     def sample(self, t: float) -> dict[str, list[Any]]:
         chans = self.options["channels"]
         alpha = 10 * math.sin(2 * math.pi * 10 * t)
-        vals: list[Any] = [round(alpha * (1.5 if c.startswith(("O", "P")) else 0.5) + self.rng.gauss(0, 5), 2) for c in chans]
+        vals: list[Any] = [round(self._value(c, t, alpha), 2) for c in chans]
         code = self.take_code(t)
         return {"eeg": vals + [code]}
+
+    def impedance(self) -> dict[str, float] | None:
+        # simulated, as an amplifier with an impedance check would report it (bad channels high)
+        return dict(self._imp) if getattr(self, "_imp", None) else None
 
 
 @register

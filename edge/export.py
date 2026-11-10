@@ -1075,7 +1075,15 @@ def timing_row(st: SessionTables) -> dict[str, Any]:
             "started": m.get("started"), "ended": m.get("ended"), "aborted": m.get("aborted"),
             "dry_run": m.get("dry_run"), "frames": t.get("frames"), "dropped_frames": t.get("dropped_frames"),
             "refresh_rate_hz": t.get("refresh_rate_hz"), "devices": ", ".join(m.get("devices", {}).keys()),
-            "errors": len(m.get("errors", [])), "seed": m.get("seed"), "edge_version": m.get("edge_version")}
+            "errors": len(m.get("errors", [])), "seed": m.get("seed"), "edge_version": m.get("edge_version"),
+            **_notes_column(st)}
+
+
+def _notes_column(st: SessionTables) -> dict[str, Any]:
+    """The experimenter's notes on the session (notes.json, written on the Run page), on one line."""
+    from .studyday import notes_text
+    text = notes_text(st.root)
+    return {"notes": text} if text else {}
 
 
 def export_session(session_dir: str | Path, formats: Iterable[str] = ("csv",), out_dir: str | Path | None = None,
@@ -1245,6 +1253,7 @@ streams/             device recordings: time (aligned master clock), device_time
                      (each channel's units and the gaze coordinates: session.json -> devices -> streams)
 session.json         settings, devices, clock models, marker codebook, timing summary, seed
 experiment.yaml      the exact experiment that produced this data
+notes.md, notes.json the experimenter's notes on this session, with times (when any were written)
 Times are in seconds. Re-export any time with:  edge export <this folder> --formats xlsx,bids
 """
 

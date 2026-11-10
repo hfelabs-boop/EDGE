@@ -1,0 +1,96 @@
+/* console.css: the study day on the Run page (console.js). Owner: P4b. The participant queue, the live console
+   (pause, signal quality, notes, the participant's screen) and the experimenter window (?console=1). */
+
+/* ---------------- the participant queue */
+.sd-card { margin-bottom: var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-5); }
+.sd-card > .card-head { margin: 0; }
+.sd-head { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+.sd-head h2 { margin: 0; }
+.sd-empty { margin: 0; max-width: 72ch; }
+.sd-next { display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap; padding: var(--sp-5) var(--sp-6); border-radius: var(--r-md);
+  background: var(--accent-subtle); border: 1px solid var(--info-border); }
+.sd-next-txt { display: flex; flex-direction: column; gap: 2px; }
+.sd-next-txt b { font-size: var(--fs-title-s); line-height: var(--lh-title-s); }
+.sd-mirror { display: inline-flex; align-items: center; gap: var(--sp-3); color: var(--text-2); cursor: pointer; }
+.sd-wrap { max-height: 420px; overflow: auto; border: 1px solid var(--border-subtle); border-radius: var(--r-md); }
+table.grid.sd-table { width: 100%; }
+table.grid.sd-table td { height: 36px; }
+table.grid.sd-table td.x, table.grid.sd-table th.x { text-align: right; width: 1%; }
+table.grid.sd-table .sd-com { width: 30%; }
+.sd-in.input { height: 28px; padding: 0 var(--sp-4); min-width: 56px; background: transparent; border-color: transparent; }
+.sd-in.input:hover { border-color: var(--border-default); }
+.sd-in.input:focus { background: var(--surface-1); border-color: var(--accent); }
+.sd-in.num { max-width: 64px; }
+.sd-in.mono { font-family: var(--font-mono); font-size: var(--fs-mono); max-width: 120px; }
+.sd-static { display: inline-block; padding: 0 9px; }
+.sd-static.mono { font-size: var(--fs-mono); }
+.sd-acts { display: flex; gap: var(--sp-2); justify-content: flex-end; align-items: center; }
+tr.sd-row.next td { background: var(--accent-subtle); }
+tr.sd-row.s-done td, tr.sd-row.s-no-show td { color: var(--text-2); }
+.sd-reason { color: var(--text-2); }
+.sd-log > summary { cursor: pointer; }
+.sd-loglist { list-style: none; margin: var(--sp-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); max-height: 220px; overflow: auto; }
+.sd-loglist li.k-abort, .sd-loglist li.k-failed { color: var(--warning); }
+.sd-plan { display: flex; flex-direction: column; gap: var(--sp-4); }
+.sd-plan .input.num { max-width: 120px; }
+.sd-screen { margin-bottom: var(--sp-5); }
+.sd-screen select { max-width: 320px; }
+
+/* ---------------- during the session */
+.sd-live { display: flex; flex-direction: column; gap: var(--sp-5); margin-bottom: var(--sp-5); }
+.sd-bar { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; padding: var(--sp-4) var(--sp-5); border-radius: var(--r-md); background: var(--surface-2); }
+.sd-now { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; font-size: var(--fs-body); }
+.sd-now .sd-k { color: var(--text-2); font-size: var(--fs-caption); margin-left: var(--sp-4); }
+.sd-now .sd-k:first-child { margin-left: 0; }
+.sd-now .chip { align-self: center; }
+.sd-livegrid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--sp-5); align-items: start; }
+.sd-col { display: flex; flex-direction: column; gap: var(--sp-5); min-width: 0; }
+@media (max-width: 900px) { .sd-livegrid { grid-template-columns: minmax(0, 1fr); } }
+.sd-reasons { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-4); }
+.sd-reasons .chip { cursor: pointer; }
+
+/* signal quality: a compact grid of channels, green / amber / red with numbers */
+.q-stream { display: flex; flex-direction: column; gap: var(--sp-3); }
+.q-stream + .q-stream { padding-top: var(--sp-4); border-top: 1px solid var(--border-subtle); }
+.q-head { display: flex; align-items: baseline; gap: var(--sp-4); flex-wrap: wrap; font-size: var(--fs-small); }
+.q-imp { color: var(--text-3); }
+.q-grid, .q-gaze { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: var(--sp-2); }
+.q-ch { display: flex; flex-direction: column; gap: 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm); border: 1px solid transparent;
+  font-size: var(--fs-caption); line-height: var(--lh-caption); min-width: 0; }
+.q-ch .q-name { font-size: var(--fs-small); font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-ch .q-num { font-variant-numeric: tabular-nums; }
+.q-ch .q-sub { color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-ch.q-ok { background: var(--success-subtle); border-color: var(--success-border); }
+.q-ch.q-ok .q-name { color: var(--success); }
+.q-ch.q-warn { background: var(--warning-subtle); border-color: var(--warning-border); }
+.q-ch.q-warn .q-name { color: var(--warning); }
+.q-ch.q-bad { background: var(--danger-subtle); border-color: var(--danger-border); }
+.q-ch.q-bad .q-name { color: var(--danger); }
+.q-ch.q-wait { background: var(--surface-2); border-color: var(--border-subtle); color: var(--text-2); }
+.q-pill { font-size: var(--fs-caption); font-weight: var(--fw-semibold); padding: 0 var(--sp-3); border-radius: var(--r-pill); }
+.q-pill.q-ok { background: var(--success-subtle); color: var(--success); }
+.q-pill.q-warn { background: var(--warning-subtle); color: var(--warning); }
+.q-pill.q-bad { background: var(--danger-subtle); color: var(--danger); }
+.q-pill.q-wait { background: var(--surface-2); color: var(--text-2); }
+.q-why { margin: 0; }
+.sd-mirrorbox img { width: 100%; max-width: 480px; aspect-ratio: 16 / 9; object-fit: contain; background: #000; border-radius: var(--r-sm); }
+.sd-mirrorbox p { margin: 0; }
+
+/* notes */
+.sd-notesbox > p { margin: 0; }
+.sd-noteadd { display: flex; gap: var(--sp-3); align-items: flex-start; }
+.sd-notein { flex: 1; min-height: 56px; resize: vertical; font: inherit; padding: var(--sp-3) var(--sp-4); }
+.sd-notes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); max-height: 320px; overflow: auto; }
+.sd-note { display: flex; align-items: baseline; gap: var(--sp-3); font-size: var(--fs-small); padding: var(--sp-1) 0; border-bottom: 1px solid var(--border-subtle); }
+.sd-note .btn { visibility: hidden; align-self: center; }
+.sd-note:hover .btn, .sd-note:focus-within .btn { visibility: visible; }
+.sd-note.auto .sd-ntext { color: var(--text-2); font-style: italic; }
+.sd-ntime { flex: none; font-size: var(--fs-caption); }
+.sd-ntext { overflow-wrap: anywhere; white-space: pre-wrap; }
+.sd-after { margin: var(--sp-6) 0; }
+.sd-datanotes { margin: 0 0 var(--sp-5); }
+
+/* ---------------- the experimenter window (?console=1): only the Run page, nothing to edit */
+.console-mode #ws-nav, .console-mode #try-split, .console-mode #btn-undo, .console-mode #btn-redo,
+.console-mode #assistant-toggle, .console-mode #btn-save, .console-mode .run-foot .run-anyway { display: none !important; }
+.console-mode #docname::before { content: "Experimenter · "; color: var(--text-2); font-weight: var(--fw-regular); }
