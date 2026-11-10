@@ -1421,7 +1421,12 @@ async function renderData() {
   const sess = D.sessions.find((s) => s.path === D.sel) || {};
   main.replaceChildren(h("div", {class: "t-caption pad"}, "Loading tables…"));
   let t;
-  try { t = await api(`/api/session_tables?path=${encodeURIComponent(D.sel)}`); }
+  try {
+    const [tables, analysis] = await Promise.all([api(`/api/session_tables?path=${encodeURIComponent(D.sel)}`),
+      api(`/api/analysis_info?path=${encodeURIComponent(D.sel)}`).catch(() => null)]);   // Eye & signals tab
+    t = tables;
+    t.analysis = analysis;
+  }
   catch (e) { main.replaceChildren(h("div", {class: "alert danger"}, icon("error"), h("div", {}, h("b", {}, "This session can't be read."), e.message))); return; }
   if (sess.path !== D.sel) return;
   D.tables = t;
@@ -1446,7 +1451,8 @@ async function renderData() {
     if (said.has(norm(text))) continue;          // the verdict already says it
     alerts.append(h("div", {class: "alert warning"}, icon("warning"), h("div", {}, cap(builderWords(text.replace(/^(WARNING|ERROR|COMPUTER|NOTE):\s*/i, "").replace(/\s*→\s*/g, ". "))))));
   }
-  const subs = [["trials", `Trials`, t.trials?.total], ["summary", "Summary"], ...(t.measures ? [["measures", "Measures"]] : []), ["dictionary", "What each column means"]];
+  const subs = [["trials", `Trials`, t.trials?.total], ["summary", "Summary"], ...(t.measures ? [["measures", "Measures"]] : []), ["dictionary", "What each column means"],
+    ...(t.analysis && (t.analysis.gaze.length || t.analysis.signals.length) ? [["analysis", "Eye & signals"]] : [])];
   if (!subs.some(([k]) => k === D.sub)) D.sub = "trials";
   const tabs = h("div", {class: "tabs data-tabs", role: "tablist", "aria-label": "Tables"});
   for (const [k, label, count] of subs) {
@@ -1460,9 +1466,11 @@ async function renderData() {
     if (i < 0 || !["ArrowLeft", "ArrowRight"].includes(e.key)) return;
     e.preventDefault(); const j = (i + (e.key === "ArrowRight" ? 1 : -1) + bs.length) % bs.length; renderData._focusTab = true; bs[j].click();
   });
-  const tb = t[D.sub] || {columns: [], rows: []};
+  const tb = (D.sub !== "analysis" && t[D.sub]) || {columns: [], rows: []};
   const dict = Object.fromEntries((t.dictionary?.rows || []).map((r) => [r.column, r.description]));
-  const panel = h("div", {class: "table-wrap data-table", id: "data-table", role: "tabpanel"}, dataTable(tb.columns, tb.rows, dict));
+  const panel = D.sub === "analysis" ? h("div", {class: "data-analysis", id: "data-table", role: "tabpanel"})
+    : h("div", {class: "table-wrap data-table", id: "data-table", role: "tabpanel"}, dataTable(tb.columns, tb.rows, dict));
+  if (D.sub === "analysis") renderAnalysis(panel, D.sel, t.analysis);      // analysis.js
   const more = tb.total > tb.rows.length ? h("p", {class: "t-caption"}, `Showing the first ${tb.rows.length} of ${tb.total} rows. Export to see them all.`) : null;
   main.replaceChildren(head, alerts, tabs, panel, more || "", h("p", {class: "t-caption data-path"}, "Folder: ", h("span", {class: "mono"}, D.sel)));
   const focusTab = main.querySelector('[role=tab][aria-selected="true"]');
@@ -1485,11 +1493,13 @@ function dataTable(columns, rows, dict = {}) {
 function exportMenu(anchor, path) {
   const run = (p, f) => () => exportData(p, f);
   const items = path ? [{head: "This session"}, {label: "CSV", run: run(path, ["csv"])}, {label: "Excel", run: run(path, ["xlsx"])},
+    {label: "SPSS (.sav)", run: run(path, ["sav"])}, {label: "R (.rds and .RData)", run: run(path, ["rds", "rdata"])},
     {label: "TSV", run: run(path, ["tsv"])}, {label: "JSON", run: run(path, ["json"])}, {label: "BIDS", run: run(path, ["bids"])}, {sep: true}] : [];
   // all sessions of the open experiment (its data folder), named after it; every experiment only when asked
   const all = D.allExp || !S.path || S.noDoc ? "." : sessionDir() + String((S.exp.settings?.data || {}).dir || "data").replace(/^\.\/|\/+$/g, "");
   items.push(all === "." ? {head: "All sessions, every experiment in this folder"} : {head: "All sessions of", name: docName()},
-    {label: "CSV + Excel", run: run(all, ["csv", "xlsx"])}, {label: "BIDS", run: run(all, ["bids"])});
+    {label: "CSV + Excel", run: run(all, ["csv", "xlsx"])}, {label: "SPSS (.sav)", run: run(all, ["sav"])},
+    {label: "R (.rds and .RData)", run: run(all, ["rds", "rdata"])}, {label: "BIDS", run: run(all, ["bids"])});
   ui.menu(anchor, items, {placement: "bottom-end"});
 }
 function commonFolder(files) {

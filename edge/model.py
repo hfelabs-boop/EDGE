@@ -51,7 +51,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "dir": "data",
         "filename": "{participant}_{session}_{experiment}_{date}",
         "save_frame_log": True,
-        "exports": ["csv"],      # also: xlsx, tsv, json, jsonl, parquet, mat, bids (written at session end)
+        "exports": ["csv"],      # also: xlsx, tsv, json, jsonl, parquet, mat, sav, rds, rdata, bids (at session end)
         "summary": {},           # optional overrides: {by: [factor, ...], rt: comp.rt, correct: comp.corr}
     },
     "participant": {"participant": "001", "session": "1"},

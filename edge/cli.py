@@ -933,7 +933,8 @@ def main(argv: list[str] | None = None) -> int:
     ex = sub.add_parser("export", help="export analysis-ready tables (one session or a whole data folder)")
     ex.add_argument("path", help="session folder or data folder")
     ex.add_argument("--formats", default="csv,xlsx",
-                    help="one or more of csv,tsv,xlsx,json,jsonl,parquet,mat,bids, separated by commas (default: csv,xlsx)")
+                    help="one or more of csv,tsv,xlsx,json,jsonl,parquet,mat,sav (SPSS),rds,rdata (R),bids, separated by commas "
+                         "(default: csv,xlsx)")
     ex.add_argument("--layout", default="wide", choices=["wide", "long"],
                     help="wide (default): one row per trial; long: one row per routine")
     ex.add_argument("--out", help="output folder (default: <path>/exports)")
@@ -941,6 +942,9 @@ def main(argv: list[str] | None = None) -> int:
                                    "<experiment>_all_<date> for a data folder)")
     ex.add_argument("--include-dry-runs", action="store_true", help="also include dry-run sessions")
     ex.set_defaults(fn=cmd_export)
+
+    from .analysis.cli import add_parser as add_analyze     # edge analyze epochs|fixations|aoi
+    add_analyze(sub)
 
     bu = sub.add_parser("bundle", help="pack an experiment and its files into a .edgez archive")
     bu.add_argument("experiment", help="experiment file")

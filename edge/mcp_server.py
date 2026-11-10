@@ -820,7 +820,7 @@ def create_server(root: str | Path = ".") -> FastMCP:
         "background": "#808080", "units": "deg"}, "data": {"exports": ["csv", "xlsx", "bids"]},
         "markers": {"codes": {"stim": 10}}, "participant": {"participant": "001", "group": "A"}};
         set initial experiment variables; rename or describe the experiment. Sections: window, data, participant,
-        markers, timing, seed; units px|norm|height|deg; exports csv|tsv|xlsx|json|jsonl|parquet|mat|bids. Unknown
+        markers, timing, seed; units px|norm|height|deg; exports csv|tsv|xlsx|json|jsonl|parquet|mat|sav|rds|rdata|bids. Unknown
         settings and invalid values are refused."""
         def op(d: ExperimentDoc) -> None:
             if settings:
@@ -962,7 +962,8 @@ def create_server(root: str | Path = ".") -> FastMCP:
                     include_dry_runs: bool = False) -> dict[str, Any]:
         """Export analysis-ready tables. `path` = one session folder or a data folder (all sessions merged).
         formats: csv, tsv, xlsx (sheets: trials, summary, dictionary, events/sessions), json, jsonl, parquet,
-        mat, bids. layout: wide (one row per trial) or long (one row per routine)."""
+        mat, sav (SPSS, with variable and value labels), rds (R data.frame with factors), rdata (R: every table
+        in one .RData), bids. layout: wide (one row per trial) or long (one row per routine)."""
         from .export import export_many, export_session, find_sessions
         p = ws.path(path)
         fmts = formats or ["csv", "xlsx"]

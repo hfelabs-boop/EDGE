@@ -418,8 +418,8 @@ def test_answer_key_column_is_not_a_factor(tmp_path):
 
 def test_formats_and_packages_are_checked_before_writing(tmp_path, monkeypatch):
     root = _run(tmp_path)
-    with pytest.raises(ValueError, match="unknown export format 'sav'"):
-        ex.export_session(root, ["csv", "sav"], tmp_path / "a")
+    with pytest.raises(ValueError, match="unknown export format 'sas'"):
+        ex.export_session(root, ["csv", "sas"], tmp_path / "a")
     assert not (tmp_path / "a").exists()
     monkeypatch.setattr(ex, "_have", lambda m: False)
     with pytest.raises(ValueError) as e:
@@ -496,7 +496,7 @@ def test_export_settings_are_checked(tmp_path, monkeypatch):
     def exports(value):
         doc = dict(TASK, settings={"data": {"exports": value}})
         return [i for i in issues_of(doc, tmp_path) if i.where == "settings.data.exports"]
-    assert [i.level for i in exports(["csv", "sav"])] == ["error"]
+    assert [i.level for i in exports(["csv", "sas"])] == ["error"]
     assert exports(["csv", "xlsx"]) == []
     monkeypatch.setattr(ex, "_have", lambda m: False)
     warn = exports(["csv", "parquet"])

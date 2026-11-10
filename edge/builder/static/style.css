@@ -285,6 +285,21 @@ body.shared-right #companion { width: var(--shared-right-w); }
 .data-table { max-height: calc(100vh - 360px); min-height: 200px; border: 1px solid var(--border-subtle); border-radius: var(--r-sm); }
 .data-table table.grid { min-width: 100%; }
 .data-path { margin: 0; }
+/* Data › Eye & signals (analysis.js) */
+.data-analysis .an-wrap { display: flex; flex-direction: column; gap: var(--sp-6); }
+.data-analysis .an-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sp-5); align-items: start; }
+.data-analysis .an-card { padding: var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-3); }
+.data-analysis .an-card h3 { display: flex; align-items: center; justify-content: flex-start; gap: var(--sp-3); margin: 0; }
+.data-analysis .an-card .field { margin-bottom: var(--sp-3); }
+.data-analysis .an-card p { margin: 0 0 var(--sp-3); }
+.data-analysis .an-chips { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.data-analysis .an-mark { cursor: pointer; height: 26px; }
+.data-analysis .an-mark input { margin: 0; }
+.data-analysis .an-results { display: flex; flex-direction: column; gap: var(--sp-4); }
+.data-analysis .an-results:empty { display: none; }
+.data-analysis .an-results h3, .data-analysis .an-results h4 { margin: var(--sp-3) 0 0; }
+.data-analysis .an-table .table-wrap { max-height: 320px; border: 1px solid var(--border-subtle); border-radius: var(--r-sm); }
+.data-analysis .an-plot { max-width: 100%; border: 1px solid var(--border-subtle); border-radius: var(--r-sm); background: #fff; }
 .data-empty { flex: 1; justify-content: center; }
 .pad { padding: var(--sp-5); }
 .export-list { margin: 0; padding-left: var(--sp-7); font-family: var(--font-mono); font-size: var(--fs-mono); }
