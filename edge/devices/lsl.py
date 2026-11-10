@@ -88,6 +88,10 @@ class LSLInlet(Device):
         "max_buffered": {"type": "int", "default": 360},
         "gaze_channels": {"type": "list", "default": None,
                           "help": "[x_channel, y_channel] to enable gaze-contingent use (normalized coords)"},
+        "impedance_stream": {"type": "str", "default": "",
+                             "help": "an LSL stream of electrode impedances to show on the Run page: its name, or "
+                                     "auto = a stream of type 'Impedance' from the same computer (EEG streams only); "
+                                     "empty (default) for none"},
     }
 
     @classmethod
@@ -128,7 +132,52 @@ class LSLInlet(Device):
         if gc:
             self._gaze_idx = (chans.index(gc[0]), chans.index(gc[1]))
         self._latest = None
+        self._connect_impedance(lsl, full)
         self.connected = True
+
+    # ------------------------------------------------------------ impedance (optional companion stream)
+    def _connect_impedance(self, lsl: Any, full: Any) -> None:
+        self._imp_inlet, self._imp_names, self._imp_scale, self._imp = None, [], 1.0, None
+        want = str(self.options.get("impedance_stream") or "").strip()
+        if not want or want == "auto" and str(full.type()).upper() != "EEG":
+            return
+        pred = f"name='{want}'" if want != "auto" else f"type='Impedance' and hostname='{full.hostname()}'"
+        try:
+            found = lsl.resolve_bypred(pred, 1, 0.5)
+            if not found:
+                return
+            self._imp_inlet = lsl.StreamInlet(found[0])
+            info = self._imp_inlet.info()
+            ch = info.desc().child("channels").child("channel")
+            unit = ""
+            for _ in range(info.channel_count()):
+                self._imp_names.append((ch.child_value("label") if not ch.empty() else "") or f"ch{len(self._imp_names) + 1}")
+                unit = unit or ((ch.child_value("unit") if not ch.empty() else "") or "")
+                ch = ch.next_sibling()
+            # values in kOhm unless the channels say otherwise
+            self._imp_scale = {"ohm": 1e-3, "ohms": 1e-3, "Ω": 1e-3, "MOhm": 1e3, "MΩ": 1e3}.get(unit.strip(), 1.0)
+            if unit.strip().lower() in ("ohm", "ohms"):
+                self._imp_scale = 1e-3
+        except Exception:
+            self._imp_inlet = None
+
+    def impedance(self) -> dict[str, float] | None:
+        inlet = getattr(self, "_imp_inlet", None)
+        if inlet is None:
+            return None
+        try:
+            chunk, _ = inlet.pull_chunk(timeout=0.0)
+            if chunk:
+                last = chunk[-1]
+                self._imp = {n: float(v) * self._imp_scale for n, v in zip(self._imp_names, last)
+                             if isinstance(v, (int, float)) and v == v}
+        except Exception:
+            pass
+        return self._imp
+
+    def impedance_note(self) -> str:
+        return ("no impedance stream (an LSL stream of type 'Impedance') was found: not available from this device"
+                if self.options.get("impedance_stream") else "not available from this device")
 
     def start(self) -> None:
         self.inlet.open_stream()

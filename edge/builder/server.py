@@ -694,7 +694,7 @@ class BuilderApp:
                 if self.root in data_dir.parents or data_dir == self.root else str(data_dir)}
 
     def run_real(self, rel: str, participant: dict[str, Any], simulate: bool,
-                 fullscreen: bool | None = None) -> dict[str, Any]:
+                 fullscreen: bool | None = None, mirror: bool = False, queue_entry: str | None = None) -> dict[str, Any]:
         from ..launcher import edge_command
         busy = [st for st in self.runs.values() if st["proc"].poll() is None]
         if busy:
@@ -713,13 +713,18 @@ class BuilderApp:
         import tempfile
         from ..monitor import parse
         stop_file = Path(tempfile.gettempdir()) / f"edge-stop-{os.getpid()}-{len(self.runs)}-{int(time.time() * 1000)}"
+        pause_file = stop_file.with_name(stop_file.name.replace("edge-stop-", "edge-pause-"))
         env = {**os.environ, "EDGE_MONITOR": "1", "EDGE_STOP_FILE": str(stop_file), "PYTHONUNBUFFERED": "1",
-               "PYTHONSAFEPATH": "1"}      # a file in the experiments folder must never shadow EDGE's own modules
+               "PYTHONSAFEPATH": "1",       # a file in the experiments folder must never shadow EDGE's own modules
+               "EDGE_PAUSE_FILE": str(pause_file)}
+        if mirror:          # a small picture of the participant's screen every 2 s (opt-in: it costs a little)
+            env["EDGE_MIRROR"] = "2"
         proc = subprocess.Popen(cmd, cwd=str(self.root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
         rid = str(proc.pid)
         mon: dict[str, Any] = {"start": None, "last": None, "history": [], "devices": None, "end": None}
         from datetime import datetime
-        state = {"proc": proc, "output": [], "monitor": mon, "stop_file": stop_file,
+        state = {"proc": proc, "output": [], "monitor": mon, "stop_file": stop_file, "pause_file": pause_file,
+                 "simulate": bool(simulate), "mirror": bool(mirror),
                  "path": str(self.safe_path(rel).relative_to(self.root)),
                  "participant": (participant or {}).get("participant"), "session": (participant or {}).get("session"),
                  "started": datetime.now().isoformat(timespec="seconds")}
@@ -736,9 +741,36 @@ class BuilderApp:
                         mon["last_response"] = ev
                     mon["history"] = (mon["history"] + [{k: ev.get(k) for k in ("n", "routine", "values", "factors", "responses",
                                                                                 "elapsed")}])[-300:]
-                elif ev.get("type") in ("start", "devices", "end"):
+                elif ev.get("type") in ("start", "devices", "end", "quality", "screen"):
                     mon[ev["type"]] = ev
+                elif ev.get("type") in ("paused", "resumed"):
+                    mon["paused"] = ev if ev["type"] == "paused" else None
+                elif ev.get("type") == "mirror":
+                    import base64
+                    state["mirror_png"] = base64.b64decode(ev.get("png") or "")
+                    mon["mirror"] = {k: ev.get(k) for k in ("w", "h", "elapsed")}
+                if ev is not None:
+                    for listener in state.get("listeners", ()):
+                        try:
+                            listener(ev)
+                        except Exception as e:      # the study-day bookkeeping never stops a session
+                            state["output"].append(f"[edge] (study day: {type(e).__name__}: {e})")
+            try:
+                proc.wait()
+            except Exception:
+                pass
+            pause_file.unlink(missing_ok=True)
+            for done in state.get("on_exit", ()):
+                try:
+                    done()
+                except Exception as e:
+                    state["output"].append(f"[edge] (study day: {type(e).__name__}: {e})")
 
+        try:        # the queue entry, the day's run log and the notes (edge/studyday.py)
+            from ..studyday import on_run_started
+            on_run_started(self, rid, state, queue_entry)
+        except Exception as e:
+            state["output"].append(f"[edge] (study day: {type(e).__name__}: {e})")
         threading.Thread(target=pump, daemon=True).start()
         return {"run_id": rid}
 
@@ -748,7 +780,7 @@ class BuilderApp:
         for rid, st in self.runs.items():
             out.append({"run_id": rid, "path": st.get("path"), "participant": st.get("participant"),
                         "session": st.get("session"), "started": st.get("started"),
-                        "running": st["proc"].poll() is None})
+                        "running": st["proc"].poll() is None, "mirror": bool(st.get("mirror"))})
         return out
 
     def run_status(self, rid: str) -> dict[str, Any]:
@@ -759,7 +791,9 @@ class BuilderApp:
         if not running:
             st["stop_file"].unlink(missing_ok=True)
         return {"running": running, "returncode": st["proc"].returncode, "output": st["output"][-400:],
-                "monitor": st.get("monitor"), "stopping": bool(st.get("stopping"))}
+                "monitor": st.get("monitor"), "stopping": bool(st.get("stopping")), "pausing": bool(st.get("pausing")),
+                "stop_reason": st.get("stop_reason"), "queue_entry": st.get("queue_entry"), "mirror": bool(st.get("mirror")),
+                "notes": len(st.get("notes") or [])}
 
     def run_stop(self, rid: str) -> dict[str, Any]:
         """Ask a running session to stop (like Esc: the data so far is saved). Forced after 10 s."""
@@ -794,7 +828,8 @@ POST_FIELDS: dict[str, dict[str, tuple[type | tuple[type, ...], bool]]] = {
     "/api/lock": {"path": (str, True)},
     "/api/system_fix": {"id": (str, False)},
     "/api/run_stop": {"id": (str, False)},
-    "/api/run": {"path": (str, True), "participant": (dict, False), "fullscreen": (bool, False)},
+    "/api/run": {"path": (str, True), "participant": (dict, False), "fullscreen": (bool, False), "mirror": (bool, False),
+                 "queue_entry": (str, False)},
     "/api/wizard": {"answers": (dict, False), "save_as": (str, False)},
     "/api/estimate": {"experiment": (dict, True), "path": (str, False)},
     "/api/play/start": {"experiment": (dict, True), "path": (str, False), "routine": (str, False), "max_trials": ((int, float), False),
@@ -823,6 +858,15 @@ QUERY_FIELDS = {"/api/experiment": ["path"], "/api/analysis_info": ["path"], "/a
                 "/api/assistant/job": ["id"], "/api/assistant/conversation": ["id"],
                 "/api/assistant/models": ["provider"], "/api/assistant/code": ["exp"]}
 RAW_BODY = {"/api/upload", "/api/assistant/attach", "/api/play/audio"}      # the body is a file, not JSON
+
+
+def _add_studyday_fields() -> None:
+    from ..studyday import POST_FIELDS as SD_POST, QUERY_FIELDS as SD_QUERY
+    POST_FIELDS.update(SD_POST)
+    QUERY_FIELDS.update(SD_QUERY)
+
+
+_add_studyday_fields()
 ATTACH_LIMIT = 60 * 1024 * 1024
 
 
@@ -935,6 +979,8 @@ def make_handler(app: BuilderApp):
                     from ..assistant import api as assistant_api
                     check_fields(u.path, None, q)
                     return self._json(*assistant_api.handle(app, "GET", u.path, q, None))
+                if u.path.startswith("/api/studyday/"):     # (POST_FIELDS describe the POSTs of the same paths)
+                    return self._studyday("GET", u.path, q, None)
                 if u.path == "/api/experiment":
                     return self._json(app.load(q["path"]))
                 if u.path == "/api/support_bundle":
@@ -1076,6 +1122,10 @@ def make_handler(app: BuilderApp):
                     # a form or text/plain "simple request" from another page never reaches the assistant
                     return self._json({"error": "send the request as JSON (Content-Type: application/json)"}, 415)
                 check_fields(u.path, None if u.path in RAW_BODY else self._body_cached(), q)
+                if u.path.startswith("/api/studyday/"):
+                    if "application/json" not in (self.headers.get("Content-Type") or "").lower():
+                        return self._json({"error": "send the request as JSON (Content-Type: application/json)"}, 415)
+                    return self._studyday("POST", u.path, q, self._body_cached())
                 if u.path.startswith("/api/assistant/"):
                     from ..assistant import api as assistant_api
                     if u.path == "/api/assistant/attach":
@@ -1161,7 +1211,8 @@ def make_handler(app: BuilderApp):
                     return self._json(app.run_stop(q.get("id") or body.get("id")))
                 if u.path == "/api/run":
                     return self._json(app.run_real(body["path"], body.get("participant") or {}, bool(body.get("simulate")),
-                                                   body.get("fullscreen")))
+                                                   body.get("fullscreen"), bool(body.get("mirror")),
+                                                   body.get("queue_entry") or None))
                 if u.path == "/api/wizard":
                     return self._json(app.wizard(body.get("answers") or {}, body.get("save_as")))
                 if u.path == "/api/estimate":
@@ -1210,6 +1261,25 @@ def make_handler(app: BuilderApp):
                 return self._json({"error": "not found"}, 404)
             except Exception as e:
                 return self._client_error(e)
+
+        def _studyday(self, method: str, path: str, q: Any, body: Any) -> None:
+            """The study day (participant queue, notes, pause/stop with a reason): edge/studyday.py."""
+            from ..studyday import Raw, handle
+            res = handle(app, method, path, q, body)
+            if isinstance(res, Raw):
+                if not res.filename:
+                    return self._send(200, res.data, res.ctype)
+                self.send_response(200)
+                self.send_header("Content-Type", res.ctype)
+                self.send_header("Content-Disposition", f'attachment; filename="{res.filename}"')
+                self.send_header("Content-Length", str(len(res.data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(res.data)
+                return None
+            if isinstance(res, tuple):
+                return self._json(*res)
+            return self._json(res)
 
         def _client_error(self, e: Exception) -> None:
             """A mistake in the request is a 400 that says what is wrong; anything else is a 500 with the trace."""

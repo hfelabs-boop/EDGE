@@ -31,6 +31,21 @@ def _keyname(symbol: int) -> str:
     return _KEYMAP_CACHE[symbol]
 
 
+def _shrink(raw: bytes, w: int, h: int, step: int) -> tuple[int, int, bytes]:
+    """Every step-th pixel of every step-th row, flipped so the first row is the top (OpenGL starts at the bottom)."""
+    sw, sh = len(range(0, w, step)), len(range(0, h, step))
+    rows = []
+    for y in range(h - 1, -1, -step):
+        row = raw[y * w * 3:(y + 1) * w * 3]
+        if step == 1:
+            rows.append(row)
+        else:
+            px = bytearray(sw * 3)
+            px[0::3], px[1::3], px[2::3] = row[0::3 * step], row[1::3 * step], row[2::3 * step]
+            rows.append(bytes(px))
+    return sw, min(sh, len(rows)), b"".join(rows[:sh])
+
+
 class PygletStim(Stim):
     def __init__(self, backend: "PygletBackend", kind: str, props: dict[str, Any]):
         super().__init__(kind, props)
@@ -168,6 +183,9 @@ class PygletBackend(Backend):
         self.diagnostics: dict[str, Any] = {}
         self.focus_events: list[tuple[float, bool]] = []
         self._refocus = False
+        # take focus back when another window gets it (default); keep_focus: false lets the experimenter type in
+        # another window on the same computer during the session (key presses then go to that window)
+        self._keep_focus = bool(window.get("keep_focus", True))
         self._sounds: dict[str, Any] = {}
         if sys.platform.startswith("win"):
             _dpi_aware()   # draw in real pixels even with display scaling (Windows would stretch the window)
@@ -177,6 +195,9 @@ class PygletBackend(Backend):
         display = pyglet.display.get_display()
         screens = display.get_screens()
         screen = screens[min(int(window.get("screen", 0)), len(screens) - 1)]
+        if int(window.get("screen", 0) or 0) >= len(screens):
+            self.warnings.append(f"screen {window.get('screen')} was chosen for the participant, but this computer has "
+                                 f"{len(screens)} screen(s): the experiment opened on screen {len(screens) - 1}")
         config = pyglet.gl.Config(double_buffer=True, sample_buffers=1, samples=4)
         try:
             config = screen.get_best_config(config)
@@ -247,7 +268,7 @@ class PygletBackend(Backend):
         @win.event
         def on_deactivate():
             self.focus_events.append((now(), False))
-            self._refocus = True
+            self._refocus = self._keep_focus
 
         @win.event
         def on_activate():
@@ -299,6 +320,21 @@ class PygletBackend(Backend):
         from pyglet import gl
         r, g, b, a = parse_color(color)
         gl.glClearColor(r / 255, g / 255, b / 255, 1.0)
+
+    def grab_small(self, max_width: int = 320) -> tuple[int, int, bytes] | None:
+        """Read the back buffer (what the next flip shows) and shrink it to at most max_width pixels wide.
+        Only the read happens here, on the drawing thread; it can take a few milliseconds (see docs)."""
+        import ctypes
+
+        from pyglet import gl
+        w, h = self.win.get_framebuffer_size() if hasattr(self.win, "get_framebuffer_size") else self.size
+        step = max(1, -(-int(w) // max_width))
+        buf = (ctypes.c_ubyte * (w * h * 3))()
+        gl.glPixelStorei(gl.GL_PACK_ALIGNMENT, 1)
+        gl.glReadBuffer(gl.GL_BACK)
+        gl.glReadPixels(0, 0, w, h, gl.GL_RGB, gl.GL_UNSIGNED_BYTE, buf)
+        raw = bytes(buf)
+        return _shrink(raw, int(w), int(h), step)
 
     def flip(self) -> float:
         from pyglet import gl

@@ -326,6 +326,13 @@ class Session:
 
     # ------------------------------------------------------------------ frames
     def flip(self, routine: str = "") -> float:
+        if self.monitor is not None and self.monitor.mirror_due():
+            try:      # opt-in: a small copy of the participant's screen for the experimenter (see docs)
+                got = self.backend.grab_small()
+                if got:
+                    self.monitor.mirror_frame(*got)
+            except Exception:
+                self.monitor.mirror_interval = 0.0       # this computer can't: stop trying
         t = self.backend.flip()
         interval = None if self.last_flip is None else t - self.last_flip
         dropped = False
@@ -339,6 +346,47 @@ class Session:
         self.last_flip = t
         self.frame_index += 1
         return t
+
+    def wait_if_paused(self, before: str = "") -> None:
+        """The experimenter pressed Pause (Run page): wait here, between two screens, until Resume. The
+        participant sees a blank screen saying "Paused"; Esc and Stop still work; markers pause/resume."""
+        m = self.monitor
+        if m is None or not m.pause_requested():
+            return
+        t0 = self.clock()
+        self.marker("pause", source="edge", fields={"before": before})
+        m.emit({"type": "paused", "before": before})
+        self.log("[edge] paused by the experimenter")
+        try:
+            text = self.backend.make_text(text="Paused. Please wait.", height=28, color="#808080", pos=(0, 0))
+        except Exception:
+            text = None
+        keep = getattr(self.backend, "_keep_focus", None)
+        if keep is not None:     # while paused the experimenter may type (notes) in another window
+            self.backend._keep_focus = False
+        try:
+            while m.pause_requested():
+                if text is not None:
+                    text.draw()
+                self.flip("(paused)")
+                self.backend.poll_events()       # key presses while paused are not responses
+                self.poll_devices()
+                self.check_abort()
+                if self.backend.name == "headless" and not getattr(self.backend, "realtime", False):
+                    time.sleep(0.01)
+        finally:
+            if keep is not None:
+                self.backend._keep_focus = keep
+                if keep:
+                    self.backend._refocus = True       # take the keyboard back for the participant
+            if text is not None:
+                try:
+                    text.release()
+                except Exception:
+                    pass
+        self.marker("resume", source="edge", fields={"paused_s": round(self.clock() - t0, 3)})
+        m.emit({"type": "resumed", "paused_s": round(self.clock() - t0, 1)})
+        self.log(f"[edge] resumed after {self.clock() - t0:.0f} s")
 
     def poll_devices(self) -> None:
         for dev in self.devices.values():

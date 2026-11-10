@@ -8,7 +8,9 @@ way a session would, listens for a few seconds and reports:
   first values;
 * every button press / line change / voice onset of an input device (press the buttons while it runs);
 * that a test marker (code 1, label ``edge_test``) was sent to marker-capable devices; when the
-  device records a trigger channel, whether the code came back and how long it took.
+  device records a trigger channel, whether the code came back and how long it took;
+* the signal quality of every stream (``quality``: per EEG channel RMS, 50/60 Hz line noise, flat or
+  saturated, impedance when the amplifier reports it; for eye trackers valid samples and tracking losses).
 """
 
 from __future__ import annotations
@@ -72,6 +74,11 @@ def test_device(dtype: str, did: str, options: dict[str, Any] | None = None, sec
     res["is_input"] = "input" in dev.capabilities
     res["connected"] = True
     res["info"] = _safe(dev.info)
+    if hasattr(dev, "measure_impedance"):      # amplifiers that measure impedance only before recording
+        try:
+            dev.measure_impedance()
+        except Exception:
+            pass
     samples: dict[str, list[tuple[float, list[Any]]]] = {s: [] for s in dev.streams}
     dev.add_sink(lambda device, stream, t_dev, t_arr, values: samples.setdefault(stream, []).append((t_arr, list(values))))
     try:
@@ -92,6 +99,10 @@ def test_device(dtype: str, did: str, options: dict[str, Any] | None = None, sec
                     res["marker"] = {"sent": False, "error": f"{type(e).__name__}: {e}"}
             time.sleep(0.002)
         dur = now() - t0
+        try:
+            res["quality"] = dev.quality()
+        except Exception as e:
+            res["quality"] = {"_error": {"kind": "error", "status": "wait", "reasons": [f"{type(e).__name__}: {e}"]}}
     finally:
         try:
             dev.stop()
@@ -135,6 +146,10 @@ def _messages(res: dict[str, Any]) -> list[str]:
             mb = s["marker_back"]
             out.append(f"stream {name}: the test marker came back after {mb['delay_ms']} ms" if mb["seen"]
                        else f"stream {name}: the test marker did not appear in its trigger channel")
+    from .quality import summary_words
+    for name, q in (res.get("quality") or {}).items():
+        if q.get("status") not in (None, "wait") and q.get("kind") in ("signal", "gaze"):
+            out.append(f"signal quality {name}: {summary_words(q)}")
     if res["inputs"]:
         names = sorted({i["input"] for i in res["inputs"] if i["down"]})
         out.append(f"inputs seen: {', '.join(names) or '(releases only)'}")

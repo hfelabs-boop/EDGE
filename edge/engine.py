@@ -405,6 +405,9 @@ class Runner:
         return expressions.evaluate(src[1:] if src.startswith("$") else src, ns)
 
     def run_routine(self, routine: Routine) -> None:
+        if self.session.monitor is not None:     # the experimenter's console: pause here, show where we are
+            self.session.wait_if_paused(routine.id)
+            self.session.monitor.screen(routine.id)
         run = RoutineRun(routine, self.session, self)
         row = run.run()
         self.routine_count += 1

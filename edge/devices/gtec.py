@@ -36,6 +36,9 @@ class GTec(Device):
         "serial": {"type": "str", "default": "", "help": "device serial (unicorn/gds); empty = first found"},
         "srate": {"type": "float", "default": 250.0, "help": "sampling rate (gds)"},
         "scans_per_read": {"type": "int", "default": 8},
+        "impedance_at_start": {"type": "bool", "default": False,
+                               "help": "gds: measure electrode impedances when connecting (before recording starts); "
+                                       "shown on the Run page and in Test the device"},
     }
 
     @classmethod
@@ -51,6 +54,7 @@ class GTec(Device):
             self._impl = LSLInlet(self.id, {"name": self.options["lsl_name"], "stream_type": self.options["lsl_type"]},
                                   clock=self.clock)
             self._impl._sinks = self._sinks
+            self._impl._qbuf = self._qbuf          # the signal-quality buffer is the inlet's
             self._impl.connect()
             self.streams = self._impl.streams
             self.n_samples = self._impl.n_samples
@@ -114,6 +118,41 @@ class GTec(Device):
             n = getattr(self.dev, "NumberOfAcquiredChannels", 16)
             names = [f"ch{i + 1}" for i in range(n)]
         self.add_stream("eeg", names, float(self.options["srate"]), "EEG")
+        if self.options.get("impedance_at_start"):
+            self.measure_impedance()
+
+    def measure_impedance(self) -> dict[str, float] | None:
+        """g.NEEDaccess (gds) only, and only while not recording: ask the amplifier for every electrode's
+        impedance (pygds ``GetImpedance``, Ohm) and keep it for ``impedance()`` (kΩ)."""
+        if self.options["mode"] != "gds" or self.recording or not hasattr(self, "dev"):
+            return None
+        try:
+            raw = self.dev.GetImpedance()
+        except Exception as e:
+            self._imp_error = f"the amplifier did not report impedances ({type(e).__name__}: {e})"
+            return None
+        while isinstance(raw, (list, tuple)) and raw and isinstance(raw[0], (list, tuple)):
+            raw = raw[0]                       # one list per amplifier: the first one's
+        names = self.streams["eeg"].channels if "eeg" in self.streams else []
+        vals = [float(v) for v in (raw or [])]
+        scale = 1e-3 if vals and max(vals) > 1000 else 1.0      # Ohm -> kOhm
+        self._imp = {n: round(v * scale, 1) for n, v in zip(names, vals)}
+        return self._imp
+
+    def impedance(self) -> dict[str, float] | None:
+        if self.options["mode"] == "lsl" and hasattr(self, "_impl"):
+            return self._impl.impedance()
+        return getattr(self, "_imp", None)
+
+    def impedance_note(self) -> str:
+        mode = self.options["mode"]
+        if mode == "lsl" and hasattr(self, "_impl"):
+            return self._impl.impedance_note()
+        if mode == "unicorn":
+            return "the Unicorn's Python API does not report impedance (use the Unicorn Suite's signal check)"
+        if getattr(self, "_imp_error", ""):
+            return self._imp_error
+        return "measured only before recording: set impedance_at_start, or use Test the device"
 
     def _read_gds(self) -> None:
         srate = float(self.options["srate"])

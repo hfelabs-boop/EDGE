@@ -126,6 +126,11 @@ class Backend:
 
     def set_background(self, color: Any) -> None: ...
 
+    def grab_small(self, max_width: int = 320) -> tuple[int, int, bytes] | None:
+        """A small RGB copy of what is about to be shown (the back buffer, rows top to bottom), for the
+        experimenter's mirror of the participant's screen; None when this backend can't."""
+        return None
+
     # -------------------------------------------------------- stimuli
     def make_text(self, **props: Any) -> Stim: raise NotImplementedError
     def make_shape(self, shape: str, **props: Any) -> Stim: raise NotImplementedError

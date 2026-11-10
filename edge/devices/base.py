@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import threading
 import traceback
+from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
@@ -86,6 +87,7 @@ class Device:
         self.errors: list[str] = []
         self.n_samples: dict[str, int] = {}
         self.latest: dict[str, tuple[float, list[Any]]] = {}    # stream -> (arrival time, values) of the last sample
+        self._qbuf: dict[str, deque] = {}       # stream -> the last few seconds of samples, for quality()
 
     # ----------------------------------------------------------- options
     @classmethod
@@ -188,6 +190,46 @@ class Device:
         out["age"] = (self.clock() - newest) if newest is not None else None
         return out
 
+    # ----------------------------------------------------------- signal quality
+    QUALITY_SECONDS: ClassVar[float] = 5.0
+
+    def recent(self, stream: str) -> list[list[Any]]:
+        """The last few seconds of a stream's samples (rows of values), oldest first."""
+        buf = self._qbuf.get(stream)
+        for _ in range(3):          # a reader thread may append while we copy
+            try:
+                return list(buf) if buf is not None else []
+            except RuntimeError:
+                continue
+        return []
+
+    def impedance(self) -> dict[str, float] | None:
+        """Electrode impedances in kΩ ({channel: kΩ}) when the amplifier reports them, else None.
+        Drivers that can measure it override this (and ``impedance_note`` says why not, when they can't)."""
+        return None
+
+    def impedance_note(self) -> str:
+        return "not available from this device"
+
+    def quality(self) -> dict[str, Any]:
+        """Signal quality of every regularly sampled stream, computed from the recent samples:
+        {stream: {...}} (see :mod:`edge.quality`). Drivers may override it or add to it."""
+        from ..quality import stream_quality
+        out: dict[str, Any] = {}
+        try:
+            imp = self.impedance()
+        except Exception:
+            imp = None
+        th = self.options.get("quality") if isinstance(self.options.get("quality"), dict) else None
+        for name, info in list(self.streams.items()):
+            try:
+                q = stream_quality(info, self.recent(name), imp, self.impedance_note(), th)
+            except Exception as e:      # never let a quality check disturb a session
+                q = {"kind": "error", "status": "wait", "reasons": [f"{type(e).__name__}: {e}"]}
+            if q is not None:
+                out[name] = q
+        return out
+
     def latest_gaze(self) -> tuple[float, float] | None:
         """Latest valid gaze position in window coordinates (px, origin centre, y up)."""
         return None
@@ -201,6 +243,8 @@ class Device:
         info = StreamInfo(name, list(channels), srate, kind, units, time_base, meta)
         self.streams[name] = info
         self.n_samples[name] = 0
+        if srate:
+            self._qbuf[name] = deque(maxlen=max(16, int(float(srate) * self.QUALITY_SECONDS)))
         return info
 
     def add_sink(self, sink: SampleSink) -> None:
@@ -214,6 +258,9 @@ class Device:
             self.arrival_sync.add(device_time, t_arr)
         self.n_samples[stream] = self.n_samples.get(stream, 0) + 1
         self.latest[stream] = (t_arr, values)
+        buf = self._qbuf.get(stream)
+        if buf is not None:
+            buf.append(values)
         for sink in self._sinks:
             sink(self.id, stream, device_time, t_arr, values)
 

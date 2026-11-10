@@ -778,7 +778,7 @@ def validate_settings(settings: dict[str, Any]) -> list[Issue]:
     units = win.get("units")
     if units is not None and not isinstance(units, str):
         issues.append(Issue("error", "settings.window.units", "must be a name such as px, norm, height, deg or cm"))
-    for k in ("fullscreen", "vsync"):
+    for k in ("fullscreen", "vsync", "keep_focus"):
         if k in win and not isinstance(win[k], bool):
             issues.append(Issue("error", f"settings.window.{k}", "must be true or false"))
     data = settings.get("data")

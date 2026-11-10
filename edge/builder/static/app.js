@@ -1473,7 +1473,8 @@ async function renderData() {
     : h("div", {class: "table-wrap data-table", id: "data-table", role: "tabpanel"}, dataTable(tb.columns, tb.rows, dict));
   if (D.sub === "analysis") renderAnalysis(panel, D.sel, t.analysis);      // analysis.js
   const more = tb.total > tb.rows.length ? h("p", {class: "t-caption"}, `Showing the first ${tb.rows.length} of ${tb.total} rows. Export to see them all.`) : null;
-  main.replaceChildren(head, alerts, tabs, panel, more || "", h("p", {class: "t-caption data-path"}, "Folder: ", h("span", {class: "mono"}, D.sel)));
+  const notes = !sess.dry_run && typeof sessionNotesBox === "function" ? sessionNotesBox(D.sel) : "";     // console.js
+  main.replaceChildren(head, alerts, notes, tabs, panel, more || "", h("p", {class: "t-caption data-path"}, "Folder: ", h("span", {class: "mono"}, D.sel)));
   const focusTab = main.querySelector('[role=tab][aria-selected="true"]');
   if (renderData._focusTab && focusTab) focusTab.focus();
   renderData._focusTab = false;
