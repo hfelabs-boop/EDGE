@@ -580,7 +580,8 @@ def xlsx_workbook(path: Path) -> tuple[zipfile.ZipFile, list[tuple[str, str]], i
         rels = {r.get("Id") or "": r.get("Target") or ""
                 for r in _xml(z, "xl/_rels/workbook.xml.rels").findall("pr:Relationship", NS)}
     sheets = []
-    for s in wb.find("m:sheets", NS) or []:
+    sheets = wb.find("m:sheets", NS)
+    for s in (sheets if sheets is not None else []):
         target = rels.get(s.get(f"{{{NS['r']}}}id") or "", "")
         target = target.lstrip("/")
         if not target.startswith("xl/"):

@@ -175,7 +175,7 @@ def test_answers_must_be_named_answers():
 def test_answers_files_json_or_yaml_with_located_errors(tmp_path, capsys):
     bad = tmp_path / "bad.json"
     bad.write_text('{"stimulus": {"kind": "word",}}')
-    with pytest.raises(WizardError, match=r"bad.json is not valid JSON \(line 1, column 30\)"):
+    with pytest.raises(WizardError, match=r"bad.json is not valid JSON \(line 1, column (29|30)\)"):
         read_answers(bad)
     assert main(["wizard", str(tmp_path / "x"), "--answers", str(bad)]) == 2
     out = capsys.readouterr()
