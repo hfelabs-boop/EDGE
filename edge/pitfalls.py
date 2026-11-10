@@ -16,8 +16,8 @@ from typing import Any, Iterable
 FRAME_TOLERANCE = 0.15            # of a frame
 SHORT = 0.25                      # s: rounding to a frame matters for presentations this short
 COMPRESSED_AUDIO = (".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wma")
-FILE_PROPS = {"image": "image", "sound": "sound", "html": "file"}
-VISUAL = {"text", "image", "shape", "fixation", "slider", "gaze_roi"}
+FILE_PROPS = {"image": "image", "sound": "sound", "html": "file", "movie": "movie"}
+VISUAL = {"text", "image", "shape", "fixation", "slider", "gaze_roi", "movie", "grating", "gabor", "noise", "dots"}
 BIG_PIXELS = 4096
 BIG_FILE = 15_000_000
 
@@ -273,7 +273,7 @@ def _file_list_issues(Issue, base: Path, where: str, files: Iterable[str], ctype
                          hint="put the file in a folder next to the experiment (e.g. images/, sounds/) and use a relative path"))
     missing = [f for f in files if not ((base / f) if not Path(f).is_absolute() else Path(f)).exists()]
     if missing:
-        what = {"image": "picture", "sound": "sound file"}.get(ctype, "file")
+        what = {"image": "picture", "sound": "sound file", "movie": "video"}.get(ctype, "file")
         near = _near(base, missing[0])
         msg = (f"{len(missing)} of {len(files)} {what}s named in {column} not found: {', '.join(missing[:3])}"
                f"{' …' if len(missing) > 3 else ''}") if column else f"{what} not found: {missing[0]}"

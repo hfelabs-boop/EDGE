@@ -1009,6 +1009,9 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--transport", default="stdio", choices=["stdio", "sse", "streamable-http"], help="stdio for Claude/VS Code; http transports for remote clients")
     m.set_defaults(fn=cmd_mcp)
 
+    from .gamma import add_cli as gamma_cli      # edge gamma: measure the monitor, save a calibration file
+    gamma_cli(sub)
+
     a = p.parse_args(argv)
     if a.cmd is None:          # plain `edge`, e.g. from the desktop icon
         from .launcher import launch

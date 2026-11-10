@@ -532,6 +532,12 @@ def referenced_files(doc: dict[str, Any], base_dir: Path | None = None) -> set[s
                     pass
                 out |= {q["file"] for q in c.get("questions") or [] if isinstance(q, dict) and literal(q.get("file"))}
 
+    win = (doc.get("settings") or {}).get("window") or {}       # the monitor's gamma calibration file
+    if isinstance(win, dict):
+        for cal in (win.get("gamma"), (win.get("monitor") or {}).get("calibration") if isinstance(win.get("monitor"), dict) else None):
+            if literal(cal) and not _is_number(cal):
+                out.add(cal)
+
     def walk(nodes: Any) -> Iterator[dict]:
         for n in nodes or []:
             if isinstance(n, dict):

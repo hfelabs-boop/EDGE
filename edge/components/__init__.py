@@ -34,8 +34,9 @@ def component_registry() -> dict[str, Type[Component]]:
 
 
 from . import eyetracking, html, logic, media_responses, responses, stimuli, survey  # noqa: E402
+from . import movie, vision  # noqa: E402
 
-for _mod in (stimuli, html, survey, responses, media_responses, eyetracking, logic):
+for _mod in (stimuli, movie, vision, html, survey, responses, media_responses, eyetracking, logic):
     for _cls in _mod.COMPONENTS:
         register_component(_cls)
 

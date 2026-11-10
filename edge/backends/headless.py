@@ -100,7 +100,14 @@ class HeadlessBackend(Backend):
         return HeadlessStim(self, "image", props)
 
     def make_movie(self, **props: Any) -> Stim:
-        return HeadlessStim(self, "movie", props)
+        from ..video import HeadlessMovie
+        return HeadlessMovie(self, props)  # type: ignore[return-value]
+
+    def make_pattern(self, kind: str, **props: Any) -> Stim:
+        return HeadlessStim(self, kind, props)
+
+    def make_dots(self, **props: Any) -> Stim:
+        return HeadlessStim(self, "dots", props)
 
     def play_sound(self, source: Any, volume: float = 1.0, **kw: Any) -> Any:
         rec = {"t": self.clock(), "source": source, "volume": volume, **kw}

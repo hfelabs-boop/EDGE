@@ -579,6 +579,11 @@ class Experiment:
         except Exception:  # advisory; never let it break validation
             pass
         issues.extend(validate_settings(self.settings))
+        try:
+            from .gamma import gamma_issues      # settings.window.gamma / gamma_method / monitor
+            issues.extend(gamma_issues(self))
+        except Exception as e:  # advisory; never let it break validation
+            issues.append(Issue("info", "settings.window", f"the gamma settings could not be checked: {e}"))
         data_dir = str((self.settings.get("data") or {}).get("dir") or "data")
         try:
             resolved = (self.base_dir / data_dir).resolve()

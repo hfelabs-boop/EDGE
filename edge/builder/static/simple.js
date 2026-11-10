@@ -500,6 +500,8 @@ function drawPlayFrame(cv, f) {
       const img = playImage(p.image);
       if (img.complete && img.naturalWidth) { const sz = p.size || [img.naturalWidth, img.naturalHeight]; ctx.scale(1, -1); ctx.drawImage(img, -sz[0] / 2, -sz[1] / 2, sz[0], sz[1]); }
       else { ctx.strokeStyle = "#888"; ctx.strokeRect(-100, -75, 200, 150); }
+    } else if (typeof drawStimFrame === "function" && drawStimFrame(ctx, kind, p)) {
+      /* video, gratings, Gabors, noise, dots: stimuli.js */
     } else {
       ctx.fillStyle = cssColor(p.fill, "#fff"); ctx.strokeStyle = cssColor(p.line_color, cssColor(p.fill, "#fff")); ctx.lineWidth = p.line_width || 2;
       const sz = Array.isArray(p.size) ? p.size : [p.size || 100, p.size || 100];
@@ -518,6 +520,7 @@ function drawPlayFrame(cv, f) {
     }
     ctx.restore();
   }
+  if (typeof stimFrameDone === "function") stimFrameDone();     // pause videos that are no longer shown
 }
 function wrapLines(ctx, text, width) {
   const out = [];
@@ -561,6 +564,7 @@ function finishPlay(f) {
   if (!P.on) return;
   P.on = false;
   playMediaDetach();
+  if (typeof stimStopVideos === "function") stimStopVideos();
   document.removeEventListener("keydown", playKey, true); document.removeEventListener("keyup", playKey, true);
   if (P.onMsg) { window.removeEventListener("message", P.onMsg); P.onMsg = null; }
   S.triedAt = Date.now();

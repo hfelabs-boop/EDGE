@@ -1516,6 +1516,8 @@ function settingsDraw() {
         {label, placeholder: String(m[k] ?? ""), key: false, prop: "window.monitor." + k});
       out.push(h("div", {class: "row2"}, cm("width_cm", "Screen width"), cm("distance_cm", "Viewing distance")), h("p", {class: "t-caption"}, "Degrees need the screen width and the viewing distance."));
     }
+  } else if (sec === "colour" && typeof gammaSettings === "function") {
+    out.push(...gammaSettings(w));
   } else if (sec === "participant") {
     st.participant ||= {};
     out.push(h("p", {class: "t-small t-2"}, "Asked when a session starts (on the Run page). The value here is filled in by default; participant and session are always asked."));

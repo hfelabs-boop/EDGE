@@ -319,6 +319,8 @@ class PygletBackend(Backend):
     def set_background(self, color: Any) -> None:
         from pyglet import gl
         r, g, b, a = parse_color(color)
+        if self.linearize is not None:     # gamma-corrected stimuli: the background is their mean grey
+            r, g, b = (round(self.linearize(c / 255, i) * 255) for i, c in enumerate((r, g, b)))
         gl.glClearColor(r / 255, g / 255, b / 255, 1.0)
 
     def grab_small(self, max_width: int = 320) -> tuple[int, int, bytes] | None:
@@ -354,6 +356,8 @@ class PygletBackend(Backend):
     def close(self) -> None:
         if getattr(self, "_pads", None) is not None:
             self._pads.close()
+        from .pyglet_media import restore_gamma_ramp
+        restore_gamma_ramp(self)
         try:
             self.win.close()
         except Exception:
@@ -367,6 +371,22 @@ class PygletBackend(Backend):
 
     def make_image(self, **props: Any) -> Stim:
         return PygletStim(self, "image", props)
+
+    def make_movie(self, **props: Any) -> Stim:
+        from .pyglet_media import PygletMovie
+        return PygletMovie(self, props)  # type: ignore[return-value]
+
+    def make_pattern(self, kind: str, **props: Any) -> Stim:
+        from .pyglet_media import PygletPattern
+        return PygletPattern(self, kind, props)
+
+    def make_dots(self, **props: Any) -> Stim:
+        from .pyglet_media import PygletDots
+        return PygletDots(self, props)
+
+    def set_gamma(self, cal: Any, method: str = "auto") -> tuple[str, str]:
+        from .pyglet_media import set_gamma_ramp
+        return set_gamma_ramp(self, cal, method)
 
     def load_image(self, src: str):
         import pyglet
