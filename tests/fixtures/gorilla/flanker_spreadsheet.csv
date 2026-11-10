@@ -1,0 +1,16 @@
+randomise_blocks,randomise_trials,display,Stimulus,Congruency,ANSWER,ITI,Block,ShowProgressBar
+,,instructions,,,,,,
+,1,practice,congruent_left.png,congruent,f,500,practice,1
+,1,practice,congruent_right.png,congruent,j,500,practice,1
+,1,practice,incongruent_left.png,incongruent,f,500,practice,1
+,1,practice,incongruent_right.png,incongruent,j,500,practice,1
+,,break,,,,,,
+1,2,trial,congruent_left.png,congruent,f,400,A,1
+1,2,trial,congruent_right.png,congruent,j,600,A,1
+1,2,trial,incongruent_left.png,incongruent,f,400,A,1
+1,2,trial,incongruent_right.png,incongruent,j,600,A,1
+2,3,trial,congruent_left.png,congruent,f,600,B,1
+2,3,trial,congruent_right.png,congruent,j,400,B,1
+2,3,trial,incongruent_left.png,incongruent,f,600,B,1
+2,3,trial,incongruent_right.png,incongruent,j,400,B,1
+,,end,,,,,,

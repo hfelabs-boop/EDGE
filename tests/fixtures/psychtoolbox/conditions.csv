@@ -1,0 +1,9 @@
+image,congruency,correct_key,fixdur
+stimuli/congruent_left.png,congruent,LeftArrow,400
+stimuli/congruent_right.png,congruent,RightArrow,600
+stimuli/incongruent_left.png,incongruent,LeftArrow,400
+stimuli/incongruent_right.png,incongruent,RightArrow,600
+stimuli/congruent_left.png,congruent,LeftArrow,600
+stimuli/congruent_right.png,congruent,RightArrow,400
+stimuli/incongruent_left.png,incongruent,LeftArrow,600
+stimuli/incongruent_right.png,incongruent,RightArrow,400

@@ -4,6 +4,10 @@
     edge import stroop.ebs3              # E-Prime 2/3 (generated E-Basic script + list exports)
     edge import task.osexp               # OpenSesame
     edge import experiment.html          # jsPsych (v6/v7)
+    edge import stroop.iqx               # Inquisit (.iqx / .exp script)
+    edge import stroop.sce               # Presentation (scenario + its PCL program)
+    edge import task.json                # Gorilla (task structure JSON and/or spreadsheet .csv/.xlsx)
+    edge import stroop.m                 # Psychtoolbox (MATLAB script; partial translation)
 
 Each import writes ``<name>.yaml`` (plus copied conditions/images/sounds and generated
 HTML pages) and ``IMPORT_REPORT.md`` listing what won't run until fixed, what was converted
@@ -26,25 +30,42 @@ from typing import Callable
 
 from .base import ImportError_, ImportResult, finalize, inside
 from .eprime import import_eprime, looks_like_eprime
+from .gorilla import import_gorilla, looks_like_gorilla
+from .inquisit import import_inquisit, looks_like_inquisit
 from .jspsych import import_jspsych, looks_like_jspsych
 from .opensesame import import_opensesame, looks_like_opensesame
+from .presentation import import_presentation, looks_like_presentation
 from .psychopy import import_psychopy, looks_like_psychopy
+from .psychtoolbox import import_psychtoolbox, looks_like_psychtoolbox
 
 PLATFORMS: dict[str, tuple[Callable[[Path], bool], Callable[[Path], ImportResult], str]] = {
     "psychopy": (looks_like_psychopy, import_psychopy, ".psyexp"),
     "eprime": (looks_like_eprime, import_eprime, ".ebs3 / .ebs2 (+ List .txt exports)"),
     "opensesame": (looks_like_opensesame, import_opensesame, ".osexp / .opensesame"),
+    "inquisit": (looks_like_inquisit, import_inquisit, ".iqx / .exp"),
+    "presentation": (looks_like_presentation, import_presentation, ".sce (+ its .pcl)"),
+    "psychtoolbox": (looks_like_psychtoolbox, import_psychtoolbox, ".m (MATLAB script)"),
+    "gorilla": (looks_like_gorilla, import_gorilla, "task .json and/or spreadsheet .csv/.xlsx"),
     "jspsych": (looks_like_jspsych, import_jspsych, ".html / .js"),
 }
-LABELS = {"psychopy": "PsychoPy", "eprime": "E-Prime", "opensesame": "OpenSesame", "jspsych": "jsPsych"}
+LABELS = {"psychopy": "PsychoPy", "eprime": "E-Prime", "opensesame": "OpenSesame", "jspsych": "jsPsych",
+          "inquisit": "Inquisit", "presentation": "Presentation", "psychtoolbox": "Psychtoolbox", "gorilla": "Gorilla"}
 SAVE_AGAIN = {
     "psychopy": "Open it in PsychoPy, save it again and import the saved file.",
     "eprime": "Open the experiment in E-Studio, press Generate (Ctrl+F7) and import the new .ebs3/.ebs2 script.",
     "opensesame": "Open it in OpenSesame, save it again and import the saved file.",
     "jspsych": "Check that the experiment runs in a browser, then import the HTML file (with its scripts next to it).",
+    "inquisit": "Check that the script runs in Inquisit, then import the .iqx file (with its stimulus files next to it).",
+    "presentation": "Check that the scenario runs in Presentation, then import the .sce file with its .pcl program "
+                    "(and templates, pictures and sounds) next to it.",
+    "psychtoolbox": "Check that the script runs in MATLAB, then import the main .m file (with the files it reads "
+                    "next to it).",
+    "gorilla": "In Gorilla, download the task's spreadsheet (CSV or XLSX) and, when you can, its task structure "
+               "(JSON), and import them together.",
 }
 
-SUPPORTED_EXTENSIONS = (".psyexp", ".ebs", ".ebs2", ".ebs3", ".osexp", ".opensesame", ".html", ".htm", ".js")
+SUPPORTED_EXTENSIONS = (".psyexp", ".ebs", ".ebs2", ".ebs3", ".osexp", ".opensesame", ".html", ".htm", ".js",
+                        ".iqx", ".exp", ".sce", ".pcl", ".m", ".json", ".csv", ".xlsx")
 
 
 def _recognize(path: Path) -> str | None:

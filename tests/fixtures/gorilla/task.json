@@ -1,0 +1,108 @@
+{
+  "builder": "Task Builder 2",
+  "name": "Flanker task (arrows)",
+  "spreadsheet": "flanker_spreadsheet.csv",
+  "displays": [
+    {
+      "name": "instructions",
+      "screens": [
+        {
+          "name": "Welcome",
+          "zones": [
+            {"type": "RichText", "name": "welcome_text",
+             "content": "<h2>Arrow task</h2><p>Look at the <b>middle</b> arrow.</p><p>Press <b>F</b> if it points left and <b>J</b> if it points right.</p>",
+             "layout": {"x": 50, "y": 40, "w": 80, "h": 40}},
+            {"type": "ContinueButton", "name": "start", "text": "Start practice"}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "practice",
+      "screens": [
+        {
+          "name": "Fixation",
+          "zones": [
+            {"type": "Fixation", "name": "cross"},
+            {"type": "TimeLimitScreen", "name": "fix_time", "duration": 500}
+          ]
+        },
+        {
+          "name": "Stimulus",
+          "zones": [
+            {"type": "Image", "name": "arrows", "image": "${spreadsheet:Stimulus}"},
+            {"type": "KeyboardResponse", "name": "response", "keys": ["F", "J"],
+             "correctAnswer": "${spreadsheet:ANSWER}"},
+            {"type": "TimeLimitResponse", "name": "rt_limit", "duration": 2000}
+          ]
+        },
+        {
+          "name": "Feedback",
+          "zones": [
+            {"type": "Feedback", "name": "fb", "correct": "Correct!", "incorrect": "Wrong", "duration": 800},
+            {"type": "Audio", "name": "beep", "audio": "beep.wav"}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "break",
+      "screens": [
+        {
+          "name": "Ready",
+          "zones": [
+            {"type": "Text", "name": "ready_text", "content": "Well done! Now the real task starts.\nNo more feedback from here on."},
+            {"type": "ContinueButton", "name": "go", "text": "Continue"}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "trial",
+      "screens": [
+        {
+          "name": "Fixation",
+          "zones": [
+            {"type": "Text", "name": "plus", "content": "+"},
+            {"type": "TimeLimitScreen", "name": "fix_time", "duration": 500}
+          ]
+        },
+        {
+          "name": "Stimulus",
+          "zones": [
+            {"type": "Image", "name": "arrows", "image": "${spreadsheet:Stimulus}"},
+            {"type": "KeyboardResponse", "name": "response", "keys": ["F", "J"],
+             "correctAnswer": "${spreadsheet:ANSWER}"},
+            {"type": "TimeLimitResponse", "name": "rt_limit", "duration": 2000}
+          ]
+        },
+        {
+          "name": "ITI",
+          "zones": [
+            {"type": "TimeLimitScreen", "name": "iti", "duration": "${spreadsheet:ITI}"}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "end",
+      "screens": [
+        {
+          "name": "Rating",
+          "zones": [
+            {"type": "Text", "name": "question", "content": "How difficult was the task?"},
+            {"type": "ButtonResponse", "name": "difficulty", "buttons": ["Easy", "OK", "Hard"]}
+          ]
+        },
+        {
+          "name": "Debrief",
+          "zones": [
+            {"type": "Video", "name": "thanks_video", "video": "thanks.mp4"},
+            {"type": "Text", "name": "thanks", "content": "Thank you for taking part!"},
+            {"type": "ContinueButton", "name": "finish", "text": "Finish"}
+          ]
+        }
+      ]
+    }
+  ]
+}

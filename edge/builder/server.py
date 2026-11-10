@@ -44,7 +44,8 @@ def looks_like_experiment(d: Any) -> bool:
         and (flow is None or isinstance(flow, list))
 
 
-IMPORT_ORDER = {"psychopy": 0, "eprime": 1, "opensesame": 2, "jspsych": 3}
+IMPORT_ORDER = {"psychopy": 0, "eprime": 1, "opensesame": 2, "inquisit": 3, "presentation": 4, "psychtoolbox": 5,
+                "gorilla": 6, "jspsych": 7}
 _ASSET_REF = re.compile(r"""["'(]\s*((?:\./)?[\w\- .]+(?:/[\w\- .]+)+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff?|wav|mp3|ogg|flac|"""
                         r"""m4a|aiff?|mp4|webm|mov|avi|csv|tsv|xlsx|txt))\s*["')]""", re.I)
 
@@ -76,7 +77,8 @@ def place_flat_assets(folder: Path) -> list[str]:
     placed = []
     for f in files:
         if f.suffix.lower() not in (".html", ".htm", ".js", ".psyexp", ".osexp", ".opensesame", ".ebs", ".ebs2",
-                                    ".ebs3", ".csv", ".tsv", ".txt", ".json") or f.stat().st_size > 5 * 1024 * 1024:
+                                    ".ebs3", ".csv", ".tsv", ".txt", ".json", ".iqx", ".exp", ".sce", ".pcl", ".tem",
+                                    ".m") or f.stat().st_size > 5 * 1024 * 1024:
             continue
         try:
             text = f.read_text(encoding="utf-8", errors="replace")
@@ -219,7 +221,7 @@ def schema() -> dict[str, Any]:
         "loop_orders": list(LOOP_ORDERS),
         "templates": {k: {"name": v["name"], "description": v.get("description", "")} for k, v in public_templates().items()},
         "import_extensions": [".psyexp", ".ebs3", ".ebs2", ".ebs", ".es3", ".es2", ".es", ".osexp", ".opensesame", ".html",
-                              ".htm", ".js", ".edgez"],
+                              ".htm", ".js", ".iqx", ".exp", ".sce", ".pcl", ".m", ".json", ".csv", ".xlsx", ".edgez"],
         "default_settings": DEFAULT_SETTINGS,
         "survey": survey_schema(),
     }
@@ -376,13 +378,14 @@ class BuilderApp:
         return out
 
     # --------------------------------------------------------------- import
-    def import_source(self, source: str, out: str | None = None) -> dict[str, Any]:
+    def import_source(self, source: str, out: str | None = None, main: str | None = None) -> dict[str, Any]:
         """Import an experiment from another platform, or open a .edgez bundle.
 
         ``source`` is a file, or the folder the builder uploaded the chosen files into (keeping their sub-folders
         when a folder was chosen or dropped). In a folder the experiment file is found by what it is, not by the
-        order of the files: PsychoPy, E-Prime, OpenSesame, then jsPsych (an HTML page that only loads its
-        timeline from a script is imported from that script)."""
+        order of the files: PsychoPy, E-Prime, OpenSesame, Inquisit, Presentation, Psychtoolbox, Gorilla, then jsPsych
+        (an HTML page that only loads its timeline from a script is imported from that script). ``main``, the file
+        the researcher chose (relative to the folder), is tried first."""
         from ..importers import ImportError_, import_experiment
         src = self.safe_path(source)
         dest = self.safe_path(out) if out else None
@@ -394,12 +397,18 @@ class BuilderApp:
                 return self.open_bundle(bundles[0])
             place_flat_assets(src)
             candidates = import_candidates(src)
+            if main:        # the file the researcher chose: first, even when an earlier upload left others here
+                from ..importers.base import inside
+                chosen = inside(src, main)
+                if chosen is not None and chosen in [c.resolve() for c in candidates]:
+                    candidates.sort(key=lambda c: c.resolve() != chosen)
             if not candidates:
                 closed = sorted(f for f in src.rglob("*") if f.suffix.lower() in (".es3", ".es2", ".es"))
                 if closed:      # the importer explains how to get a script E-Prime can generate
                     import_experiment(closed[0], dest)
                 raise ImportError_("None of these files is a PsychoPy (.psyexp), E-Prime (.ebs3/.ebs2), OpenSesame "
-                                   "(.osexp) or jsPsych (.html/.js) experiment.")
+                                   "(.osexp), jsPsych (.html/.js), Inquisit (.iqx), Presentation (.sce), Psychtoolbox "
+                                   "(.m) or Gorilla (task .json / spreadsheet) experiment.")
             first: Exception | None = None
             for f in candidates:
                 try:
@@ -770,7 +779,7 @@ class BuilderApp:
 
 # what each POST endpoint needs in its JSON body: field -> (type, required)
 POST_FIELDS: dict[str, dict[str, tuple[type | tuple[type, ...], bool]]] = {
-    "/api/import": {"source": (str, True), "out": (str, False)},
+    "/api/import": {"source": (str, True), "out": (str, False), "main": (str, False)},
     "/api/export": {"path": (str, True), "formats": (list, False), "layout": (str, False)},
     "/api/recording": {"experiment": (dict, True), "path": (str, False)},
     "/api/validate": {"experiment": (dict, True), "path": (str, False)},
@@ -1082,7 +1091,7 @@ def make_handler(app: BuilderApp):
                 if u.path == "/api/import":
                     from ..importers import ImportError_
                     try:
-                        return self._json(app.import_source(body["source"], body.get("out")))
+                        return self._json(app.import_source(body["source"], body.get("out"), body.get("main")))
                     except (ImportError_, storage.DocumentError) as e:
                         return self._json({"error": str(e)}, 400)
                 if u.path == "/api/experiment":

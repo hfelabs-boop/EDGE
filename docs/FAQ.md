@@ -56,7 +56,9 @@ connection** in **Assistant settings**. Other messages and what to do are in
 
 **Can I open my PsychoPy / E-Prime experiments?**
 Yes, see [Importing](IMPORT.md). PsychoPy converts most completely. For E-Prime, import the
-*generated script* (`.ebs3`); `.es3` files are a closed binary format.
+*generated script* (`.ebs3`); `.es3` files are a closed binary format. Inquisit (`.iqx`), Presentation
+(`.sce` with its `.pcl`), Gorilla (task structure and spreadsheet) and Psychtoolbox (`.m`, partially:
+it is a program) can be imported too.
 
 **How accurate is the timing?**
 Starts and stops are decided for each screen refresh and stamped with the measured flip time; RTs

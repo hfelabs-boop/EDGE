@@ -315,3 +315,41 @@ def finalize(result: ImportResult, out_dir: Path) -> list[str]:
     for m in missing:
         result.note("approx", "files", f"referenced file '{m}' was not found next to the source; copy it manually")
     return missing
+
+
+def avoid_column_clashes(doc: dict[str, Any]) -> None:
+    """An item named like a trial-list column ('image' item, 'image' column) hides its own results: rename the item."""
+    routines = doc.get("routines") or {}
+
+    def fix(rid: str, cols: set[str]) -> None:
+        r = routines.get(rid)
+        if not isinstance(r, dict):
+            return
+        comps = r.get("components") or []
+        taken = {c.get("id") for c in comps}
+        for c in comps:
+            old = c.get("id")
+            if old in cols and old != "resp":
+                new, i = f"{old}_item", 2
+                while new in taken or new in cols:
+                    new, i = f"{old}_item{i}", i + 1
+                c["id"] = new
+                taken.add(new)
+                for other in comps:
+                    if isinstance(other.get("clickable"), list):
+                        other["clickable"] = [new if x == old else x for x in other["clickable"]]
+
+    def walk(nodes: Any, cols: set[str]) -> None:
+        for n in nodes or []:
+            if isinstance(n, str):
+                fix(n, cols)
+            elif isinstance(n, dict):
+                if "routine" in n:
+                    fix(str(n["routine"]), cols)
+                inner = cols
+                if isinstance(n.get("conditions"), list):
+                    inner = cols | {str(k) for r in n["conditions"] if isinstance(r, dict) for k in r}
+                for key in ("children", "then", "else"):
+                    walk(n.get(key), inner)
+
+    walk(doc.get("flow"), set())

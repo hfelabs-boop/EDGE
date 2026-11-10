@@ -1,0 +1,271 @@
+*******************************************************************************************
+*                                  STROOP TASK                                            *
+*  Lab version, adapted from the Inquisit library script. Last edit: MK, March 2024       *
+*  Keys: D = red, F = green, J = blue                                                     *
+*******************************************************************************************
+
+<defaults>
+/ fontstyle = ("Arial", 5%, true)
+/ screencolor = black
+/ txcolor = white
+/ txbgcolor = black
+/ inputdevice = keyboard
+/ minimumversion = "6.0.0.0"
+</defaults>
+
+<values>
+/ ncorrect = 0
+/ blockcount = 0
+</values>
+
+<data>
+/ columns = (build, computer.platform, date, time, subject, blockcode, blocknum, trialcode, trialnum,
+	stimulusitem, response, correct, latency, values.ncorrect)
+/ separatefiles = true
+</data>
+
+*******************************************************************************************
+* instructions
+*******************************************************************************************
+<instruct>
+/ windowsize = (80%, 70%)
+/ nextkey = (" ")
+/ prevkey = ("b")
+/ fontstyle = ("Arial", 3%)
+/ txcolor = white
+/ screencolor = black
+</instruct>
+
+<page intro>
+^^In this task you will see colour words (RED, GREEN, BLUE) printed in different ink colours.
+^^Respond to the INK colour and ignore the word:
+^^      D = red        F = green        J = blue
+^^Respond as quickly and accurately as you can. Press the space bar to start the practice.
+</page>
+
+<page testintro>
+^The practice is over. Now the real test begins.
+^^Remember: respond to the INK colour.
+</page>
+
+<page goodbye>
+^^Thank you for taking part!
+</page>
+
+*******************************************************************************************
+* stimuli
+*******************************************************************************************
+<text fixation>
+/ items = ("+")
+/ fontstyle = ("Arial", 8%)
+/ position = (50%, 50%)
+/ erase = false
+</text>
+
+<text redcongruent>
+/ items = ("RED")
+/ txcolor = red
+</text>
+
+<text greencongruent>
+/ items = ("GREEN")
+/ txcolor = (0, 255, 0)
+</text>
+
+<text bluecongruent>
+/ items = ("BLUE")
+/ txcolor = blue
+</text>
+
+<text redincongruent>
+/ items = ("GREEN")
+/ txcolor = red
+</text>
+
+<text greenincongruent>
+/ items = ("BLUE")
+/ txcolor = (0, 255, 0)
+</text>
+
+<text blueincongruent>
+/ items = ("RED")
+/ txcolor = blue
+</text>
+
+<text errortext>
+/ items = ("X")
+/ txcolor = red
+/ fontstyle = ("Arial", 10%, true)
+</text>
+
+<text reminder>
+/ items = ("D = red    F = green    J = blue")
+/ fontstyle = ("Arial", 2.5%)
+/ position = (50%, 90%)
+/ txcolor = gray
+</text>
+
+<picture keyboard>
+/ items = ("stimuli/keyboard.png")
+/ position = (50%, 60%)
+/ size = (40%, 20%)
+</picture>
+
+<sound errorsound>
+/ items = ("error.wav")
+</sound>
+
+<item practicewords>
+/ 1 = "XXXX"
+/ 2 = "XXXXX"
+</item>
+
+<text practiceword>
+/ items = practicewords
+/ select = noreplace
+/ txcolor = white
+</text>
+
+<list inkcolors>
+/ items = (red, green, blue)
+/ selectionmode = random
+</list>
+
+<counter oldstyle>
+/ items = (1, 2, 3)
+/ select = noreplace
+</counter>
+
+*******************************************************************************************
+* trials
+*******************************************************************************************
+<trial showkeys>
+/ stimulusframes = [1 = keyboard, reminder]
+/ validresponse = (" ")
+</trial>
+
+<trial redcongruent>
+/ ontrialend = [if (trial.redcongruent.correct) values.ncorrect = values.ncorrect + 1]
+/ stimulustimes = [0 = fixation; 500 = redcongruent, reminder]
+/ validresponse = ("d", "f", "j")
+/ correctresponse = ("d")
+/ timeout = 2000
+/ posttrialpause = 250
+/ errormessage = true(errortext, 400)
+</trial>
+
+<trial greencongruent>
+/ ontrialend = [if (trial.greencongruent.correct) values.ncorrect = values.ncorrect + 1]
+/ stimulustimes = [0 = fixation; 500 = greencongruent, reminder]
+/ validresponse = ("d", "f", "j")
+/ correctresponse = ("f")
+/ timeout = 2000
+/ posttrialpause = 250
+/ errormessage = true(errortext, 400)
+</trial>
+
+<trial bluecongruent>
+/ ontrialend = [if (trial.bluecongruent.correct) values.ncorrect = values.ncorrect + 1]
+/ stimulustimes = [0 = fixation; 500 = bluecongruent, reminder]
+/ validresponse = ("d", "f", "j")
+/ correctresponse = ("j")
+/ timeout = 2000
+/ posttrialpause = 250
+/ errormessage = true(errortext, 400)
+</trial>
+
+<trial redincongruent>
+/ ontrialend = [if (trial.redincongruent.correct) values.ncorrect = values.ncorrect + 1]
+/ stimulustimes = [0 = fixation; 500 = redincongruent, reminder]
+/ validresponse = ("d", "f", "j")
+/ correctresponse = ("d")
+/ timeout = 2000
+/ posttrialpause = 250
+/ errormessage = true(errortext, 400)
+</trial>
+
+<trial greenincongruent>
+/ ontrialend = [if (trial.greenincongruent.correct) values.ncorrect = values.ncorrect + 1]
+/ stimulustimes = [0 = fixation; 500 = greenincongruent, reminder]
+/ validresponse = ("d", "f", "j")
+/ correctresponse = ("f")
+/ timeout = 2000
+/ posttrialpause = 250
+/ errormessage = true(errortext, 400)
+</trial>
+
+<trial blueincongruent>
+/ ontrialend = [if (trial.blueincongruent.correct) values.ncorrect = values.ncorrect + 1]
+/ stimulustimes = [0 = fixation; 500 = blueincongruent, reminder]
+/ validresponse = ("d", "f", "j")
+/ correctresponse = ("j")
+/ timeout = 2000
+/ posttrialpause = 250
+/ errormessage = true(errortext, 400)
+</trial>
+
+<trial practice>
+/ stimulustimes = [0 = fixation; 500 = practiceword]
+/ validresponse = ("d", "f", "j")
+/ correctresponse = ("d")
+/ timeout = 3000
+/ branch = [if (trial.practice.error) trial.practicefeedback]
+</trial>
+
+<trial practicefeedback>
+/ stimulustimes = [0 = errortext]
+/ trialduration = 500
+/ validresponse = (0)
+</trial>
+
+*******************************************************************************************
+* questionnaire
+*******************************************************************************************
+<textbox age>
+/ caption = "How old are you?"
+/ mask = positiveinteger
+/ range = (16, 99)
+</textbox>
+
+<radiobuttons hand>
+/ caption = "Which hand do you write with?"
+/ options = ("left", "right", "both")
+/ required = true
+</radiobuttons>
+
+<dropdown colorblind>
+/ caption = "Do you have any form of colour blindness?"
+/ options = ("no", "yes", "not sure")
+</dropdown>
+
+<surveypage demographics>
+/ caption = "A few questions about you"
+/ questions = [1 = age; 2 = hand; 3 = colorblind]
+/ showpagenumbers = false
+</surveypage>
+
+<survey about>
+/ pages = [1 = demographics]
+/ finishlabel = "Done"
+</survey>
+
+*******************************************************************************************
+* blocks
+*******************************************************************************************
+<block practice>
+/ preinstructions = (intro)
+/ trials = [1 = showkeys; 2-5 = practice]
+/ onblockbegin = [values.blockcount += 1]
+</block>
+
+<block stroop>
+/ preinstructions = (testintro)
+/ trials = [1-12 = noreplace(redcongruent, greencongruent, bluecongruent, redincongruent, greenincongruent, blueincongruent)]
+/ onblockbegin = [values.blockcount += 1]
+</block>
+
+<expt>
+/ blocks = [1 = about; 2 = practice; 3 = stroop]
+/ postinstructions = (goodbye)
+/ onexptend = [values.completed = 1]
+</expt>
