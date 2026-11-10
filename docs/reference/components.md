@@ -5,6 +5,38 @@ Generated from the code by `edge docs build`. Every component also accepts the s
 
 ## Stimulus
 
+### dots
+
+Random-dot kinematogram (RDK). n dots in an aperture, a fraction (coherence) moving in one direction, the others as noise; dot size, speed and lifetime; reproducible with a seed.
+
+| property | type | default | description |
+|---|---|---|---|
+| `n_dots` | int | `100` | number of dots |
+| `coherence` | float | `0.5` | fraction of dots moving in the signal direction |
+| `direction` | float | `0.0` | signal direction in degrees: 0 = right, 90 = up, 180 = left, 270 = down |
+| `speed` | float | `100` | dot speed in window units per second |
+| `dot_size` | float | `4` | dot diameter (window units) |
+| `lifetime` | int | `0` | frames a dot lives before it is re-plotted somewhere else; 0 = for ever |
+| `noise_dots` | choice: same / random_walk / random_position | `same` | noise dots: same (each keeps a random direction), random_walk (new direction every frame) or random_position (re-plotted every frame) |
+| `field_shape` | choice: circle / square | `circle` | shape of the aperture |
+| `size` | vec2 | `[300, 300]` | aperture width, height (window units) |
+| `color` | color | `white` | dot colour |
+| `seed` | int |  | the same seed gives the same dots; empty = new ones each time (reproducible from the session's seed) |
+| `pos` | vec2 | `[0, 0]` | position (window units, origin centre) |
+| `opacity` | float | `1.0` | 0 (invisible) to 1 (opaque) |
+| `ori` | float | `0.0` | rotation, degrees clockwise |
+| `units` | choice: (default) / px / norm / height / deg |  | empty = experiment default |
+
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `onset` | Onset of this component (s from routine start, at the screen flip) | s |
+| `duration` | How long this component was active (s) | s |
+| `frames` | Screen refreshes this component was drawn on | frames |
+| `seed` | Random seed of this component |  |
+| `n_signal` | Number of signal (coherent) dots of this component at its onset |  |
+
 ### fixation
 
 Fixation cross.
@@ -31,6 +63,68 @@ Records (data columns `<id>.<name>`):
 |---|---|---|
 | `onset` | Onset of this component (s from routine start, at the screen flip) | s |
 | `duration` | How long this component was active (s) | s |
+
+### gabor
+
+Gabor patch (grating in a Gaussian window). Sigma, phase, orientation, contrast and drift (tf).
+
+| property | type | default | description |
+|---|---|---|---|
+| `sf` | float | `2.0` | spatial frequency (cycles per degree, or per pixel: see sf_units) |
+| `sf_units` | choice: cycles/deg / cycles/px | `cycles/deg` | cycles/deg uses the monitor's width and viewing distance (Experiment settings → Screen) |
+| `phase` | float | `0.0` | phase in cycles (0.5 = half a cycle) |
+| `tf` | float | `0.0` | temporal frequency in Hz: drifts the bars (positive: towards the right at orientation 0) |
+| `wave` | choice: sin / sqr | `sin` | sine wave or square wave |
+| `contrast` | float | `1.0` | Michelson contrast, 0 (uniform grey) to 1 (full); linear on a gamma-calibrated monitor |
+| `color` | color | `white` | colour of the bright parts (white = a grey-level pattern around mid grey) |
+| `sigma` | float | `30` | standard deviation of the Gaussian window (window units) |
+| `size` | vec2 |  | width, height of the patch; empty = 6 × sigma (the window fades out inside it) |
+| `pos` | vec2 | `[0, 0]` | position (window units, origin centre) |
+| `opacity` | float | `1.0` | 0 (invisible) to 1 (opaque) |
+| `ori` | float | `0.0` | rotation, degrees clockwise |
+| `units` | choice: (default) / px / norm / height / deg |  | empty = experiment default |
+
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `onset` | Onset of this component (s from routine start, at the screen flip) | s |
+| `duration` | How long this component was active (s) | s |
+| `frames` | Screen refreshes this component was drawn on | frames |
+| `sf_cpd` | Spatial frequency of this component as shown (cycles per degree) | c/deg |
+| `phase` | Phase of this component at its onset (cycles) | cycles |
+
+### grating
+
+Sine/square grating (drifts with tf). Spatial frequency in cycles/deg or cycles/px, phase, orientation, contrast and a mask (circle, gauss, raisedcos).
+
+| property | type | default | description |
+|---|---|---|---|
+| `sf` | float | `2.0` | spatial frequency (cycles per degree, or per pixel: see sf_units) |
+| `sf_units` | choice: cycles/deg / cycles/px | `cycles/deg` | cycles/deg uses the monitor's width and viewing distance (Experiment settings → Screen) |
+| `phase` | float | `0.0` | phase in cycles (0.5 = half a cycle) |
+| `tf` | float | `0.0` | temporal frequency in Hz: drifts the bars (positive: towards the right at orientation 0) |
+| `wave` | choice: sin / sqr | `sin` | sine wave or square wave |
+| `contrast` | float | `1.0` | Michelson contrast, 0 (uniform grey) to 1 (full); linear on a gamma-calibrated monitor |
+| `mask` | choice: none / circle / gauss / raisedcos | `none` | none (a square patch), circle, gauss (Gaussian), raisedcos (circle with soft edges) |
+| `sigma` | float |  | Gaussian mask's standard deviation (window units); empty = size / 6 |
+| `edge` | float | `0.2` | raised-cosine mask: width of the soft edge, as a fraction of the radius |
+| `color` | color | `white` | colour of the bright parts (white = a grey-level pattern around mid grey) |
+| `size` | vec2 | `[256, 256]` | width, height of the patch (window units) |
+| `pos` | vec2 | `[0, 0]` | position (window units, origin centre) |
+| `opacity` | float | `1.0` | 0 (invisible) to 1 (opaque) |
+| `ori` | float | `0.0` | rotation, degrees clockwise |
+| `units` | choice: (default) / px / norm / height / deg |  | empty = experiment default |
+
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `onset` | Onset of this component (s from routine start, at the screen flip) | s |
+| `duration` | How long this component was active (s) | s |
+| `frames` | Screen refreshes this component was drawn on | frames |
+| `sf_cpd` | Spatial frequency of this component as shown (cycles per degree) | c/deg |
+| `phase` | Phase of this component at its onset (cycles) | cycles |
 
 ### html
 
@@ -72,6 +166,66 @@ Records (data columns `<id>.<name>`):
 |---|---|---|
 | `onset` | Onset of this component (s from routine start, at the screen flip) | s |
 | `duration` | How long this component was active (s) | s |
+
+### movie
+
+Video file, frame-locked to the screen. MP4, WebM, MOV …; the item ends with the video (or loops); the data say when its first frame appeared and whether frames were dropped.
+
+| property | type | default | description |
+|---|---|---|---|
+| `movie` | file |  | video file (mp4, webm, mov …) relative to the experiment, or $column **(required)** |
+| `size` | vec2 |  | width, height; empty = the video's own size |
+| `loop` | bool | `False` | start again at the end (until the item's duration ends) |
+| `volume` | float | `1.0` | sound track volume, 0 (muted) to 1 |
+| `pos` | vec2 | `[0, 0]` | position (window units, origin centre) |
+| `opacity` | float | `1.0` | 0 (invisible) to 1 (opaque) |
+| `ori` | float | `0.0` | rotation, degrees clockwise |
+| `units` | choice: (default) / px / norm / height / deg |  | empty = experiment default |
+
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `onset` | Onset of this component (s from routine start, at the screen flip) | s |
+| `first_frame` | When the first video frame of this component appeared (s from routine start, at the flip) | s |
+| `duration` | How long this component was on the screen (s) | s |
+| `movie_duration` | Length of the video file of this component (s) | s |
+| `frames_shown` | Video frames of this component that were shown | frames |
+| `frames_dropped` | Video frames of this component that were never shown although their time came | frames |
+| `frames_repeated` | Screen refreshes on which this component showed a frame longer than its time | frames |
+| `ended` | Whether this component played to its end (1) or was stopped earlier (0) |  |
+
+### noise
+
+Visual noise (white, pink, brown, binary). Pink is 1/f, brown 1/f²; static or a new sample every frame (dynamic), reproducible with a seed.
+
+| property | type | default | description |
+|---|---|---|---|
+| `noise_type` | choice: white / pink / brown / binary | `white` | white, pink (1/f, like natural images), brown (1/f²) or binary (black/white checks) |
+| `element_size` | float |  | size of one noise element (window units); empty = one screen pixel |
+| `dynamic` | bool | `False` | a new noise sample every update_frames refreshes |
+| `update_frames` | int | `1` | dynamic noise: refreshes per noise sample (1 = every frame) |
+| `seed` | int |  | the same seed gives the same noise; empty = a new one each time (reproducible from the session's seed) |
+| `contrast` | float | `1.0` | Michelson contrast, 0 (uniform grey) to 1 (full); linear on a gamma-calibrated monitor |
+| `mask` | choice: none / circle / gauss / raisedcos | `none` | none (a square patch), circle, gauss (Gaussian), raisedcos (circle with soft edges) |
+| `sigma` | float |  | Gaussian mask's standard deviation (window units); empty = size / 6 |
+| `edge` | float | `0.2` | raised-cosine mask: width of the soft edge, as a fraction of the radius |
+| `color` | color | `white` | colour of the bright parts (white = a grey-level pattern around mid grey) |
+| `size` | vec2 | `[256, 256]` | width, height of the patch (window units) |
+| `pos` | vec2 | `[0, 0]` | position (window units, origin centre) |
+| `opacity` | float | `1.0` | 0 (invisible) to 1 (opaque) |
+| `ori` | float | `0.0` | rotation, degrees clockwise |
+| `units` | choice: (default) / px / norm / height / deg |  | empty = experiment default |
+
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `onset` | Onset of this component (s from routine start, at the screen flip) | s |
+| `duration` | How long this component was active (s) | s |
+| `frames` | Screen refreshes this component was drawn on | frames |
+| `seed` | Noise seed used by this component |  |
+| `samples` | Number of different noise samples this component showed |  |
 
 ### shape
 

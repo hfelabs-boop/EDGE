@@ -295,8 +295,8 @@ Thresholds can be changed per device with the option `quality: {noisy_warn_uv: 8
 
 ### Simulators — `sim_eyetracker`, `sim_eeg`, `sim_physio`, `mouse_gaze`, `ttl_loopback`, `sim_inputs`
 Each simulator runs on its own clock with configurable offset, drift (ppm) and transport jitter,
-so dry runs exercise the full sync pipeline. `sim_eeg` has a few bad channels on purpose (C4 50 Hz hum,
-P4 flat, Oz noisy) to show the signal-quality display; `faults: {}` makes every channel clean. `mouse_gaze` lets you build gaze-contingent tasks at
+so dry runs exercise the full sync pipeline. `sim_eeg` can have bad channels on purpose
+to show the signal-quality display: `faults: {C4: line_noise, P4: flat, Oz: noisy}` (clean by default). `mouse_gaze` lets you build gaze-contingent tasks at
 your desk. `--dry-run` swaps every hardware driver for its simulator automatically.
 
 ## Writing a driver

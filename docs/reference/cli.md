@@ -448,3 +448,26 @@ edge mcp [-h] [--root ROOT] [--transport {stdio,sse,streamable-http}]
 | `--root` | workspace folder the server may read and write |
 | `--transport` | stdio for Claude/VS Code; http transports for remote clients |
 
+## edge gamma
+
+measure the monitor's gamma with a photometer and save a calibration file
+
+```
+edge gamma [-h] [--levels LEVELS] [--csv CSV] [--readings READINGS]
+                  [--show] [--name NAME] [--monitor MONITOR] [--use]
+                  [--fit-only]
+                  experiment
+```
+
+| argument | description |
+|---|---|
+| `experiment` | the experiment file; the calibration is saved in its calibration/ folder |
+| `--levels` | number of grey levels to measure (default 9) |
+| `--csv` | read the readings from a CSV file (level, luminance; or level, r, g, b) |
+| `--readings` | the readings, comma-separated, one per level from black to white |
+| `--show` | show the grey patches in the experiment window and type each reading there (otherwise: type them in this terminal) |
+| `--name` | calibration file name (default: monitor → calibration/monitor.json) |
+| `--monitor` | a description of the monitor (model, settings) saved in the file |
+| `--use` | also set the experiment's settings.window.gamma to the new file |
+| `--fit-only` | show the fit without saving anything |
+

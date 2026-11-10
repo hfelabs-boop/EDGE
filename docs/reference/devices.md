@@ -37,6 +37,7 @@ Records: `streams/<id>.eeg.csv`: EEG channels as configured on the amplifier (vi
 | `serial` | str |  | device serial (unicorn/gds); empty = first found |
 | `srate` | float | `250.0` | sampling rate (gds) |
 | `scans_per_read` | int | `8` |  |
+| `impedance_at_start` | bool | `False` | gds: measure electrode impedances when connecting (before recording starts); shown on the Run page and in Test the device |
 
 ## labjack
 
@@ -79,6 +80,7 @@ Records: `streams/<id>.stream.csv`: every channel of the LSL stream 'stream', at
 | `timeout` | float | `5.0` | seconds to wait for the stream |
 | `max_buffered` | int | `360` |  |
 | `gaze_channels` | list |  | [x_channel, y_channel] to enable gaze-contingent use (normalized coords) |
+| `impedance_stream` | str |  | an LSL stream of electrode impedances to show on the Run page: its name, or auto = a stream of type 'Impedance' from the same computer (EEG streams only); empty (default) for none |
 
 ## lsl_markers
 
@@ -197,6 +199,7 @@ Records: `streams/<id>.eeg.csv`: simulated EEG plus a trigger channel (9 channel
 | `transport_jitter` | float | `0.002` | max simulated transport delay (s) |
 | `seed` | int | `0` |  |
 | `channels` | list | `['Fz', 'Cz', 'Pz', 'Oz', 'C3', 'C4', 'P3', 'P4']` |  |
+| `faults` | dict | `{'C4': 'line_noise', 'P4': 'flat', 'Oz': 'noisy'}` | channels that behave badly, to see the signal-quality display at work: {channel: line_noise | flat | noisy | railing}; {} for clean channels |
 
 ## sim_eyetracker
 

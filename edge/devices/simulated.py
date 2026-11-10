@@ -172,9 +172,10 @@ class SimEEG(_SimBase):
     capabilities = {"stream", "markers"}
     options_schema = {**_SimBase.options_schema,
                       "channels": {"type": "list", "default": ["Fz", "Cz", "Pz", "Oz", "C3", "C4", "P3", "P4"]},
-                      "faults": {"type": "dict", "default": {"C4": "line_noise", "P4": "flat", "Oz": "noisy"},
-                                 "help": "channels that behave badly, to see the signal-quality display at work: "
-                                         "{channel: line_noise | flat | noisy | railing}; {} for clean channels"}}
+                      "faults": {"type": "dict", "default": {},
+                                 "help": "channels that behave badly, to see the signal-quality display at work, "
+                                         "e.g. {C4: line_noise, P4: flat, Oz: noisy} (line_noise | flat | noisy | "
+                                         "railing); empty = every channel clean"}}
     FAULT_IMPEDANCE = {"line_noise": 45.0, "flat": 900.0, "noisy": 18.0, "railing": 2000.0}
 
     @classmethod

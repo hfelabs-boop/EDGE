@@ -394,8 +394,8 @@ During a session, in **Test this device** and in `edge test-device`, every recor
   loss. Red when less than 60 % is valid or the participant isn't tracked right now.
 * Other signals (ECG, skin conductance …): flat or stuck at a limit.
 
-The simulated EEG has three bad channels on purpose, so you can see the display at work: C4 with 50 Hz hum, P4
-flat, Oz noisy (`faults: {}` in its options for clean channels).
+To see the display at work without hardware, give the simulated EEG some bad channels in its options:
+`faults: {C4: line_noise, P4: flat, Oz: noisy}` (C4 gets 50 Hz hum, P4 is flat, Oz is noisy).
 
 ### Two monitors: the experimenter's screen
 

@@ -145,13 +145,19 @@ def _prop(name: str, meta: dict[str, Any], full: bool) -> str:
     return s
 
 
+# item types whose many settings the compact primer (small local models) leaves to describe_component_type
+SPECIALISED = frozenset({"movie", "grating", "gabor", "noise", "dots", "microphone", "gamepad", "device_response"})
+
+
 def component_catalogue(full: bool) -> str:
     from ..components import component_registry
     out = []
     for k, cls in sorted(component_registry().items(), key=lambda kv: (kv[1].category, kv[0])):
         desc = cls.description if full else _first_sentence(cls.description)
         out.append(f"- {k} [{cls.category}] {_first_sentence(desc) if not full else desc}")
-        if full or cls.category in ("stimulus", "response"):
+        if not full and k in SPECIALISED:           # small models: the details come from describe_component_type
+            out.append("  props: ask describe_component_type")
+        elif full or cls.category in ("stimulus", "response"):
             names = [n for n in cls.props_schema if n != "marker"]
             common = ("pos", "opacity", "ori", "units")       # every visual item has them: named, not typed (compact)
             short = not full and all(c in names for c in common)

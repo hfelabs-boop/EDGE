@@ -90,7 +90,8 @@ def test_gaze_quality():
 
 
 def test_simulated_eeg_has_bad_channels_and_impedance():
-    dev = create_device("sim_eeg", "eeg", {"seed": 1})
+    assert create_device("sim_eeg", "eeg", {"seed": 1}).options["faults"] == {}     # clean unless asked
+    dev = create_device("sim_eeg", "eeg", {"seed": 1, "faults": {"C4": "line_noise", "P4": "flat", "Oz": "noisy"}})
     dev.connect()
     dev.start()
     dev._last -= 3.0               # pretend 3 s have passed: poll() makes up the samples
@@ -133,7 +134,7 @@ def test_monitor_events_carry_quality_screen_and_pause(tmp_path):
     exp = tmp_path / "e.yaml"
     exp.write_text("name: e\nroutines:\n  a:\n    components:\n      - {id: t, type: text, text: hi, duration: 1.2}\n"
                    "  b:\n    components:\n      - {id: t, type: text, text: bye, duration: 0.3}\n"
-                   "flow: [a, b]\ndevices:\n  - {id: eeg, type: sim_eeg}\n")
+                   "flow: [a, b]\ndevices:\n  - {id: eeg, type: sim_eeg, options: {faults: {C4: line_noise, P4: flat}}}\n")
     pause = tmp_path / "pause"
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent.parent), "EDGE_MONITOR": "1",
            "EDGE_QUALITY_INTERVAL": "0.3", "EDGE_PAUSE_FILE": str(pause), "EDGE_STOP_FILE": str(tmp_path / "stop")}
