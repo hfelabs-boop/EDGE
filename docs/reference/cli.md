@@ -300,12 +300,24 @@ edge export [-h] [--formats FORMATS] [--layout {wide,long}] [--out OUT]
 | argument | description |
 |---|---|
 | `path` | session folder or data folder |
-| `--formats` | one or more of csv,tsv,xlsx,json,jsonl,parquet,mat,bids, separated by commas (default: csv,xlsx) |
+| `--formats` | one or more of csv,tsv,xlsx,json,jsonl,parquet,mat,sav (SPSS),rds,rdata (R),bids, separated by commas (default: csv,xlsx) |
 | `--layout` | wide (default): one row per trial; long: one row per routine |
 | `--out` | output folder (default: <path>/exports) |
 | `--name` | start of the file names (default: the session folder's name, or <experiment>_all_<date> for a data folder) |
 | `--include-dry-runs` | also include dry-run sessions |
 | `--audio-manifest` | also list every voice recording (microphone items) in audio_manifest.csv, for transcription |
+
+## edge analyze
+
+analyse recorded signals: EEG/pupil epochs, fixations, AOIs
+
+```
+edge analyze [-h] {epochs,fixations,aoi} ...
+```
+
+| argument | description |
+|---|---|
+| `analysis` | epochs (EEG/pupil), fixations (and saccades) or aoi (areas of interest) |
 
 ## edge bundle
 
