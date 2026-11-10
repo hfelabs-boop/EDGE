@@ -163,6 +163,7 @@ function renderProps() {
     else if (sel?.kind === "machine") renderMachineProps(el);
     else if (sel?.kind === "state") renderStateProps(el);
     else if (sel?.kind === "device" && S.exp.devices[sel.index]) renderDeviceProps(el, S.exp.devices[sel.index], sel.index);
+    else if ((sel?.kind === "components" || sel?.kind === "routines") && typeof renderMultiProps === "function") renderMultiProps(el, sel);   // edit.js
     else inspOverview(el);
   } catch (e) {
     console.error(e);

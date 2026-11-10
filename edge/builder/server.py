@@ -1027,6 +1027,9 @@ def make_handler(app: BuilderApp):
                     return self._json(*assistant_api.handle(app, "GET", u.path, q, None))
                 if u.path.startswith("/api/studyday/"):     # (POST_FIELDS describe the POSTs of the same paths)
                     return self._studyday("GET", u.path, q, None)
+                if u.path.startswith("/api/edit/"):      # editing helpers (edit_api.py): trial-list files
+                    from . import edit_api
+                    return self._json(*edit_api.handle(app, "GET", u.path, q, None))
                 if u.path == "/api/experiment":
                     return self._json(app.load(q["path"]))
                 if u.path == "/api/support_bundle":
@@ -1184,6 +1187,11 @@ def make_handler(app: BuilderApp):
                     else:
                         body_in = self._body_cached()
                     return self._json(*assistant_api.handle(app, "POST", u.path, q, body_in))
+                if u.path.startswith("/api/edit/"):      # expression checks, paste with files, trial-list files
+                    if "application/json" not in (self.headers.get("Content-Type") or "").lower():
+                        return self._json({"error": "send the request as JSON (Content-Type: application/json)"}, 415)
+                    from . import edit_api
+                    return self._json(*edit_api.handle(app, "POST", u.path, q, self._body_cached()))
                 if u.path == "/api/upload":
                     dest = app.safe_path(q["path"])
                     if dest.suffix.lower() in BLOCKED_UPLOAD_SUFFIXES or dest.name.startswith("."):

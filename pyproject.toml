@@ -27,7 +27,9 @@ plots = ["matplotlib>=3.5"]   # ERP / pupil plots of `edge analyze epochs` (ever
 rtl = ["python-bidi>=0.4"]
 video = ["pyglet>=2.0"]          # plus FFmpeg's shared libraries (see docs/EXPERIMENT_FORMAT.md#video)
 vision = ["numpy>=1.24"]         # gratings, Gabors and noise (plain Python without it: slow, white noise only)
-all = ["pyglet>=2.0", "pylsl>=1.16", "pyserial>=3.5", "numpy>=1.24", "mcp>=1.2,<2", "python-bidi>=0.4"]
+excel = ["openpyxl>=3"]   # edit Excel (.xlsx) trial lists in place in the builder
+all = ["pyglet>=2.0", "pylsl>=1.16", "pyserial>=3.5", "numpy>=1.24", "mcp>=1.2,<2", "python-bidi>=0.4", "openpyxl>=3",
+       "sounddevice>=0.4"]
 dev = ["pytest>=7", "mcp>=1.2,<2", "openpyxl>=3", "python-bidi>=0.4"]
 
 [project.scripts]

@@ -1122,6 +1122,7 @@ function dropTarget(zone, mark, listPath, index) {
   zone.addEventListener("drop", (e) => {
     const raw = e.dataTransfer.getData("edge/flowpath"); if (!raw) return;
     e.preventDefault(); e.stopPropagation(); mark.classList.remove("drop-hover");
+    if (typeof moveSelectedScreens === "function" && moveSelectedScreens(JSON.parse(raw), listPath, index)) return;   // a group (edit.js)
     moveFlowNode(JSON.parse(raw), listPath, index);
   });
   mark.dataset.list = JSON.stringify(listPath); mark.dataset.index = index;
@@ -1166,7 +1167,8 @@ function storyCardItem(n, path) {
   const rid = routineOfNode(n);
   const exists = !!S.exp.routines[rid];
   const mark = proposalMark("routines", rid);
-  const sel = S.sel?.kind === "routine" && S.sel.routine === rid && (!S.sel.path || samePath(S.sel.path, path));
+  const sel = S.sel?.kind === "routine" && S.sel.routine === rid && (!S.sel.path || samePath(S.sel.path, path))
+    || (typeof screenInSelection === "function" && screenInSelection(rid, path));      // several screens (edit.js)
   const [capIc, capCat] = exists ? summaryIcon(rid) : ["warning", "respond"];
   const summary = exists ? screenSummary(rid) : "this screen doesn't exist";
   const key = "card:" + path.join(".");
@@ -1552,6 +1554,7 @@ function nodeMenu(e, path) {
   const lp = path.slice(0, -1), at = path[path.length - 1];
   if (bEditable() && typeof at === "number") items.splice(1, 0, {label: "Add a step before…", icon: "plus", run: () => flowInsertMenu(anchor, lp, at)},
     {label: "Add a step after…", icon: "plus", run: () => flowInsertMenu(anchor, lp, at + 1)});
+  if (typeof clipMenuItems === "function") items.splice(items.findIndex((x) => x?.sep), 0, ...clipMenuItems(path));     // Copy, Paste after (edit.js)
   return ui.menu(anchor, items.filter(Boolean));
 }
 
@@ -1616,9 +1619,10 @@ function wrapInLoop(path) {
 }
 function normFormula(v) { v = String(v || "").trim(); return !v ? "" : v.startsWith("$") ? v : "$" + v; }
 /* A formula field with its sentence under it (replaces the old prompt "Run only if…"). */
-async function askCondition(title, value) {
+async function askCondition(title, value, where = null) {
   const id = "cond-" + Date.now();
-  const input = h("input", {class: "input expr", id, value: value || "", placeholder: "$score > 5", spellcheck: "false", autocomplete: "off"});
+  const input = h("input", {class: "input expr", id, value: value || "", placeholder: "$score > 5", spellcheck: "false", autocomplete: "off",
+    "data-where": where ? JSON.stringify(where) : null});     // exprcheck.js checks it at that place
   const say = h("div", {class: "help cond-say"});
   const upd = () => { const v = normFormula(input.value); say.textContent = v ? `In words: ${exprInWords(v)}.` : "For example $score > 5, or $practice.accuracy >= 0.8."; };
   input.addEventListener("input", upd); upd();
@@ -1632,7 +1636,7 @@ async function showOnlyIf(path) {
   if (!bEditable()) return;
   const n = nodeAt(path);
   const cond = await askCondition(isRoutineNode(n) ? `Show “${routineOfNode(n)}” only if…` : n.if !== undefined && !isRoutineNode(n) ? "Only if…" : `Show ${nodeWords(n)} only if…`,
-    typeof n === "object" && n.if ? n.if : "");
+    typeof n === "object" && n.if ? n.if : "", {flow: path, field: "if"});
   if (!cond) return;
   const cur = nodeAt(path);
   const {list, index} = parentOf(path);
@@ -2196,7 +2200,8 @@ function renderTimelineHead() {
 }
 function timelineRow(rid, c, idx, span) {
   const cat = catKey(c.type);
-  const sel = S.sel?.kind === "component" && S.sel.routine === rid && S.sel.id === c.id;
+  const sel = S.sel?.kind === "component" && S.sel.routine === rid && S.sel.id === c.id
+    || (typeof itemInSelection === "function" && itemInSelection(rid, c.id));          // several items (edit.js)
   const r = S.exp.routines[rid];
   const start = numOr(c.start, 0);
   const conditional = isExpr(c.start) || !!c.start_after || !!c.start_if || c.start_frame != null || !!c.if;
@@ -2994,6 +2999,7 @@ function emptyListState(n, path) {
 
 /* ---------------- A file: read-only rows from /api/conditions */
 function fileListView(n, path) {
+  if (typeof fileTableView === "function") { const v = fileTableView(n, path); if (v) return v; }    // edited in place (tablefile.js)
   const spec = n.conditions;
   const file = typeof spec === "string" ? spec : spec.file;
   const rows = loopRows(spec);
