@@ -278,6 +278,7 @@ function fixSelection() {
   if (S.sel?.kind === "routine" && !S.exp.routines[S.sel.routine]) S.sel = null;
   if (S.sel?.kind === "device" && !S.exp.devices[S.sel.index]) S.sel = null;
   if (S.sel?.path) { try { if (!getNode(S.sel.path)) S.sel = null; } catch { S.sel = null; } }
+  if (typeof fixMultiSelection === "function") fixMultiSelection();      // several items or screens (edit.js)
 }
 
 /* ------------------------------------------------------------------ document helpers */
@@ -3042,7 +3043,7 @@ function cycleRegion(dir) {
 function goUpOneLevel() {
   if (S.ws !== "build") return false;
   if ($("#ws-build").classList.contains("focus") && typeof toggleBigPreview === "function") { toggleBigPreview(); return true; }
-  if (S.sel?.kind === "component") { S.sel = {kind: "routine", routine: S.sel.routine}; renderAll(); return true; }
+  if (S.sel?.kind === "component" || S.sel?.kind === "components") { S.sel = {kind: "routine", routine: S.sel.routine}; renderAll(); return true; }
   if (S.view === "screen" || S.view === "list" || S.view === "diagram") { EDGE.setView("story"); return true; }
   if (S.sel) { EDGE.select(null, {reveal: false}); return true; }
   return false;
@@ -3056,6 +3057,7 @@ function stepScreen(delta) {
 }
 function deleteSelection() {
   const sel = S.sel; if (!sel) return;
+  if (typeof multiDelete === "function" && multiDelete()) return;        // several items or screens (edit.js)
   if (sel.kind === "component") {
     const list = comps(sel.routine); const i = list.findIndex((c) => c.id === sel.id); if (i < 0) return;
     list.splice(i, 1); S.sel = {kind: "routine", routine: sel.routine};
@@ -3073,6 +3075,7 @@ function deleteSelection() {
 }
 function duplicateSelection() {
   const sel = S.sel; if (!sel) return;
+  if (typeof multiDuplicate === "function" && multiDuplicate()) return;
   if (sel.kind === "component") {
     const list = comps(sel.routine); const i = list.findIndex((c) => c.id === sel.id); if (i < 0) return;
     const cp = clone(list[i]); cp.id = uniqueId(list[i].id, allCompIds());

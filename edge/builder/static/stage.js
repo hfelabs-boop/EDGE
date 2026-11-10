@@ -63,6 +63,7 @@ function drawStageOverlay(cv) {
     }
   }
   ctx.restore();
+  if (typeof drawMultiOverlay === "function") drawMultiOverlay(cv);      // several items and the selection rectangle (edit.js)
 }
 
 function hitTest(cv, p) {

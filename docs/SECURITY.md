@@ -31,7 +31,14 @@ same folder. A sandboxed page has no origin, so the browser labels those reads c
 allows them only for read-only file requests whose path carries `<key>`, a random value of this builder
 process that only the builder's own page can read. Every such path must stay inside the folder too. Uploads through the builder cannot
 create executable files (`.py`, `.bat`, `.sh`, `.exe` …) or hidden files, and every path a request
-names must stay inside the folder the builder was started in. Sessions started from the builder run
+names must stay inside the folder the builder was started in. Pasting into another experiment
+(`/api/edit/paste_files`) copies only the files the pasted part names, each from inside the source
+experiment's folder to inside the target's, never participant data, hidden files or program files, and
+never over an existing file (a different file of the same name is copied under a new name). Editing a
+trial-list file (`/api/edit/table`) works only on CSV, TSV, text and Excel files inside the experiment's
+folder, keeps the previous version in its History and refuses to overwrite a file changed elsewhere since
+it was read. Checking a formula while you type (`/api/edit/check`) only parses it; nothing is evaluated.
+Sessions started from the builder run
 with `PYTHONSAFEPATH`, so a file in the experiments folder can never shadow a Python module.
 
 Requests the builder cannot act on (a missing field, a file that is not there, a document of the

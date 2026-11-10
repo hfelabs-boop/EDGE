@@ -1,0 +1,52 @@
+/* edit.css: styles for builder editing. Owner: builder editing.
+ * Multi-select (the selection rectangle, cards and rows a rectangle passes over, "Mixed" values, the align
+ * buttons), formula checks under fields and the suggestion list (exprcheck.js), and trial-list files edited in
+ * place (tablefile.js). Tokens only (tokens.css), no colour mixing.
+ */
+
+/* ---------------- multi-select */
+.ed-band { position: fixed; z-index: var(--z-coach); pointer-events: none; border: 1px solid var(--accent);
+  background: var(--accent-ring); border-radius: var(--r-xs); }
+#flow .scard.ed-hit { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.timeline .tl-row.ed-hit { background: var(--accent-subtle); }
+.field.mixed .lbl-row { gap: var(--sp-3); }
+.chip.mixed-chip { height: 18px; padding: 0 var(--sp-3); font-size: var(--fs-overline); background: var(--surface-3); color: var(--text-2);
+  border: 1px dashed var(--border-default); margin-left: auto; }
+.field.switch-field.mixed { display: flex; align-items: flex-start; gap: var(--sp-4); }
+.field.switch-field.mixed > :first-child { flex: 1; min-width: 0; }
+.field.switch-field.mixed > .mixed-chip { margin-top: var(--sp-1); }
+.ed-align-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); }
+.ed-align-row .ed-sep { width: 1px; height: 20px; background: var(--border-subtle); margin: 0 var(--sp-3); }
+.ed-names { margin: 0 0 var(--sp-3); line-height: var(--lh-body); }
+.ed-names .linkish { font-family: var(--font-mono); font-size: var(--fs-mono); }
+
+/* ---------------- formulas checked while typing */
+.input.expr.xc-bad { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger-border); }
+.input.expr.xc-warn { border-color: var(--warning-icon); }
+.xc-msg { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-2); }
+.xc-msg[hidden] { display: none; }
+.xc-line { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-sm);
+  font-size: var(--fs-small); line-height: var(--lh-small); border: 1px solid var(--border-subtle); }
+.xc-line > .ic { flex: none; width: var(--icon-s); height: var(--icon-s); margin-top: 1px; }
+.xc-line.danger { background: var(--danger-subtle); border-color: var(--danger-border); color: var(--text-1); }
+.xc-line.danger > .ic { color: var(--danger); }
+.xc-line.warning { background: var(--warning-subtle); border-color: var(--warning-border); color: var(--text-1); }
+.xc-line.warning > .ic { color: var(--warning-icon); }
+.xc-line.info { background: var(--info-subtle); border-color: var(--info-border); }
+.xc-txt { flex: 1 1 160px; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-1); overflow-wrap: anywhere; }
+.xc-hint { color: var(--text-2); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+.xc-fix { flex: none; margin-left: auto; font-family: var(--font-mono); }
+.xc-pop { position: fixed; max-height: 260px; overflow-y: auto; padding: var(--sp-2); }
+.xc-opt { display: flex; align-items: baseline; gap: var(--sp-5); min-height: 28px; padding: var(--sp-2) var(--sp-4); border-radius: var(--r-xs); cursor: pointer; }
+.xc-opt.on, .xc-opt:hover { background: var(--accent-subtle); }
+.xc-opt .xc-name { color: var(--text-1); }
+.xc-opt .xc-kind { margin-left: auto; color: var(--text-3); font-size: var(--fs-caption); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+
+/* ---------------- trial-list files edited in place */
+.ft-box { display: flex; flex-direction: column; gap: var(--sp-4); }
+.ft-info .ft-state { padding: 0 var(--sp-3); border-radius: var(--r-pill); }
+.ft-info .ft-state.dirty { color: var(--warning); }
+.ft-conflict .msg { flex: 1; }
+.ft-grid td.editing { padding: 0; }
+.ft-history .pick-row { display: flex; align-items: center; gap: var(--sp-4); }
+.ft-history .grow, .ft-info .grow { flex: 1; }

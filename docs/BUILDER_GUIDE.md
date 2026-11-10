@@ -113,8 +113,13 @@ its trial list filled in, and a line saying how it ends ("r / g / b · max 2.5 s
   experiment:** with **Add back** and **Delete**).
 * **Drag** a card or a frame onto any **+** to move it, also into or out of trial lists and workflow phases.
   Alt+arrow keys move the selection.
-* A card's **⋯** (or right-click) has Open, Rename, Duplicate, Move earlier / later, Repeat with a trial list,
-  Show only if…, Remove from the experiment and Delete screen. Removing and deleting show an **Undo** message
+* **Several screens at once**: Ctrl-click (⌘-click on a Mac) or Shift-click cards to add them to the selection, or
+  drag over an empty part of the storyboard to select every card the rectangle touches. Properties then shows
+  *3 screens selected* with what they share (**Lasts at most**, *Mixed* when they differ); Delete removes them from
+  the experiment, Ctrl+D duplicates them, and dragging one of them onto a **+** moves them all, in their order.
+  Each of these is one Undo step.
+* A card's **⋯** (or right-click) has Open, Rename, Duplicate, **Copy**, **Paste after**, Move earlier / later, Repeat
+  with a trial list, Show only if…, Remove from the experiment and Delete screen. Removing and deleting show an **Undo** message
   instead of asking first.
 * **Cards · List** switches to a compact list for large studies. The toolbar shows the trial count and the
   estimated time.
@@ -154,9 +159,29 @@ The preview is also an editor.
 | arrow keys (after clicking the preview) | nudge by one pixel; **Shift** for ten |
 | drag an item from Add onto the preview | add it exactly there |
 | drop picture, sound or .html files from your computer onto the preview | copy them into the experiment folder and add them where you dropped them |
+| Ctrl-click (⌘-click) or Shift-click another item | add it to the selection (or take it out again) |
+| drag over an empty part of the preview | select everything the rectangle touches (with Ctrl or Shift: add to the selection) |
+| drag one of several selected items, or press the arrow keys | move them together (one Undo step) |
+| right-click | Copy, Cut, Paste, Duplicate, Align, Select all items, Delete |
 
 Every change can be undone. If a position or size comes from the trial list, the preview says so instead of
 moving it: change it in the trial list, or make the value the same on every trial again.
+
+### Several items at once
+
+On the preview and on the timeline, Ctrl-click (⌘-click on a Mac) or Shift-click adds items to the selection, and
+dragging over an empty part selects with a rectangle (on the timeline: the bars it passes over). **Ctrl+A** selects
+every item of the screen. With several items selected:
+
+* **Properties** says *3 items selected* and lists them (click a name to select just that one). **Arrange** aligns
+  their left edges, centres, right edges, tops, middles or bottoms, and spaces three or more evenly. **Shared
+  properties** shows what they all have (colour, letter height, position, opacity, starts at, lasts …): where they
+  differ the field says **Mixed**, and a new value applies to all of them.
+* Dragging one of them, or the arrow keys, moves them all; on the timeline dragging a bar (or ←/→ on a selected row)
+  moves all their start times together.
+* **Delete**, **Ctrl+D** (duplicate), **Ctrl+C / Ctrl+X** (copy, cut) work on all of them.
+
+Every one of these is a single Undo step.
 
 ### Pictures, sounds and pages
 
@@ -226,14 +251,73 @@ from**:
   row, the column header menu renames, inserts and deletes columns, and **Paste from Excel** (or Ctrl+V) pastes
   rows copied from Excel, LibreOffice or Google Sheets. Each column header says which items use it, or *not used:
   for analysis*.
-* **A file**: a CSV, TSV or Excel file from the experiment's folder, shown read-only; **Change file…** and **Copy
-  into the experiment** (turns it into typed rows).
+* **A file**: a CSV, TSV or Excel file from the experiment's folder, **edited in place** (see below); **Change
+  file…** and **Copy into the experiment** (turns it into typed rows).
 * **Every combination**: list each factor and its levels; EDGE builds every combination ("3 × 3 = 9 rows").
 * **Staircase**: an adaptive procedure (start value, steps, how many right answers make it harder, when to stop).
 
 **Done** (or Esc) goes back to where you came from.
 
-## Workflows and if / otherwise
+### Editing a trial-list file in place
+
+A trial list that comes from a file is edited right there, like a typed one: click a cell and type (or press Enter
+or F2), arrows move, Tab moves on while editing, Esc cancels. **+ Row** adds a row; the row number's menu inserts,
+duplicates, moves (also **Alt+↑ / Alt+↓**) and deletes rows; a column's menu renames, inserts, moves and deletes
+columns. Renaming a column also updates the screens that use it (`$ink` becomes `$colour`). Copy cells in Excel,
+LibreOffice or Google Sheets and press **Ctrl+V** on a cell: the block lands there and rows and columns are added as
+needed. **Paste from Excel** does the same, or replaces all rows.
+
+* **Saving**: every change is written back to the same file, in its own format (a CSV keeps its separator, a TSV its
+  tabs), a moment after you stop; the bar above the grid says *Saved to the file 10:42*. The editor has its own
+  **Undo / Redo** (and Ctrl+Z / Ctrl+Y while a cell has the focus).
+* **History**: the first change of each editing session keeps the previous version of the file. **History…** lists the
+  earlier versions and restores any of them (the current one is kept too). They live next to the file in
+  `.edge/backups/`, like the experiment's own versions.
+* **Changed in another program**: while the list is open, EDGE watches the file. If you change it in Excel and save,
+  the builder shows the new version; if you had edits here that weren't saved yet, a strip asks which version to keep.
+* **Excel files** are written with openpyxl (`pip install edge-experiments[excel]`). EDGE uses the active sheet. If the
+  workbook has other sheets or the sheet has formulas, EDGE says so above the grid and asks before the first save: the
+  sheet is then written as values (formulas become their values), the other sheets are kept, and the version before
+  is in History. Without openpyxl the rows can be saved as a CSV file next to the workbook, which the trial list then
+  uses; the Excel file stays as it is.
+
+## Copy and paste
+
+**Ctrl+C**, **Ctrl+X** and **Ctrl+V** (⌘ on a Mac), and Copy / Cut / Paste in the right-click menus, work on:
+
+* **items**: pasted onto the selected or open screen, after the selected item;
+* **screens** (with all their items): pasted after the selected step of the storyboard, or at the end;
+* a whole **trial list**, **if / otherwise** or **workflow** with its screens (select its frame).
+
+Names that are taken get a number (`resp` → `resp2`, `trial` → `trial2`, `trials` → `trials2`), and everything inside
+what you paste follows: `$resp.corr` in a pasted feedback text becomes `$resp2.corr`, *Starts after* points at the
+pasted item, `$trials.accuracy` at the pasted trial list. Pasting on the same screen moves the copies a little so
+you can see them. One paste is one Undo step.
+
+Copy and paste also works **between experiments** and between browser tabs (and windows) of the builder: the copy
+goes to the system clipboard (as text that starts with `{"edge": "edge-clipboard"`) and to the browser's storage.
+When you paste into another experiment, the pictures, sounds, web pages and trial-list files the pasted part uses are
+copied into this experiment's folder. A file is never overwritten: if a different file already has that name, the
+copy gets a new one (`stroop_2.csv`) and what you pasted uses it. A message lists what was copied. Variables the
+pasted part uses come along; a device it needs that this experiment doesn't have is named in a warning.
+
+## Formulas are checked while you type
+
+Every field that takes a formula (a value set to **Formula ($…)**, *Only if*, *Starts when*, *Stops when*, a
+screen's rules, a trial list's *Stop early when*, *Show only if…*, workflow routes, a measure's *Only when*) is checked
+as you type, for the place it is used:
+
+* mistakes in the formula itself: *"This isn't a valid expression … Check that every '(' has a matching ')'."*
+* names that don't exist, with a suggestion: *"The trial list has no column called 'inkk'. Did you mean 'ink'?"*,
+  *"This uses resp.cor, but a key press has no 'cor'. Did you mean resp.corr?"*; **Use “ink”** puts it right;
+* names that exist elsewhere but not here: a trial-list column on a screen that list doesn't repeat (*"'wrd' isn't
+  available here. Did you mean 'word'? That is a column of the trial list 'trials', which doesn't repeat this
+  screen."*).
+
+While you type a name, a list offers what is available at that place: the columns of the trial lists around it,
+variables, participant info, the results of items (`resp.rt`, `resp.corr`), trial-list statistics
+(`trials.accuracy`), workflow phases and functions (`round`, `math.sqrt`). **↑ / ↓** choose, **Enter** or **Tab**
+takes it, **Esc** closes the list.
 
 A **workflow** runs **phases** one at a time; after a phase, its **routes** (*Then go to…*) decide what comes next,
 checked from top to bottom: *When* a condition holds go to that phase; an empty *When* means *Otherwise*. **Repeat
@@ -404,9 +488,13 @@ LM Studio. See [The assistant](ASSISTANT.md) and the tutorial *Build with the as
 | [ · ] | previous · next screen |
 | Ctrl/⌘ [ · Ctrl/⌘ ] | previous · next trial-list row in the preview |
 | / | quick add (Screen view) |
-| F2 · Ctrl/⌘ D · Delete | rename · duplicate · delete the selection |
+| F2 · Ctrl/⌘ D · Delete | rename · duplicate · delete the selection (also several items or screens) |
+| Ctrl/⌘ C · Ctrl/⌘ X · Ctrl/⌘ V | copy · cut · paste items, screens or a trial list (also into another experiment) |
+| Ctrl/⌘-click · Shift-click | add to the selection (preview, timeline, storyboard) |
+| Ctrl/⌘ A | select every item of the screen (Screen view) |
 | Alt + arrow keys | move the selection in the storyboard |
-| arrow keys · Shift + arrow keys | preview: nudge by 1 or 10 pixels; timeline bar: move by 0.05 or 0.5 s |
+| arrow keys · Shift + arrow keys | preview: nudge by 1 or 10 pixels; timeline bar: move by 0.05 or 0.5 s (all selected items) |
+| Alt ↑ · Alt ↓ | trial-list file: move the row up or down |
 | ? · F1 | Help · help for the focused field |
 
 **⋯** › **Keyboard shortcuts** lists them all.
