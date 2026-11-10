@@ -198,6 +198,33 @@ Records (data columns `<id>.<name>`):
 | `time` | Master-clock time (s) of its response | s |
 | `device` | Device that produced its response |  |
 
+### gamepad
+
+A response on a gamepad or joystick: which button (a, b, x, y, lb, rb, lt, rt, up, down …), its RT from this item's onset, the stick positions at that moment; optionally pushing a stick past a threshold counts as the response, and the stick positions can be saved on every frame.
+
+| property | type | default | description |
+|---|---|---|---|
+| `buttons` | list |  | buttons that count, e.g. [a, b] or [lb, rb]; stick directions too (stick_left, stick_right …); empty = any |
+| `correct` | str |  | the correct button (often a trial-list column: $correct_button) |
+| `axis_threshold` | float |  | pushing a stick this far (0..1) counts as a response (stick_left, stick_up …); empty = only buttons |
+| `deadzone` | float | `0.1` | stick positions closer to the centre than this count as 0 |
+| `track` | bool | `False` | save the stick positions on every frame |
+| `gamepad` | int |  | which controller: 0 = the first; empty = any |
+| `keys` | dict |  | keyboard keys that also count, e.g. {f: lb, j: rb}: for Try it and piloting without a gamepad |
+| `response_marker` | str |  | marker sent at the moment of the response |
+
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `button` | Which button (or stick direction) of this component responded; empty = no response |  |
+| `rt` | Response time (s) of this component, from its onset flip to the response | s |
+| `corr` | Correctness of its response: 1 = correct, 0 = incorrect (only with `correct`) |  |
+| `time` | Master-clock time (s) of its response | s |
+| `axes` | Stick and trigger positions at its response (lx, ly, rx, ry: -1..1, up and right positive; lt, rt: 0..1) |  |
+| `gamepad` | Which controller gave its response |  |
+| `path` | Stick positions on every frame of this component (time, lx, ly, rx, ry) (only with `track`) |  |
+
 ### keyboard
 
 Collect key presses with RT measured from the component's onset flip.
@@ -221,16 +248,46 @@ Records (data columns `<id>.<name>`):
 | `time` | Master-clock time (s) of its response | s |
 | `duration` | How long the key was held down in this component (s) (only with `record_release`) | s |
 
+### microphone
+
+Record a spoken answer: a WAV file per screen in the session folder (audio/…), with the moment speech starts (rt) and stops, found by the same detector as the voice key. Records for its duration, until the screen ends, or until the participant stops speaking.
+
+| property | type | default | description |
+|---|---|---|---|
+| `samplerate` | int | `44100` | samples per second (44100 or 48000 for speech; 16000 is enough for transcription) |
+| `channels` | choice: 1 / 2 | `1` | 1 = mono (one microphone), 2 = stereo |
+| `device` | str |  | microphone name or number (empty = the computer's default input) |
+| `voice_key` | device |  | a voice key device that times the speech onset (empty = the experiment's voice key, if it has one; otherwise the onset is found in the recording) |
+| `stop_after_speech` | bool | `False` | stop recording (and finish this item) once the participant has spoken and then been quiet |
+| `threshold_db` | float | `-30.0` | loudness (dB below full scale) that counts as speech |
+| `min_ms` | float | `15.0` | it must stay loud this long to count as speech (ignores clicks) |
+| `release_ms` | float | `300.0` | quiet this long after speech = they stopped speaking |
+| `response_marker` | str |  | marker sent at the moment speech starts |
+
+Records (data columns `<id>.<name>`):
+
+| column | meaning | units |
+|---|---|---|
+| `file` | The recording made by this component (WAV file, relative to the session folder) |  |
+| `rt` | Speech onset in this component: seconds from its onset flip until speech started; empty = no speech | s |
+| `offset` | Speech offset in this component: seconds from its onset flip until speech ended | s |
+| `duration` | Length of the recording made by this component (s) | s |
+| `source` | What timed the speech onset in this component: voice_key (the voice key device), recording (the detector on the recording), browser (Try it) |  |
+
 ### mouse
 
-Mouse clicks, optionally restricted to clickable components (e.g. images/shapes).
+Mouse clicks and touchscreen taps, optionally restricted to clickable components (e.g. images/shapes); a swipe in a given direction can be the response, and every finger on the screen can be saved.
 
 | property | type | default | description |
 |---|---|---|---|
 | `buttons` | list | `['left']` | buttons that count as a response: left, middle, right |
 | `clickable` | list |  | ids of components in this routine that can be clicked |
-| `correct` | str |  | id of the correct clickable component |
+| `correct` | str |  | id of the correct clickable component (with swipe: the correct direction) |
 | `track` | bool | `False` | save the full mouse trajectory |
+| `touch` | bool | `True` | taps on a touchscreen count like clicks |
+| `swipe` | list |  | swipe directions that are the response, e.g. [left, right]; empty = clicks and taps |
+| `swipe_distance` | float | `0.1` | shortest swipe, as a fraction of the screen height (shorter = a tap) |
+| `record_touches` | bool | `False` | save every finger's positions (multi-touch) |
 | `response_marker` | str |  | marker sent at the moment of the click |
 
 Records (data columns `<id>.<name>`):
@@ -242,8 +299,11 @@ Records (data columns `<id>.<name>`):
 | `corr` | Correctness of its response: 1 = correct, 0 = incorrect (only with `correct`) |  |
 | `x` | Horizontal response position in this component (experiment units) |  |
 | `y` | Vertical response position in this component (experiment units) |  |
-| `button` | Mouse button used in this component |  |
+| `button` | Mouse button used in this component (touch = a finger on a touchscreen) |  |
 | `path` | Mouse trajectory in this component (time, x, y) (only with `track`) |  |
+| `swipe` | Direction of the swipe that answered this component (left, right, up, down) (only with `swipe`) |  |
+| `touches` | Every finger on the touchscreen during this component (time, finger, down/move/up, x, y) (only with `record_touches`) |  |
+| `n_touches` | Most fingers on the touchscreen at the same time during this component (only with `record_touches`) |  |
 
 ### slider
 

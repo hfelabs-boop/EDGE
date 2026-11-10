@@ -293,7 +293,7 @@ export analysis-ready tables (one session or a whole data folder)
 
 ```
 edge export [-h] [--formats FORMATS] [--layout {wide,long}] [--out OUT]
-                   [--name NAME] [--include-dry-runs]
+                   [--name NAME] [--include-dry-runs] [--audio-manifest]
                    path
 ```
 
@@ -305,6 +305,7 @@ edge export [-h] [--formats FORMATS] [--layout {wide,long}] [--out OUT]
 | `--out` | output folder (default: <path>/exports) |
 | `--name` | start of the file names (default: the session folder's name, or <experiment>_all_<date> for a data folder) |
 | `--include-dry-runs` | also include dry-run sessions |
+| `--audio-manifest` | also list every voice recording (microphone items) in audio_manifest.csv, for transcription |
 
 ## edge bundle
 
