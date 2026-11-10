@@ -1,0 +1,26 @@
+/* hardware.css: plug and play notices (hardware.js). Owner: plug and play. Tokens from tokens.css. */
+#hw-notices { position: fixed; right: var(--sp-6); bottom: calc(var(--statusbar-h) + 12px); z-index: var(--z-toast);
+  display: flex; flex-direction: column; gap: var(--sp-4); width: min(400px, calc(100vw - 32px)); pointer-events: none; }
+.hw-notice { display: flex; gap: var(--sp-5); align-items: flex-start; padding: var(--sp-5); border: 1px solid var(--border-default);
+  border-radius: var(--r-md); background: var(--surface-1); color: var(--text-1); box-shadow: var(--e3); pointer-events: auto;
+  animation: edge-rise var(--dur-3) var(--ease-standard); }
+.hw-notice.warning { border-color: var(--warning-border); background: var(--warning-subtle); }
+.hw-notice .tile { width: 32px; height: 32px; border-radius: var(--r-md); display: grid; place-items: center; flex: none; }
+.hw-notice.warning .tile { background: transparent; color: var(--warning-icon); }
+.hw-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.hw-title { font-size: var(--fs-body); line-height: var(--lh-body); font-weight: var(--fw-semibold); }
+.hw-sub { color: var(--text-2); word-break: break-all; }
+.hw-body p { margin: 0; }
+.hw-q { color: var(--text-2); }
+.hw-choices { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-2); }
+.hw-choices .btn { justify-content: flex-start; text-align: left; height: auto; min-height: var(--ctl-h-sm); white-space: normal;
+  padding-top: var(--sp-2); padding-bottom: var(--sp-2); line-height: var(--lh-small); }
+.hw-also { display: flex; align-items: flex-start; gap: var(--sp-3); color: var(--text-2); cursor: pointer; }
+.hw-also input { margin-top: 3px; }
+.hw-acts { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-2); }
+.hw-x { flex: none; margin: calc(-1 * var(--sp-2)) calc(-1 * var(--sp-2)) 0 0; }
+.scan-row[data-hw-item] { flex-wrap: wrap; }
+.scan-row[data-hw-item] .dev-txt { flex: 1; min-width: 0; }
+.scan-row .hw-acts-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); flex-basis: 100%; padding-left: calc(32px + var(--sp-4)); align-items: center; }
+.scan-row .hw-acts-row:empty { display: none; }
+@media (prefers-reduced-motion: reduce) { .hw-notice { animation: none; } }

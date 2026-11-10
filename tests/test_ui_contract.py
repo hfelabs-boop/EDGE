@@ -42,9 +42,9 @@ modal-body dialogs toast sr-live play
 
 SCRIPTS = ["icons.js", "ui.js", "app.js", "build.js", "inspector.js", "simple.js", "survey.js", "widgets.js", "stage.js",
            "measures.js", "analysis.js", "assistant.js", "console.js", "stimuli.js", "edit.js", "exprcheck.js",
-           "tablefile.js"]
+           "tablefile.js", "hardware.js"]
 STYLES = ["tokens.css", "components.css", "style.css", "build.css", "pages.css", "assistant.css", "console.css",
-          "edit.css"]
+          "edit.css", "hardware.css"]
 
 # §6.3 and §6.6: functions other modules, tests, tutorials and the MCP docs call by name
 KEPT_FUNCTIONS = """

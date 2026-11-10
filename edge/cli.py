@@ -230,24 +230,86 @@ def cmd_components(a: argparse.Namespace) -> int:
 def cmd_scan(a: argparse.Namespace) -> int:
     from .scan import scan_all
 
+    if getattr(a, "watch", False):
+        return _scan_watch(a)
     found = scan_all(timeout=a.timeout)
     if a.json:
         print(json.dumps(found, indent=2, default=str))
         return 0
     import yaml
+    skip = {"suggested", "offers", "what", "certainty", "question", "identity", "channel_names"}
     for section, items in found.items():
         print(f"{section.replace('_', ' ')}:")
         if not items:
             print("  (none)")
         for it in items:
-            print("  - " + ", ".join(f"{k.replace('_', ' ')}: {v}" for k, v in it.items()
-                                     if k != "suggested" and v not in (None, "", "n/a")))
+            if it.get("what"):
+                sure = "probably " if it.get("certainty") == "probably" else ""
+                print(f"  - {sure}{it['what']}")
+                rest = ", ".join(f"{k.replace('_', ' ')}: {v}" for k, v in it.items() if k not in skip and v not in (None, "", "n/a"))
+                if rest:
+                    print(f"    {rest}")
+                if it.get("certainty") == "ask" and len(it.get("offers") or []) > 1:
+                    print(f"    {it.get('question') or 'What is it?'} It could be:")
+                    for o in it["offers"]:
+                        dev = o.get("device")
+                        line = yaml.safe_dump(dev, default_flow_style=True, sort_keys=False, width=1000).strip() if dev else ""
+                        print(f"      * {o['label']}" + (f":  {line}" if line else ""))
+                    continue
+                for o in it.get("offers") or []:
+                    if not o.get("device"):
+                        what = o.get("item") and f"add a {o['item'].get('label') or o['item']['type']} item" or \
+                            o.get("setting") and f"set {'.'.join(o['setting']['path'])}: {o['setting']['value']}"
+                        print(f"    {o['label']}: {what}")
+            else:
+                print("  - " + ", ".join(f"{k.replace('_', ' ')}: {v}" for k, v in it.items()
+                                         if k != "suggested" and v not in (None, "", "n/a")))
             if it.get("suggested"):
                 sug = dict(it["suggested"])
                 ids = {"tobii": "eyetracker", "gazepoint": "eyetracker", "ttl_serial": "triggers", "lsl_inlet": "stream"}
                 dev = {"id": ids.get(sug.get("type"), sug.get("type") or "device"), **sug}
                 line = yaml.safe_dump(dev, default_flow_style=True, sort_keys=False, width=1000).strip()
                 print(f"    in the experiment's devices:  {line}")
+    return 0
+
+
+def scan_event_line(ev: dict) -> str:
+    """One line for ``edge scan --watch``: '+ connected  probably Cedrus RB-840 response pad, on COM3, …'."""
+    import time
+    from .hotplug import format_item
+    it = ev.get("item") or {}
+    sign = "+ connected   " if ev.get("event") == "connected" else "- disconnected"
+    extra = f" (was on {ev['was_port']})" if ev.get("was_port") else ""
+    line = f"{time.strftime('%H:%M:%S', time.localtime(ev.get('time') or time.time()))}  {sign}  {format_item(it)}{extra}"
+    offers = (it.get("identified") or {}).get("offers") or []
+    if ev.get("event") == "connected" and offers:
+        line += "\n" + " " * 26 + "add as: " + " | ".join(o["label"] for o in offers)
+    return line
+
+
+def _scan_watch(a: argparse.Namespace) -> int:
+    from .hotplug import Watcher, format_item
+    w = Watcher(interval=2.0).start()
+    w.ready.wait(15)
+    r = w.wait(w.seq, timeout=0)
+    if a.json:
+        print(json.dumps({"event": "present", "items": r["connected"]}, default=str), flush=True)
+    else:
+        print("Connected now:" if r["connected"] else "Nothing connected that EDGE recognises.")
+        for it in r["connected"]:
+            print(f"  {format_item(it)}")
+        print("Watching for devices being plugged in or out (Ctrl+C to stop)…", flush=True)
+    since = r["seq"]
+    try:
+        while True:
+            r = w.wait(since, timeout=5.0)
+            for ev in r["events"]:
+                print(json.dumps(ev, default=str) if a.json else scan_event_line(ev), flush=True)
+            since = r["seq"]
+    except KeyboardInterrupt:
+        pass
+    finally:
+        w.stop()
     return 0
 
 
@@ -857,9 +919,11 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--json", action="store_true", help="full component descriptions as JSON")
     c.set_defaults(fn=cmd_components)
 
-    s = sub.add_parser("scan", help="discover connected hardware (LSL, serial, Tobii, Gazepoint)")
+    s = sub.add_parser("scan", help="discover connected hardware and say what it is (USB/serial, LSL, eye trackers, "
+                                    "gamepads, microphones, monitors, LabJack, parallel ports)")
     s.add_argument("--timeout", type=float, default=2.0, help="seconds to listen for LSL streams")
     s.add_argument("--json", action="store_true", help="machine-readable output")
+    s.add_argument("--watch", action="store_true", help="keep watching: print devices as they are plugged in and out")
     s.set_defaults(fn=cmd_scan)
 
     dr = sub.add_parser("doctor", help="check this computer for known causes of bad timing and lost responses")

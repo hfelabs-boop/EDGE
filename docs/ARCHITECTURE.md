@@ -35,7 +35,10 @@ edge/
   participant.py    virtual participant for dry runs (keys, clicks, taps and swipes, speech, gamepad buttons)
   audio.py          spoken answers: WAV files, speech onset/offset (the voice key's detector), simulated
                     recordings for test runs, live recording (sounddevice), transcription manifests
-  scan.py           hardware discovery
+  scan.py           hardware discovery (`edge scan`, Find devices, MCP scan_hardware): one look, identified
+  hotplug.py        plug and play: detection backends (USB/serial, LSL, gamepads, microphones, monitors, Tobii, Gazepoint,
+                    LabJack, parallel), the watcher (connect/disconnect events), whether the experiment's devices are there
+  hardware_db.py    what a device probably is and how to add it (built-in list + the lab's hardware.yaml)
   importers/        PsychoPy, E-Prime, OpenSesame and jsPsych importers (`edge import`)
   templates.py      starter experiments (and hidden starting points for tutorials)
   survey.py         survey questions: model, validation, display logic, page renderer, auto-answers, data, scoring

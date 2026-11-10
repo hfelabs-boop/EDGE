@@ -2807,6 +2807,8 @@ function preferencesDialog() {
     row("Density", ui.seg([{value: "comfortable", label: "Comfortable"}, {value: "compact", label: "Compact"}], document.documentElement.dataset.density === "compact" ? "compact" : "comfortable", setDensity)),
     row("On start", ui.seg([{value: "last", label: "Reopen the last experiment"}, {value: "home", label: "Show Home"}], EDGE.prefs.get("start", "last"), (v) => EDGE.prefs.set("start", v))),
     row("Assistant", assistantRow),
+    row("Devices", ui.switch(!!EDGE.prefs.get("hardware.autoAdd", false), (v) => EDGE.prefs.set("hardware.autoAdd", v),
+      {label: "Add recognised devices automatically", caption: "When you plug in a device EDGE recognises, it is added to the open experiment at once (you can undo it). Off: EDGE asks first."})),
     row("Tutorials", h("div", {}, h("button", {class: "btn sm", onclick: async () => {
       if (!(await ui.confirm({title: "Reset tutorial progress?", message: "Every tutorial shows as not done again. Your experiments are not touched.", ok: "Reset progress"}))) return;
       try { localStorage.removeItem("edge.tutorials.done"); } catch { /* private mode */ }

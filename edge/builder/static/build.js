@@ -787,36 +787,44 @@ function deviceCard(d, i) {
   h("span", {class: "dev-txt"},
     h("span", {class: "dev-name"}, d.id, mark ? markBadge(mark) : null),
     h("span", {class: "dev-type"}, deviceLabel(d), !isSimple() ? h("span", {class: "mono"}, ` · ${d.type}`) : null, d.required === false ? " · optional" : null),
-    h("span", {class: "dev-status"}, status,
+    h("span", {class: "dev-status"}, status, typeof hwStatusChip === "function" ? hwStatusChip(d) : null,     // plug and play (hardware.js)
       info.available === false ? h("span", {class: "chip warning", title: info.unavailable_reason || ""}, "needs setup") : null)));
 }
 
 /* Find connected devices (today's "Scan for hardware"): results inline in the Devices tab, each with [+ Add]. */
-async function scanHardware(el) {
+async function scanHardware(el, {quiet = false} = {}) {
   if (!(el instanceof Element)) el = $("#tab-hardware") || $("#scan-results");
-  if (typeof showTab === "function") showTab("hardware"); else EDGE.go("build");
-  if (railOn()) openFlyout("devices", {focus: false});
+  if (!quiet) {
+    if (typeof showTab === "function") showTab("hardware"); else EDGE.go("build");
+    if (railOn()) openFlyout("devices", {focus: false});
+  }
   const b = $("#btn-scan");
   b?.setAttribute("aria-busy", "true");
-  el.replaceChildren(h("div", {class: "scan-wait"}, h("span", {class: "spin"}), "Looking on the network, the USB and serial ports, and for Tobii and Gazepoint…"));
-  const names = {lsl_streams: "LSL streams", serial_ports: "USB and serial ports", tobii: "Tobii eye trackers", gazepoint: "Gazepoint eye trackers"};
+  if (!quiet) el.replaceChildren(h("div", {class: "scan-wait"}, h("span", {class: "spin"}), "Looking at the USB and serial ports, LSL streams, eye trackers, gamepads, microphones and monitors…"));
+  const names = {serial: "USB / serial", lsl: "LSL stream", tobii: "Tobii", gazepoint: "Gazepoint", gamepad: "Gamepad", audio: "Microphone",
+    monitor: "Monitor", labjack: "LabJack", parallel: "Parallel port"};
   try {
-    const r = await api("/api/scan?timeout=1.5");
-    const found = [];
-    for (const [sec, items] of Object.entries(r)) for (const it of items || []) found.push([sec, it]);
-    const out = [h("div", {class: "t-overline pal-cat", id: "scan-found", tabindex: "-1"}, found.length ? `Found (${found.length})` : "Nothing found")];
-    if (!found.length) out.push(h("p", {class: "dev-none"}, `Looked for ${Object.keys(r).map((k) => names[k] || k).join(", ")}. Check that the device is on and connected, then look again.`));
-    for (const [sec, it] of found) {
-      const {suggested, ...rest} = it;
-      const label = rest.name || rest.description && rest.description !== "n/a" && rest.description || rest.port || rest.address || rest.model || names[sec] || sec;
-      const sub = [names[sec] || sec, rest.port && rest.port !== label ? rest.port : null, rest.type || null].filter(Boolean).join(" · ");
-      out.push(h("div", {class: "scan-row"},
-        h("span", {class: "tile tint-hw"}, icon(suggested ? (DEVICE_ICON[suggested.type] || "device") : "chip")),
+    // plug and play (edge/hotplug.py): everything connected now, each identified with what it probably is
+    const r = await api("/api/hardware/now");
+    if (typeof hwRefreshStatus === "function") await hwRefreshStatus(true);
+    const found = (r.connected || []).filter((it) => !(it.kind === "monitor" && +it.index === 0 && (r.connected || []).filter((x) => x.kind === "monitor").length === 1));
+    const out = [h("div", {class: "t-overline pal-cat", id: "scan-found", tabindex: "-1"}, found.length ? `Connected now (${found.length})` : "Nothing found")];
+    if (!found.length) out.push(h("p", {class: "dev-none"}, "Looked at the USB and serial ports, LSL streams, Tobii and Gazepoint eye trackers, gamepads, microphones and monitors. Check that the device is on and connected: EDGE notices it within a few seconds."));
+    for (const it of found) {
+      const ident = it.identified || {};
+      const label = `${ident.certainty === "probably" ? "Probably " : ""}${ident.name || it.name || it.port || names[it.kind] || it.kind}`;
+      const sub = [names[it.kind] || it.kind, it.where || it.port || null, it.vid ? `USB ${it.vid}:${it.pid || ""}` : null,
+        it.kind === "lsl" && it.channel_count ? `${it.channel_count} ch${it.srate ? ` · ${it.srate} Hz` : ""}` : null,
+        ident.certainty === "ask" ? (ident.question || "What is it?") : null].filter(Boolean).join(" · ");
+      const raw = Object.entries(it).filter(([k, v]) => !["identified", "label", "where", "id", "channels", "units"].includes(k) && v !== "" && v != null);
+      out.push(h("div", {class: "scan-row", "data-hw-item": it.id},
+        h("span", {class: "tile tint-hw"}, icon((typeof HW_ICON !== "undefined" && HW_ICON[it.kind]) || "chip")),
         h("span", {class: "dev-txt"}, h("span", {class: "dev-name"}, label), h("span", {class: "dev-type"}, sub),
-          !isSimple() ? h("span", {class: "mono scan-raw"}, Object.entries(rest).map(([k, v]) => `${k}=${v}`).join("  ")) : null),
-        suggested ? btn("Add", () => addDevice(suggested.type, suggested.options || {}), {ic: "plus"}) : null));
+          !isSimple() ? h("span", {class: "mono scan-raw"}, raw.map(([k, v]) => `${k}=${v}`).join("  ")) : null),
+        h("span", {class: "hw-acts-row"}, ...(typeof hwRowActions === "function" ? hwRowActions(it) : []))));
     }
     el.replaceChildren(...out);
+    if (quiet) return;
     // say what was found, and take focus there (the first Add button, else the heading): the More menu that started it is gone
     const firstName = (row) => row.querySelector(".dev-name")?.textContent || "";
     const rows = [...el.querySelectorAll(".scan-row")];

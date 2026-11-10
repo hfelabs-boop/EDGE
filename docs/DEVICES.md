@@ -268,6 +268,93 @@ Any expression can also read the **latest sample of any device**: `$devices.eeg.
 `$devices.eye.x`, `$devices.eeg.age` (seconds since that sample), e.g. a rule
 `when: "$devices.physio.eda > 5"`.
 
+### Plug and play
+
+Plug a device in while the builder is open and EDGE notices it within a few seconds, says what it
+probably is, and offers to add it to the open experiment, already set up:
+
+> **Cedrus RB-840 response pad connected** · probably · COM3 · USB 0403:6001
+> As: response box on COM3 · ☑ Also add a “Button box” item to the screen “trial”
+> **[Add to this experiment]** [Add as…] [Identify] [Not now]
+
+**Add** creates the device with the right options (port, protocol, baud rate, the buttons named
+`b1` … `b8`, the LSL stream's name, the eye tracker's address) and, where it makes sense, the matching
+item on the screen where the participant answers: a Button box item wired to the new box, a Voice
+recording item for a new microphone, a Gamepad item for a gamepad. A second monitor becomes the
+participant's monitor. It is one step: Undo takes all of it back. When a device could be several
+things (an Arduino, a plain USB-serial adapter), the notice asks what it is and lists the likely
+choices ("Add as trigger output", "Add as button box …").
+
+* **Devices tab**: every device of the experiment shows *Connected* or *Not connected* (matched by its
+  port, the LSL stream's name or type, the eye tracker, the microphone's name). A device plugged into
+  another USB socket often gets another port name (COM3 becomes COM5): the card says *On COM5 now* and
+  a notice offers **Use COM5**.
+* **Find connected devices** lists everything connected now, each with what it is and Add / Add as….
+* **Unplugging** a device the experiment uses shows a warning straight away ("Cedrus RB-840 response pad
+  was unplugged. The experiment uses it as “buttons”."). During a session, the Run page and the
+  experimenter window show it too ("“buttons” is unplugged … until then its responses or triggers are
+  lost"); the session keeps running, and a response box on a serial port reconnects by itself when it is plugged back in.
+* **Preferences → Devices → Add recognised devices automatically** (off by default) adds a recognised
+  device without asking (with an Undo); devices that need a choice still ask.
+* **Command line**: `edge scan` lists what is connected with its identification and the device entry to
+  paste into the experiment; `edge scan --watch` keeps going and prints a line for each device plugged
+  in or out (`--json` for one JSON event per line). The assistant's `scan_hardware` tool returns the
+  same identifications and the suggested additions.
+
+**What is recognised** (the list is in `edge/hardware_db.py`):
+
+| Looked for | How | Recognised as |
+|---|---|---|
+| USB / serial ports | the operating system's list (pyserial) | Cedrus RB-x40, Lumina, StimTracker, c-pod (by the name the device reports: *probably*); Brain Products TriggerBox, Black Box ToolKit, Current Designs fORP, MindWare, a g.tec Unicorn on Bluetooth (by name); Arduino (USB vendor 2341, 2A03), Teensy (16C0:0483), Raspberry Pi Pico (2E8A), Adafruit (239A), adapters with an FTDI (0403), CH340 (1A86), Prolific (067B) or Silicon Labs (10C4) chip: EDGE asks what is behind them |
+| LSL streams | listening for their announcements (pylsl) | BioSemi, Brain Products (BrainAmp, LiveAmp, actiCHamp), g.tec (Unicorn, g.USBamp, g.Nautilus), OpenBCI, Muse, Tobii, Gazepoint, Pupil Labs; any EEG, gaze or marker stream by its type; channel names, units and rate come from the stream |
+| Eye trackers | Tobii Pro SDK (tobii_research); Gazepoint Control on this computer (127.0.0.1:4242) | `tobii` with its address, `gazepoint` |
+| Gamepads and joysticks | pyglet | a Gamepad item |
+| Microphones | sounddevice | a Voice recording item, or a voice key |
+| Monitors | pyglet | a second monitor: the participant's monitor setting |
+| LabJack U3 / U6 | USB vendor 0CD5 (Linux) or LabJackPython | `labjack` |
+| Parallel ports | `/dev/parport*` (Linux), the inpout driver (Windows) | `parallel_port` or `parallel_inputs` |
+
+"Probably" means only the device's name matched (many lab boxes use the same USB chip). Every backend
+is optional: without pylsl, sounddevice or the Tobii SDK, that kind of device simply isn't looked for.
+`pip install edge-experiments[serial]`, `[lsl]`, `[audio]`, `[tobii]` and `[labjack]` add them (gamepads and monitors need `[display]`).
+
+**Your lab's devices**: put your own entries in `hardware.yaml` in EDGE's settings folder
+(`~/.config/edge` on Linux, `~/Library/Application Support/EDGE` on macOS, `%APPDATA%\EDGE` on Windows).
+They are checked before the built-in list, and the file is re-read when it changes:
+
+```yaml
+- id: lab3_box
+  name: Lab 3 button box
+  kind: serial                       # serial, lsl, gamepad, audio, monitor, tobii, gazepoint, labjack, parallel
+  match: {vid: "2341", pid: "8036"}  # also: serial_number, text (description / manufacturer), lsl_name, lsl_type
+  certainty: sure
+  offers:
+    - label: Button box
+      device: {type: serial_inputs, id: buttons,
+               options: {port: "{port}", protocol: byte, inputs: {1: left, 2: right}}}
+      item: {type: device_response, label: Button box, props: {inputs: [left, right]}}
+    - label: Trigger output
+      device: {type: ttl_serial, id: triggers, options: {port: "{port}"}}
+```
+
+`{port}`, `{serial_number}`, `{name}` and named groups of a `text` or `lsl_name` pattern are filled in.
+To find your device's identifiers, run `edge scan` with it plugged in (`vid`, `pid`, `serial number`,
+`description`).
+
+**Safety and privacy**: detection is passive. Serial ports are only listed, never opened: EDGE does not
+send anything to a device it hasn't been told to use. The one exception is the **Identify** button on a
+device recognised as Cedrus, which you click yourself: it asks the box for its name and model with
+Cedrus's read-only XID query commands (`_c1`, `_d1`, `_d2`, `_d3`). LSL streams are found the way
+LabRecorder finds them; Gazepoint is looked for on this computer only; nothing else on the network is
+scanned. The builder looks every 2 seconds while its page is open and stops a minute after the page is
+closed. Nothing is sent anywhere.
+
+*Testing aid*: with the environment variable `EDGE_FAKE_HARDWARE=hw.json` the real detection is
+replaced by the items listed in that file (a JSON list such as
+`[{"kind": "serial", "port": "COM3", "vid": "0403", "pid": "6001", "serial_number": "FT1", "description": "RB-840"}]`),
+re-read every poll, so editing the file "plugs" and "unplugs" devices. The tests and the browser checks
+use it.
+
 ### Testing devices and timing
 
 * **Test this device** in the device panel (or `edge test-device study.yaml [id]`): connects with a

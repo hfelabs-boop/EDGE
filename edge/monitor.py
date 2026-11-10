@@ -14,6 +14,9 @@ prints one JSON line per event to stdout, prefixed with ``@edge-monitor``:
 * ``quality`` (every ``EDGE_QUALITY_INTERVAL`` seconds, default 2): signal quality of every device stream
   (EEG channels: RMS, 50/60 Hz line noise, flat, saturated, impedance when the amplifier reports it; eye
   trackers: valid samples, tracking losses), see :mod:`edge.quality`;
+* ``hardware`` (when it changes, checked every ``EDGE_HARDWARE_INTERVAL`` seconds, default 3, 0 = off): whether
+  each USB/serial, parallel-port, LabJack and Gazepoint device of the experiment is still plugged in
+  (``devices``: {id: {state: connected | moved | missing, detail}}, ``missing``: [ids]); see :mod:`edge.hotplug`;
 * ``paused`` / ``resumed``: the experimenter paused the session between two screens;
 * ``mirror`` (opt-in, ``EDGE_MIRROR=<seconds>``): a small PNG of the participant's screen, base64.
 
@@ -52,7 +55,8 @@ def from_env(session) -> "Monitor | None":
             return default
     return Monitor(session, stop_file=os.environ.get("EDGE_STOP_FILE") or None,
                    pause_file=os.environ.get("EDGE_PAUSE_FILE") or None,
-                   quality_interval=num("EDGE_QUALITY_INTERVAL", 2.0), mirror_interval=num("EDGE_MIRROR", 0.0))
+                   quality_interval=num("EDGE_QUALITY_INTERVAL", 2.0), mirror_interval=num("EDGE_MIRROR", 0.0),
+                   hardware_interval=num("EDGE_HARDWARE_INTERVAL", 3.0))
 
 
 def parse(line: str) -> dict[str, Any] | None:
@@ -67,8 +71,11 @@ def parse(line: str) -> dict[str, Any] | None:
 
 class Monitor:
     def __init__(self, session, stop_file: str | None = None, emit=_emit, interval: float = 1.0,
-                 pause_file: str | None = None, quality_interval: float = 2.0, mirror_interval: float = 0.0):
+                 pause_file: str | None = None, quality_interval: float = 2.0, mirror_interval: float = 0.0,
+                 hardware_interval: float = 0.0):
         from .measures import declared
+        self.hardware_interval = hardware_interval
+        self._hw_last: dict[str, Any] | None = None
         self.session = session
         self.stop_file = stop_file
         self.emit = emit
@@ -110,6 +117,46 @@ class Monitor:
                                for did, dev in s.devices.items()}})
         self._thread = threading.Thread(target=self._health_loop, daemon=True)
         self._thread.start()
+        if self.hardware_interval > 0 and self.hardware_specs():
+            threading.Thread(target=self._hardware_loop, daemon=True, name="edge-monitor-hardware").start()
+
+    # -------------------------------------------------------------- is the hardware still plugged in?
+    HW_KINDS = ("serial", "parallel", "labjack", "gazepoint")
+
+    def hardware_specs(self) -> list[dict[str, Any]]:
+        """The experiment's devices that run for real in this session (not simulated) and can be seen being unplugged."""
+        out = []
+        for spec in getattr(self.session.exp, "devices", None) or []:
+            dev = self.session.devices.get(spec.id)
+            if dev is None or dev.type_name != spec.type:
+                continue        # simulated in this session
+            out.append({"id": spec.id, "type": spec.type, "options": dict(spec.options or {})})
+        return out
+
+    def hardware_check(self) -> dict[str, Any] | None:
+        """One look; the event to send when something changed (None otherwise)."""
+        from .hotplug import presence, snapshot
+        specs = self.hardware_specs()
+        items = list(snapshot(self.HW_KINDS).values())
+        st = {k: {"state": v["state"], "detail": v.get("detail", "")} for k, v in presence(specs, items).items()
+              if v["state"] != "unknown"}
+        if not st or st == self._hw_last:
+            return None
+        first = self._hw_last is None
+        self._hw_last = st
+        missing = [k for k, v in st.items() if v["state"] == "missing"]
+        if first and not missing:
+            return None
+        return {"type": "hardware", "elapsed": round(time.monotonic() - self.t0, 1), "devices": st, "missing": missing}
+
+    def _hardware_loop(self) -> None:
+        while not self._stop.wait(self.hardware_interval):
+            try:
+                ev = self.hardware_check()
+                if ev:
+                    self.emit(ev)
+            except Exception:
+                pass
 
     def end(self, summary: dict[str, Any]) -> None:
         self._stop.set()

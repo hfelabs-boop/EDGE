@@ -1074,10 +1074,23 @@ def create_server(root: str | Path = ".") -> FastMCP:
 
     @tool
     def scan_hardware(timeout: float = 2.0) -> dict[str, Any]:
-        """Find connected hardware: LSL streams, serial ports (trigger boxes), Tobii trackers, Gazepoint Control.
-        Each result includes a suggested device configuration for add_device."""
+        """Find connected hardware and say what it is: USB/serial devices (response boxes, trigger boxes, Arduino …),
+        LSL streams (EEG, gaze, markers), Tobii trackers, Gazepoint Control, gamepads, microphones, monitors, LabJack,
+        parallel ports. Each item has `what` (the identification), `certainty` (sure / probably / ask: then ask the
+        user which of the offers it is), `offers` (ways to add it: a `device` for add_device, an `item` response
+        component to add with add_component, or a `setting` for update_settings) and `suggested` (the first device).
+        `suggested_additions` lists, per item, the first offer ready to apply."""
         from .scan import scan_all
-        return scan_all(timeout=timeout)
+        found = scan_all(timeout=timeout)
+        adds = []
+        for section, items in found.items():
+            for it in items:
+                offers = it.get("offers") or []
+                if offers:
+                    adds.append({"what": it.get("what"), "certainty": it.get("certainty"), "identity": it.get("identity"),
+                                 "add": offers[0] if it.get("certainty") != "ask" else None,
+                                 "choices": [o["label"] for o in offers]})
+        return {**found, "suggested_additions": adds}
 
     @tool
     def open_builder(port: int = 8765) -> dict[str, Any]:

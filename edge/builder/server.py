@@ -751,7 +751,7 @@ class BuilderApp:
                         mon["last_response"] = ev
                     mon["history"] = (mon["history"] + [{k: ev.get(k) for k in ("n", "routine", "values", "factors", "responses",
                                                                                 "elapsed")}])[-300:]
-                elif ev.get("type") in ("start", "devices", "end", "quality", "screen"):
+                elif ev.get("type") in ("start", "devices", "end", "quality", "screen", "hardware"):
                     mon[ev["type"]] = ev
                 elif ev.get("type") in ("paused", "resumed"):
                     mon["paused"] = ev if ev["type"] == "paused" else None
@@ -864,6 +864,9 @@ POST_FIELDS: dict[str, dict[str, tuple[type | tuple[type, ...], bool]]] = {
     "/api/assistant/applied": {"id": (str, True)},
     "/api/assistant/detach": {"exp": (str, True), "file": (str, True)},
     "/api/assistant/reviewed": {"exp": (str, True), "hashes": (list, True)},
+    # plug and play (edge/builder/hardware_api.py)
+    "/api/hardware/status": {"devices": (list, True)},
+    "/api/hardware/identify": {"id": (str, True)},
 }
 QUERY_FIELDS = {"/api/experiment": ["path"], "/api/analysis_info": ["path"], "/api/restore": ["path"], "/api/upload": ["path"],
                 "/api/assistant/attach": ["exp", "name"], "/api/assistant/preview": ["exp", "file"],
@@ -1030,6 +1033,9 @@ def make_handler(app: BuilderApp):
                 if u.path.startswith("/api/edit/"):      # editing helpers (edit_api.py): trial-list files
                     from . import edit_api
                     return self._json(*edit_api.handle(app, "GET", u.path, q, None))
+                if u.path.startswith("/api/hardware/"):  # plug and play (hardware_api.py)
+                    from . import hardware_api
+                    return self._json(*hardware_api.handle(app, "GET", u.path, q, None))
                 if u.path == "/api/experiment":
                     return self._json(app.load(q["path"]))
                 if u.path == "/api/support_bundle":
@@ -1192,6 +1198,11 @@ def make_handler(app: BuilderApp):
                         return self._json({"error": "send the request as JSON (Content-Type: application/json)"}, 415)
                     from . import edit_api
                     return self._json(*edit_api.handle(app, "POST", u.path, q, self._body_cached()))
+                if u.path.startswith("/api/hardware/"):  # plug and play: the experiment's devices' status, Identify
+                    if "application/json" not in (self.headers.get("Content-Type") or "").lower():
+                        return self._json({"error": "send the request as JSON (Content-Type: application/json)"}, 415)
+                    from . import hardware_api
+                    return self._json(*hardware_api.handle(app, "POST", u.path, q, self._body_cached()))
                 if u.path == "/api/upload":
                     dest = app.safe_path(q["path"])
                     if dest.suffix.lower() in BLOCKED_UPLOAD_SUFFIXES or dest.name.startswith("."):

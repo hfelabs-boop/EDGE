@@ -439,7 +439,9 @@ function monitorView() {
       const factors = Object.entries(shown.factors || {}).map(([k, v]) => `${(mById[k] || {}).label || k} ${v}`);
       left.append(h("p", {class: "t-small mon-last"}, h("span", {class: "t-2"}, "Last response: "), [...bits, ...factors].join(" · ") || "none", h("span", {class: "t-caption"}, ` (screen “${shown.routine}”)`)));
     }
-    // devices
+    // devices (plug and play: a device that was unplugged during the session, edge/hotplug.py via the monitor)
+    for (const [did, hw] of Object.entries(M.hardware?.devices || {}))
+      if (!end && hw.state === "missing") warns.unshift(`“${did}” is unplugged (${hw.detail}). Plug it back in: until then its responses or triggers are lost.`);
     const devs = M.devices?.devices || {};
     const right = h("section", {class: "mon-sec", "aria-label": "Devices"}, h("h3", {class: "t-small mon-h"}, "Devices"));
     if (Object.keys(start.devices || {}).length) {
