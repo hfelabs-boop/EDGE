@@ -14,7 +14,8 @@ builds those automatically:
 * ``data_dictionary`` describes every column: meaning, group, type, units, levels/range,
                       missing count, derived from the experiment definition itself
 * writers             CSV, TSV, JSON, JSONL, Excel (.xlsx, no dependencies), Parquet (pyarrow/pandas),
-                      MATLAB (.mat, scipy) and a BIDS-style folder (beh, events, physio)
+                      MATLAB (.mat, scipy), SPSS (.sav) and R (.rds, .RData) (no dependencies, see
+                      edge/spss.py and edge/rds.py) and a BIDS-style folder (beh, events, physio)
 * ``export_many``     merges many sessions/participants into one dataset with a sessions table
 """
 
@@ -39,8 +40,9 @@ from xml.sax.saxutils import escape
 
 import yaml
 
-FORMATS = ("csv", "tsv", "xlsx", "json", "jsonl", "parquet", "mat", "bids")
-FORMAT_ALIASES = {"excel": "xlsx", "xls": "xlsx", "matlab": "mat", "text": "tsv", "txt": "tsv"}
+FORMATS = ("csv", "tsv", "xlsx", "json", "jsonl", "parquet", "mat", "bids", "sav", "rds", "rdata")
+FORMAT_ALIASES = {"excel": "xlsx", "xls": "xlsx", "matlab": "mat", "text": "tsv", "txt": "tsv",
+                  "spss": "sav", "r": "rds", "rda": "rdata"}
 LAYOUTS = ("wide", "long")
 
 
@@ -873,7 +875,9 @@ def write_mat(path: Path, cols: list[str], rows: list[dict[str, Any]]) -> Path:
     return path
 
 
-def write_table(path: Path, fmt: str, cols: list[str], rows: list[dict[str, Any]]) -> Path:
+def write_table(path: Path, fmt: str, cols: list[str], rows: list[dict[str, Any]],
+                dictionary: list[dict[str, Any]] | None = None) -> Path:
+    """``dictionary`` (data_dictionary entries): variable labels and value labels for sav, rds and rdata."""
     if fmt == "csv":
         return write_delimited(path, cols, rows, ",")
     if fmt == "tsv":
@@ -888,6 +892,15 @@ def write_table(path: Path, fmt: str, cols: list[str], rows: list[dict[str, Any]
         return write_mat(path, cols, rows)
     if fmt == "xlsx":
         return write_xlsx(path, {"trials": (cols, rows)})
+    if fmt == "sav":
+        from .spss import write_sav
+        return write_sav(path, cols, rows, dictionary)
+    if fmt == "rds":
+        from .rds import write_rds
+        return write_rds(path, cols, rows, dictionary)
+    if fmt == "rdata":
+        from .rds import write_rdata
+        return write_rdata(path, {"trials": (cols, rows)}, {"trials": dictionary or []})
     check_formats([fmt], need_packages=False)
     raise ExportError(f"{fmt} is written as a folder, not a table")
 
@@ -1104,6 +1117,14 @@ def _write_all(tables, formats, out: Path, stem: str, sessions: list[SessionTabl
                 notes += [n for n in bids_notes if n not in notes]
         elif fmt == "xlsx":
             files.append(write_xlsx(out / f"{stem}.xlsx", tables))
+        elif fmt == "rdata":     # one file, every table a data.frame: load("x.RData") -> trials, summary, ...
+            from .rds import write_rdata
+            files.append(write_rdata(out / f"{stem}.RData", tables, {"trials": tables["dictionary"][1]}))
+        elif fmt in ("sav", "rds"):    # labelled trials (labels from the dictionary) + the summary
+            files.append(write_table(out / f"{stem}_trials.{fmt}", fmt, *tables["trials"], tables["dictionary"][1]))
+            files.append(write_table(out / f"{stem}_summary.{fmt}", fmt, *tables["summary"]))
+            if "measures" in tables:
+                files.append(write_table(out / f"{stem}_measures.{fmt}", fmt, *tables["measures"]))
         else:
             ext = {"jsonl": "jsonl", "mat": "mat"}.get(fmt, fmt)
             files.append(write_table(out / f"{stem}_trials.{ext}", fmt, *tables["trials"]))
@@ -1247,6 +1268,7 @@ audio/               spoken answers (microphone items): one WAV per screen, <rou
                      audio/manifest.csv lists them with their trial, speech onset and an empty transcript column
 session.json        settings, devices, clock models, marker codebook, timing summary, seed
 experiment.yaml      the exact experiment that produced this data
+analysis/            results of `edge analyze` (fixations, AOI reports, EEG/pupil epochs), when you run it
 Times are in seconds. Re-export any time with:  edge export <this folder> --formats xlsx,bids
 """
 

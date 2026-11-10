@@ -147,6 +147,7 @@ While a session runs from the builder, the run window shows each measure live (s
 edge export data/001_1_stroop_2027-02-01_101500 --formats xlsx,bids     # one session
 edge export data/ --formats csv,xlsx                                      # every participant, merged
 edge export data/ --layout long --formats parquet                         # one row per routine
+edge export data/ --formats sav,rds,rdata                                 # SPSS and R, labelled
 ```
 
 | format | what you get |
@@ -156,10 +157,36 @@ edge export data/ --layout long --formats parquet                         # one 
 | `json`, `jsonl` | records |
 | `parquet` | needs `pyarrow` |
 | `mat` | MATLAB struct `trials` (needs `scipy`) |
+| `sav` | SPSS: `*_trials.sav` and `*_summary.sav` with variable labels, value labels and measurement levels (see below); no extra packages needed |
+| `rds` | R: `*_trials.rds` and `*_summary.rds`, each one data frame (`readRDS("..._trials.rds")`) with factors and column labels; no extra packages needed |
+| `rdata` | R: one `.RData` with every table as a data frame (`load("....RData")` gives `trials`, `summary`, `dictionary`, `events`, `session`, and `sessions`/`measures` when there are any) |
 | `bids` | BIDS-style tree: `sub-XX/ses-YY/beh/*_beh.tsv` + JSON sidecar (column descriptions), `*_events.tsv` (onsets from session start, labels, TTL codes), `*_physio.tsv.gz` + JSON (sampling rate, start time, columns and their units) per device stream, `dataset_description.json`, `participants.tsv`. Every time in it counts from the session start; two folders with the same participant and session become `run-1`, `run-2` |
 
 `parquet` and `mat` need a package that is not installed by default: the export says so, with the
-command that installs it for your EDGE, before writing anything.
+command that installs it for your EDGE, before writing anything. (`spss` is another name for `sav`,
+`r` for `rds` and `rda` for `rdata`.)
+
+### SPSS and R files
+
+The `.sav`, `.rds` and `.RData` files are written by EDGE itself (no SPSS, R or Python package needed)
+and carry the data dictionary with them:
+
+* **Names.** Column names become names that are valid in both SPSS and R: letters, digits, `.` and
+  `_`, starting with a letter, at most 64 characters, unique ignoring case (`resp.rt` stays `resp.rt`;
+  `with space` becomes `with_space`, `2nd` becomes `v_2nd`, a reserved word such as `if` or `ALL`
+  gets `_v`). Every variable's **label** is its description from the data dictionary; when the name had
+  to change, the label starts with the original column name.
+* **Types.** Numbers stay numbers (whole numbers are integers in R), true/false becomes logical in R and
+  0/1 with the labels false/true in SPSS, lists (mouse paths, slider histories) become JSON text, long
+  texts (typed answers) are kept whole (SPSS long strings).
+* **Conditions and responses as categories.** A text column of the trial list or a response with at most
+  20 different values (`kind` = standard/deviant, `resp.keys`) becomes an R **factor** and, in SPSS,
+  numeric codes 1, 2, … with **value labels** (codes in alphabetical order of the values; numbers sort
+  numerically). Correctness (`.corr`) gets 0 = incorrect, 1 = correct; gaze flags (`.entered`,
+  `.completed`) 0 = no, 1 = yes. Measurement levels: categories are nominal, numbers scale.
+* **Missing values.** Empty cells are system-missing in SPSS and `NA` in R.
+* **R extras.** Each column has a `label` attribute (RStudio's viewer and the labelled/haven packages show
+  it), and the data frame has `variable.labels` (the convention of `foreign::read.spss`).
 
 Merging many sessions (`edge export data/`) adds a `session_folder` column (also to the summary and
 measures, so two sessions of one participant stay apart), unions columns across participants in a
@@ -178,6 +205,150 @@ To export automatically after every session, list the formats in the experiment:
 
 The same exports are in the builder (**Data** tab), and are available to Claude over MCP
 (`export_data`, `analyze_session`).
+
+## Analyses: epochs, pupil, fixations and areas of interest
+
+EDGE can analyse what devices recorded in a session: cut EEG or pupil epochs around markers and average
+them per condition, find fixations and saccades in gaze data, and report how each area of interest
+(AOI) was looked at in every trial. Everything uses EDGE's master clock, so markers, trials and samples
+line up without a trigger channel. Results go to the session's `analysis/` folder.
+
+* **Builder:** **Data** tab, choose a session, then **Eye & signals** (shown when the session has a gaze,
+  EEG or other recording). Run an analysis, read the first rows and download the files.
+* **Command line:** `edge analyze epochs|fixations|aoi SESSION_FOLDER …` (below).
+* **Python:** `from edge.analysis import epochs, fixations, aoi_report`.
+
+No extra packages are needed. The ERP / pupil plot (`.png`) needs matplotlib
+(`pip install edge-experiments[plots]`); without it the plot is skipped with a note, and the CSV has the
+same numbers.
+
+### Epochs and averages (EEG, pupil)
+
+```bash
+edge analyze epochs data/001_1_auditory_oddball_… --stream eeg --markers standard,deviant \
+    --tmin -0.2 --tmax 0.8 --baseline -0.2 0
+edge analyze epochs data/001_1_freeview_… --stream pupil --markers "view_*" --tmin -0.5 --tmax 3 \
+    --baseline -0.5 0 --by left_color
+```
+
+```python
+from edge.analysis import epochs
+res = epochs("data/001_1_auditory_oddball_…", stream="eeg", markers=["standard", "deviant"],
+             tmin=-0.2, tmax=0.8, baseline=(-0.2, 0), reject=100)
+res["erp"]["deviant"]["Pz"]          # the average, one value per time in res["times"]
+```
+
+1. **Markers:** labels as they appear in `events.jsonl` (the item's marker), separated by commas;
+   wildcards work (`view_*`) and a number matches the TTL code.
+2. **Signal:** `--stream` is a device id (`eeg`), `device.stream`, a kind, or `pupil` for the eye
+   tracker's pupil size. All channels except trigger/status channels are used, or name them with
+   `--channels Fz,Cz,Pz`.
+3. **Pupil:** blinks and short losses (up to 1 s) are filled by linear interpolation first, from 50 ms
+   before to 100 ms after each gap (the eyelid distorts the samples next to a blink). Both eyes are
+   averaged.
+4. **Cutting:** every epoch is sampled on the same grid from `tmin` to `tmax` at the stream's rate,
+   interpolating between the two nearest samples, so the times are exact whatever the amplifier's
+   sampling phase.
+5. **Baseline:** the mean of the baseline window is subtracted, per epoch and channel
+   (`--no-baseline` to skip).
+6. **Rejection:** an epoch is left out of the averages when its peak-to-peak range on any channel is above
+   `--reject` (default 150 for channels in µV, none for other units; `--reject none` keeps all), or when
+   more than half of a channel's samples are missing.
+7. **Conditions:** the marker's label, or trial-list columns with `--by` (`--by kind,isi`; `marker` in
+   `--by` adds the label). Each epoch belongs to the trial during which its marker happened.
+
+| file | what it holds |
+|---|---|
+| `epochs_<stream>.npz` | for Python/MNE (`numpy.load`): `data` (epochs × channels × times), `times`, `channels`, `event_times`, `markers`, `conditions`, `trials`, `rejected`, `srate`, `erp` (conditions × channels × times), `erp_conditions` |
+| `epochs_<stream>.csv` | long format, one row per epoch, channel and time: `epoch`, `trial`, `condition`, `marker`, `rejected` (1 = left out of the averages), `channel`, `time` (s from the marker), `value` (baseline-corrected, in the channel's units) |
+| `epochs_<stream>_info.csv` | one row per epoch: `epoch`, `trial` (row of trials_wide.csv), `routine` (screen), `marker`, `code` (TTL), `event_time` (master clock, s), `condition`, the trial-list columns, `rejected`, `reason` (e.g. "peak-to-peak 183.2 uV on Fz"), and for pupil `interpolated` (share of the epoch filled in) |
+| `erp_<stream>.csv` | the averages: `condition`, `channel`, `time` (s), `mean`, `sd`, `se` (SD/√n), `n` (epochs that had a value), `units` |
+| `erp_<stream>.png` | one panel per channel, one line per condition (needs matplotlib) |
+
+### Fixations and saccades
+
+```bash
+edge analyze fixations data/001_1_freeview_…                   # I-VT, 30 deg/s
+edge analyze fixations data/001_1_freeview_… --method idt --dispersion 1.0 --min-duration 0.1
+```
+
+Gaze from any EDGE eye tracker (simulated, mouse, Tobii, Gazepoint: their screen fractions are converted)
+is turned into visual angle with the experiment's screen geometry: `settings.window.monitor`
+(`width_cm`: the width of the visible screen, `distance_cm`: eyes to screen) and the window size in
+pixels. Set them to your lab's values, or the degrees (and so the thresholds) are off.
+
+* **I-VT** (velocity threshold, the default; like Tobii's I-VT filter): gaps up to 75 ms are filled, a
+  3-sample moving median reduces noise, the speed of the eyes is measured over a 20 ms window, samples
+  slower than 30 deg/s belong to fixations; fixations less than 75 ms and 0.5 deg apart are merged, and
+  fixations shorter than 60 ms are dropped. Change them with `--velocity`, `--min-duration`,
+  `--noise-filter` (1 = off).
+* **I-DT** (dispersion threshold, Salvucci & Goldberg 2000): a fixation is at least 100 ms of gaze whose
+  spread (x range + y range) stays within 1 deg. Change them with `--dispersion` and `--min-duration`.
+* **Saccades** are the movements between two fixations when the eyes were tracked all the way (no blink
+  in between) and took at most 150 ms.
+* The simulated eye tracker is noisier than real ones (8 px); I-VT works on it, I-DT needs a larger
+  `--dispersion` (about 2).
+
+`fixations.csv` (one row per fixation):
+
+| column | meaning |
+|---|---|
+| `fixation` | number, in time order |
+| `trial`, `routine` | the row of trials_wide.csv and the screen it started on (empty between screens) |
+| `start`, `end`, `duration` | master-clock times and length (s) |
+| `onset` | start from the beginning of its screen (s) |
+| `x`, `y` | mean position in pixels from the screen centre, +y up (EDGE's own units) |
+| `x_deg`, `y_deg` | the same as visual angle from the screen centre (deg) |
+| `dispersion_deg` | x range + y range of its samples (deg) |
+| `n_samples` | samples in it |
+| `pupil` | mean pupil diameter (mm), when the tracker records it |
+| `aoi` | the AOI(s) it landed in, separated by `;` (filled by `edge analyze aoi`) |
+
+`saccades.csv`: `saccade`, `trial`, `routine`, `start`, `end`, `duration`, `onset`, `x_start`, `y_start`,
+`x_end`, `y_end` (px), `amplitude_deg` (distance travelled, deg) and `peak_velocity_deg_s`.
+
+### Areas of interest (AOI)
+
+```bash
+edge analyze aoi data/001_1_freeview_…
+edge analyze aoi data/001_1_freeview_… --aoi face:rect:0,100,300,200 --aoi centre:circle:0,0,80:view --by condition
+```
+
+AOIs come from the experiment: every **gaze area** item (`gaze_roi`; one that follows a picture or shape
+uses that item's area), every **picture** and every **shape** (rectangles and triangles by their box,
+circles, ellipses and polygons by their outline), on the screens where they were shown, with positions and
+sizes worked out per trial (also `$` expressions such as `$[side * 250, 0]`), in the experiment's units.
+A picture shown at its own size has no known size here: give it one, or define the area yourself.
+
+Your own AOIs: `--aoi name:rect:x,y,width,height` or `--aoi name:circle:x,y,radius` (pixels from the
+screen centre, +y up), with `:screen` at the end to limit it to one screen; or a YAML/JSON file
+(`--aoi-file aois.yaml`) with a list of `{name, shape: rect|circle|ellipse|polygon, pos: [x, y],
+size: [w, h] | radius | vertices, units, routine}`; in Python `aoi_report(session, aois=[...])`. They are
+used on the screens that have AOIs of their own, or on every screen of a trial list.
+`--no-experiment-aois` uses only yours.
+
+`aoi_trials.csv` (one row per trial, screen and AOI):
+
+| column | meaning |
+|---|---|
+| `trial`, `routine`, `aoi` | the trial (row of trials_wide.csv), the screen and the AOI |
+| `aoi_source` | where the AOI came from: `gaze_roi`, `shape`, `image`, `gaze_roi -> left_img`, `user` |
+| *condition columns* | the trial-list columns of `--by` (default: the trial list's factors) |
+| `fixated` | 1 if any fixation landed in the AOI after it appeared |
+| `first_fixation_latency` | s from the AOI's onset (the item appearing) to the start of the first fixation in it (0 if the eyes were already there) |
+| `first_fixation_duration` | s, of that first fixation |
+| `dwell_time` | total s of fixations in the AOI (from its onset to the end of the screen) |
+| `fixation_count` | fixations in the AOI |
+| `visits` | separate visits (runs of consecutive fixations in the AOI) |
+| `revisits` | visits after the first (`visits - 1`) |
+| `proportion` | `dwell_time` / all fixation time on the screen since the AOI appeared |
+| `trial_fixation_time` | that total fixation time (s) |
+| `screen_duration` | s from the AOI's onset to the end of the screen |
+
+`aoi_summary.csv` (one row per screen, AOI and condition cell): `n_trials`, `n_fixated`, `p_fixated`
+(share of trials with a fixation in the AOI) and the means of `first_fixation_latency` and
+`first_fixation_duration` (over the trials where the AOI was fixated), `dwell_time`, `fixation_count`,
+`visits`, `revisits` and `proportion` (over all trials).
 
 ## Scripting EDGE from Python
 

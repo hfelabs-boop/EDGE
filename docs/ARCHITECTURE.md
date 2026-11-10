@@ -19,7 +19,12 @@ edge/
   storage.py        atomic save/load, backups & undo, conflict detection, migrations, .edgez bundles
   editing.py        validated document-editing API (used by the MCP server and scripts)
   measures.py       what an experiment measures (outcomes, factors, checks) and everything it records
-  export.py         wide trial tables, summaries, data dictionary, xlsx/csv/json/parquet/mat/BIDS, merging
+  export.py         wide trial tables, summaries, data dictionary, xlsx/csv/json/parquet/mat/sav/rds/BIDS, merging
+  statfiles.py      typed, labelled variables (names valid in SPSS and R, factors, value labels) for spss.py and rds.py
+  spss.py           SPSS .sav writer (pure Python: long names, long strings, variable and value labels, missing values)
+  rds.py            R .rds / .RData writer (pure Python serialization: data.frame, factors, NA, column labels)
+  analysis/         recorded-signal analyses (`edge analyze`): epochs/ERPs and pupil (epochs.py), fixations,
+                    saccades and AOI reports (gaze.py), session/stream access (common.py), builder API, CLI
   mcp_server.py     MCP server: natural-language control from Claude / VS Code
   report.py         post-session timing / integrity / sync analysis
   align.py          external-recording alignment via TTL code sequences

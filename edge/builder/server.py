@@ -460,6 +460,16 @@ class BuilderApp:
         out["report"] = analyze_session(root)
         return out
 
+    def analysis(self, rel: str, kind: str | None = None, options: dict[str, Any] | None = None) -> dict[str, Any]:
+        """What a session can be analysed for (kind None), or run one analysis (edge/analysis/builder_api.py)."""
+        from ..analysis import AnalysisError, analysis_info
+        from ..analysis.builder_api import run
+        root = self.safe_path(rel)
+        try:
+            return analysis_info(str(root)) if kind is None else run(root, self.root, kind, options or {})
+        except AnalysisError as e:
+            raise BadRequest(str(e)) from None
+
     def export(self, rel: str, formats: list[str], layout: str, include_dry_runs: bool) -> dict[str, Any]:
         from ..export import export_many, export_session
         p = self.safe_path(rel)
@@ -773,6 +783,7 @@ class BuilderApp:
 POST_FIELDS: dict[str, dict[str, tuple[type | tuple[type, ...], bool]]] = {
     "/api/import": {"source": (str, True), "out": (str, False)},
     "/api/export": {"path": (str, True), "formats": (list, False), "layout": (str, False)},
+    "/api/analyze": {"path": (str, True), "kind": (str, True), "options": (dict, False)},
     "/api/recording": {"experiment": (dict, True), "path": (str, False)},
     "/api/validate": {"experiment": (dict, True), "path": (str, False)},
     "/api/dryrun": {"experiment": (dict, True), "path": (str, False), "participant": (dict, False),
@@ -807,7 +818,7 @@ POST_FIELDS: dict[str, dict[str, tuple[type | tuple[type, ...], bool]]] = {
     "/api/assistant/detach": {"exp": (str, True), "file": (str, True)},
     "/api/assistant/reviewed": {"exp": (str, True), "hashes": (list, True)},
 }
-QUERY_FIELDS = {"/api/experiment": ["path"], "/api/restore": ["path"], "/api/upload": ["path"],
+QUERY_FIELDS = {"/api/experiment": ["path"], "/api/analysis_info": ["path"], "/api/restore": ["path"], "/api/upload": ["path"],
                 "/api/assistant/attach": ["exp", "name"], "/api/assistant/preview": ["exp", "file"],
                 "/api/assistant/job": ["id"], "/api/assistant/conversation": ["id"],
                 "/api/assistant/models": ["provider"], "/api/assistant/code": ["exp"]}
@@ -973,6 +984,9 @@ def make_handler(app: BuilderApp):
                     return self._json({"sessions": app.sessions(q.get("dry_runs") == "1")})
                 if u.path == "/api/session_tables":
                     return self._json(app.session_tables(q["path"]))
+                if u.path == "/api/analysis_info":
+                    check_fields(u.path, None, q)
+                    return self._json(app.analysis(q["path"]))
                 if u.path.startswith(PAGE_PREFIX):     # same as /api/file, by path: relative links resolve in the folder
                     key, _, rel = u.path[len(PAGE_PREFIX):].partition("/")
                     if key != app.page_key:
@@ -1100,6 +1114,8 @@ def make_handler(app: BuilderApp):
                 if u.path == "/api/restore":
                     rid = storage.restore_backup(app.safe_path(q["path"]), q.get("id") or None)
                     return self._json({"restored": rid})
+                if u.path == "/api/analyze":
+                    return self._json(app.analysis(body["path"], body["kind"], body.get("options") or {}))
                 if u.path == "/api/export":
                     return self._json(app.export(body["path"], body.get("formats") or ["csv", "xlsx"],
                                                  body.get("layout", "wide"), bool(body.get("dry_runs"))))

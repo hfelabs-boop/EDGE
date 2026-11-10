@@ -1441,7 +1441,7 @@ function inspOverview(el) {
 /* ================================================================== the Experiment settings dialog (W13) */
 const SETTINGS_SECTIONS = [["general", "General"], ["screen", "Screen"], ["participant", "Participant info"], ["data", "Data files"],
   ["markers", "Markers", true], ["variables", "Variables", true], ["repro", "Reproducibility"]];
-const EXPORT_FORMATS = [["csv", "CSV"], ["xlsx", "Excel (.xlsx)"], ["tsv", "TSV"], ["json", "JSON"], ["jsonl", "JSON lines"], ["parquet", "Parquet"], ["mat", "MATLAB (.mat)"], ["bids", "BIDS"]];
+const EXPORT_FORMATS = [["csv", "CSV"], ["xlsx", "Excel (.xlsx)"], ["tsv", "TSV"], ["json", "JSON"], ["jsonl", "JSON lines"], ["parquet", "Parquet"], ["mat", "MATLAB (.mat)"], ["sav", "SPSS (.sav)"], ["rds", "R (.rds)"], ["rdata", "R (.RData)"], ["bids", "BIDS"]];
 const SETTINGS_UI = {section: "general", body: null, json: new Set()};
 function openSettings(section = "general") {
   if (!S.exp || S.noDoc) return toast("Open or create an experiment first.");
