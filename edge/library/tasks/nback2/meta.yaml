@@ -1,0 +1,35 @@
+id: nback2
+title: 2-back task
+category: Working memory
+summary: Press a key whenever the current letter matches the one shown two letters earlier.
+description: >-
+  Measures updating and monitoring of working memory. Single consonants appear for 0.5 s, one every 3 s; the participant
+  presses SPACE for a letter that is the same as the one two positions back and withholds otherwise. A 22-letter
+  practice block with feedback is followed by three blocks of 32 letters (2 lead-in letters plus 30 scored, a third
+  of them matches; non-matches never repeat the letter one or two back). Main outcomes are the hit rate and the
+  false alarm rate (from which d' can be computed) and the RT on hits.
+measures:
+- hit rate (response on 2-back matches)
+- correct rejections (1 - false alarm rate)
+- overall accuracy
+- RT on hits
+duration_min: 7
+input: keyboard
+languages:
+- en
+references:
+- >-
+  Kirchner, W. K. (1958). Age differences in short-term retention of rapidly changing information. Journal of Experimental
+  Psychology, 55, 352–358.
+- >-
+  Jaeggi, S. M., Buschkuehl, M., Perrig, W. J., & Meier, B. (2010). The concurrent validity of the N-back task as
+  a working memory measure. Memory, 18, 394–412.
+- >-
+  Kane, M. J., Conway, A. R. A., Miura, T. K., & Colflesh, G. J. H. (2007). Working memory, attention control, and
+  the n-back task: A question of construct validity. Journal of Experimental Psychology: Learning, Memory, and Cognition,
+  33(3), 615–622.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/nback2.html
+notes: >-
+  The letter lists are fixed (made by tools/library/make_nback2.py, re-runnable with a different seed); change soa
+  / letter_on under variables for other timings.

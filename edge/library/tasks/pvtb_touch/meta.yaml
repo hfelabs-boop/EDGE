@@ -1,0 +1,36 @@
+id: pvtb_touch
+title: Brief psychomotor vigilance test (PVT-B, touch)
+category: Vigilance
+summary: Tap the screen as fast as possible whenever a millisecond counter starts, for 3 minutes.
+description: >-
+  The PVT-B for phones and touchscreens (portrait layout). At random intervals of 1-4 s a red millisecond counter
+  starts; the participant taps anywhere on the screen to stop it and sees the reaction time for 1 s. Taps faster
+  than 100 ms count as false starts, reactions slower than 355 ms as lapses. Three practice trials, then 3 minutes.
+  Outcomes as in the keyboard version: mean and median RT, response speed, lapses, false starts.
+measures:
+- mean RT
+- median RT
+- mean response speed (1/RT)
+- lapses (> 355 ms)
+- false starts (< 100 ms)
+- lapses + false starts per trial
+duration_min: 4
+input: touch
+languages:
+- en
+variant_of: pvtb
+references:
+- >-
+  Basner, M., Mollicone, D., & Dinges, D. F. (2011). Validity and sensitivity of a brief psychomotor vigilance test
+  (PVT-B) to total and partial sleep deprivation. Acta Astronautica, 69, 949–959.
+- >-
+  Dinges, D. F., & Powell, J. W. (1985). Microcomputer analyses of performance on a portable, simple visual RT task
+  during sustained operations. Behavior Research Methods, Instruments, & Computers, 17(6), 652–655.
+- >-
+  Lim, J., & Dinges, D. F. (2008). Sleep deprivation and vigilant attention. Annals of the New York Academy of Sciences,
+  1129, 305–322.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/pvtb_touch.html
+notes: >-
+  Taps while waiting for the counter are not registered (only anticipations under 100 ms count as false starts),
+  unlike the keyboard version. Touchscreen latency adds to every RT; compare RTs within one device.

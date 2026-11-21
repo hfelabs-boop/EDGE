@@ -1,0 +1,31 @@
+id: mackworth
+title: Mackworth clock test
+category: Vigilance
+summary: Watch a clock pointer that moves one step per second and press a key when it jumps two steps.
+description: >-
+  A classic sustained-attention (vigilance) task. A pointer moves around a clock face with 60 marks, one step every
+  second; at rare, irregular moments it jumps two steps, and the participant presses SPACE (a press during that
+  second or the next counts as a detection). A 40-second practice with feedback, then 5 minutes with 15 double jumps
+  (3 per minute). Outcomes: the proportion of double jumps detected, false alarms and detection time, each per minute
+  to show the vigilance decrement.
+measures:
+- hit rate (double jumps detected)
+- false alarms
+- detection time
+- per minute of the test
+duration_min: 7
+input: keyboard
+languages:
+- en
+references:
+- >-
+  Mackworth, N. H. (1948). The breakdown of vigilance during prolonged visual search. Quarterly Journal of Experimental
+  Psychology, 1, 6–21.
+- >-
+  Lichstein, K. L., Riedel, B. W., & Richman, S. L. (2000). The Mackworth Clock Test: A computerized version. The
+  Journal of Psychology, 134(2), 153–161.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/mackworth.html
+notes: >-
+  Short version of a test that originally lasted 2 hours; ticks.csv (made by tools/library/make_mackworth.py) holds
+  one row per step, so a longer test is a longer list. The clock face is drawn by that script.

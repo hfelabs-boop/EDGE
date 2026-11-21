@@ -1,0 +1,32 @@
+id: retrocue
+title: Retro-cue working memory task
+category: Working memory
+summary: Remember four colours; a cue during the delay points to the one that will be tested (or to all).
+description: >-
+  Measures how attention can select and protect an item already held in working memory. Four coloured squares are
+  shown for 0.5 s; 1 s later a cue frames either the one square that will be tested (retro-cue, always valid) or
+  all four (neutral). 0.9 s after the cue one square reappears at a studied place and the participant reports whether
+  its colour is the same (F) or different (J). 8 practice trials with feedback, then 48 trials: cue type x same/different,
+  12 each, random order. The retro-cue benefit is the accuracy (and RT) difference between retro-cue and neutral
+  trials.
+measures:
+- accuracy by cue type (retro-cue benefit)
+- RT of correct answers by cue type
+duration_min: 6
+input: keyboard
+languages:
+- en
+references:
+- >-
+  Griffin, I. C., & Nobre, A. C. (2003). Orienting attention to locations in internal representations. Journal of
+  Cognitive Neuroscience, 15(8), 1176–1194.
+- >-
+  Souza, A. S., & Oberauer, K. (2016). In search of the focus of attention in working memory: 13 years of the retro-cue
+  effect. Attention, Perception, & Psychophysics, 78, 1839–1860.
+- >-
+  Loaiza, V. M., Cheung, H. W., & Goldenhaus-Manning, D. T. (2024). What you don't know can't hurt you: Retro-cues
+  benefit working memory regardless of prior knowledge in long-term memory. Psychonomic Bulletin & Review, 31(3).
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/retrocue.html
+notes: >-
+  Colours are drawn at random on each trial (four different ones of eight); timings are under variables.

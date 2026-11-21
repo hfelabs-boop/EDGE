@@ -1,0 +1,30 @@
+id: mackworth2
+title: Mackworth clock test (lamp ring, 4 periods)
+category: Vigilance
+summary: A light moves around a ring of 60 lamps; press a key whenever it skips a lamp, for 8 minutes.
+description: >-
+  A richer version of the Mackworth clock: one lamp of a ring of 60 is lit and the light moves on one lamp per second;
+  when it skips a lamp the participant presses SPACE (during that second or the next). Alertness is rated on a 1-9
+  scale before and after. After a 40-second practice with feedback, the test runs for 8 minutes without breaks in
+  four 2-minute periods with 6 skips each. Outcomes per period (the vigilance decrement): hit rate, false alarms,
+  detection time; plus the change in rated alertness.
+measures:
+- hit rate per period
+- false alarms per period
+- detection time per period
+- alertness before and after (1-9)
+duration_min: 10
+input: keyboard+mouse
+languages:
+- en
+variant_of: mackworth
+references:
+- >-
+  Mackworth, N. H. (1948). The breakdown of vigilance during prolonged visual search. Quarterly Journal of Experimental
+  Psychology, 1, 6–21.
+- >-
+  Lichstein, K. L., Riedel, B. W., & Richman, S. L. (2000). The Mackworth Clock Test: A computerized version. The
+  Journal of Psychology, 134(2), 153–161.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/mackworth2.html
+notes: The lamp ring picture and the step lists are made by tools/library/make_mackworth.py.

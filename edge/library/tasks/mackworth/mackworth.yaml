@@ -1,0 +1,129 @@
+name: mackworth
+description: >
+  Mackworth clock test (vigilance). A pointer moves around a clock face one step every second. Now and
+  then it jumps TWO steps at once; the participant presses SPACE whenever that happens (a press during the
+  double jump's second or the next one counts as a detection). A 40-second practice with feedback, then
+  5 minutes with 15 double jumps at irregular times. Outcomes: hit rate, false alarms and detection time,
+  per minute to show the drop in vigilance over time.
+
+settings:
+  window: {size: [1280, 720], background: "#3a3a3a", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  step_time: 1.0          # seconds per pointer step
+  pointer: 0              # current position, 0-59
+  pending: 0              # 1 while a double jump has not been reported yet
+  hits: 0
+  misses: 0
+  false_alarms: 0
+
+measures:
+  - {id: hit_rate, label: Double jumps detected, role: outcome, column: score.detected, loop: ticks,
+     trials: "$after == 1", summary: proportion}
+  - {id: false_alarms, label: False alarms (presses without a double jump), role: outcome, column: score.fa_now,
+     loop: ticks, summary: sum}
+  - {id: hit_rt, label: Detection time (from the double jump), role: outcome, column: score.hit_rt, loop: ticks,
+     trials: "$score.hit_now == 1", summary: median, units: s, expect: [0.15, 2.0]}
+  - {id: minute, label: Minute of the test, role: factor, column: period}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 27
+        wrap_width: 1100
+        text: |
+          Clock watching
+
+          A red pointer moves around a clock, one small step every second.
+          Once in a while it jumps TWO steps at once.
+          Whenever you see such a double jump, press SPACE straight away.
+          Do not press for normal single steps.
+
+          The double jumps are rare, so keep watching the whole time.
+          First a 40-second practice with feedback. Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 28
+        wrap_width: 1100
+        text: |
+          Now the test: 5 minutes without feedback.
+          Press SPACE whenever the pointer jumps two steps at once.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, when: end, set: {pointer: 0, pending: 0, hits: 0, misses: 0, false_alarms: 0}}
+
+  tick:
+    duration: $step_time
+    components:
+      - {id: move, type: variable, set: {pointer: "$(pointer + 1 + double) % 60"}}
+      - {id: dial, type: image, image: stimuli/dial.png, size: [560, 560]}
+      # the pointer: a bar from the centre towards the current mark (0 = top, clockwise)
+      - {id: hand, type: shape, shape: rect, size: [8, 190], fill: "#c0392b",
+         pos: "$[97 * math.sin(math.radians(pointer * 6)), 97 * math.cos(math.radians(pointer * 6))]",
+         ori: "$pointer * 6", marker: "$'double_jump' if double else ''"}
+      - {id: hub, type: shape, shape: circle, radius: 12, fill: "#333333"}
+      - id: resp
+        type: keyboard
+        keys: [space]
+        duration: $step_time
+        correct: "$'space' if double == 1 or (after == 1 and pending == 1) else 'none'"
+      - id: score
+        type: variable
+        when: end
+        set:
+          resp_now: "$int(resp.keys is not None)"
+          hit_now: "$int(resp.keys is not None and (double == 1 or (after == 1 and pending == 1)))"
+          fa_now: "$int(resp.keys is not None and not (double == 1 or (after == 1 and pending == 1)))"
+          miss_now: "$int(after == 1 and pending == 1 and resp.keys is None)"
+          detected: "$(0 if (pending == 1 and resp.keys is None) else 1) if after == 1 else None"
+          hit_rt: "$(resp.rt + (step_time if after == 1 and double == 0 else 0)) if resp.keys is not None and (double == 1 or (after == 1 and pending == 1)) else None"
+          pending: "$int(double == 1 and resp.keys is None)"
+      - id: tally
+        type: variable
+        when: end
+        set:
+          hits: "$hits + score.hit_now"
+          misses: "$misses + score.miss_now"
+          false_alarms: "$false_alarms + score.fa_now"
+
+  practice_feedback:
+    duration: 1.0
+    components:
+      - id: fb
+        type: text
+        height: 32
+        pos: [0, 320]
+        text: "$'Well spotted!' if score.hit_now else ('You missed a double jump' if score.miss_now else 'That was a single step')"
+        color: "$'#5fd38d' if score.hit_now else '#ff8a7a'"
+      - {id: dial, type: image, image: stimuli/dial.png, size: [560, 560]}
+      - {id: hand, type: shape, shape: rect, size: [8, 190], fill: "#c0392b",
+         pos: "$[97 * math.sin(math.radians(pointer * 6)), 97 * math.cos(math.radians(pointer * 6))]", ori: "$pointer * 6"}
+      - {id: hub, type: shape, shape: circle, radius: 12, fill: "#333333"}
+
+  thanks:
+    duration: 4
+    components:
+      - {id: bye, type: text, height: 32, text: "$f'Thank you, the test is finished. You spotted {hits} of {hits + misses} double jumps.'"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: sequential
+    children:
+      - tick
+      - {routine: practice_feedback, if: "$score.hit_now == 1 or score.miss_now == 1 or score.fa_now == 1"}
+  - main_intro
+  - loop: ticks
+    conditions: ticks.csv
+    order: sequential
+    children: [tick]
+  - thanks

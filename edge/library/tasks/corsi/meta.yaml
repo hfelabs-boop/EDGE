@@ -1,0 +1,31 @@
+id: corsi
+title: Corsi block-tapping task
+category: Working memory
+summary: >-
+  Tap nine scattered blocks in the order in which they lit up; sequences grow until two of one length fail.
+description: >-
+  Measures visuo-spatial short-term memory span. Nine blue blocks are scattered over the screen; a sequence of them
+  lights up, one block per second, and the participant then taps or clicks the same blocks in the same order. After
+  two practice sequences, the test starts at 2 blocks with two sequences per length; the length grows by one while
+  at least one sequence is right and the test stops when both are wrong (or after 9 blocks). Outcomes as in Kessels
+  et al. (2000): the Corsi span and the total score (span x number of correct sequences).
+measures:
+- Corsi span
+- number of sequences correct
+- total score (span x correct sequences)
+- proportion of taps on the right block
+- time per tap
+duration_min: 6
+input: mouse
+languages:
+- en
+references:
+- >-
+  Corsi, P. M. (1972). Human memory and the medial temporal region of the brain (Doctoral dissertation). McGill
+  University, Montreal.
+- >-
+  Kessels, R. P. C., van Zandvoort, M. J. E., Postma, A., Kappelle, L. J., & de Haan, E. H. F. (2000). The Corsi
+  Block-Tapping Task: Standardization and normative data. Applied Neuropsychology, 7(4), 252–258.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/corsi.html
+notes: Mouse or touch. The block layout is fixed (variables.blocks and the block items).

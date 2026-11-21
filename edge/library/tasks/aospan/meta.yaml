@@ -1,0 +1,36 @@
+id: aospan
+title: Automated operation span (AOSPAN)
+category: Working memory
+summary: Judge simple arithmetic while remembering letters, then recall the letters of each set in order.
+description: >-
+  A complex span measure of working memory capacity. Each element of a set is an arithmetic problem (solve, click,
+  then judge a proposed answer TRUE or FALSE) followed by a letter shown for 0.8 s; after 3-7 elements the letters
+  are recalled in order on a 4 x 3 letter grid. Practice: letters alone, arithmetic alone (each person's solving
+  time limit = mean + 2.5 SD of practice times), and both together. The test has set sizes 3-7, two sets each in
+  random order (50 letters). Outcomes: absolute span (letters of perfectly recalled sets), partial span (letters
+  in the right place) and arithmetic errors (speed and accuracy); the arithmetic should stay at or above 85% correct.
+measures:
+- absolute OSPAN score
+- partial OSPAN score
+- letters recalled in the right place
+- arithmetic accuracy (85% criterion)
+- speed errors
+- accuracy errors
+- time to solve a problem
+duration_min: 12
+input: mouse
+languages:
+- en
+references:
+- >-
+  Turner, M. L., & Engle, R. W. (1989). Is working memory capacity task dependent? Journal of Memory and Language,
+  28, 127–154.
+- >-
+  Unsworth, N., Heitz, R. P., Schrock, J. C., & Engle, R. W. (2005). An automated version of the operation span
+  task. Behavior Research Methods, 37, 498–505.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/aospan.html
+notes: >-
+  Shortened from the original 3 sets per size to 2 (set 'repeats: 3' on the 'sets' trial list for the full 75-letter
+  version, about 20 minutes). Recall is one click per position, with a 'don't remember' key instead of the original
+  blank/clear buttons.

@@ -1,0 +1,347 @@
+name: aospan
+description: >
+  Automated operation span (AOSPAN). The participant alternates between checking simple arithmetic and
+  remembering letters: solve a problem such as (3 x 4) - 2, click, decide whether the proposed answer is
+  TRUE or FALSE, then see a letter for 0.8 s. After 3 to 7 such pairs, the letters are recalled in order
+  by clicking them on a 4 x 3 letter grid. Practice: letters alone, arithmetic alone (which sets each
+  person's time limit for solving: mean + 2.5 SD of their practice times), then both together.
+  Main part: set sizes 3-7, two sets each, in random order (50 letters; the original uses three sets
+  each: set 'repeats: 3' in the trial list 'sets'). Scores: absolute span (letters of perfectly recalled
+  sets), partial span (letters in the right place), and arithmetic errors (speed and accuracy); the
+  arithmetic should stay at 85% correct or better.
+
+settings:
+  window: {size: [1280, 720], background: "#1b1f27", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  pool: [F, H, J, K, L, "N", P, Q, R, S, T, "Y"]   # the 12 letters (Unsworth et al., 2005)
+  math_limit: 10.0        # time allowed to solve a problem; replaced after the arithmetic practice
+  practice_limit: 15.0    # time allowed during the arithmetic practice
+  letter_time: 0.8
+  math_rts: []
+  set_size: 2
+  set_letters: []
+  i_item: 0               # position in the current set
+  i_rec: 0                # position being recalled
+  n_ok: 0                 # letters recalled in the right place in this set
+  chosen: ""
+  set_math_errors: 0
+  a: 2
+  b: 3
+  c: 1
+  op: "+"
+  answer: 7
+  proposed: 7
+  is_true: 1
+  abs_total: 0            # absolute OSPAN score
+  partial_total: 0        # partial-credit OSPAN score
+  math_done: 0
+  math_correct: 0
+  speed_errors: 0
+  accuracy_errors: 0
+  phase: letters
+
+measures:
+  - {id: ospan_absolute, label: Absolute OSPAN score (letters of perfect sets), role: outcome,
+     column: setscore.abs_total, trials: "$phase == 'main'", summary: last, expect: [0, 50]}
+  - {id: ospan_partial, label: Partial OSPAN score (letters in the right place), role: outcome,
+     column: setscore.partial_total, trials: "$phase == 'main'", summary: last, expect: [0, 50]}
+  - {id: letter_accuracy, label: Letters recalled in the right place, role: outcome, column: pick.corr,
+     trials: "$phase == 'main'", summary: proportion}
+  - {id: math_accuracy, label: Arithmetic correct (in time and right), role: check, column: mathscore.math_ok,
+     trials: "$phase == 'main'", summary: proportion, expect: [0.85, 1]}
+  - {id: speed_errors, label: Arithmetic not solved in time, role: check, column: mathscore.speed_err,
+     trials: "$phase == 'main'", summary: sum}
+  - {id: accuracy_errors, label: Arithmetic answered wrongly, role: check, column: mathscore.acc_err,
+     trials: "$phase == 'main'", summary: sum}
+  - {id: solve_time, label: Time to solve a problem, role: outcome, column: solve.rt, trials: "$phase == 'main'",
+     summary: median, units: s, expect: [0.3, 15]}
+  - {id: set_size, label: Set size, role: factor, column: set_size}
+
+routines:
+  intro_letters:
+    components:
+      - {id: ph, type: variable, set: {phase: letters}}
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1100
+        text: |
+          Memory and arithmetic
+
+          This task has two parts that you will first practise separately.
+
+          Practice 1, letters: letters appear one at a time. Remember them in order.
+          Then click the letters in the order they appeared on a grid of 12 letters.
+          If you forget one, click "don't remember" for that place and carry on.
+
+          Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  intro_math:
+    components:
+      - {id: ph, type: variable, set: {phase: math}}
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1100
+        text: |
+          Practice 2, arithmetic: you will see a problem such as  (2 x 3) + 1 = ?
+          Work out the answer as quickly as you can and click the mouse as soon as you have it.
+          A number then appears: click TRUE if it is the answer, FALSE if it is not.
+
+          These practice problems also measure how long you need: in the real task,
+          you will have a little more than your usual time.
+
+          Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  set_limit:
+    duration: 0.5
+    components:
+      - id: limit
+        type: variable
+        set:
+          math_limit: "$round(max(2.0, statistics.mean(math_rts) + 2.5 * statistics.stdev(math_rts)), 2) if len(math_rts) >= 2 else math_limit"
+      - {id: blank, type: wait}
+
+  intro_both:
+    components:
+      - {id: ph, type: variable, set: {phase: both}}
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1100
+        text: |
+          Practice 3, both together: solve a problem, judge the answer, then a letter appears.
+          This repeats a few times; then recall all the letters of the set in order.
+
+          Solve the problems quickly and correctly (aim for at least 85% correct)
+          while remembering as many letters as you can.
+
+          Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  intro_main:
+    components:
+      - id: ph
+        type: variable
+        set: {phase: main, abs_total: 0, partial_total: 0, math_done: 0, math_correct: 0, speed_errors: 0, accuracy_errors: 0}
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1100
+        text: |
+          Now the real task: 10 sets of 3 to 7 letters, in random order.
+          Keep the arithmetic at 85% correct or better and remember as many letters as you can.
+
+          Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  new_set:
+    duration: 0.8
+    components:
+      - id: make
+        type: variable
+        set: {set_letters: "$random.sample(pool, int(set_size))", i_item: 0, i_rec: 0, n_ok: 0, chosen: "", set_math_errors: 0}
+      - {id: ready, type: text, text: "+", height: 44, color: "#9aa4b8"}
+
+  math:
+    duration: "$practice_limit if phase == 'math' else math_limit"
+    components:
+      - id: problem
+        type: variable
+        set:
+          a: "$random.randint(1, 9)"
+          b: "$random.randint(2, 9)"
+          op: "$random.choice(['+', '-'])"
+          c: "$random.randint(1, 9)"
+          answer: "$a * b + c if op == '+' else a * b - c"
+          is_true: "$int(random.random() < 0.5)"
+          proposed: "$answer if is_true else (answer + random.choice([-3, -2, -1, 1, 2, 3]) if answer > 3 else answer + random.choice([1, 2, 3]))"
+      - {id: sum_text, type: text, text: "$f'({a} x {b}) {op} {c} = ?'", height: 56, marker: problem}
+      - {id: hint, type: text, text: "When you know the answer, click the mouse.", pos: [0, -260], height: 22, color: "#9aa4b8"}
+      - {id: solve, type: mouse, end_routine: true}
+      - id: rts
+        type: variable
+        when: end
+        set: {math_rts: "$math_rts + [solve.rt] if phase == 'math' and solve.rt is not None else math_rts"}
+
+  verify:
+    components:
+      - {id: number, type: text, text: $str(proposed), height: 64, pos: [0, 140]}
+      - {id: b_true, type: shape, shape: rect, size: [240, 100], pos: [-180, -100], fill: "#2e6b45", line_color: "#7fc89b"}
+      - {id: b_false, type: shape, shape: rect, size: [240, 100], pos: [180, -100], fill: "#7a2f2f", line_color: "#d48a8a"}
+      - {id: l_true, type: text, text: "TRUE", pos: [-180, -100], height: 36}
+      - {id: l_false, type: text, text: "FALSE", pos: [180, -100], height: 36}
+      - {id: verify, type: mouse, clickable: [b_true, b_false], correct: "$'b_true' if is_true else 'b_false'", end_routine: true}
+
+  math_feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 34
+        text: "$'Too slow' if solve.rt is None else ('Correct' if verify.corr else 'Incorrect')"
+        color: "$'#5fd38d' if solve.rt is not None and verify.corr else '#ff7a7a'"
+
+  letter:
+    duration: "$letter_time + 0.2"
+    components:
+      # arithmetic of this pair: solved in time and judged right? (verify only counts when it was shown)
+      - id: mathscore
+        type: variable
+        set:
+          speed_err: "$int(phase in ('both', 'main') and solve.rt is None)"
+          acc_err: "$int(phase in ('both', 'main') and solve.rt is not None and verify.corr != 1)"
+          math_ok: "$int(solve.rt is not None and verify.corr == 1) if phase in ('both', 'main') else None"
+      - id: tally
+        type: variable
+        set:
+          math_done: "$math_done + (1 if phase in ('both', 'main') else 0)"
+          math_correct: "$math_correct + (mathscore.math_ok or 0)"
+          speed_errors: "$speed_errors + mathscore.speed_err"
+          accuracy_errors: "$accuracy_errors + mathscore.acc_err"
+          set_math_errors: "$set_math_errors + mathscore.speed_err + mathscore.acc_err"
+      - {id: let, type: text, text: "$set_letters[i_item]", height: 96, duration: $letter_time, marker: letter}
+      - {id: step, type: variable, when: end, set: {i_item: "$i_item + 1"}}
+
+  recall:
+    components:
+      - {id: prompt, type: text, pos: [0, 320], height: 24, color: "#c9d1e0",
+         text: "$f'Click the letters in the order they appeared  ({i_rec + 1} of {int(set_size)})'"}
+      - {id: so_far, type: text, pos: [0, 250], height: 48, text: "$chosen + ' _'"}
+      - {id: k_F, type: shape, shape: rect, size: [130, 80], pos: [-240, 130], fill: "#34495e", line_color: "#7f9bb5"}
+      - {id: k_H, type: shape, shape: rect, size: [130, 80], pos: [-80, 130], fill: "#34495e", line_color: "#7f9bb5"}
+      - {id: k_J, type: shape, shape: rect, size: [130, 80], pos: [80, 130], fill: "#34495e", line_color: "#7f9bb5"}
+      - {id: k_K, type: shape, shape: rect, size: [130, 80], pos: [240, 130], fill: "#34495e", line_color: "#7f9bb5"}
+      - {id: k_L, type: shape, shape: rect, size: [130, 80], pos: [-240, 30], fill: "#34495e", line_color: "#7f9bb5"}
+      - {id: k_N, type: shape, shape: rect, size: [130, 80], pos: [-80, 30], fill: "#34495e", line_color: "#7f9bb5"}
+      - {id: k_P, type: shape, shape: rect, size: [130, 80], pos: [80, 30], fill: "#34495e", line_color: "#7f9bb5"}
+      - {id: k_Q, type: shape, shape: rect, size: [130, 80], pos: [240, 30], fill: "#34495e", line_color: "#7f9bb5"}
+      - {id: k_R, type: shape, shape: rect, size: [130, 80], pos: [-240, -70], fill: "#34495e", line_color: "#7f9bb5"}
+      - {id: k_S, type: shape, shape: rect, size: [130, 80], pos: [-80, -70], fill: "#34495e", line_color: "#7f9bb5"}
+      - {id: k_T, type: shape, shape: rect, size: [130, 80], pos: [80, -70], fill: "#34495e", line_color: "#7f9bb5"}
+      - {id: k_Y, type: shape, shape: rect, size: [130, 80], pos: [240, -70], fill: "#34495e", line_color: "#7f9bb5"}
+      - {id: k_blank, type: shape, shape: rect, size: [290, 70], pos: [0, -190], fill: "#4a4f5c", line_color: "#9aa4b8"}
+      - {id: t_F, type: text, text: "F", pos: [-240, 130], height: 40}
+      - {id: t_H, type: text, text: "H", pos: [-80, 130], height: 40}
+      - {id: t_J, type: text, text: "J", pos: [80, 130], height: 40}
+      - {id: t_K, type: text, text: "K", pos: [240, 130], height: 40}
+      - {id: t_L, type: text, text: "L", pos: [-240, 30], height: 40}
+      - {id: t_N, type: text, text: "N", pos: [-80, 30], height: 40}
+      - {id: t_P, type: text, text: "P", pos: [80, 30], height: 40}
+      - {id: t_Q, type: text, text: "Q", pos: [240, 30], height: 40}
+      - {id: t_R, type: text, text: "R", pos: [-240, -70], height: 40}
+      - {id: t_S, type: text, text: "S", pos: [-80, -70], height: 40}
+      - {id: t_T, type: text, text: "T", pos: [80, -70], height: 40}
+      - {id: t_Y, type: text, text: "Y", pos: [240, -70], height: 40}
+      - {id: t_blank, type: text, text: "don't remember", pos: [0, -190], height: 26}
+      # one click per place in the set; the right answer for this place is set_letters[i_rec]
+      - id: pick
+        type: mouse
+        clickable: [k_F, k_H, k_J, k_K, k_L, k_N, k_P, k_Q, k_R, k_S, k_T, k_Y, k_blank]
+        correct: "$'k_' + set_letters[i_rec]"
+        end_routine: true
+      - id: note
+        type: variable
+        when: end
+        set:
+          chosen: "$(chosen + ' ' + ('_' if pick.clicked == 'k_blank' else pick.clicked[2:])).strip() if pick.clicked else chosen"
+          n_ok: "$n_ok + (pick.corr or 0)"
+          i_rec: "$i_rec + 1"
+
+  set_feedback:
+    duration: 2.5
+    components:
+      - id: setscore
+        type: variable
+        set:
+          set_ok: "$int(n_ok == int(set_size))"
+          abs_total: "$abs_total + (int(set_size) if n_ok == int(set_size) and phase == 'main' else 0)"
+          partial_total: "$partial_total + (n_ok if phase == 'main' else 0)"
+      - id: fb
+        type: text
+        height: 30
+        wrap_width: 1000
+        text: "$f'You recalled {n_ok} of {int(set_size)} letters correctly.' + ('' if phase == 'letters' else f'\\n\\nArithmetic errors in this set: {set_math_errors}')"
+      - id: pct
+        type: text
+        pos: [0, -150]
+        height: 40
+        text: "$'' if phase == 'letters' or math_done == 0 else f'{round(100 * math_correct / math_done)}%'"
+        color: "$'#ff6b6b' if math_done and math_correct / math_done < 0.85 else '#5fd38d'"
+      - id: pct_note
+        type: text
+        pos: [0, -210]
+        height: 20
+        color: "#9aa4b8"
+        text: "$'' if phase == 'letters' or math_done == 0 else 'arithmetic correct so far (keep it at 85% or more)'"
+
+  thanks:
+    duration: 4
+    components:
+      - {id: bye, type: text, height: 30, wrap_width: 1000,
+         text: "$f'Thank you, the task is finished.\\nLetters of perfectly recalled sets: {abs_total}'"}
+
+flow:
+  # 1. letters only
+  - intro_letters
+  - loop: letter_practice
+    conditions: [{set_size: 2}, {set_size: 3}]
+    order: sequential
+    children:
+      - new_set
+      - loop: letter_items
+        repeats: $set_size
+        children: [letter]
+      - loop: letter_recall
+        repeats: $set_size
+        children: [recall]
+      - set_feedback
+  # 2. arithmetic only (sets the time limit)
+  - intro_math
+  - loop: math_practice
+    repeats: 8
+    children:
+      - math
+      - {routine: verify, if: "$solve.rt is not None"}
+      - math_feedback
+  - set_limit
+  # 3. both together
+  - intro_both
+  - loop: both_practice
+    conditions: [{set_size: 2}, {set_size: 2}]
+    order: sequential
+    children:
+      - new_set
+      - loop: both_items
+        repeats: $set_size
+        children:
+          - math
+          - {routine: verify, if: "$solve.rt is not None"}
+          - letter
+      - loop: both_recall
+        repeats: $set_size
+        children: [recall]
+      - set_feedback
+  # 4. the test: set sizes 3-7, twice each, random order
+  - intro_main
+  - loop: sets
+    conditions: [{set_size: 3}, {set_size: 4}, {set_size: 5}, {set_size: 6}, {set_size: 7}]
+    order: fullrandom
+    repeats: 2
+    children:
+      - new_set
+      - loop: items
+        repeats: $set_size
+        children:
+          - math
+          - {routine: verify, if: "$solve.rt is not None"}
+          - letter
+      - loop: letters_recall
+        repeats: $set_size
+        children: [recall]
+      - set_feedback
+  - thanks

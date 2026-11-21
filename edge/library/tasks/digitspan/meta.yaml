@@ -1,0 +1,31 @@
+id: digitspan
+title: Digit span (forward)
+category: Working memory
+summary: Recall ever longer lists of digits in the order they were shown, until two lists of one length fail.
+description: >-
+  Measures verbal short-term memory span. Digits 1-9 (no repeats within a list) are shown one per second; afterwards
+  the participant enters them in the same order on an on-screen keypad (mouse or touch). After two practice lists
+  of 2 digits, the test starts at 3 digits with two lists per length; the length grows by one while at least one
+  of the two lists is right and the test stops when both lists of a length are wrong (or after 9 digits). The span
+  is the longest list recalled correctly; the number of correct lists and the digits in the right place are recorded
+  too.
+measures:
+- digit span (longest list recalled correctly)
+- number of lists correct
+- proportion of digits in the right place
+- time per keypad tap
+duration_min: 5
+input: mouse
+languages:
+- en
+references:
+- >-
+  Wechsler, D. (2008). Wechsler Adult Intelligence Scale – Fourth Edition (WAIS-IV). San Antonio, TX: Pearson.
+- >-
+  Jones, G., & Macken, B. (2015). Questioning short-term memory and its measurement: Why digit span measures long-term
+  associative learning. Cognition, 144, 1–13.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/digitspan.html
+notes: >-
+  A workflow (state machine) implements the two-tries-per-length stopping rule; change start_span, max_span and
+  the timing under variables.

@@ -1,0 +1,32 @@
+id: backward_corsi
+title: Backward Corsi block-tapping task
+category: Working memory
+summary: Tap the blocks that lit up in reverse order; sequences grow until two of one length fail.
+description: >-
+  The backward version of the Corsi task, which adds the need to reorder the sequence (spatial working memory).
+  Blocks light up one per second; the participant taps them in reverse order, starting with the last one. Two practice
+  sequences, then two sequences per length starting at 2 blocks, growing while at least one is right and stopping
+  when both of a length are wrong. Outcomes: backward span and total score (span x correct sequences).
+measures:
+- backward Corsi span
+- number of sequences correct
+- total score
+- proportion of taps on the right block
+- time per tap
+duration_min: 6
+input: mouse
+languages:
+- en
+references:
+- >-
+  Corsi, P. M. (1972). Human memory and the medial temporal region of the brain (Doctoral dissertation). McGill
+  University, Montreal.
+- >-
+  Kessels, R. P. C., van Zandvoort, M. J. E., Postma, A., Kappelle, L. J., & de Haan, E. H. F. (2000). The Corsi
+  Block-Tapping Task: Standardization and normative data. Applied Neuropsychology, 7(4), 252–258.
+- >-
+  Isaacs, E. B., & Vargha-Khadem, F. (1989). Differential course of development of spatial and verbal memory span:
+  A normative study. British Journal of Developmental Psychology, 7, 377–380.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/backward_corsi.html
+notes: 'Same file as corsi with direction: backward under variables.'

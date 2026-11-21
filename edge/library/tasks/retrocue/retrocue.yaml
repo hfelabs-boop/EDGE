@@ -1,0 +1,133 @@
+name: retrocue
+description: >
+  Retro-cue working-memory task (change detection). Four coloured squares are shown briefly and must be
+  held in memory. During the retention interval a cue appears: a retro-cue frames the ONE square that will
+  be tested (always valid); a neutral cue frames all four. Then one square comes back at one of the places
+  and the participant says whether its colour is the SAME or DIFFERENT (F / J). 8 practice trials with
+  feedback, then 48 trials (cue type x same/different, 12 each, random order).
+  The retro-cue benefit = accuracy (and speed) with a retro-cue minus with a neutral cue.
+
+settings:
+  window: {size: [1280, 720], background: "#7f7f7f", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  # eight easy-to-tell-apart colours; four different ones are drawn on every trial
+  palette: ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#42d4f4", "#ffffff"]
+  places: [[-150, 150], [150, 150], [-150, -150], [150, -150]]
+  array_time: 0.5         # memory array (s)
+  cue_onset: 2.0          # cue onset from trial start (1 s after the array goes off)
+  cue_time: 0.25
+  probe_onset: 3.15       # probe 0.9 s after the cue
+  max_rt: 3.0
+  cols: ["#e6194b", "#3cb44b", "#ffe119", "#4363d8"]
+  probe_i: 0
+  probe_col: "#e6194b"
+
+measures:
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: rt, label: RT (correct trials), role: outcome, column: resp.rt, loop: trials, trials: "$resp.corr == 1",
+     summary: median, units: s, expect: [0.25, 3.0]}
+  - {id: cue, label: Cue (retro / neutral), role: factor, column: cue}
+  - {id: change, label: Probe colour (same / different), role: factor, column: change}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1100
+        color: "#000000"
+        text: |
+          Colour memory
+
+          Four coloured squares will flash briefly. Remember their colours and where they were.
+          While you wait, a white frame appears:
+            - around ONE place: that is the square you will be asked about, so focus on it.
+            - around ALL four places: any of them can be asked about.
+
+          Then one square comes back. Was its colour the same as before at that place?
+            F = SAME colour          J = DIFFERENT colour
+
+          Keep your eyes on the cross in the middle. First 8 practice trials.
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 28
+        wrap_width: 1100
+        color: "#000000"
+        text: |
+          Now 48 trials without feedback. Be as accurate as you can.
+
+          F = SAME          J = DIFFERENT
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - id: draw
+        type: variable
+        set:
+          cols: "$random.sample(palette, 4)"
+          probe_i: "$random.randint(0, 3)"
+      - id: pick
+        type: variable
+        set: {probe_col: "$cols[probe_i] if change == 'same' else random.choice([c for c in palette if c not in cols])"}
+      - {id: fix, type: text, text: "+", height: 36, color: "#000000"}
+      - {id: sq1, type: shape, shape: rect, size: [70, 70], pos: [-150, 150], fill: "$cols[0]", start: 0.5, duration: $array_time, marker: memory_array}
+      - {id: sq2, type: shape, shape: rect, size: [70, 70], pos: [150, 150], fill: "$cols[1]", start: 0.5, duration: $array_time}
+      - {id: sq3, type: shape, shape: rect, size: [70, 70], pos: [-150, -150], fill: "$cols[2]", start: 0.5, duration: $array_time}
+      - {id: sq4, type: shape, shape: rect, size: [70, 70], pos: [150, -150], fill: "$cols[3]", start: 0.5, duration: $array_time}
+      # retro-cue: a frame around the place that will be tested
+      - {id: cue_one, type: shape, shape: rect, size: [100, 100], pos: "$places[probe_i]", fill: transparent,
+         line_color: "#ffffff", line_width: 5, start: $cue_onset, duration: $cue_time, if: "$cue == 'retro'", marker: retro_cue}
+      # neutral cue: frames around all four places
+      - {id: cue_n1, type: shape, shape: rect, size: [100, 100], pos: [-150, 150], fill: transparent, line_color: "#ffffff", line_width: 5, start: $cue_onset, duration: $cue_time, if: "$cue == 'neutral'", marker: neutral_cue}
+      - {id: cue_n2, type: shape, shape: rect, size: [100, 100], pos: [150, 150], fill: transparent, line_color: "#ffffff", line_width: 5, start: $cue_onset, duration: $cue_time, if: "$cue == 'neutral'"}
+      - {id: cue_n3, type: shape, shape: rect, size: [100, 100], pos: [-150, -150], fill: transparent, line_color: "#ffffff", line_width: 5, start: $cue_onset, duration: $cue_time, if: "$cue == 'neutral'"}
+      - {id: cue_n4, type: shape, shape: rect, size: [100, 100], pos: [150, -150], fill: transparent, line_color: "#ffffff", line_width: 5, start: $cue_onset, duration: $cue_time, if: "$cue == 'neutral'"}
+      - {id: probe, type: shape, shape: rect, size: [70, 70], pos: "$places[probe_i]", fill: $probe_col, start: $probe_onset, marker: probe}
+      - {id: keys_hint, type: text, text: "F = same      J = different", pos: [0, -300], height: 22, color: "#222222", start: $probe_onset}
+      - {id: resp, type: keyboard, keys: [f, j], correct: "$'f' if change == 'same' else 'j'", start: $probe_onset,
+         duration: $max_rt, end_routine: true}
+
+  practice_feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 32
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#005a1e' if resp.corr else '#8b0000'"
+
+  iti:
+    duration: 0.5
+    components:
+      - {id: blank, type: wait}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 32, color: "#000000", text: "Thank you, the task is finished."}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: {factorial: {cue: [retro, neutral], change: [same, different]}}
+    order: random
+    repeats: 2
+    children: [trial, practice_feedback]
+  - main_intro
+  - loop: trials
+    conditions: {factorial: {cue: [retro, neutral], change: [same, different]}}
+    order: fullrandom
+    repeats: 12
+    max_repeat: {cue: 4}
+    children: [trial, iti]
+  - thanks
