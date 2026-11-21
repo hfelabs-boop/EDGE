@@ -1,0 +1,36 @@
+id: flanker_arrows_ops
+title: Flanker task (arrows, operational)
+category: Inhibition and conflict
+summary: Report which way the middle track or vehicle of a row is heading while ignoring the ones beside it.
+description: >
+  The library's arrow flanker task with operator displays. Each trial shows five objects in a row; the operator
+  reports the heading of the middle one with the left or right arrow key. The four flankers head the same way
+  (congruent), the opposite way (incongruent) or are not moving (neutral). A 500 ms fixation cross precedes the
+  row, which stays until the answer (max 2 s), followed by a 500 ms blank. 12 practice trials with feedback, then
+  96 test trials (6 combinations x 16, random order, a condition at most 3 times in a row). The flanker effect is
+  the RT (and error) difference between incongruent and congruent trials, as in the classic task.
+measures:
+  - RT by flanker condition (flanker effect = incongruent minus congruent)
+  - accuracy by flanker condition
+duration_min: 4
+input: keyboard
+languages: [en]
+variant_of: flanker_arrows
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The arrows of the classic task become moving objects whose heading the operator reports; the design, timing,
+  keys and measures stay the same. c2: five hostile surface tracks (red diamond frames, hull icon) in a row on the
+  map grid, each with a course leader (a line with an arrowhead from the frame the way it moves); neutral flankers
+  are tracks without a leader (not moving), standing for the classic dashes. uav: five light tracked vehicles seen
+  from above in a camera frame under a reticle, turned the way they drive, with the image tracker's cyan motion
+  vector; neutral flankers are parked vehicles facing up without a vector. The pictures are drawn by
+  tools/library/make_flanker_arrows_ops.py from defence-kit symbols and vehicles; all are generic and fictional.
+references:
+  - "Eriksen, B. A., & Eriksen, C. W. (1974). Effects of noise letters upon the identification of a target letter in a nonsearch task. Perception & Psychophysics, 16, 143-149."
+  - "Stoffels, E. J., & van der Molen, M. W. (1988). Effects of visual and auditory noise on visual choice reaction time in a continuous-flow paradigm. Perception & Psychophysics, 44, 7-14."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/flanker_arrows.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). The trial list is the classic one (its stimulus column
+  still shows the arrows each row stands for); the variable item `look` works out the flankers' heading (column
+  look.flank). Each row of five is 640 px wide, about the same as the classic row of arrows.

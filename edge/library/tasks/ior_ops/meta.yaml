@@ -1,0 +1,39 @@
+id: ior_ops
+title: Inhibition of return (IOR, operational)
+category: Attention
+summary: An uninformative sector or box highlight speeds detection of a new contact there after 100 ms but slows it after 800 ms.
+description: >
+  The library's inhibition-of-return task with operator displays. Three places are shown (left, centre, right).
+  After 1 s one side place lights up for 100 ms; this cue does not predict the contact's side (50% valid). On
+  long-interval trials the centre place lights up 300 ms after the cue to bring attention back to fixation. A
+  contact then appears in the cued or the uncued place 100 ms or 800 ms after cue onset, and the operator presses
+  SPACE as soon as they detect it (max 1.2 s). 20% of trials are catch trials without a contact, which discourage
+  anticipations. 10 practice trials with feedback, then 80 test trials. The main outcome, as in the classic task,
+  is the cueing effect (uncued minus cued RT) at each interval: positive (facilitation) at 100 ms, negative (IOR)
+  at 800 ms.
+measures:
+  - detection RT cued vs uncued at short and long cue-target intervals
+  - false alarms on catch trials
+duration_min: 5
+input: keyboard
+languages: [en]
+variant_of: ior
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The boxes, flashes and dot of the classic task become sensor sectors or candidate boxes, display highlights that
+  draw the eye without meaning anything, and a new contact to detect; the design, timing, key and measures stay the
+  same. c2: a radar-style plot with three outlined sectors; a sector frame lights up amber, and the target is a new
+  unknown air contact (yellow quatrefoil frame). uav: a camera frame with three candidate boxes from the image
+  tracker; a box lights up cyan, and the target is a vehicle appearing in a box. Catch trials (nothing appears)
+  stand for highlights that are not followed by a contact. Everything is generic and fictional.
+references:
+  - "Posner, M. I., & Cohen, Y. (1984). Components of visual orienting. In H. Bouma & D. G. Bouwhuis (Eds.), Attention and Performance X: Control of language processes (pp. 531-556). Hillsdale, NJ: Erlbaum."
+  - "Klein, R. M. (2000). Inhibition of return. Trends in Cognitive Sciences, 4, 138-146."
+  - "Pratt, J., & Abrams, R. A. (1999). Inhibition of return in discrimination tasks. Journal of Experimental Psychology: Human Perception and Performance, 25, 229-242."
+  - "Abrams, R. A., & Dobkin, R. S. (1994). Inhibition of return: Effects of attentional cuing on eye movement latencies. Journal of Experimental Psychology: Human Perception and Performance, 20, 467-477."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/ior.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). Valid/invalid/catch and the intervals are rows of
+  ior_ops.csv (the classic list). The pictures come from EDGE's defence kit (tools/library/make_ior_ops.py copies
+  them).

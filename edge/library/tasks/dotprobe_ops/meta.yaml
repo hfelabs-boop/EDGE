@@ -1,0 +1,39 @@
+id: dotprobe_ops
+title: Dot-probe task (operational)
+category: Social and implicit
+summary: Measures attentional bias toward threat symbols (hostile tracks, armoured vehicles) by how fast a dot is found in their place.
+description: >
+  The library's dot-probe task with operator displays. After a 500 ms fixation cross, two symbols appear for
+  500 ms, one 80 px above and one below fixation; on test trials one stands for a threat and the other is neutral.
+  A dot then appears at the position of one symbol and the operator presses UP or DOWN for its location (max 2 s).
+  Every pair appears four times (threat symbol top/bottom x dot top/bottom), so the dot is equally often at the
+  threat and the neutral symbol. 8 practice trials with neutral pairs and feedback, then 80 test trials (20 pairs).
+  The attentional bias index, as in the classic task, is the mean correct RT on incongruent trials (dot at the
+  neutral symbol) minus congruent trials (dot at the threat symbol); positive values mean vigilance toward threat.
+measures:
+  - RT congruent vs incongruent (attentional bias index = incongruent - congruent)
+  - accuracy
+duration_min: 4
+input: keyboard
+languages: [en]
+variant_of: dotprobe
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The threat and neutral words of the classic task become threat-related and neutral objects from operator
+  displays; the design, timing, keys and measures stay the same. c2: track symbols on the map grid; threat = a
+  hostile air, surface or ground track (red diamond frame), neutral = a neutral track of the same kinds (green
+  square frame); the practice pairs show a friendly (blue) and a neutral track. uav: vehicles seen from above in a
+  camera frame, turned any way; threat = a light or dark tracked (armoured) vehicle, neutral = a light or dark
+  civilian car; the practice pairs show a wheeled vehicle and a car. The bias index then stands for how strongly
+  threat-coded objects on a display hold the operator's attention. Everything is generic and fictional.
+references:
+  - "MacLeod, C., Mathews, A., & Tata, P. (1986). Attentional bias in emotional disorders. Journal of Abnormal Psychology, 95, 15-20."
+  - "Putwain, D. W., Langdale, H. C., Woods, K. A., & Nicholson, L. J. (2011). Developing and piloting a dot-probe measure of attentional bias for test anxiety. Learning and Individual Differences, 21(4), 478-482."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/dotprobe.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). The trial lists are the classic ones with the word
+  columns replaced by the pair's number (column pair, 0-19), which picks one threat and one neutral picture
+  (columns place.top_kind, place.top_idx, place.bottom_kind, place.bottom_idx). The pairs are not matched on anything
+  but size; check that the threat and neutral pictures of your theme differ only in what you want to test.
+  tools/library/make_dotprobe_ops.py copies the pictures from EDGE's defence kit and writes the lists.

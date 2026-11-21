@@ -1,0 +1,174 @@
+name: maabrams_ops
+description: >
+  Attentional capture and visual grouping, operational adaptation. The same paradigm and measures as the
+  library's `maabrams` task: six markers stand on a circle around the centre: five round contacts and one diamond
+  (the hostile track). Find the diamond and report whether its course line is east-west (horizontal, Z) or
+  north-south (vertical, M). On most trials one round contact is red instead of green: an alert highlight that
+  tends to capture attention. A thin link line connects two neighbouring markers; it either joins the red contact
+  to the diamond (grouped) or to another contact (ungrouped). One variable, `theme`, sets the display: c2 (contacts
+  around own position on a radar-style plot) or video (tracker markers around the crosshair on a camera feed).
+  The camera feed is synthetic and generic (EDGE's defence kit).
+
+# Theme switch as in search_ops: `theme` is the first variable. The search display is drawn by shape items, the
+# same in every theme (as in maabrams); only the display around it (plot or camera feed with crosshair, the
+# instruction texts) is guarded with `if: $theme == ...`. The trial list, layout rules, timing, keys, correct
+# answers and measures are the same for every theme (and as in maabrams).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or video
+  green: "#26b34a"
+  red: "#e8402f"
+  # the six places on a circle (radius 220 px), counter-clockwise from the top
+  xy: [[0, 220], [-191, 110], [-191, -110], [0, -220], [191, -110], [191, 110]]
+  # connector bars: bars[j] joins place j and place j+1
+  bars: [[[2, 217], [-189, 107], [-193, 113], [-2, 223]], [[-187, 110], [-187, -110], [-195, -110], [-195, 110]], [[-189, -107], [2, -217], [-2, -223], [-193, -113]], [[-2, -217], [189, -107], [193, -113], [2, -223]], [[187, -110], [187, 110], [195, 110], [195, -110]], [[189, 107], [-2, 217], [2, 223], [193, 113]]]
+  # the line inside each shape, as a thin polygon
+  line_shapes:
+    vertical: [[-3, -20], [3, -20], [3, 20], [-3, 20]]
+    horizontal: [[-20, -3], [20, -3], [20, 3], [-20, 3]]
+    tilt_right: [[12, 16], [16, 12], [-12, -16], [-16, -12]]
+    tilt_left: [[-12, 16], [-16, 12], [12, -16], [16, -12]]
+  tp: 0                # place of the diamond (target)
+  side: 1              # the distractor sits next to the target: +1 counter-clockwise, -1 clockwise
+  dp: 1                # place of the red distractor
+  bar_edge: 0
+  line_kinds: [horizontal, tilt_left, tilt_right, tilt_left, tilt_right, tilt_left]
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: mean, units: s, expect: [0.3, 2.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: distractor, label: Distractor (none / grouped with target / ungrouped), role: factor, column: distractor}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 24
+        wrap_width: 1100
+        text: |
+          Find the hostile track. You are monitoring the air picture around your own position.
+
+          Six markers will appear around the centre of the plot: five round contacts and one DIAMOND
+          (the hostile track). Find the diamond and look at its course line:
+
+          course east-west (horizontal line)   ->  press Z
+          course north-south (vertical line)   ->  press M
+
+          Sometimes one contact is highlighted red (an alert) and some markers are joined by a link line:
+          ignore both, they never tell you where the diamond is. Keep your eyes on the centre cross
+          until the markers appear. First 12 practice trials with feedback. Press SPACE to begin.
+      - id: text_video
+        type: text
+        if: "$theme == 'video'"
+        height: 24
+        wrap_width: 1100
+        text: |
+          Find the target marker. You are watching a camera feed on which an image tracker marks objects.
+
+          Six markers will appear around the crosshair: five round markers and one DIAMOND
+          (the target). Find the diamond and look at the line inside it:
+
+          horizontal line  ->  press Z
+          vertical line    ->  press M
+
+          Sometimes one round marker is red (an alert) and some markers are joined by a link line:
+          ignore both, they never tell you where the diamond is. Keep your eyes on the centre cross
+          until the markers appear. First 12 practice trials with feedback. Press SPACE to begin.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Practice done. The test has 72 trials (about 4 minutes) without feedback.
+
+          diamond with horizontal line (east-west) -> Z      vertical line (north-south) -> M
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  # Fixation; meanwhile choose this trial's layout (the search screen's items use it to decide what to show).
+  prep:
+    components:
+      - {id: pick, type: variable, set: {tp: "$random.randint(0, 5)", side: "$random.choice([-1, 1])", shown_theme: $theme}}
+      - id: place
+        type: variable
+        set:
+          dp: "$(tp + side) % 6"
+          # grouped: the bar joins target and distractor; otherwise it joins the distractor's place to its
+          # other neighbour (the same bar position with and without a red distractor)
+          bar_edge: >-
+            $(tp if side == 1 else (tp - 1) % 6) if distractor == 'grouped'
+            else ((tp + 1) % 6 if side == 1 else (tp - 2) % 6)
+          line_kinds: "$[target_line if i == tp else random.choice(['tilt_left', 'tilt_right']) for i in range(6)]"
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720], duration: 0.8}
+      - {id: feed_video, type: movie, if: "$theme == 'video'", movie: stimuli/feed_03_orbit_ir.mp4, size: [1280, 720], loop: true, volume: 0, duration: 0.8}
+      - {id: cross_video, type: image, if: "$theme == 'video'", image: stimuli/crosshair_full_1280x720.png, size: [1280, 720], duration: 0.8}
+      - {id: fix, type: text, text: "+", height: 36, color: "#9fe8ff", duration: 0.8}
+
+  search:
+    components:
+      # ---- the display around the markers, one block per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: feed_video, type: movie, if: "$theme == 'video'", movie: stimuli/feed_03_orbit_ir.mp4, size: [1280, 720], loop: true, volume: 0, duration: 3.0}
+      - {id: cross_video, type: image, if: "$theme == 'video'", image: stimuli/crosshair_full_1280x720.png, size: [1280, 720]}
+      # ---- the search display (the same for every theme, as in maabrams) ----
+      - {id: fix2, type: text, text: "+", height: 36, color: "#9fe8ff"}
+      - {id: bar, type: shape, shape: polygon, vertices: "$bars[bar_edge]", fill: "#9a9a9a", marker: "$f'display_{distractor}'"}
+      - {id: circle0, type: shape, shape: circle, radius: 40, pos: "$xy[0]", fill: "$red if distractor != 'none' and dp == 0 else green", if: "$tp != 0"}
+      - {id: circle1, type: shape, shape: circle, radius: 40, pos: "$xy[1]", fill: "$red if distractor != 'none' and dp == 1 else green", if: "$tp != 1"}
+      - {id: circle2, type: shape, shape: circle, radius: 40, pos: "$xy[2]", fill: "$red if distractor != 'none' and dp == 2 else green", if: "$tp != 2"}
+      - {id: circle3, type: shape, shape: circle, radius: 40, pos: "$xy[3]", fill: "$red if distractor != 'none' and dp == 3 else green", if: "$tp != 3"}
+      - {id: circle4, type: shape, shape: circle, radius: 40, pos: "$xy[4]", fill: "$red if distractor != 'none' and dp == 4 else green", if: "$tp != 4"}
+      - {id: circle5, type: shape, shape: circle, radius: 40, pos: "$xy[5]", fill: "$red if distractor != 'none' and dp == 5 else green", if: "$tp != 5"}
+      - {id: diamond, type: shape, shape: rect, size: [64, 64], ori: 45, pos: "$xy[tp]", fill: $green}
+      - {id: line0, type: shape, shape: polygon, pos: "$xy[0]", vertices: "$line_shapes[line_kinds[0]]", fill: black}
+      - {id: line1, type: shape, shape: polygon, pos: "$xy[1]", vertices: "$line_shapes[line_kinds[1]]", fill: black}
+      - {id: line2, type: shape, shape: polygon, pos: "$xy[2]", vertices: "$line_shapes[line_kinds[2]]", fill: black}
+      - {id: line3, type: shape, shape: polygon, pos: "$xy[3]", vertices: "$line_shapes[line_kinds[3]]", fill: black}
+      - {id: line4, type: shape, shape: polygon, pos: "$xy[4]", vertices: "$line_shapes[line_kinds[4]]", fill: black}
+      - {id: line5, type: shape, shape: polygon, pos: "$xy[5]", vertices: "$line_shapes[line_kinds[5]]", fill: black}
+      - {id: resp, type: keyboard, keys: [z, m], correct: $correct_key, duration: 3.0, end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "End of the watch. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: maabrams_ops.csv
+    order: random
+    repeats: 2
+    children: [prep, search, feedback]
+  - main_intro
+  - loop: main
+    conditions: maabrams_ops.csv
+    order: random
+    repeats: 12
+    children: [prep, search, iti]
+  - thanks

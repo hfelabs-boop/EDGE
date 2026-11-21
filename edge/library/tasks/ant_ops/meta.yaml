@@ -1,0 +1,41 @@
+id: ant_ops
+title: Attention Network Test (ANT, operational)
+category: Attention
+summary: A cued heading-flanker task on tracks or vehicles that gives separate scores for alerting, orienting and executive attention.
+description: >
+  The library's ANT with operator displays. Each trial begins with a fixation cross for a random 400-1600 ms, then
+  a 100 ms alert-ring cue: no cue, a centre cue, a double cue (both possible target places) or a spatial cue (the
+  coming target place). After a further 400 ms a row of five tracks or vehicles appears above or below fixation;
+  the operator reports the heading of the middle one with the left or right arrow key. The flankers head the same
+  way (congruent), the other way (incongruent) or are not moving (neutral). Trials last 4 s in total. 24 practice
+  trials with feedback, then 96 test trials (all 48 cue x flanker x direction x location combinations twice).
+  Scores from mean correct RTs, as in the classic task: alerting = no cue - double cue; orienting = centre cue -
+  spatial cue; executive = incongruent - congruent.
+measures:
+  - RT by cue (alerting = none - double; orienting = center - spatial)
+  - RT by flanker (executive/conflict = incongruent - congruent)
+  - accuracy
+duration_min: 9
+input: keyboard
+languages: [en]
+variant_of: ant
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The arrows of the classic task become moving objects whose heading the operator reports, and the asterisk cue
+  becomes a brief alert ring; the design, timing, keys and measures stay the same. c2: hostile surface tracks (red
+  diamond frames) on the map grid with course leaders (a line with an arrowhead the way they move; neutral
+  flankers have no leader); the cue is an amber alert ring, as a console flags where a report will come from. uav:
+  light tracked vehicles seen from above in a camera frame, turned the way they drive, with the image tracker's
+  cyan motion vector (neutral flankers are parked, facing up); the cue is a cyan tracker ring. The heading pictures
+  are the same as in flanker_arrows_ops (drawn by tools/library/make_ant_ops.py from defence-kit pictures); all
+  are generic and fictional.
+references:
+  - "Fan, J., McCandliss, B. D., Sommer, T., Raz, A., & Posner, M. I. (2002). Testing the efficiency and independence of attentional networks. Journal of Cognitive Neuroscience, 14(3), 340-347."
+  - "Posner, M. I. (2008). Measuring alertness. Annals of the New York Academy of Sciences, 1129, 193-199. https://doi.org/10.1196/annals.1417.011"
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/ant.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). The trial list is the classic one (its stimulus column
+  still shows the arrows each row stands for); the variable item `pick` works out the flankers' heading (column
+  pick.flank) and the random fixation time (pick.d1). The original has three test blocks of 96 trials; raise the
+  repeats of the main trial list (2 = 96 trials) for the full length.

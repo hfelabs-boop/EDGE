@@ -1,0 +1,40 @@
+id: sart_ops
+title: Sustained Attention to Response Task (SART, operational)
+category: Vigilance
+summary: Acknowledge every new track or tracker marker at a fixed pace except the rare friendly track or cleared box.
+description: >
+  The library's SART with operator displays. Nine objects (standing for the digits 1 to 9) appear in random order,
+  each for 250 ms followed by a 900 ms mask (a ring with a diagonal cross), in five different sizes so that the
+  object must actually be identified. The operator presses SPACE for every object except the no-go object (the
+  classic task's 3, about 11% of trials). Because responding becomes automatic, a mind that wanders presses on the
+  no-go object. 18 practice trials, then 225 test trials (each object 25 times, every object-size pair 5 times).
+  Main outcomes, as in the classic task: commission errors (presses on the no-go object), omissions on go trials
+  and go reaction time.
+measures:
+  - "commission errors: accuracy on no-go (3) trials"
+  - omissions (hit rate on go trials)
+  - go reaction time
+duration_min: 5
+input: keyboard
+languages: [en]
+variant_of: sart
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The digits of the classic task become objects an operator acknowledges one by one; the design, timing, key,
+  sizes and measures stay the same, and the trial list keeps the digit column (3 = the no-go object). c2: new
+  tracks on a radar-style plot, acknowledged with SPACE: hostile, unknown and neutral air, surface and ground tracks
+  are go objects; the no-go object is a friendly air track (blue rectangle), our own aircraft, so a commission error
+  stands for acknowledging one's own aircraft as a contact. uav: vehicles marked by an image tracker on a camera
+  frame under a reticle, with telemetry text; candidate, selected and confirmed boxes and point markers are go
+  objects; the no-go object is a cleared (green) box. The mask is the classic ring with a cross, in the console
+  colour. Track symbols, vehicles and places are generic and fictional.
+references:
+  - "Robertson, I. H., Manly, T., Andrade, J., Baddeley, B. T., & Yiend, J. (1997). 'Oops!': Performance correlates of everyday attentional failures in traumatic brain injured and normal subjects. Neuropsychologia, 35(6), 747-758."
+  - "Ralph, B. C. W., Thomson, D. R., Seli, P., Carriere, J. S. A., & Smilek, D. (2015). Media multitasking and behavioral measures of sustained attention. Attention, Perception, & Psychophysics, 77, 390-401."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/sart.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). The column digit (1-9) of sart_ops.csv picks the object
+  (looks[theme].objects[digit - 1]); digit_size (60-140 px) sets its drawn size. The uav theme uses one still
+  camera frame for the whole watch (no video: a 1.15 s trial would restart it every time). The pictures come from
+  EDGE's defence kit (tools/library/make_sart_ops.py copies them).

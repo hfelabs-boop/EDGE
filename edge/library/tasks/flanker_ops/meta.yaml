@@ -1,0 +1,38 @@
+id: flanker_ops
+title: Flanker task (letters, operational)
+category: Inhibition and conflict
+summary: Classify the middle track (hostile or friendly) or vehicle (tracked or wheeled) of a row of five while ignoring the ones around it.
+description: >
+  The library's letter flanker task with operator displays. Each trial shows a row of five objects; the operator
+  classifies the middle one (two kinds with one key, two kinds with the other). The outer objects are identical to
+  the target, a different object mapped to the same key (same_response), an object mapped to the other key
+  (incongruent), or an object that needs no answer (neutral). A fixation cross (500 ms) precedes the row, which
+  stays until the answer (max 2 s). After 12 practice trials with feedback come 80 test trials (16 combinations
+  x 5, random order). The main outcome, as in the classic task, is the flanker effect: slower and less accurate
+  answers on incongruent than on identical or neutral trials; same_response vs identical separates perceptual from
+  response conflict.
+measures:
+  - RT by flanker condition (flanker effect = incongruent minus identical/neutral)
+  - accuracy by flanker condition
+duration_min: 4
+input: keyboard
+languages: [en]
+variant_of: flanker
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The letters of the classic task become objects the operator classifies; the design, timing, keys and measures
+  stay the same, and the trial list keeps the letters (each letter picks an object). c2: tracks on the map grid
+  classified by affiliation: H = hostile air and K = hostile surface track (red diamond frames, Z), S = friendly air
+  and C = friendly surface track (blue rectangle frames, M), X = neutral air track (green square, no answer); so
+  same_response flankers share the affiliation but not the kind of track, and incongruent flankers have the other
+  affiliation. uav: vehicles seen from above in a camera frame under a reticle, classified by running gear: H =
+  light and K = dark tracked vehicle (Z), S = light and C = dark wheeled vehicle (M), X = a civilian car (no
+  answer). Everything is generic and fictional.
+references:
+  - "Eriksen, B. A., & Eriksen, C. W. (1974). Effects of noise letters upon the identification of a target letter in a nonsearch task. Perception & Psychophysics, 16, 143-149."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/flanker.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). Keys Z and M; change correct_key in flanker_ops.csv to
+  remap. The column stimulus (e.g. SSHSS) says which object stands where (looks[theme][letter]). The pictures come
+  from EDGE's defence kit (tools/library/make_flanker_ops.py copies them).

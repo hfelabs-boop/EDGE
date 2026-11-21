@@ -1,0 +1,17 @@
+pair_type,pair,threat_pos,probe_pos,congruence,probe_y,correct_key
+neutral,0,top,top,neutral,80,up
+neutral,0,top,bottom,neutral,-80,down
+neutral,0,bottom,top,neutral,80,up
+neutral,0,bottom,bottom,neutral,-80,down
+neutral,1,top,top,neutral,80,up
+neutral,1,top,bottom,neutral,-80,down
+neutral,1,bottom,top,neutral,80,up
+neutral,1,bottom,bottom,neutral,-80,down
+neutral,2,top,top,neutral,80,up
+neutral,2,top,bottom,neutral,-80,down
+neutral,2,bottom,top,neutral,80,up
+neutral,2,bottom,bottom,neutral,-80,down
+neutral,3,top,top,neutral,80,up
+neutral,3,top,bottom,neutral,-80,down
+neutral,3,bottom,top,neutral,80,up
+neutral,3,bottom,bottom,neutral,-80,down

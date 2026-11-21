@@ -1,0 +1,43 @@
+id: maabrams_ops
+title: Attentional capture and visual grouping (operational)
+category: Attention
+summary: Find the hostile diamond among round contacts and report its course while an alert-highlighted contact, linked or not to the target, competes for attention.
+description: >
+  The library's attentional capture and grouping task with operator displays (additional-singleton paradigm with a
+  grouping manipulation). After an 800 ms fixation cross, six filled markers appear on a circle around fixation:
+  five green round contacts and one green diamond (the target). The operator reports the orientation of the line
+  inside the diamond (horizontal: Z, vertical: M; max 3 s); the lines in the round contacts are tilted. On two
+  thirds of trials one contact next to the target is red (colour-singleton distractor). A grey link line always
+  joins two neighbouring markers: on grouped trials it joins the distractor to the target, on ungrouped trials it
+  joins the distractor to its other neighbour, and on no-distractor trials it sits at that same place. 12 practice
+  trials with feedback, then 72 test trials (each condition x line orientation 12 times). Outcomes, as in the
+  classic task: the capture cost (distractor minus no-distractor RT) and its size for grouped vs ungrouped
+  distractors.
+measures:
+  - RT by distractor condition (capture cost = distractor - none; grouped vs ungrouped)
+  - accuracy by distractor condition
+duration_min: 5
+input: keyboard
+languages: [en]
+variant_of: maabrams
+domain: defense
+themes: [c2, video]
+adaptation: >
+  The shapes of the classic task are kept (so the stimulus geometry and colours stay those of the paradigm) but
+  given operator meanings: the diamond is the hostile track (the frame shape of the hostile affiliation), the circles
+  are other contacts, the line inside is a course line (east-west or north-south), the red colour singleton is an
+  alert highlight and the connecting bar is a link line between two contacts, as on displays that join associated
+  tracks. The capture cost then stands for how much an irrelevant alert on the display delays finding the track
+  that matters, and the grouping manipulation for whether linking the alert to that track changes it. c2: the
+  markers stand around own position on a radar-style plot. video: the same markers drawn by an image tracker
+  around the crosshair on a looping infrared camera feed. Everything is generic and fictional.
+references:
+  - "Ma, X., & Abrams, R. A. (2023). Visual distraction's \"silver lining\": Distractor suppression boosts attention to competing stimuli. Psychological Science, 34(12), 1336-1349. https://doi.org/10.1177/09567976231201853"
+  - "Theeuwes, J. (1992). Perceptual selectivity for color and form. Perception & Psychophysics, 51(6), 599-606."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/maabrams.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, video). As the classic task, a generic additional-singleton task
+  with a connectedness manipulation; it is not a replication of the exact displays, timing or design of Ma and
+  Abrams (2023). The layout of each trial is saved in the pick.* and place.* columns (tp = target place, dp =
+  distractor place). The video theme's camera feed starts again with the fixation and with the search display,
+  a brief change of the whole picture at display onset; use the c2 theme where that matters.

@@ -1,0 +1,38 @@
+id: go_no_go_ops
+title: Go/no-go task (operational)
+category: Inhibition and conflict
+summary: Engage a frequent hostile track or confirmed target box as fast as possible and hold on a rare friendly track or cleared box.
+description: >
+  The library's go/no-go task with operator displays. Every 1.5 s an object appears (500 ms fixation, object for
+  500 ms, 1 s to respond). The go object (75% of trials) requires a fast SPACE press ("engage" / "designate"); the
+  no-go object (25%) requires no press ("hold"). Because most trials are go trials, pressing becomes automatic and
+  holding on no-go trials is hard. 12 practice trials with feedback, then 100 test trials in random order (never
+  two no-go trials in a row). Main outcomes, as in the classic task: the commission error rate (presses on no-go
+  trials), the omission rate on go trials and the go reaction time.
+measures:
+  - "commission errors: accuracy on no-go trials (1 - false alarm rate)"
+  - hit rate on go trials
+  - go reaction time
+duration_min: 3
+input: keyboard
+languages: [en]
+variant_of: go_no_go
+domain: defense
+themes: [c2, video]
+adaptation: >
+  The go letter and the no-go letter of the classic task become a target the operator acts on and an object the
+  operator must not act on; the design, timing, key and measures stay the same. c2: an air-defence plot; the go
+  object is a hostile air track (red diamond frame) to engage, the no-go object a friendly air track (blue
+  rectangle frame) to hold on, so a commission error stands for engaging a friendly track. video: a camera feed
+  under a crosshair, on which an image tracker boxes vehicles; the go object is a vehicle in a confirmed (red)
+  target box to designate, the no-go object a vehicle in a cleared (green) box to leave alone. Track numbers,
+  vehicles and places are generic and fictional.
+references:
+  - "Verbruggen, F., & Logan, G. D. (2008). Automatic and controlled response inhibition: Associative learning in the go/no-go and stop-signal paradigms. Journal of Experimental Psychology: General, 137(4), 649-672."
+  - "Criaud, M., & Boulinguez, P. (2013). Have we been asking the right questions when assessing response inhibition in go/no-go tasks with fMRI? A meta-analysis and critical review. Neuroscience & Biobehavioral Reviews, 37(1), 11-23."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/go-no-go.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, video). The go/no-go ratio is set by the rows of
+  go_no_go_ops.csv (3 go rows, 1 no-go row), as in the classic task. The pictures come from EDGE's defence kit
+  (tools/library/make_go_no_go_ops.py copies them). The video theme plays a looping camera video behind every
+  object (it starts again with each trial).

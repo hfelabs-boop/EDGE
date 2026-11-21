@@ -1,0 +1,44 @@
+id: stopsignal_ops
+title: Stop-signal task (operational)
+category: Inhibition and conflict
+summary: Give an engage order for a target as fast as possible, but cancel it when an abort signal follows.
+description: >
+  The library's stop-signal task with operator displays. On every trial a target (a hostile track or a boxed
+  vehicle) appears after a 500 ms fixation cross and the operator presses the arrow key for the way it is heading
+  (1 s to respond): the engage order. On 25% of trials a red ABORT signal appears after the stop-signal delay
+  (SSD) and the operator should withhold the press. The SSD adapts with a one-up/one-down staircase on the stop
+  trials only (start 250 ms, +50 ms after a successful stop, -50 ms after a failed stop, range 50-900 ms), which
+  converges on 50% successful stopping. 16 practice trials with feedback, then 120 test trials (30 stop trials,
+  never more than two in a row). The main outcome is the stop-signal reaction time (SSRT), estimated at the end by
+  the mean method (mean go RT minus mean SSD); go RT and the probability of stopping are also reported.
+measures:
+  - stop-signal reaction time (SSRT, mean method)
+  - go reaction time
+  - "probability of successful stopping (accuracy on stop trials, about 0.5)"
+  - mean stop-signal delay
+duration_min: 6
+input: keyboard
+languages: [en]
+variant_of: stopsignal
+domain: defense
+themes: [c2, video]
+adaptation: >
+  The arrow of the classic task becomes a target whose heading the operator reports to give an engage order, and
+  the arrow turning red becomes an abort cue that countermands the order; the design, timing, staircase, keys and
+  measures stay the same. c2: a hostile surface track (red diamond frame) with a course leader in the middle of a
+  radar-style plot. video: a vehicle seen from above with the image tracker's cyan motion vector, inside a
+  confirmed (red) target box under a crosshair on a looping camera feed. In both themes the stop signal is a red
+  frame around the target with the word ABORT above it (optionally with a beep). Everything is generic and
+  fictional.
+references:
+  - "Logan, G. D., Cowan, W. B., & Davis, K. A. (1984). On the ability to inhibit simple and choice reaction time responses: A model and a method. Journal of Experimental Psychology: Human Perception and Performance, 10, 276-291."
+  - "Verbruggen, F., & Logan, G. D. (2008). Response inhibition in the stop-signal paradigm. Trends in Cognitive Sciences, 12(11), 418-424."
+  - "Verbruggen, F., Aron, A. R., Band, G. P. H., et al. (2019). A consensus guide to capturing the ability to inhibit actions and impulsive behaviors in the stop-signal task. eLife, 8, e46323."
+  - "Logan, G. D. (2015). The point of no return: A fundamental limit on the ability to control thought and action. Quarterly Journal of Experimental Psychology, 68, 833-857."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/stopsignal.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, video). The trial list is the classic one (its arrow column
+  shows the heading each row stands for). The SSD staircase is a variable item (track) at the end of each trial,
+  as in the classic task; set the variable stop_tone to true to add a 750 Hz beep to the ABORT signal. The video
+  theme plays a looping camera video behind the target (it starts again with each trial). In test runs the
+  virtual participant does not race the stop signal, so its SSRT is not meaningful.

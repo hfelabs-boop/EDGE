@@ -1,0 +1,154 @@
+name: go_no_go_ops
+description: >
+  Go/no-go task, operational adaptation. The same paradigm and measures as the library's `go_no_go` task: objects
+  appear one at a time at a steady pace; press SPACE as fast as possible for the frequent go object (75% of trials)
+  and do nothing for the rare no-go object (25%). One variable, `theme`, sets the display: c2 (engage hostile air
+  tracks, hold on friendly ones, on a radar-style plot) or video (designate vehicles the tracker boxed as
+  confirmed targets, hold on vehicles boxed as cleared, on a camera feed). All pictures are synthetic and generic
+  (EDGE's defence kit).
+
+# Theme switch as in search_ops: `theme` is the first variable; `looks` maps each theme to its pictures (data), and
+# the display around the stimulus (plot, feed, crosshair, instruction texts) is guarded with `if: $theme == ...`.
+# The trial list, timing, keys, correct answers and measures are the same for every theme (and as in go_no_go).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or video
+  # per theme: the go object, the no-go object (a frame or symbol), the vehicles shown inside the box (video), sizes
+  looks:
+    c2:
+      go: stimuli/hostile_air_64.png
+      nogo: stimuli/friendly_air_64.png
+      size: [72, 72]
+      inside: []
+    video:
+      go: stimuli/box_confirmed_96.png
+      nogo: stimuli/box_cleared_96.png
+      size: [110, 110]
+      inside: [stimuli/vehicle_tracked_light.png, stimuli/vehicle_wheeled_light.png]
+  # the words of each theme (status line, feedback)
+  go_name: {c2: HOSTILE track, video: CONFIRMED box}
+  nogo_name: {c2: FRIENDLY track, video: CLEARED box}
+  vehicle: stimuli/vehicle_tracked_light.png
+  vehicle_ori: 0
+  track_no: 417
+
+measures:
+  - {id: go_rt, label: Go reaction time (hits), role: outcome, column: resp.rt,
+     trials: "$trial_type == 'go' and resp.corr == 1", loop: main, summary: mean, units: s, expect: [0.15, 1.0]}
+  - {id: accuracy, label: Accuracy (go - hit rate; no-go - correct withholding), role: outcome, column: resp.corr,
+     loop: main, summary: proportion}
+  - {id: trial_type, label: Trial type, role: factor, column: trial_type}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 25
+        wrap_width: 1050
+        pos: [0, 80]
+        text: |
+          You are the weapons controller on an air-defence console.
+
+          Tracks will appear one after another in the middle of the plot.
+
+          HOSTILE air track (red diamond)     ->  press SPACE to engage, as fast as you can
+          FRIENDLY air track (blue rectangle) ->  HOLD: do NOT press anything
+
+          Most tracks are hostile, so be ready to stop yourself when a friendly one comes.
+          First a short practice with feedback. Press SPACE to begin.
+      - id: text_video
+        type: text
+        if: "$theme == 'video'"
+        height: 25
+        wrap_width: 1050
+        pos: [0, 80]
+        text: |
+          You are watching a camera feed. An image tracker boxes the vehicles it finds.
+
+          A boxed vehicle will appear in the middle of the feed, one after another.
+
+          RED box (confirmed target)  ->  press SPACE to designate it, as fast as you can
+          GREEN box (cleared)         ->  HOLD: do NOT press anything
+
+          Most boxes are red, so be ready to stop yourself when a green one comes.
+          First a short practice with feedback. Press SPACE to begin.
+      # the two objects as they will appear: go on the left, no-go on the right
+      - {id: example_bg, type: shape, shape: rect, size: [420, 150], pos: [0, -250], fill: "#26323a", line_color: "#5a7a8a", line_width: 1}
+      - {id: example_go, type: image, image: "$looks[theme]['go']", size: "$looks[theme]['size']", pos: [-100, -250]}
+      - {id: example_nogo, type: image, image: "$looks[theme]['nogo']", size: "$looks[theme]['size']", pos: [100, -250]}
+      - {id: example_veh1, type: image, if: "$theme == 'video'", image: stimuli/vehicle_tracked_light.png, size: [48, 48], pos: [-100, -250]}
+      - {id: example_veh2, type: image, if: "$theme == 'video'", image: stimuli/vehicle_wheeled_light.png, size: [48, 48], pos: [100, -250]}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: "$f'Practice done. Now the real task (no more feedback).\\n\\n{go_name[theme]} -> SPACE        {nogo_name[theme]} -> hold\\n\\nPress SPACE to start.'"
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    duration: 1.5
+    components:
+      - id: look
+        type: variable
+        set:
+          shown_theme: $theme      # puts the theme into every trial's data (column look.shown_theme)
+          vehicle: "$random.choice(looks[theme]['inside']) if looks[theme]['inside'] else ''"
+          vehicle_ori: "$random.choice([0, 90, 180, 270])"
+          track_no: "$random.randint(100, 989)"
+      # ---- the display around the stimulus, one block per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: tn_c2, type: text, if: "$theme == 'c2'", font: DejaVu Sans Mono, height: 16, color: "#9fe8ff", pos: [0, -60],
+         text: "$f'TN {track_no:04d}'", start: 0.5, duration: 0.5}
+      - {id: feed_video, type: movie, if: "$theme == 'video'", movie: stimuli/feed_01_pan.mp4, size: [1280, 720], loop: true, volume: 0, duration: 1.5}
+      - {id: cross_video, type: image, if: "$theme == 'video'", image: stimuli/crosshair_full_1280x720.png, size: [1280, 720]}
+      - {id: status_bar, type: shape, shape: rect, size: [1280, 40], pos: [0, 340], fill: "#0a2232", opacity: 0.85}
+      - {id: status, type: text, font: DejaVu Sans Mono, height: 17, color: "#9fe8ff", pos: [0, 340],
+         text: "$f'{go_name[theme]}: SPACE    {nogo_name[theme]}: HOLD'"}
+      # ---- the go/no-go stimulus (the same timing for every theme) ----
+      - {id: fix, type: text, text: "+", height: 36, color: "#9fe8ff", duration: 0.5}
+      - {id: inside, type: image, if: "$theme == 'video'", image: $vehicle, size: [48, 48], ori: $vehicle_ori, start: 0.5, duration: 0.5}
+      - {id: stim, type: image, image: "$looks[theme][trial_type]", size: "$looks[theme]['size']", start: 0.5, duration: 0.5,
+         marker: "$f'stim_{trial_type}'"}
+      - {id: resp, type: keyboard, keys: [space], correct: $correct_key, start: 0.5, duration: 1.0}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: >-
+          $('Correct' if resp.corr else 'Too slow - press faster for the ' + go_name[theme]) if trial_type == 'go'
+          else ('Correct - well held' if resp.corr else 'Hold - do not press for the ' + nogo_name[theme])
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "End of the watch. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: go_no_go_ops.csv
+    order: random
+    repeats: 3
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: go_no_go_ops.csv
+    order: random
+    repeats: 25
+    max_repeat: {trial_type: {nogo: 1}}
+    children: [trial]
+  - thanks

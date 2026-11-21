@@ -1,0 +1,169 @@
+name: dotprobe_ops
+description: >
+  Dot-probe task, operational adaptation. The same paradigm and measures as the library's `dotprobe` task: two
+  symbols appear briefly, one above and one below the centre: on test trials one of them stands for a threat and
+  the other is neutral. Then a dot appears where one of them was; press the UP or DOWN arrow key for its position.
+  Faster responses when the dot replaces the threat symbol (congruent) than when it replaces the neutral one
+  (incongruent) indicate attention drawn to threat. One variable, `theme`, sets the display: c2 (hostile vs
+  neutral tracks on the map grid) or uav (armoured vs civilian vehicles in a camera frame). All pictures are
+  synthetic and generic (EDGE's defence kit).
+
+# Theme switch as in search_ops: `theme` is the first variable; `looks` maps each theme to its lists of threat,
+# neutral and practice pictures, the trial list's `pair` (0-19) picks one of each (variable item `pair_pics`), and
+# the display around the stimuli (map, camera frame, instruction texts) is guarded with `if: $theme == ...`.
+# The trial lists, timing, keys, correct answers and measures are the same for every theme (and as in dotprobe).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or uav
+  # per theme: the threat pictures, the neutral pictures (test pairs: one of each) and the pictures that take the
+  # threat's place in the practice pairs (neutral too), the drawn size and whether pictures may be shown turned
+  looks:
+    c2:
+      threat: [stimuli/hostile_air_64.png, stimuli/hostile_surface_64.png, stimuli/hostile_ground_64.png]
+      neutral: [stimuli/neutral_air_64.png, stimuli/neutral_surface_64.png, stimuli/neutral_ground_64.png]
+      practice: [stimuli/friendly_air_64.png, stimuli/friendly_surface_64.png, stimuli/friendly_ground_64.png]
+      size: [64, 64]
+      turn: false
+    uav:
+      threat: [stimuli/vehicle_tracked_light.png, stimuli/vehicle_tracked_dark.png]
+      neutral: [stimuli/vehicle_car_light.png, stimuli/vehicle_car_dark.png]
+      practice: [stimuli/vehicle_wheeled_light.png, stimuli/vehicle_wheeled_dark.png]
+      size: [64, 64]
+      turn: true
+  pair_time: 0.5       # how long the pair of symbols is shown (s)
+  # set on every trial: which list (threat / neutral / practice) and which picture of it is shown at the top and
+  # at the bottom (these starting values are used by the builder's preview)
+  top_kind: threat
+  top_idx: 0
+  bottom_kind: neutral
+  bottom_idx: 0
+  top_ori: 0
+  bottom_ori: 0
+
+measures:
+  - {id: rt, label: Reaction time to the dot (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: mean, units: s, expect: [0.2, 1.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: congruence, label: Dot at the threat symbol (congruent) or at the neutral one, role: factor, column: congruence}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 25
+        wrap_width: 1100
+        pos: [0, 60]
+        text: |
+          You are monitoring the tactical map.
+
+          Look at the cross in the middle. Two tracks will flash, one above and one below it.
+          Then a small cyan dot appears where one of the tracks was.
+
+          Dot above the centre  ->  UP arrow key
+          Dot below the centre  ->  DOWN arrow key
+
+          The tracks themselves do not matter. Respond as fast as you can without making mistakes.
+          First 8 practice trials with feedback. Press SPACE to begin.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 25
+        wrap_width: 1100
+        pos: [0, 60]
+        text: |
+          You are the payload operator of a surveillance aircraft, watching its camera.
+
+          Look at the cross in the middle. Two vehicles will flash, one above and one below it.
+          Then a small cyan dot appears where one of the vehicles was.
+
+          Dot above the centre  ->  UP arrow key
+          Dot below the centre  ->  DOWN arrow key
+
+          The vehicles themselves do not matter. Respond as fast as you can without making mistakes.
+          First 8 practice trials with feedback. Press SPACE to begin.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Practice done. The test has 80 trials (about 3 minutes) without feedback.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      # the two pictures of this pair: on test trials a threat and a neutral one, in practice two neutral ones
+      # ("first" takes the threat's place); the pair's number picks one picture of each list
+      - id: pair_pics
+        type: variable
+        set:
+          shown_theme: $theme      # puts the theme into every trial's data (column pair_pics.shown_theme)
+          first_kind: "$'threat' if pair_type == 'threat' else 'practice'"
+          first_idx: "$pair % len(looks[theme]['threat'])"
+          second_idx: "$(pair // len(looks[theme]['threat'])) % len(looks[theme]['neutral'])"
+      - id: place
+        type: variable
+        set:
+          top_kind: "$first_kind if threat_pos == 'top' else 'neutral'"
+          top_idx: "$first_idx if threat_pos == 'top' else second_idx"
+          bottom_kind: "$'neutral' if threat_pos == 'top' else first_kind"
+          bottom_idx: "$second_idx if threat_pos == 'top' else first_idx"
+          top_ori: "$random.choice([0, 90, 180, 270]) if looks[theme]['turn'] else 0"
+          bottom_ori: "$random.choice([0, 90, 180, 270]) if looks[theme]['turn'] else 0"
+      # ---- the display around the stimuli, one block per theme ----
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_02_village.jpg, size: [1280, 720]}
+      # ---- fixation, the pair, the dot (the same for every theme) ----
+      - {id: fix, type: text, text: "+", height: 36, color: "#9fe8ff", duration: $0.5 + pair_time}
+      - {id: pic_top, type: image, image: "$looks[theme][top_kind][top_idx]", size: "$looks[theme]['size']", ori: $top_ori, pos: [0, 80], start: 0.5,
+         duration: $pair_time, marker: "$f'words_threat_{threat_pos}'"}
+      - {id: pic_bottom, type: image, image: "$looks[theme][bottom_kind][bottom_idx]", size: "$looks[theme]['size']", ori: $bottom_ori, pos: [0, -80],
+         start: 0.5, duration: $pair_time}
+      - {id: dot, type: shape, shape: circle, radius: 8, fill: "#00e5ff", pos: "$[0, probe_y]", start: $0.5 + pair_time,
+         marker: "$f'probe_{congruence}'"}
+      - {id: resp, type: keyboard, keys: [up, down], correct: $correct_key, start: $0.5 + pair_time, duration: 2.0,
+         end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong key')"
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "End of the watch. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    stop_if: $practice.n >= 7
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: dotprobe_ops.csv
+    order: random
+    max_repeat: {probe_pos: 4}
+    children: [trial, iti]
+  - thanks

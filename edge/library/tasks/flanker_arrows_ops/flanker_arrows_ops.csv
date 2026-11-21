@@ -1,0 +1,7 @@
+stimulus,direction,condition,correct_key
+← ← ← ← ←,left,congruent,left
+→ → → → →,right,congruent,right
+→ → ← → →,left,incongruent,left
+← ← → ← ←,right,incongruent,right
+— — ← — —,left,neutral,left
+— — → — —,right,neutral,right

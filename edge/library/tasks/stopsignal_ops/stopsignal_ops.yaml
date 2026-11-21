@@ -1,0 +1,179 @@
+name: stopsignal_ops
+description: >
+  Stop-signal task, operational adaptation. The same paradigm and measures as the library's `stopsignal` task: a
+  target appears; press the arrow key for the way it is heading as fast as possible (the engage order). On a quarter
+  of the trials an ABORT signal follows after a short delay (the stop-signal delay, SSD): then try not to press. The
+  SSD follows a staircase: +50 ms after a successful stop, -50 ms after a failed one, so that stopping succeeds on
+  about half of the stop trials. The stop-signal reaction time (SSRT) is estimated at the end. One variable,
+  `theme`, sets the display: c2 (a hostile surface track on a radar-style plot) or video (a boxed vehicle on a
+  camera feed). All pictures are synthetic and generic (EDGE's defence kit).
+
+# Theme switch as in search_ops: `theme` is the first variable; `looks` maps each theme to its target pictures
+# (heading left / right), and the display around the target (plot, feed, crosshair, box, instruction texts) is
+# guarded with `if: $theme == ...`. The ABORT signal is the same in every theme. The trial list, timing, staircase,
+# keys, correct answers and measures are the same for every theme (and as in stopsignal).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or video
+  looks:
+    c2: {left: stimuli/c2_heading_left.png, right: stimuli/c2_heading_right.png}
+    video: {left: stimuli/uav_heading_left.png, right: stimuli/uav_heading_right.png}
+  target_name: {c2: the hostile track, video: the boxed vehicle}
+  ssd: 0.25            # current stop-signal delay (s); the staircase starts here
+  ssd_step: 0.05       # staircase step (s)
+  ssd_min: 0.05
+  ssd_max: 0.9
+  stop_tone: false     # true: also play a short 750 Hz beep with the visual stop signal
+  go_rt_sum: 0         # running totals for the SSRT estimate (reset before the test block)
+  go_n: 0
+  stop_ssd_sum: 0
+  stop_n: 0
+
+measures:
+  - {id: go_rt, label: Go reaction time (correct go trials), role: outcome, column: resp.rt,
+     trials: "$trial_type == 'go' and resp.corr == 1", loop: main, summary: mean, units: s, expect: [0.2, 1.0]}
+  - {id: accuracy, label: Accuracy (go - correct direction; stop - stopped successfully), role: outcome,
+     column: resp.corr, loop: main, summary: proportion}
+  - {id: ssd, label: Stop-signal delay on stop trials, role: outcome, column: delay.trial_ssd,
+     trials: "$trial_type == 'stop'", loop: main, summary: mean, units: s, expect: [0.05, 0.9]}
+  - {id: ssrt, label: Stop-signal reaction time (mean method), role: outcome, column: estimate.ssrt,
+     summary: first, units: s}
+  - {id: trial_type, label: Trial type, role: factor, column: trial_type}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 90]
+        text: |
+          You are the weapons controller on an air-defence console.
+
+          A hostile surface track will appear in the middle of the plot. Give the engage order at once by
+          pressing the arrow key for the way it is heading (LEFT or RIGHT; the line with the arrowhead is its course).
+
+          Sometimes a red ABORT signal comes shortly after the track appears.
+          Then try NOT to press any key.
+
+          Stopping will not always work, and that is fine. Do not wait for the abort:
+          always respond as fast as you can, and stop when you can.
+          First a short practice with feedback. Press SPACE to begin.
+      - id: text_video
+        type: text
+        if: "$theme == 'video'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 90]
+        text: |
+          You are watching a camera feed. The image tracker boxes a vehicle in the middle of the picture.
+
+          Designate it at once by pressing the arrow key for the way it is driving
+          (LEFT or RIGHT; the cyan arrow is the tracker's motion vector).
+
+          Sometimes a red ABORT signal comes shortly after the box appears.
+          Then try NOT to press any key.
+
+          Stopping will not always work, and that is fine. Do not wait for the abort:
+          always respond as fast as you can, and stop when you can.
+          First a short practice with feedback. Press SPACE to begin.
+      # the target and the abort signal as they will appear
+      - {id: example_bg, type: shape, shape: rect, size: [460, 150], pos: [0, -260], fill: "#26323a", line_color: "#5a7a8a", line_width: 1}
+      - {id: example_box, type: image, if: "$theme == 'video'", image: stimuli/box_confirmed_128.png, size: [128, 128], pos: [-110, -260]}
+      - {id: example, type: image, image: "$looks[theme]['right']", size: [120, 56], pos: [-110, -260]}
+      - {id: example_abort, type: shape, shape: rect, size: [150, 120], pos: [110, -260], fill: transparent, line_color: "#ff3b30", line_width: 6}
+      - {id: example_abort_word, type: text, text: ABORT, font: DejaVu Sans Mono, bold: true, height: 28, color: "#ff3b30", pos: [110, -260]}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: reset
+        type: variable
+        set: {go_rt_sum: 0, go_n: 0, stop_ssd_sum: 0, stop_n: 0}
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: "$f'Practice done. Now the real task (about 4 minutes, no feedback).\\n\\nRespond as fast as you can to {target_name[theme]}; try to stop when ABORT comes.\\n\\nPress SPACE to start.'"
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: delay, type: variable, set: {trial_ssd: $ssd, shown_theme: $theme}}
+      # ---- the display around the target, one block per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: feed_video, type: movie, if: "$theme == 'video'", movie: stimuli/feed_02_zoom.mp4, size: [1280, 720], loop: true, volume: 0, duration: 1.5}
+      - {id: cross_video, type: image, if: "$theme == 'video'", image: stimuli/crosshair_full_1280x720.png, size: [1280, 720]}
+      - {id: box_video, type: image, if: "$theme == 'video'", image: stimuli/box_confirmed_128.png, size: [128, 128], start: 0.5, duration: 1.0}
+      # ---- fixation, target, stop signal (the same for every theme) ----
+      - {id: fix, type: text, text: "+", height: 36, color: "#9fe8ff", duration: 0.5}
+      - {id: target, type: image, image: "$looks[theme][direction]", size: [120, 56], start: 0.5, duration: 1.0, marker: "$f'go_{direction}'"}
+      - {id: signal, type: shape, shape: rect, size: [170, 140], fill: transparent, line_color: "#ff3b30", line_width: 6,
+         start: $0.5 + trial_ssd, duration: $1.0 - trial_ssd, if: "$trial_type == 'stop'", marker: stop_signal}
+      - {id: signal_word, type: text, text: ABORT, font: DejaVu Sans Mono, bold: true, height: 30, color: "#ff3b30", pos: [0, 100],
+         start: $0.5 + trial_ssd, duration: $1.0 - trial_ssd, if: "$trial_type == 'stop'"}
+      - {id: beep, type: sound, sound: 750, tone_duration: 0.1, start: $0.5 + trial_ssd,
+         if: "$stop_tone and trial_type == 'stop'"}
+      - {id: resp, type: keyboard, keys: [left, right], correct: $correct_key, start: 0.5, duration: 1.0,
+         end_routine: true}
+      # The staircase: after each stop trial the delay goes up one step if the operator stopped and
+      # down one step if they pressed; go trials leave it alone. The sums feed the SSRT estimate.
+      - id: track
+        type: variable
+        when: end
+        set:
+          ssd: >-
+            $ssd if trial_type == 'go' else (min(ssd + ssd_step, ssd_max) if resp.keys is None
+            else max(ssd - ssd_step, ssd_min))
+          go_rt_sum: "$go_rt_sum + (resp.rt if trial_type == 'go' and resp.corr == 1 else 0)"
+          go_n: "$go_n + (1 if trial_type == 'go' and resp.corr == 1 else 0)"
+          stop_ssd_sum: "$stop_ssd_sum + (trial_ssd if trial_type == 'stop' else 0)"
+          stop_n: "$stop_n + (1 if trial_type == 'stop' else 0)"
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: >-
+          $('Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong way'))
+          if trial_type == 'go' else ('Well stopped' if resp.corr else 'Try to stop when ABORT comes')
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 4
+    components:
+      - id: estimate
+        type: variable
+        set:
+          mean_go_rt: "$go_rt_sum / go_n if go_n else None"
+          mean_ssd: "$stop_ssd_sum / stop_n if stop_n else None"
+          ssrt: "$go_rt_sum / go_n - stop_ssd_sum / stop_n if go_n and stop_n else None"
+      - {id: bye, type: text, height: 30, text: "End of the watch. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: stopsignal_ops.csv
+    order: random
+    repeats: 2
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: stopsignal_ops.csv
+    order: random
+    repeats: 15
+    max_repeat: {trial_type: {stop: 2}}
+    children: [trial, iti]
+  - thanks
