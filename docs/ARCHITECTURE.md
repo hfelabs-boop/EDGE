@@ -40,7 +40,8 @@ edge/
                     LabJack, parallel), the watcher (connect/disconnect events), whether the experiment's devices are there
   hardware_db.py    what a device probably is and how to add it (built-in list + the lab's hardware.yaml)
   importers/        importers from PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Psychtoolbox, Gorilla, PsyToolkit (`edge import`)
-  library/          the task library: tasks/<id>/ folders (experiment, meta.yaml, stimuli), loader, copies, `edge library`
+  library/          the task library: 60 classic paradigms, one folder per task (tasks/<id>/: experiment, meta.yaml,
+                    trial lists, stimuli), loader, copies, `edge library`; stimulus generators in tools/library/
   templates.py      starter experiments (and hidden starting points for tutorials)
   survey.py         survey questions: model, validation, display logic, page renderer, auto-answers, data, scoring
   survey_library.py validated questionnaires and answer scales (citations, licences, scoring rules)
@@ -65,10 +66,7 @@ edge/
   updater.py        `edge update`: git clones and installed copies; `edge.__version__` names the exact commit
   help.py           docs topics, search, tutorials, generated reference pages (`edge help`, `edge docs build`)
   tutorials/        interactive tutorial definitions (YAML; also rendered into docs/TUTORIALS.md)
-  library/          the task library: tasks/<id>/ holds a ready-made classic paradigm (experiment, trial lists, meta.yaml)
   assets/           the EDGE icon in every size the desktop shortcuts need
-  library/          the task library: classic paradigms ready to use, one folder per task (tasks/<id>/: the
-                    experiment, meta.yaml, trial lists, stimuli); their generator scripts are in tools/library/
   assistant/        the natural-language assistant: providers (Claude, OpenAI-compatible, Ollama, LM Studio over
                     urllib), settings (user config folder, 0600), attachments and their previews, the agent loop
                     over ExperimentDoc operations, JSON fallback mode, change lists, jobs and the builder API
