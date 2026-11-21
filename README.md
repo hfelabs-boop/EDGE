@@ -297,7 +297,7 @@ claude mcp add edge -- edge mcp --root .          # Claude Code (VS Code: .vscod
 > "Build a 2-back task with letters, 3 blocks of 30 trials, g.tec EEG over LSL and TTL triggers,
 > dry-run it and give me the expected session length."
 
-The 59 tools cover building experiments (including the design wizard and questionnaires) and editing them (with all-or-nothing batch edits), devices,
+The 61 tools cover building experiments (including the design wizard and questionnaires) and editing them (with all-or-nothing batch edits), devices,
 validation, dry runs, real runs, preflight, lock and verify, session analysis, exports, undo and
 version history, and opening the visual builder. Edits are validated, backed up and show up live in an open builder.
 See [docs/MCP.md](docs/MCP.md).

@@ -1,3 +1,7 @@
 # Source distributions carry the guides too, so wheels built from them include edge/docs (see setup.py).
 include setup.py
 recursive-include docs *.md *.png
+# The task library (edge/library/tasks/<id>/: experiment, meta.yaml, stimuli), without test runs or caches.
+recursive-include edge/library/tasks *
+recursive-exclude edge/library/tasks/*/data *
+global-exclude __pycache__ *.pyc .DS_Store

@@ -21,12 +21,13 @@ terminal.
 
 | | |
 |---|---|
+| [Task library](LIBRARY.md) | ready-made classic tasks (Stroop, flanker, n-back, go/no-go …) to run or adapt: how to start from one, change it, cite it, and add your own |
 | [Cookbook](COOKBOOK.md) | copy-and-adapt recipes: jittered ISIs, breaks, counterbalancing, practice criteria, gaze-contingent trials, EEG triggers … |
 | [Surveys and questionnaires](SURVEYS.md) | question types, display logic, scores, and the library of validated questionnaires (PHQ-9, GAD-7, Big Five, NASA-TLX …) |
 | [Experiment format](EXPERIMENT_FORMAT.md) | complete reference of the YAML format: settings, components, timing, loops, workflows, rules, HTML pages |
 | [Devices and synchronization](DEVICES.md) | eye trackers, EEG, physiology, LSL, TTL; how clocks are aligned and verified |
 | [Data](DATA.md) | saving and loading, what is recorded, trial tables, summaries, exports |
-| [Importing](IMPORT.md) | bring experiments from PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Gorilla and Psychtoolbox |
+| [Importing](IMPORT.md) | bring experiments from PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Gorilla, Psychtoolbox and PsyToolkit |
 | [Claude & VS Code (MCP)](MCP.md) | build and analyse experiments by describing them in plain language |
 
 ## Reference (generated from the code)

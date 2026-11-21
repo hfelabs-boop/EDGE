@@ -53,7 +53,7 @@ If `edge` isn't on the PATH Claude Desktop uses, give the full path to the execu
 
 | Area | Tools |
 |---|---|
-| Discover | `list_experiments`, `list_component_types`, `list_device_types`, `list_templates`, `scan_hardware` |
+| Discover | `list_experiments`, `list_component_types`, `list_device_types`, `list_templates`, `list_library`, `scan_hardware` |
 | Documents | `create_experiment`, `create_from_wizard` (a finished task from plain design answers), `describe_experiment`, `get_experiment_source`, `replace_experiment_source`, `estimate_duration` |
 | Batch edit | `edit_experiment`: many operations, applied all-or-nothing |
 | Routines | `add_routine`, `update_routine`, `remove_routine` |
@@ -61,7 +61,8 @@ If `edge` isn't on the PATH Claude Desktop uses, give the full path to the execu
 | Components | `add_component`, `update_component`, `remove_component`, `move_component` |
 | Flow | `add_loop`, `update_loop`, `set_conditions`, `add_branch`, `modify_flow` |
 | Workflow logic | `add_workflow` (state machines), `update_workflow_state`, `add_routine_rule` |
-| Import | `import_experiment`: PsychoPy, E-Prime, OpenSesame, jsPsych |
+| Import | `import_experiment`: PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Psychtoolbox, Gorilla, PsyToolkit |
+| Task library | `list_library` (classic tasks by category, search, input, language), `create_from_library` (copy one into a new experiment folder, with what to cite) |
 | Devices & settings | `add_device`, `update_device`, `remove_device`, `update_settings` |
 | Test & run | `validate_experiment` (plain-language issues, incl. names not defined where they're used), `dry_run`, `run_experiment`, `run_status` |
 | Before collecting data | `preflight` (one go / no-go: checks, packages, a full test run, the lock), `check_system` (this computer: power saving, display, the known causes of bad timing), `test_device` (connect one device for a few seconds: data rate, buttons, markers) |

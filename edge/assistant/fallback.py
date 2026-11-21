@@ -49,8 +49,8 @@ def json_protocol(compact: bool = False) -> str:
         lines.append(f"- {t.name} — {what} — input: {{{fields}}}")
     return ("Answer format\n"
             "You cannot call tools directly. Answer every message with exactly ONE JSON object and nothing else:\n"
-            '  {"say": "<short note for the researcher>", "tool": {"name": "<tool name>", "input": {…}}}   to use a tool\n'
-            '  {"say": "<final summary for the researcher>", "done": true}                                  when finished\n'
+            '  {"say": "<short note for the researcher>", "tool": {"name": "<tool name>", "input": {…}}}  to use a tool\n'
+            '  {"say": "<final summary for the researcher>", "done": true}  when finished\n'
             "The tools are:\n" + "\n".join(lines) + "\n"
             'You will receive each tool\'s result in the next message as {"tool_result": {...}}.')
 

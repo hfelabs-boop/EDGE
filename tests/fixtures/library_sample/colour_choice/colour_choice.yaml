@@ -1,0 +1,30 @@
+name: colour_choice
+description: Red or blue? F for red, J for blue (a sample library task for tests).
+settings:
+  window: {size: [1280, 720], background: "#808080"}
+measures:
+  - {id: rt, label: Reaction time, role: outcome, column: resp.rt, trials: $resp.corr == 1, loop: trials, summary: median, units: s}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: colour, label: Colour, role: factor, column: colour}
+routines:
+  instructions:
+    components:
+      - {id: msg, type: text, text: "Red: press F.   Blue: press J.\n\nPress SPACE to start.", height: 30}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+  trial:
+    components:
+      - {id: fix, type: fixation, duration: 0.5}
+      - {id: patch, type: image, image: $picture, size: [200, 200], start: 0.5}
+      - {id: resp, type: keyboard, keys: [f, j], start: 0.5, duration: 2, correct: $key, end_routine: true}
+  thanks:
+    duration: 1
+    components:
+      - {id: bye, type: text, text: Thank you!}
+flow:
+  - instructions
+  - loop: trials
+    conditions: conditions.csv
+    order: random
+    repeats: 2
+    children: [trial]
+  - thanks

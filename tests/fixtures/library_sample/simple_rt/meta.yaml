@@ -1,0 +1,13 @@
+id: simple_rt
+title: Simple reaction time (sample)
+category: Attention
+summary: Press the space bar as soon as a white square appears.
+description: >
+  A sample task for EDGE's own tests of the task library. A square appears after a random wait of 1 to 2 s;
+  participants press SPACE as quickly as they can. Six trials; the outcome is the median reaction time.
+measures: ["median reaction time"]
+duration_min: 1
+input: keyboard
+languages: [en]
+references: ["Donders, F. C. (1869/1969). On the speed of mental processes. Acta Psychologica, 30, 412-431."]
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/simple_rt.html"}

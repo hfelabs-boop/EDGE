@@ -9,7 +9,8 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 root = os.path.abspath(os.path.join(SPECPATH, ".."))
 sys.path.insert(0, root)      # bundle this copy of EDGE, whether or not (or wherever) it is pip-installed
 # the same data files as package-data in pyproject.toml, plus the guides for the Help Center
-datas = collect_data_files("edge", includes=["builder/static/*", "tutorials/*.yaml", "survey_page/*", "assets/*"])
+datas = collect_data_files("edge", includes=["builder/static/*", "tutorials/*.yaml", "survey_page/*", "assets/*",
+                                            "library/tasks/**/*"])
 datas += [(os.path.join(root, "docs"), "edge/docs")]
 
 # edge/__main__.py imports edge.cli absolutely, so it works as the app's entry script

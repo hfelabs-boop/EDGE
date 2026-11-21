@@ -327,6 +327,37 @@ def create_server(root: str | Path = ".") -> FastMCP:
         from .templates import public_templates
         return {k: v.get("description", v["name"]) for k, v in public_templates().items()}
 
+    @tool
+    def list_library(category: str = "", search: str = "", input: str = "", language: str = "") -> dict[str, Any]:
+        """The task library: ready-made, tested versions of classic paradigms (Stroop, flanker, go/no-go, n-back,
+        Simon …), each with instructions, practice, main trials, measures and references. Filter by category
+        (Attention, Inhibition and conflict, Cognitive control, Working memory, Vigilance, Decision making, Language,
+        Social and implicit, Perception and motor, Problem solving), search words, input (keyboard, mouse, touch,
+        keyboard+mouse) or language (en, de …). Start from one with create_from_library."""
+        from . import library
+        try:
+            tasks = library.list_tasks(category or None, search or None, input or None, language or None)
+        except library.LibraryError as e:
+            raise EditError(str(e)) from None
+        return {"tasks": [t.to_dict(full=False) | {"references": t.references} for t in tasks],
+                "categories": [c for c in library.categories() if c["count"]]}
+
+    @tool
+    def create_from_library(task: str, directory: str = ".", name: str = "") -> dict[str, Any]:
+        """Copy a task of the library (see list_library) into a new experiment folder <directory>/<name>/ (name: the
+        task's id when left out) with its pictures, sounds, trial lists and a CITATION.md. Never overwrites: an
+        existing folder makes the copy <name>_2. Returns the new experiment's path, outline and what to cite; adapt
+        it with the editing tools and check it with dry_run."""
+        from . import library
+        try:
+            t = library.get_task(task)
+            exp = library.copy_task(t.id, ws.path(directory, must_exist=False), name or None)
+        except library.LibraryError as e:
+            raise EditError(str(e)) from None
+        doc = ExperimentDoc.open(exp)
+        return {"ok": True, "path": ws.rel(exp), "title": t.title, "measures": t.measures, "citation": t.citation(),
+                "outline": doc.outline(), **_issues(doc)}
+
     # ================================================================ whole documents
     @tool
     def create_experiment(path: str, name: str = "", template: str = "", description: str = "") -> dict[str, Any]:
@@ -775,9 +806,10 @@ def create_server(root: str | Path = ".") -> FastMCP:
     def import_experiment(source: str, out_dir: str = "", platform: str = "", name: str = "") -> dict[str, Any]:
         """Import a PsychoPy (.psyexp), E-Prime (generated .ebs3/.ebs2 script, plus List .txt exports next to it),
         OpenSesame (.osexp/.opensesame), jsPsych (.html/.js), Inquisit (.iqx/.exp), Presentation (.sce with its .pcl),
-        Psychtoolbox (.m, partial translation of common patterns) or Gorilla (task structure .json and/or spreadsheet
+        Psychtoolbox (.m, partial translation of common patterns), PsyToolkit (the .zip from a PsyToolkit account, or its
+        script .psy/.txt) or Gorilla (task structure .json and/or spreadsheet
         .csv/.xlsx) experiment from the workspace. platform (psychopy, eprime, opensesame, jspsych, inquisit,
-        presentation, psychtoolbox, gorilla) is detected when left out; name renames the experiment. Importing the same file
+        presentation, psychtoolbox, gorilla, psytoolkit) is detected when left out; name renames the experiment. Importing the same file
         again updates an earlier import nobody changed since; one that was edited is never overwritten (the new one
         goes to <folder>_2). Returns the new EDGE experiment
         path, what was converted, and items that need manual work. Follow with dry_run."""

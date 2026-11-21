@@ -1,0 +1,14 @@
+id: colour_choice_touch
+title: Colour choice, touch screen (sample)
+category: Decision making
+summary: Tap the patch that has the colour named on the screen.
+description: >
+  A sample task for EDGE's own tests of the task library: the touch-screen version of the colour choice task.
+  A colour word appears with a red and a blue patch; participants tap the patch of that colour.
+measures: ["choice reaction time", "accuracy"]
+duration_min: 2
+input: touch
+languages: [en]
+variant_of: colour_choice
+references: ["Hick, W. E. (1952). On the rate of gain of information. Quarterly Journal of Experimental Psychology, 4, 11-26."]
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/choice_rt.html"}

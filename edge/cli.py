@@ -1035,12 +1035,13 @@ def main(argv: list[str] | None = None) -> int:
     bk.set_defaults(fn=cmd_backups)
 
     im = sub.add_parser("import", help="import a PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, "
-                                       "Psychtoolbox or Gorilla experiment")
+                                       "Psychtoolbox, Gorilla or PsyToolkit experiment")
     im.add_argument("source", help=".psyexp, .ebs3/.ebs2, .osexp/.opensesame, jsPsych .html/.js, Inquisit .iqx/.exp, "
-                                   "Presentation .sce, Psychtoolbox .m, or a Gorilla task .json / spreadsheet .csv/.xlsx")
+                                   "Presentation .sce, Psychtoolbox .m, a Gorilla task .json / spreadsheet .csv/.xlsx, or a "
+                                   "PsyToolkit .zip / script .psy")
     im.add_argument("--out", help="output folder (default: <source>_edge next to the source)")
     im.add_argument("--platform", choices=["psychopy", "eprime", "opensesame", "jspsych", "inquisit", "presentation",
-                                           "psychtoolbox", "gorilla"], help="force the source platform (normally detected)")
+                                           "psychtoolbox", "gorilla", "psytoolkit"], help="force the source platform (normally detected)")
     im.add_argument("--name", help="name for the imported experiment")
     im.set_defaults(fn=cmd_import)
 
@@ -1078,6 +1079,8 @@ def main(argv: list[str] | None = None) -> int:
 
     from .gamma import add_cli as gamma_cli      # edge gamma: measure the monitor, save a calibration file
     gamma_cli(sub)
+    from .library.cli import add_cli as library_cli     # edge library list|show|new: the task library
+    library_cli(sub)
 
     a = p.parse_args(argv)
     if a.cmd is None:          # plain `edge`, e.g. from the desktop icon

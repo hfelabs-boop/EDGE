@@ -1,0 +1,28 @@
+name: simple_rt
+description: Press SPACE as soon as the square appears (a sample library task for tests).
+settings:
+  window: {size: [1280, 720], background: "#202020"}
+measures:
+  - {id: rt, label: Reaction time, role: outcome, column: resp.rt, loop: trials, summary: median, units: s}
+routines:
+  instructions:
+    components:
+      - {id: msg, type: text, text: "Press SPACE as soon as you see the square.\n\nPress SPACE to start.", height: 30}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+  trial:
+    components:
+      - {id: fix, type: fixation, duration: $wait}
+      - {id: square, type: shape, shape: rect, size: [100, 100], fill: white, start: $wait}
+      - {id: resp, type: keyboard, keys: [space], start: $wait, duration: 2, correct: space, end_routine: true}
+  thanks:
+    duration: 1
+    components:
+      - {id: bye, type: text, text: Thank you!}
+flow:
+  - instructions
+  - loop: trials
+    conditions: [{wait: 1.0}, {wait: 1.5}, {wait: 2.0}]
+    order: random
+    repeats: 2
+    children: [trial]
+  - thanks

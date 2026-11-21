@@ -46,7 +46,7 @@ def looks_like_experiment(d: Any) -> bool:
 
 
 IMPORT_ORDER = {"psychopy": 0, "eprime": 1, "opensesame": 2, "inquisit": 3, "presentation": 4, "psychtoolbox": 5,
-                "gorilla": 6, "jspsych": 7}
+                "gorilla": 6, "psytoolkit": 7, "jspsych": 8}
 _ASSET_REF = re.compile(r"""["'(]\s*((?:\./)?[\w\- .]+(?:/[\w\- .]+)+\.(?:png|jpe?g|gif|bmp|svg|webp|tiff?|wav|mp3|ogg|flac|"""
                         r"""m4a|aiff?|mp4|webm|mov|avi|csv|tsv|xlsx|txt))\s*["')]""", re.I)
 
@@ -56,7 +56,8 @@ def import_candidates(folder: Path) -> list[Path]:
     from ..importers import SUPPORTED_EXTENSIONS, _recognize
     found = []
     for f in sorted(folder.rglob("*")):
-        if not f.is_file() or f.suffix.lower() not in SUPPORTED_EXTENSIONS or f.stat().st_size > 20 * 1024 * 1024:
+        if not f.is_file() or f.suffix.lower() not in SUPPORTED_EXTENSIONS \
+                or f.stat().st_size > (500 if f.suffix.lower() == ".zip" else 20) * 1024 * 1024:   # a zip holds the pictures too
             continue
         try:
             platform = _recognize(f)
@@ -223,7 +224,7 @@ def schema() -> dict[str, Any]:
         "loop_orders": list(LOOP_ORDERS),
         "templates": {k: {"name": v["name"], "description": v.get("description", "")} for k, v in public_templates().items()},
         "import_extensions": [".psyexp", ".ebs3", ".ebs2", ".ebs", ".es3", ".es2", ".es", ".osexp", ".opensesame", ".html",
-                              ".htm", ".js", ".iqx", ".exp", ".sce", ".pcl", ".m", ".json", ".csv", ".xlsx", ".edgez"],
+                              ".htm", ".js", ".iqx", ".exp", ".sce", ".pcl", ".m", ".json", ".csv", ".xlsx", ".psy", ".zip", ".txt", ".edgez"],
         "default_settings": DEFAULT_SETTINGS,
         "survey": survey_schema(),
     }
@@ -385,7 +386,7 @@ class BuilderApp:
 
         ``source`` is a file, or the folder the builder uploaded the chosen files into (keeping their sub-folders
         when a folder was chosen or dropped). In a folder the experiment file is found by what it is, not by the
-        order of the files: PsychoPy, E-Prime, OpenSesame, Inquisit, Presentation, Psychtoolbox, Gorilla, then jsPsych
+        order of the files: PsychoPy, E-Prime, OpenSesame, Inquisit, Presentation, Psychtoolbox, Gorilla, PsyToolkit, then jsPsych
         (an HTML page that only loads its timeline from a script is imported from that script). ``main``, the file
         the researcher chose (relative to the folder), is tried first."""
         from ..importers import ImportError_, import_experiment
@@ -410,7 +411,7 @@ class BuilderApp:
                     import_experiment(closed[0], dest)
                 raise ImportError_("None of these files is a PsychoPy (.psyexp), E-Prime (.ebs3/.ebs2), OpenSesame "
                                    "(.osexp), jsPsych (.html/.js), Inquisit (.iqx), Presentation (.sce), Psychtoolbox "
-                                   "(.m) or Gorilla (task .json / spreadsheet) experiment.")
+                                   "(.m), Gorilla (task .json / spreadsheet) or PsyToolkit (.zip / .psy) experiment.")
             first: Exception | None = None
             for f in candidates:
                 try:
@@ -1036,6 +1037,9 @@ def make_handler(app: BuilderApp):
                 if u.path.startswith("/api/hardware/"):  # plug and play (hardware_api.py)
                     from . import hardware_api
                     return self._json(*hardware_api.handle(app, "GET", u.path, q, None))
+                if u.path == "/api/library" or u.path.startswith("/api/library/"):   # the task library (library_api.py)
+                    from . import library_api
+                    return self._json(*library_api.handle(app, "GET", u.path, q, None))
                 if u.path == "/api/experiment":
                     return self._json(app.load(q["path"]))
                 if u.path == "/api/support_bundle":
@@ -1203,6 +1207,11 @@ def make_handler(app: BuilderApp):
                         return self._json({"error": "send the request as JSON (Content-Type: application/json)"}, 415)
                     from . import hardware_api
                     return self._json(*hardware_api.handle(app, "POST", u.path, q, self._body_cached()))
+                if u.path.startswith("/api/library/"):   # the task library: copy a task into the builder's folder
+                    if "application/json" not in (self.headers.get("Content-Type") or "").lower():
+                        return self._json({"error": "send the request as JSON (Content-Type: application/json)"}, 415)
+                    from . import library_api
+                    return self._json(*library_api.handle(app, "POST", u.path, q, self._body_cached()))
                 if u.path == "/api/upload":
                     dest = app.safe_path(q["path"])
                     if dest.suffix.lower() in BLOCKED_UPLOAD_SUFFIXES or dest.name.startswith("."):
