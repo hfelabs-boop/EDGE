@@ -1,0 +1,33 @@
+id: touch_simon_ops
+title: Simon task, touchscreen (operational)
+category: Inhibition and conflict
+summary: Tap the left or right button for the kind of contact (friendly or hostile track, wheeled or tracked vehicle) while ignoring where it appears.
+description: >
+  The touchscreen Simon task (`touch_simon`) with operator displays. Two response buttons sit in the bottom
+  corners, each showing its kind of contact. 500 ms after the fixation cross a contact appears on the left or the
+  right of the screen, and the operator taps the button of its kind within 2 seconds. When the contact is on the
+  side of the correct button the trial is congruent, otherwise incongruent. 8 practice trials with feedback, then
+  80 test trials (the four kind x side combinations, balanced, in random order), with feedback after errors and a
+  500 ms pause between trials. Main outcome: the Simon effect in tap times and accuracy.
+measures:
+  - "Median tap RT on correct trials, congruent vs incongruent (Simon effect)"
+  - "Accuracy, congruent vs incongruent"
+duration_min: 4
+input: touch
+languages: [en]
+variant_of: touch_simon
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  As in simon_ops: the blue and orange circles become two kinds of contact, and the coloured buttons become
+  buttons that show the kind of contact they stand for. c2: a friendly air track (blue rectangle frame; left
+  button) or a hostile air track (red diamond frame; right button) on a radar-style plot. uav: a light wheeled
+  vehicle (left button) or a light tracked vehicle (right button) in a surveillance camera frame with a reticle.
+  All generic and fictional.
+references:
+  - "Simon, J. R., & Wolf, J. D. (1963). Choice reaction times as a function of angular stimulus-response correspondence and age. Ergonomics, 6, 99–105."
+  - "Hommel, B. (1993). Inverting the Simon effect by intention: Determinants of direction and extent of effects of irrelevant spatial information. Psychological Research, 55, 270–279."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/touch_simon.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). Tap RTs include the hand movement to the button. The
+  trial list is the classic task's, copied with the kit pictures by tools/library/make_simon_ops.py.

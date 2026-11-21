@@ -1,0 +1,42 @@
+id: wcst_ops
+title: Card sorting task, contact reports (operational)
+category: Problem solving
+summary: Find the hidden sorting rule for contact reports (affiliation, type or number of tracks; or threat, signal or number of emitters) from right/wrong feedback; the rule changes without warning.
+description: >
+  The library's WCST-inspired card sorting task with operator report cards, measuring set shifting and
+  perseveration. Four key reports stay on screen. Each new report (one of 64: 4 x 4 x 1-4) is sorted by clicking
+  a key report, without a time limit, and is followed by RIGHT or WRONG for 0.9 s. The rule is never stated; it
+  starts with the first dimension and, after 10 correct sorts in a row, changes silently to the second, then the
+  number, then the first again. The task ends when 6 categories (rules) are completed or after 128 reports. Main
+  outcomes: categories completed, total errors and perseverative errors (here: errors that would have been
+  correct under the previous category's rule), plus the number of reports used.
+measures:
+  - "Categories completed (0-6)"
+  - "Total errors"
+  - "Perseverative errors (sorting by the previous rule)"
+  - "Proportion of correct sorts and number of reports used"
+duration_min: 8
+input: mouse
+languages: [en]
+variant_of: wcst
+domain: defense
+themes: [c2, ew]
+adaptation: >
+  The cards become contact reports with three dimensions that map one to one onto the classic colour, shape and
+  number, so rules, key cards and scoring stay the same. c2: 1-4 track symbols; colour = AFFILIATION (red hostile
+  diamond, green neutral square, yellow unknown quatrefoil, blue friendly rectangle), shape = TYPE (the icon: air,
+  surface, ground, subsurface), number = number of tracks; key reports 1 hostile air, 2 neutral surface, 3 unknown
+  ground, 4 friendly subsurface tracks. ew: 1-4 emitter traces on a waterfall-style card; colour = THREAT level
+  (red high, green own/cleared, yellow medium, blue low), shape = SIGNAL type (continuous, pulsed, burst, sweep),
+  number = number of emitters. All generic and fictional.
+references:
+  - "Berg, E. A. (1948). A simple objective technique for measuring flexibility in thinking. Journal of General Psychology, 39, 15–22."
+  - "Grant, D. A., & Berg, E. (1948). A behavioral analysis of degree of reinforcement and ease of shifting to new responses in a Weigl-type card-sorting problem. Journal of Experimental Psychology, 38, 404–411."
+  - "Milner, B. (1963). Effects of different brain lesions on card sorting: The role of the frontal lobes. Archives of Neurology, 9, 100–110."
+  - "Nyhus, E., & Barceló, F. (2009). The Wisconsin Card Sorting Test and the cognitive assessment of prefrontal executive functions: A critical update. Brain and Cognition, 71, 437–451."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/wcst.html"}
+notes: >
+  Not the copyrighted clinical WCST and not normed. Switch the display with the variable `theme` (c2, ew). The
+  cards (stimuli/c2/ and stimuli/ew/, named by the classic codes, e.g. 1_red_triangle) and cards.csv are drawn by
+  tools/library/make_wcst_ops.py (Pillow; frame shapes from the defence kit's generator). Scoring as in wcst
+  (simplified perseveration score).

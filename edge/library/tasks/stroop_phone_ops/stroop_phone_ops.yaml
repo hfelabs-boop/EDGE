@@ -1,0 +1,155 @@
+name: stroop_phone_ops
+description: >
+  Stroop task for phones and tablets (portrait screen), operational adaptation of `stroop_phone`. A track
+  affiliation label (HOSTILE, NEUTRAL, FRIENDLY, UNKNOWN) appears in one of the four affiliation colours and the
+  operator taps the button of the label's COLOUR, ignoring what it says. Half congruent, half incongruent;
+  practice with feedback, then 96 test trials. Works with a mouse too. One variable, `theme`, sets the display:
+  c2 (a track label on a tactical plot) or uav (a target tag under the reticle of a camera frame).
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops, edge/library/tasks/search_ops/search_ops.yaml)
+# `theme` is the first variable (c2 or uav); the label and its colour come from the trial list and are the same in
+# every theme; the display around them (plot or camera frame, reticle, instructions) are items guarded with
+# `if: "$theme == 'uav'"`.
+
+settings:
+  window: {size: [540, 960], background: "#000000", units: height}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or uav
+  cameras: [stimuli/terrain_01_farmland.jpg, stimuli/terrain_05_farmland_ir.jpg]
+  # set for every trial by the variable item `show` (these are only starting values, used by the preview)
+  camera: stimuli/terrain_01_farmland.jpg
+  track_no: 417
+
+measures:
+  - {id: rt, label: Reaction time (correct taps), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.3, 2.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: condition, label: Congruent or incongruent, role: factor, column: condition}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        text: |
+          TRACK LABELS
+
+          You are watching the tactical plot. Each new track gets a label written in a colour.
+
+          Tap the button with the COLOUR of the label. Ignore what the label says.
+          (red = hostile, green = neutral, blue = friendly, yellow = unknown)
+
+          Be as fast as you can without making mistakes.
+        height: 0.03
+        wrap_width: 0.5
+        pos: [0, 0.12]
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        text: |
+          TARGET TAGS
+
+          You are watching a surveillance camera. Under the reticle a target tag appears, written in a colour.
+
+          Tap the button with the COLOUR of the tag. Ignore what the tag says.
+          (red = hostile, green = neutral, blue = friendly, yellow = unknown)
+
+          Be as fast as you can without making mistakes.
+        height: 0.03
+        wrap_width: 0.5
+        pos: [0, 0.12]
+      - {id: start_btn, type: shape, shape: rect, size: [0.3, 0.09], fill: "#3a3a3a", line_color: "#aaaaaa", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start practice", height: 0.03, pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  trial:
+    components:
+      - id: show
+        type: variable
+        set:
+          shown_theme: $theme      # puts the theme into every trial's data (column show.shown_theme)
+          track_no: "$random.randint(100, 989)"
+          camera: "$random.choice(cameras)"
+      # ---- the display around the label (upper half), one block per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_800x800.png, size: [0.5, 0.5], pos: [0, 0.22]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: $camera, size: [0.8, 0.45], pos: [0, 0.25]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_brackets.png, size: [0.2, 0.2], pos: [0, 0.32]}
+      - {id: status_bar, type: shape, shape: rect, size: [0.5625, 0.045], pos: [0, 0.4775], fill: "#0a2232", opacity: 0.85}
+      - {id: status, type: text, font: DejaVu Sans Mono, height: 0.02, color: "#9fe8ff", pos: [0, 0.4775], text: "$'TAP THE LABEL COLOUR' if theme == 'c2' else 'TAP THE TAG COLOUR'"}
+      # ---- the Stroop stimulus (the same in every theme) ----
+      - {id: fix, type: fixation, duration: 0.5, size: 0.04, pos: [0, 0.15]}
+      - {id: plate, type: shape, shape: rect, size: [0.5, 0.13], fill: "#04121c", line_color: "#1d4a5e", line_width: 2, opacity: 0.85, pos: [0, 0.14], start: 0.5}
+      - id: stimulus
+        type: text
+        text: $word
+        color: $ink_rgb
+        height: 0.06
+        bold: true
+        start: 0.5
+        pos: [0, 0.155]
+        marker: $f"word_{condition}"
+      - {id: track_tag, type: text, font: DejaVu Sans Mono, text: "$f'TRK {track_no:04d}'", color: "#7f9aa6", height: 0.018, pos: [0, 0.1], start: 0.5}
+      # four answer buttons (2 x 2) in the lower half, always in the same places, in the affiliation colours
+      - {id: btn_hostile, type: shape, shape: rect, size: [0.22, 0.12], fill: "#ff8080", pos: [-0.125, -0.12]}
+      - {id: btn_neutral, type: shape, shape: rect, size: [0.22, 0.12], fill: "#aaffaa", pos: [0.125, -0.12]}
+      - {id: btn_friendly, type: shape, shape: rect, size: [0.22, 0.12], fill: "#80e0ff", pos: [-0.125, -0.27]}
+      - {id: btn_unknown, type: shape, shape: rect, size: [0.22, 0.12], fill: "#ffff80", pos: [0.125, -0.27]}
+      - id: resp
+        type: mouse
+        clickable: [btn_hostile, btn_neutral, btn_friendly, btn_unknown]
+        touch: true
+        start: 0.5
+        duration: 2.5
+        correct: $correct_button
+        end_routine: true
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr == 1 else ('Too slow' if resp.clicked is None else 'Wrong colour')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 0.05
+        pos: [0, 0.15]
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: |
+          Practice finished.
+
+          Now the real test (about 4 minutes). You will only see a message after a mistake.
+          Tap the COLOUR of the label.
+        height: 0.03
+        wrap_width: 0.5
+        pos: [0, 0.12]
+      - {id: start_btn, type: shape, shape: rect, size: [0.3, 0.09], fill: "#3a3a3a", line_color: "#aaaaaa", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start", height: 0.03, pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "End of the watch. Thank you!", height: 0.035, wrap_width: 0.5}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    children: [trial, feedback]
+  - practice_done
+  - loop: trials
+    conditions: stroop.csv
+    order: random
+    repeats: 4
+    max_repeat: {ink: 3}
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - thanks

@@ -1,0 +1,5 @@
+global_shape,local_shape,cells,consistency,global_key,local_key
+diamond,diamond,...x.....x.x...x...x.x.....x.x...x...x.x.....x...,consistent,h,h
+diamond,square,...x.....x.x...x...x.x.....x.x...x...x.x.....x...,inconsistent,h,s
+square,diamond,........xxxxx..x...x..x...x..x...x..xxxxx........,inconsistent,s,h
+square,square,........xxxxx..x...x..x...x..x...x..xxxxx........,consistent,s,s

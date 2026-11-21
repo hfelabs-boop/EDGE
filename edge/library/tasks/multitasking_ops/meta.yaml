@@ -1,0 +1,36 @@
+id: multitasking_ops
+title: Multitasking, two feeds (operational)
+category: Cognitive control
+summary: Monitor two feeds; report the kind of a contact group in the top feed or its size in the bottom feed, in single-task blocks and a mixed block.
+description: >
+  The library's multitasking task with operator displays. Two feeds are on the screen, one above the other. 500
+  ms into each trial a group of 2 or 3 contacts of one kind appears in one feed. In the top feed the operator
+  reports the kind of the group (A or L), in the bottom feed its size (2 = A, 3 = L), within 3 seconds. Block 1
+  has only the top-feed task (24 trials), block 2 only the bottom-feed task (24 trials), block 3 mixes both at
+  random (64 trials); each block starts with 8 practice trials with feedback. Half of the groups are incongruent
+  (the two tasks call for different keys). Main outcomes: the mixing cost (repeat trials in the mixed block vs
+  single-task trials) and the switch cost (switch vs repeat trials in the mixed block).
+measures:
+  - "Median RT on correct trials: single task vs mixed-block repeat vs mixed-block switch (mixing and switch costs)"
+  - "Accuracy by trial type and task"
+duration_min: 6
+input: keyboard
+languages: [en]
+variant_of: multitasking
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The frame's two halves become two feeds the operator monitors, and the figure (a diamond or rectangle with 2 or
+  3 dots) becomes a group of 2 or 3 contacts of one kind: the shape task becomes reporting the group's kind and
+  the filling task counting the group. c2: on a radar-style plot, an AIR PICTURE feed (top; hostile air tracks =
+  A, friendly = L) and a GROUP SIZE feed (bottom). uav: two surveillance camera frames, CAMERA 1 (top; tracked
+  vehicles = A, wheeled = L) and CAMERA 2 (bottom; number of vehicles). The trial lists keep the classic codes
+  (shape diamond = the A kind, rectangle = the L kind; dots = group size). All generic and fictional.
+references:
+  - "Stoet, G., O'Connor, D. B., Conner, M., & Laws, K. R. (2013). Are women better than men at multi-tasking? BMC Psychology, 1, 18."
+  - "Monsell, S. (2003). Task switching. Trends in Cognitive Sciences, 7, 134–140."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/multitasking.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). The block and practice lists are the classic task's,
+  copied with the kit pictures by tools/library/make_multitasking_ops.py; their stage column keeps practice out of
+  the measures. The trial type (single / first / repeat / switch) is saved as cond.trial_type.

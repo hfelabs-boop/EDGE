@@ -1,0 +1,154 @@
+name: negative_priming_ops
+description: >
+  Negative priming, operational adaptation. The same paradigm, trial lists, timing, keys and measures as the
+  library's `negative_priming` task. Each trial is a prime display followed by a probe display; in both, two
+  designator letters overlap and the operator presses the key of the one that matters (D, F, J or K), ignoring the
+  other. In ignored-repetition pairs the probe's target letter is the letter that had to be ignored in the prime;
+  in control pairs both probe letters are new. One variable, `theme`, sets the display: c2 (a hostile track's
+  designator over a friendly track's, on a radar plot) or ew (a high-threat emitter's designator over a low-threat
+  emitter's, on the spectrum display).
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops, edge/library/tasks/search_ops/search_ops.yaml)
+# `theme` is the first variable (c2 or ew). The letters come from the trial list; their colours are data per
+# theme (`looks`: the target's and the distractor's colour). The display around them (plot or spectrum, status
+# line, instructions) are items guarded with `if: "$theme == 'ew'"`.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or ew
+  # per theme: the colour of the letter to report (target) and of the letter to ignore (distractor)
+  looks:
+    c2: {target: "#ff8080", distractor: "#80e0ff", status: "REPORT THE HOSTILE (RED) DESIGNATOR   D  F  J  K"}
+    ew: {target: "#ff3b30", distractor: "#3ad0ff", status: "REPORT THE HIGH-THREAT (RED) EMITTER   D  F  J  K"}
+
+measures:
+  - {id: probe_rt, label: Probe reaction time (prime and probe correct), role: outcome, column: probe_resp.rt,
+     trials: $probe_resp.corr == 1 and prime_resp.corr == 1, loop: trials, summary: median, units: s, expect: [0.25, 2.0]}
+  - {id: probe_accuracy, label: Probe accuracy, role: outcome, column: probe_resp.corr, loop: trials, summary: proportion}
+  - {id: prime_accuracy, label: Prime accuracy, role: check, column: prime_resp.corr, loop: trials, summary: proportion}
+  - {id: condition, label: Ignored repetition or control, role: factor, column: condition}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        text: |
+          HOSTILE DESIGNATORS
+
+          You are watching the radar plot. Two tracks are on top of each other, and their designator letters
+          overlap: a RED letter (the hostile track) and a BLUE letter (a friendly track).
+          Press the key of the RED (hostile) letter and ignore the blue one.
+
+          The letters are D, F, J and K: press the key with the same letter.
+          Put your fingers on D, F, J and K now.
+
+          Two displays come quickly one after the other; answer each one.
+          Be fast, but try not to make mistakes.
+
+          First a short practice. Press SPACE to start.
+        height: 25
+        wrap_width: 1100
+      - id: text_ew
+        type: text
+        if: "$theme == 'ew'"
+        text: |
+          HIGH-THREAT EMITTERS
+
+          You are watching the spectrum display. Two emitters share a channel, and their designator letters
+          overlap: a RED letter (a high-threat emitter) and a BLUE letter (a low-threat emitter).
+          Press the key of the RED (high-threat) letter and ignore the blue one.
+
+          The letters are D, F, J and K: press the key with the same letter.
+          Put your fingers on D, F, J and K now.
+
+          Two displays come quickly one after the other; answer each one.
+          Be fast, but try not to make mistakes.
+
+          First a short practice. Press SPACE to start.
+        height: 25
+        wrap_width: 1100
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  prime:
+    components:
+      - {id: show, type: variable, set: {shown_theme: $theme}}    # the theme in every trial's data (show.shown_theme)
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: spectrum_ew, type: image, if: "$theme == 'ew'", image: stimuli/spectrum_1280x720.png, size: [1280, 720]}
+      - {id: status_bar, type: shape, shape: rect, size: [1280, 40], pos: [0, 340], fill: "#0a2232", opacity: 0.85}
+      - {id: status, type: text, font: DejaVu Sans Mono, height: 17, color: "#9fe8ff", pos: [0, 340], text: "$looks[theme]['status']"}
+      - {id: plate, type: shape, shape: rect, size: [200, 180], fill: "#04121c", line_color: "#1d4a5e", line_width: 2, opacity: 0.9}
+      - {id: fix, type: fixation, duration: 0.5, size: 30}
+      - {id: prime_dist, type: text, text: $prime_distractor, color: "$looks[theme]['distractor']", height: 110, bold: true, pos: [14, -10], start: 0.5}
+      - {id: prime_targ, type: text, text: $prime_target, color: "$looks[theme]['target']", height: 110, bold: true, pos: [-14, 10], start: 0.5,
+         marker: prime_on}
+      - {id: prime_resp, type: keyboard, keys: [d, f, j, k], start: 0.5, duration: 2.0, correct: $prime_key, end_routine: true}
+
+  probe:
+    components:
+      - {id: probe_plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: probe_spectrum_ew, type: image, if: "$theme == 'ew'", image: stimuli/spectrum_1280x720.png, size: [1280, 720]}
+      - {id: probe_status_bar, type: shape, shape: rect, size: [1280, 40], pos: [0, 340], fill: "#0a2232", opacity: 0.85}
+      - {id: probe_status, type: text, font: DejaVu Sans Mono, height: 17, color: "#9fe8ff", pos: [0, 340], text: "$looks[theme]['status']"}
+      - {id: probe_plate, type: shape, shape: rect, size: [200, 180], fill: "#04121c", line_color: "#1d4a5e", line_width: 2, opacity: 0.9}
+      - {id: blank, type: wait, duration: 0.5}
+      - {id: probe_dist, type: text, text: $probe_distractor, color: "$looks[theme]['distractor']", height: 110, bold: true, pos: [14, -10], start: 0.5}
+      - {id: probe_targ, type: text, text: $probe_target, color: "$looks[theme]['target']", height: 110, bold: true, pos: [-14, 10], start: 0.5,
+         marker: '$f"probe_{condition}"'}
+      - {id: probe_resp, type: keyboard, keys: [d, f, j, k], start: 0.5, duration: 2.0, correct: $probe_key, end_routine: true}
+
+  feedback:
+    duration: 1.0
+    components:
+      - id: fb
+        type: text
+        text: "$'Both correct' if (prime_resp.corr == 1 and probe_resp.corr == 1) else 'Not quite: press the key of the RED letter'"
+        color: "$'#55dd55' if (prime_resp.corr == 1 and probe_resp.corr == 1) else '#ff5555'"
+        height: 34
+
+  iti:
+    duration: 0.8
+    components:
+      - {id: blank, type: wait}
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: |
+          Practice finished.
+
+          Now the real test (about 4 minutes). You will see a message only after a mistake.
+          Report the RED letter (D, F, J, K); ignore the blue one.
+
+          Press SPACE to start.
+        height: 28
+        wrap_width: 1100
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "End of the watch. Thank you!", height: 34}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    children: [prime, probe, feedback, iti]
+  - practice_done
+  - loop: trials
+    conditions: trials.csv
+    order: random
+    max_repeat: {condition: 3}
+    children:
+      - prime
+      - probe
+      - {routine: feedback, if: "$prime_resp.corr != 1 or probe_resp.corr != 1"}
+      - iti
+  - thanks

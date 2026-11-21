@@ -1,0 +1,5 @@
+colour,colour_rgb,side,x,correct_button,condition
+blue,#3d6df2,left,-0.45,btn_left,congruent
+blue,#3d6df2,right,0.45,btn_left,incongruent
+orange,#f28c28,left,-0.45,btn_right,incongruent
+orange,#f28c28,right,0.45,btn_right,congruent

@@ -1,0 +1,9 @@
+block,block_type,stage,half,task,shape,dots,correct_key,congruency
+shape,single,practice,top,shape,diamond,2,a,congruent
+shape,single,practice,top,shape,diamond,3,a,incongruent
+shape,single,practice,top,shape,rectangle,2,l,incongruent
+shape,single,practice,top,shape,rectangle,3,l,congruent
+shape,single,practice,top,shape,diamond,2,a,congruent
+shape,single,practice,top,shape,diamond,3,a,incongruent
+shape,single,practice,top,shape,rectangle,2,l,incongruent
+shape,single,practice,top,shape,rectangle,3,l,congruent

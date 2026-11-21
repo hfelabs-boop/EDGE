@@ -1,0 +1,35 @@
+id: stroop_en_ops
+title: Stroop task, easy to translate (operational)
+category: Inhibition and conflict
+summary: Operational Stroop task (report the colour of an affiliation label) with every participant-facing text in one block of variables, ready for translation.
+description: >
+  The operational Stroop design of stroop_ops (4 affiliation colours, 500 ms fixation, response within 2 s, half
+  congruent and half incongruent trials, 8 practice trials with feedback and 96 test trials), built like
+  `stroop_en` for use in other languages. All instructions (one per display theme), status lines, feedback
+  messages and the four affiliation words live in the experiment's variables (the block marked TRANSLATE HERE),
+  so translating means changing those values only; the trial lists name the affiliations by an id (hostile,
+  neutral, friendly, unknown) that never changes. The response keys D, F, J and K are keyboard positions. Outcome:
+  the Stroop effect, the slowing and extra errors on incongruent trials.
+measures:
+  - "Median RT on correct trials, congruent vs incongruent (Stroop effect)"
+  - "Accuracy, congruent vs incongruent"
+duration_min: 5
+input: keyboard
+languages: [en]
+variant_of: stroop_en
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  As in stroop_ops: the colour words become affiliation words (HOSTILE, NEUTRAL, FRIENDLY, UNKNOWN, from the
+  variable affiliation_words) and the inks the affiliation colours of the common symbology convention (hostile
+  red, neutral green, friendly blue, unknown yellow); the response is the colour (D = red, F = green, J = blue,
+  K = yellow). c2: a new track's label on a radar-style tactical plot, with a track number. uav: a target tag
+  under the reticle of a surveillance aircraft's camera frame, with telemetry text. All generic and fictional.
+references:
+  - "Stroop, J. R. (1935). Studies of interference in serial verbal reactions. Journal of Experimental Psychology, 18, 643–662."
+  - "MacLeod, C. M. (1991). Half a century of research on the Stroop effect: An integrative review. Psychological Bulletin, 109, 163–203."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/stroop_en.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). When translating, translate both themes' instructions
+  and update txt_keys so the key reminder names the colours in the new language. Trial lists and pictures made by
+  tools/library/make_stroop_ops.py.

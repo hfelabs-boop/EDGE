@@ -174,3 +174,27 @@ the **telemetry overlay** (monospace text in the corners: `ALT … m  HDG …  S
 The spectrum and waterfall pictures have their data area at pixels x 70-1250, y 50-690 (from the top left of the
 1280x720 picture; `plot_area` in `kit.yaml`), which is x -570 to 610, y 310 to -330 in EDGE's centred pixel
 coordinates. Channels are labelled CH 0-100 in relative units: they are not real frequencies.
+
+## Adaptations: conflict, switching and rule tasks
+
+These adaptations keep their base task's trial lists (or the same design re-coded with operational names), keys,
+timing and measures. The default theme is listed first.
+
+| adaptation | themes | what the operator does |
+|---|---|---|
+| `stroop_ops`, `stroop_de_ops`, `stroop_en_ops`, `stroop_phone_ops` | c2, uav | report the **colour** of an affiliation label (HOSTILE / NEUTRAL / FRIENDLY / UNKNOWN; German: FEIND / NEUTRAL / FREUND / UNBEKANNT) written in an affiliation colour; HOSTILE in red is congruent, HOSTILE in blue incongruent. Language versions keep their language and keys |
+| `numerical_stroop_ops`, `numerical_stroop_touch_ops` | c2, ew | say which of two counts is larger (hostile tracks in sector ALPHA vs BRAVO; emitters in band A vs B), ignoring print size |
+| `simon_ops`, `touch_simon_ops` | c2, uav | classify a contact that appears left or right of own ship / the reticle (friendly vs hostile air track; wheeled vs tracked vehicle), ignoring its side |
+| `negative_priming_ops` | c2, ew | report the designator letter of the hostile track (high-threat emitter) where two designators overlap; ignore the friendly (low-threat) one |
+| `navon_ops` | c2, uav | report the shape (diamond = H, square = S) of a formation, or of the symbols / markers it is made of |
+| `taskswitching_ops`, `taskswitching_cued_ops` | c2, ew | judge a contact's affiliation (threat level) or its domain (signal type), by grid position or by a cue word |
+| `multitasking_ops` | c2, uav | monitor two feeds: the kind of a group in the top feed, its size (2 or 3) in the bottom feed; single and mixed blocks |
+| `prp_ops` | c2, uav | answer a radio call tone (routine / priority) and then a track or vehicle alert that follows it after 50-1000 ms |
+| `dccs_ops` | c2, uav | sort contact reports by affiliation, then by domain (uav: vehicle shade, then type), then by an amber priority-frame rule |
+| `wcst_ops` | c2, ew | find the hidden sorting rule for report cards: affiliation / type / number of tracks, or threat / signal type / number of emitters |
+
+Their pictures are copied from the kit by `tools/library/make_<task>_ops.py` (one script per family, e.g.
+`make_stroop_ops.py` for the four Stroop versions); `make_wcst_ops.py` also draws the 2 x 64 report cards, and
+`make_navon_ops.py` writes the Navon experiment file itself. Where a trial list keeps the classic codes (for
+example `colour: blue / orange` in `simon_ops`, `letter: X / O` in `prp_ops`), the variable `looks` says which
+picture each code stands for in each theme; the task's `meta.yaml` (`adaptation:`) spells the mapping out.

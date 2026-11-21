@@ -1,0 +1,9 @@
+word,ink,ink_colour,ink_rgb,congruent,condition,correct_button
+HOSTILE,hostile,red,#ff8080,1,congruent,btn_hostile
+NEUTRAL,friendly,blue,#80e0ff,0,incongruent,btn_friendly
+FRIENDLY,unknown,yellow,#ffff80,0,incongruent,btn_unknown
+UNKNOWN,unknown,yellow,#ffff80,1,congruent,btn_unknown
+HOSTILE,neutral,green,#aaffaa,0,incongruent,btn_neutral
+NEUTRAL,neutral,green,#aaffaa,1,congruent,btn_neutral
+FRIENDLY,friendly,blue,#80e0ff,1,congruent,btn_friendly
+UNKNOWN,hostile,red,#ff8080,0,incongruent,btn_hostile

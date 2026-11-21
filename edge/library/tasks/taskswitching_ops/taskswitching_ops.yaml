@@ -1,0 +1,162 @@
+name: taskswitching_ops
+description: >
+  Task switching with predictable alternating runs, operational adaptation. The same paradigm, design, timing,
+  keys and measures as the library's `taskswitching` task (after Rogers & Monsell, 1995), with a contact instead
+  of a letter-digit pair. The contact moves clockwise around a 2 x 2 grid, one cell per trial. In the TOP cells the
+  operator judges its identity (c2: affiliation, hostile = A, friendly = L; ew: threat, high = A, low = L), in the
+  BOTTOM cells its kind (c2: domain, air = A, surface = L; ew: signal, pulsed = A, continuous = L). The task
+  therefore changes every second trial (AABB...): switch vs repeat trials give the switch cost. One variable,
+  `theme`, sets the display: c2 (track symbols on a radar plot) or ew (emitter traces on a spectrum display).
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops, edge/library/tasks/search_ops/search_ops.yaml)
+# `theme` is the first variable (c2 or ew). The trial list codes each contact theme-free (identity hostile /
+# friendly x kind air / surface); `looks` maps it to the theme's picture and `words` gives the theme's task
+# labels, so one image item serves every theme. The display around the grid (plot or spectrum, instructions) are
+# items guarded with `if: "$theme == 'ew'"`.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2        # display theme: c2 or ew
+  step: 0          # trial counter within a block; sets the grid cell (step % 4). Reset before each block.
+  rsi: 0.6         # response-stimulus interval (s): empty grid between a response and the next contact
+  looks:
+    c2: {hostile_air: stimuli/hostile_air_64.png, hostile_surface: stimuli/hostile_surface_64.png,
+         friendly_air: stimuli/friendly_air_64.png, friendly_surface: stimuli/friendly_surface_64.png, size: [72, 72]}
+    ew: {hostile_air: stimuli/emitter_pulsed_high.png, hostile_surface: stimuli/emitter_continuous_high.png,
+         friendly_air: stimuli/emitter_pulsed_low.png, friendly_surface: stimuli/emitter_continuous_low.png, size: [34, 102]}
+  words:
+    c2: {identity: "AFFILIATION:  hostile = A   friendly = L", kind: "DOMAIN:  air = A   surface = L", tag: TRK}
+    ew: {identity: "THREAT:  high = A   low = L", kind: "SIGNAL:  pulsed = A   continuous = L", tag: EMT}
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt,
+     trials: "$resp.corr == 1 and cond.transition != 'first'", loop: trials, summary: median, units: s, expect: [0.3, 3.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, trials: "$cond.transition != 'first'",
+     loop: trials, summary: proportion}
+  - {id: transition, label: Switch or repeat trial, role: factor, column: cond.transition}
+  - {id: task, label: Identity or kind task, role: factor, column: cond.task}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        text: |
+          AFFILIATION AND DOMAIN
+
+          You are watching the radar plot, divided into four boxes. A track appears in one box and
+          moves clockwise to the next box on every trial.
+
+          In the TOP two boxes judge its AFFILIATION:  hostile (red diamond) = A key    friendly (blue rectangle) = L key
+          In the BOTTOM two boxes judge its DOMAIN:     air (wing symbol) = A key    surface (hull symbol) = L key
+
+          So you do two affiliation trials, then two domain trials, and so on.
+          Answer as fast as you can without making mistakes.
+
+          First a practice. Press SPACE to start.
+        height: 23
+        wrap_width: 1200
+      - id: text_ew
+        type: text
+        if: "$theme == 'ew'"
+        text: |
+          THREAT AND SIGNAL
+
+          You are watching the spectrum display, divided into four boxes. An emitter appears in one box
+          and moves clockwise to the next box on every trial.
+
+          In the TOP two boxes judge its THREAT level:  high (red) = A key    low (blue) = L key
+          In the BOTTOM two boxes judge its SIGNAL:    pulsed (dashed trace) = A key    continuous (solid trace) = L key
+
+          So you do two threat trials, then two signal trials, and so on.
+          Answer as fast as you can without making mistakes.
+
+          First a practice. Press SPACE to start.
+        height: 23
+        wrap_width: 1200
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {step: 0}}
+
+  trial:
+    components:
+      - id: cond                      # what this trial is, from its place in the run (saved as cond.*)
+        type: variable
+        set:
+          shown_theme: $theme         # the theme in every trial's data (cond.shown_theme)
+          quadrant: $step % 4         # 0 top left, 1 top right, 2 bottom right, 3 bottom left
+          task: "$'identity' if step % 4 < 2 else 'kind'"
+          transition: "$'first' if step == 0 else ('switch' if step % 4 in (0, 2) else 'repeat')"
+          x: "$-150 if step % 4 in (0, 3) else 150"
+          y: "$100 if step % 4 < 2 else -100"
+      # ---- the display around the grid, one block per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: spectrum_ew, type: image, if: "$theme == 'ew'", image: stimuli/spectrum_1280x720.png, size: [1280, 720]}
+      # ---- the grid (the same in every theme) ----
+      - {id: box_tl, type: shape, shape: rect, size: [300, 200], fill: "#04121c", opacity: 0.9, line_color: "#5a7a8a", pos: [-150, 100]}
+      - {id: box_tr, type: shape, shape: rect, size: [300, 200], fill: "#04121c", opacity: 0.9, line_color: "#5a7a8a", pos: [150, 100]}
+      - {id: box_br, type: shape, shape: rect, size: [300, 200], fill: "#04121c", opacity: 0.9, line_color: "#5a7a8a", pos: [150, -100]}
+      - {id: box_bl, type: shape, shape: rect, size: [300, 200], fill: "#04121c", opacity: 0.9, line_color: "#5a7a8a", pos: [-150, -100]}
+      - {id: top_bar, type: shape, shape: rect, size: [560, 34], fill: "#04121c", opacity: 0.9, pos: [0, 225]}
+      - {id: bottom_bar, type: shape, shape: rect, size: [560, 34], fill: "#04121c", opacity: 0.9, pos: [0, -225]}
+      - {id: top_label, type: text, font: DejaVu Sans Mono, text: "$words[theme]['identity']", color: "#9fe8ff", height: 18, pos: [0, 225]}
+      - {id: bottom_label, type: text, font: DejaVu Sans Mono, text: "$words[theme]['kind']", color: "#9fe8ff", height: 18, pos: [0, -225]}
+      - id: stimulus
+        type: image
+        image: $looks[theme][contact]
+        size: "$looks[theme]['size']"
+        pos: $[x, y + 12]
+        start: $rsi
+        marker: $f"contact_{task}_{transition}"
+      - {id: tag, type: text, font: DejaVu Sans Mono, text: "$f'{words[theme][\"tag\"]} {track_no:04d}'", color: "#7f9aa6", height: 15, pos: "$[x, y - 62]", start: $rsi}
+      - id: resp
+        type: keyboard
+        keys: [a, l]
+        start: $rsi
+        duration: 3.0
+        correct: "$identity_key if task == 'identity' else kind_key"
+        end_routine: true
+      - {id: count, type: variable, when: end, set: {step: $step + 1}}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr == 1 else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 36
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: "$f'Practice finished.\\n\\nNow the real test (about 4 minutes). The contact keeps moving clockwise.\\nTop boxes: {words[theme][\"identity\"]}\\nBottom boxes: {words[theme][\"kind\"]}\\nYou will only see a message after a mistake.\\n\\nPress SPACE to start.'"
+        height: 26
+        wrap_width: 1150
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {step: 0}}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "End of the watch. Thank you!", height: 34}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: stimuli.csv
+    order: random
+    children: [trial, feedback]
+  - practice_done
+  - loop: trials
+    conditions: stimuli.csv
+    order: random
+    repeats: 6
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - thanks

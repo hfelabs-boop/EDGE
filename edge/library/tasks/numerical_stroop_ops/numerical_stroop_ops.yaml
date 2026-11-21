@@ -1,0 +1,155 @@
+name: numerical_stroop_ops
+description: >
+  Numerical Stroop (size congruity) task, operational adaptation. The same paradigm, trial lists, timing, keys and
+  measures as the library's `numerical_stroop` task: two counts appear side by side in different print sizes and
+  the operator presses A (left) or L (right) for the NUMERICALLY larger count, ignoring print size. Congruent,
+  incongruent and neutral (same size) trials; numerical distance 1 or 5. One variable, `theme`, sets the display:
+  c2 (hostile tracks reported in two sectors of a map) or ew (emitters detected in two bands of a spectrum display).
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops, edge/library/tasks/search_ops/search_ops.yaml)
+# `theme` is the first variable (c2 or ew). What differs between themes in the stimuli is data: `looks` holds each
+# theme's panel names, digit colour and status line. The display around the digits (map or spectrum, instruction
+# texts) are items guarded with `if: "$theme == 'ew'"`.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2                # display theme: c2 or ew
+  digit_size: 160          # print size (px) of a "big" digit; small = half, neutral = three quarters
+  looks:
+    c2: {left: SECTOR ALPHA, right: SECTOR BRAVO, what: HOSTILE TRACKS, colour: "#ff8080",
+         status: "WHICH SECTOR HAS MORE HOSTILE TRACKS?   A = ALPHA (left)   L = BRAVO (right)"}
+    ew: {left: BAND A, right: BAND B, what: EMITTERS DETECTED, colour: "#ffb000",
+         status: "WHICH BAND HAS MORE EMITTERS?   A = band A (left)   L = band B (right)"}
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.25, 2.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: condition, label: Size congruity, role: factor, column: condition}
+  - {id: distance, label: Numerical distance, role: factor, column: distance}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        text: |
+          WHICH SECTOR HAS MORE HOSTILE TRACKS?
+
+          You are watching the map of two sectors. Each sector panel shows how many hostile tracks
+          it reports: ALPHA on the left, BRAVO on the right.
+          Choose the sector with the larger NUMBER. Ignore how big or small the number is printed.
+
+          A = ALPHA (left) has more          L = BRAVO (right) has more
+
+          Answer as fast as you can without making mistakes.
+          First a short practice. Press SPACE to start.
+        height: 26
+        wrap_width: 1100
+      - id: text_ew
+        type: text
+        if: "$theme == 'ew'"
+        text: |
+          WHICH BAND HAS MORE EMITTERS?
+
+          You are watching the spectrum display. Two panels show how many emitters were detected
+          in band A (left) and band B (right).
+          Choose the band with the larger NUMBER. Ignore how big or small the number is printed.
+
+          A = band A (left) has more          L = band B (right) has more
+
+          Answer as fast as you can without making mistakes.
+          First a short practice. Press SPACE to start.
+        height: 26
+        wrap_width: 1100
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: show, type: variable, set: {shown_theme: $theme}}    # the theme in every trial's data (show.shown_theme)
+      # ---- the display around the counts, one block per theme ----
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - {id: spectrum_ew, type: image, if: "$theme == 'ew'", image: stimuli/spectrum_1280x720.png, size: [1280, 720]}
+      - {id: status_bar, type: shape, shape: rect, size: [1280, 40], pos: [0, 340], fill: "#0a2232", opacity: 0.85}
+      - {id: status, type: text, font: DejaVu Sans Mono, height: 17, color: "#9fe8ff", pos: [0, 340], text: "$looks[theme]['status']"}
+      # the two count panels (always there)
+      - {id: panel_left, type: shape, shape: rect, size: [300, 300], fill: "#04121c", line_color: "#1d4a5e", line_width: 3, opacity: 0.92, pos: [-200, -10]}
+      - {id: panel_right, type: shape, shape: rect, size: [300, 300], fill: "#04121c", line_color: "#1d4a5e", line_width: 3, opacity: 0.92, pos: [200, -10]}
+      - {id: name_left, type: text, font: DejaVu Sans Mono, text: "$looks[theme]['left']", color: "#9fe8ff", height: 18, pos: [-200, 120]}
+      - {id: name_right, type: text, font: DejaVu Sans Mono, text: "$looks[theme]['right']", color: "#9fe8ff", height: 18, pos: [200, 120]}
+      - {id: what_left, type: text, font: DejaVu Sans Mono, text: "$looks[theme]['what']", color: "#5f8090", height: 13, pos: [-200, -140]}
+      - {id: what_right, type: text, font: DejaVu Sans Mono, text: "$looks[theme]['what']", color: "#5f8090", height: 13, pos: [200, -140]}
+      # ---- the numerical Stroop stimulus (the same in every theme) ----
+      - {id: fix, type: fixation, duration: 0.5, size: 30}
+      - id: left
+        type: text
+        text: "$f'{left_digit}'"
+        color: "$looks[theme]['colour']"
+        height: $digit_size * left_size
+        pos: [-200, -10]
+        start: 0.5
+        marker: $f"digits_{condition}"
+      - id: right
+        type: text
+        text: "$f'{right_digit}'"
+        color: "$looks[theme]['colour']"
+        height: $digit_size * right_size
+        pos: [200, -10]
+        start: 0.5
+      - id: resp
+        type: keyboard
+        keys: [a, l]
+        start: 0.5
+        duration: 2.0
+        correct: $correct_key
+        end_routine: true
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr == 1 else ('Too slow' if resp.keys is None else 'Wrong: choose the larger number')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 40
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: |
+          Practice finished.
+
+          Now the real test (about 4 minutes). You will only see a message after a mistake.
+          A = the left count is larger      L = the right count is larger
+
+          Press SPACE to start.
+        height: 28
+        wrap_width: 1100
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "End of the watch. Thank you!", height: 34}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    children: [trial, feedback]
+  - practice_done
+  - loop: trials
+    conditions: trials.csv
+    order: random
+    repeats: 2
+    max_repeat: {larger_side: 4}
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - thanks

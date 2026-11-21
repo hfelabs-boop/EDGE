@@ -1,0 +1,205 @@
+name: multitasking_ops
+description: >
+  Multitasking (after Stoet et al., 2013), operational adaptation. The same paradigm, trial lists, timing, keys and
+  measures as the library's `multitasking` task, with two sensor feeds instead of the two halves of a frame. A group
+  of 2 or 3 contacts of one kind appears in the top or the bottom feed. Top feed: report the KIND of the group
+  (c2: hostile = A, friendly = L; uav: tracked = A, wheeled = L). Bottom feed: report the SIZE of the group
+  (2 = A, 3 = L). Two single-task blocks (only the top feed, only the bottom feed) are followed by a mixed
+  (dual-task) block in which the group appears in either feed at random. Mixing cost: repeat trials in the mixed
+  block vs single-task trials. Switch cost: switch vs repeat trials in the mixed block. One variable, `theme`, sets
+  the display: c2 (air tracks on a radar plot) or uav (vehicles in two camera frames).
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops, edge/library/tasks/search_ops/search_ops.yaml)
+# `theme` is the first variable (c2 or uav). The trial lists keep the classic codes (shape: diamond / rectangle
+# for the two kinds, dots: 2 / 3 for the group size); `looks` maps the kind to the theme's picture and `words`
+# gives the theme's feed names. The display around the group (plot or camera frames, instructions) are items
+# guarded with `if: "$theme == 'uav'"`.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2            # display theme: c2 or uav
+  prev_task: ""        # the previous trial's task in this block (empty at the start of a block)
+  looks:
+    c2: {diamond: stimuli/hostile_air_48.png, rectangle: stimuli/friendly_air_48.png, size: [56, 56]}
+    uav: {diamond: stimuli/vehicle_tracked_light.png, rectangle: stimuli/vehicle_wheeled_light.png, size: [64, 64]}
+  words:
+    c2: {top: AIR PICTURE, bottom: GROUP SIZE, top_rule: "hostile = A   friendly = L", bottom_rule: "2 = A   3 = L"}
+    uav: {top: CAMERA 1, bottom: CAMERA 2, top_rule: "tracked = A   wheeled = L", bottom_rule: "2 = A   3 = L"}
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt,
+     trials: "$stage == 'test' and resp.corr == 1 and cond.trial_type != 'first'", summary: median, units: s, expect: [0.3, 3.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, trials: "$stage == 'test' and cond.trial_type != 'first'",
+     summary: proportion}
+  - {id: trial_type, label: "Single task, mixed-block repeat or mixed-block switch", role: factor, column: cond.trial_type}
+  - {id: task, label: Kind (top feed) or group size (bottom feed) task, role: factor, column: task}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        text: |
+          TWO FEEDS
+
+          You are monitoring two feeds of the radar picture. A group of 2 or 3 air tracks will appear in one
+          of them. The tracks of a group are all hostile (red diamonds) or all friendly (blue rectangles).
+
+          If the group is in the TOP feed (AIR PICTURE):    hostile = A key     friendly = L key
+          If the group is in the BOTTOM feed (GROUP SIZE):  2 tracks = A key     3 tracks = L key
+
+          There are three parts: top feed only, bottom feed only, and then both mixed.
+          Each part starts with a short practice. Press SPACE to continue.
+        height: 24
+        wrap_width: 1150
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        text: |
+          TWO CAMERAS
+
+          You are monitoring two surveillance cameras. A group of 2 or 3 vehicles will appear in one of them.
+          The vehicles of a group are all tracked or all wheeled.
+
+          If the group is in the TOP camera (CAMERA 1):      tracked = A key     wheeled = L key
+          If the group is in the BOTTOM camera (CAMERA 2):   2 vehicles = A key     3 vehicles = L key
+
+          There are three parts: top camera only, bottom camera only, and then both mixed.
+          Each part starts with a short practice. Press SPACE to continue.
+        height: 24
+        wrap_width: 1150
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  intro_shape:
+    components:
+      - id: text
+        type: text
+        text: "$f'PART 1: TOP FEED ONLY ({words[theme][\"top\"]})\\n\\nThe group is always in the TOP feed. Report its kind:\\n{words[theme][\"top_rule\"]}\\n\\nPress SPACE to practise.'"
+        height: 26
+        wrap_width: 1100
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {prev_task: ""}}
+
+  intro_filling:
+    components:
+      - id: text
+        type: text
+        text: "$f'PART 2: BOTTOM FEED ONLY ({words[theme][\"bottom\"]})\\n\\nThe group is always in the BOTTOM feed. Count it:\\n{words[theme][\"bottom_rule\"]}\\n\\nPress SPACE to practise.'"
+        height: 26
+        wrap_width: 1100
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {prev_task: ""}}
+
+  intro_mixed:
+    components:
+      - id: text
+        type: text
+        text: "$f'PART 3: BOTH FEEDS\\n\\nNow the group can be in either feed.\\nTOP feed: its kind ({words[theme][\"top_rule\"]})\\nBOTTOM feed: its size ({words[theme][\"bottom_rule\"]})\\n\\nPress SPACE to practise.'"
+        height: 26
+        wrap_width: 1100
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {prev_task: ""}}
+
+  trial:
+    components:
+      - id: cond                      # trial type from the block and the previous task (saved as cond.*)
+        type: variable
+        set:
+          shown_theme: $theme         # the theme in every trial's data (cond.shown_theme)
+          trial_type: "$'single' if block_type == 'single' else ('first' if prev_task == '' else ('repeat' if task == prev_task else 'switch'))"
+          y: "$100 if half == 'top' else -100"
+      # ---- the display around the feeds, one block per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: feed_top_c2, type: shape, if: "$theme == 'c2'", shape: rect, size: [420, 200], pos: [0, 100], fill: "#04121c", opacity: 0.85}
+      - {id: feed_bottom_c2, type: shape, if: "$theme == 'c2'", shape: rect, size: [420, 200], pos: [0, -100], fill: "#04121c", opacity: 0.85}
+      - {id: cam_top_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_01_farmland.jpg, size: [420, 200], pos: [0, 100]}
+      - {id: cam_bottom_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_04_river.jpg, size: [420, 200], pos: [0, -100]}
+      # ---- the two feeds (the same in every theme) ----
+      - {id: frame, type: shape, shape: rect, size: [420, 400], fill: transparent, line_color: "#9fe8ff", line_width: 3}
+      - {id: divider, type: shape, shape: rect, size: [420, 3], fill: "#9fe8ff"}
+      - {id: label_top, type: text, font: DejaVu Sans Mono, text: "$words[theme]['top']", color: "#9fe8ff", height: 20, pos: [-350, 115]}
+      - {id: rule_top, type: text, font: DejaVu Sans Mono, text: "$words[theme]['top_rule']", color: "#5f8090", height: 15, pos: [-350, 85]}
+      - {id: label_bottom, type: text, font: DejaVu Sans Mono, text: "$words[theme]['bottom']", color: "#9fe8ff", height: 20, pos: [-350, -85]}
+      - {id: rule_bottom, type: text, font: DejaVu Sans Mono, text: "$words[theme]['bottom_rule']", color: "#5f8090", height: 15, pos: [-350, -115]}
+      # the group: 2 or 3 contacts of the trial's kind (the third only when dots == 3)
+      - id: figure
+        type: image
+        image: "$looks[theme][shape]"
+        size: "$looks[theme]['size']"
+        pos: "$[-80 if dots == 3 else -40, 100 if half == 'top' else -100]"
+        start: 0.5
+        marker: $f"group_{task}_{trial_type}"
+      - {id: member2, type: image, image: "$looks[theme][shape]", size: "$looks[theme]['size']", pos: "$[0 if dots == 3 else 40, 100 if half == 'top' else -100]", start: 0.5}
+      - {id: member3, type: image, if: "$dots == 3", image: "$looks[theme][shape]", size: "$looks[theme]['size']", pos: "$[80, 100 if half == 'top' else -100]", start: 0.5}
+      - id: resp
+        type: keyboard
+        keys: [a, l]
+        start: 0.5
+        duration: 3.0
+        correct: $correct_key
+        end_routine: true
+      - {id: remember, type: variable, when: end, set: {prev_task: $task}}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr == 1 else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 36
+
+  ready:
+    components:
+      - {id: text, type: text, text: "Practice finished. Now the test part. Press SPACE to start.", height: 28}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {prev_task: ""}}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "End of the watch. Thank you!", height: 34}
+
+flow:
+  - instructions
+  - intro_shape
+  - loop: practice_shape
+    conditions: practice_shape.csv
+    order: random
+    children: [trial, feedback]
+  - ready
+  - loop: shape_block
+    conditions: shape.csv
+    order: random
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - intro_filling
+  - loop: practice_filling
+    conditions: practice_filling.csv
+    order: random
+    children: [trial, feedback]
+  - ready
+  - loop: filling_block
+    conditions: filling.csv
+    order: random
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - intro_mixed
+  - loop: practice_mixed
+    conditions: practice_mixed.csv
+    order: random
+    children: [trial, feedback]
+  - ready
+  - loop: mixed_block
+    conditions: mixed.csv
+    order: random
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - thanks

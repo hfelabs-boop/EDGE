@@ -1,0 +1,17 @@
+contact,identity,kind,track_no,identity_key,kind_key,congruency
+hostile_air,hostile,air,214,a,a,congruent
+hostile_air,hostile,air,388,a,a,congruent
+hostile_air,hostile,air,507,a,a,congruent
+hostile_air,hostile,air,731,a,a,congruent
+hostile_surface,hostile,surface,126,a,l,incongruent
+hostile_surface,hostile,surface,452,a,l,incongruent
+hostile_surface,hostile,surface,619,a,l,incongruent
+hostile_surface,hostile,surface,873,a,l,incongruent
+friendly_air,friendly,air,341,l,a,incongruent
+friendly_air,friendly,air,566,l,a,incongruent
+friendly_air,friendly,air,702,l,a,incongruent
+friendly_air,friendly,air,958,l,a,incongruent
+friendly_surface,friendly,surface,183,l,l,congruent
+friendly_surface,friendly,surface,295,l,l,congruent
+friendly_surface,friendly,surface,640,l,l,congruent
+friendly_surface,friendly,surface,817,l,l,congruent
