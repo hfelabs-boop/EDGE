@@ -23,6 +23,16 @@ Each task is a folder ``edge/library/tasks/<id>/`` with
     see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/stroop.html"}
     notes: optional limits
 
+Operational adaptations (``docs/library/DEFENSE.md``) are variants of a task with three more fields::
+
+    variant_of: search                  # required for an adaptation: the task it adapts
+    domain: defense                     # one of DOMAINS
+    themes: [c2, uav, ew, video]        # which of THEMES it supports, the default (the file's `theme`) first
+    adaptation: one paragraph: what each stimulus stands for operationally
+
+Such a task has a variable ``theme`` at the top of its ``variables:`` (the default theme); ``copy_task(id, folder,
+theme="uav")`` sets it in the copy. The base task lists its adaptations (``Task.adaptations``).
+
 ``copy_task(id, folder)`` makes a researcher's own copy (a new experiment folder, never over anything). The CLI is
 ``edge library list|show|new``, the builder shows the library on Home and in the new-experiment flow
 (``/api/library``), and the MCP server has ``list_library`` / ``create_from_library``.
@@ -50,7 +60,16 @@ CATEGORIES = ("Attention", "Inhibition and conflict", "Cognitive control", "Work
 INPUTS = ("keyboard", "mouse", "touch", "keyboard+mouse")
 REQUIRED = ("id", "title", "category", "summary", "description", "measures", "duration_min", "input", "languages",
             "references", "see_also")
-OPTIONAL = ("variant_of", "notes")
+OPTIONAL = ("variant_of", "notes", "domain", "adaptation")
+LISTS = ("themes",)                    # optional fields that are lists
+# operational adaptations: the application domain and its display themes (docs/library/DEFENSE.md)
+DOMAINS = ("defense",)
+THEMES = ("c2", "uav", "ew", "video")
+THEME_TITLES = {"c2": "C2", "uav": "UAV", "ew": "EW", "video": "Video"}
+THEME_ABOUT = {"c2": "command and control: tactical plot with track symbols",
+               "uav": "UAV payload operator: camera view, reticle, telemetry",
+               "ew": "electronic-warfare operator: spectrum and waterfall",
+               "video": "video interface: feed with crosshair and target boxes"}
 _ID = re.compile(r"^[a-z][a-z0-9_]*$")
 # what a copy leaves behind: the library's own description, recorded sessions, caches and hidden files
 _SKIP = {"meta.yaml", "data", "__pycache__", ".edge"}
@@ -77,6 +96,10 @@ class Task:
     folder: Path
     variant_of: str | None = None
     notes: str | None = None
+    domain: str | None = None
+    themes: list[str] = field(default_factory=list)
+    adaptation: str | None = None
+    adaptations: list[dict[str, Any]] = field(default_factory=list)   # filled by discover(): [{id, title, themes}]
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -93,17 +116,19 @@ class Task:
     def matches(self, words: str) -> bool:
         hay = " ".join([self.id, self.id.replace("_", " "), self.title, self.category, self.summary,
                         self.description, self.input, " ".join(self.measures), " ".join(self.references),
-                        self.notes or ""]).lower()
+                        self.notes or "", self.domain or "", self.adaptation or "",
+                        " ".join(THEME_TITLES.get(x, x) for x in self.themes)]).lower()
         return all(w in hay for w in words.lower().split())
 
     def to_dict(self, full: bool = True) -> dict[str, Any]:
         d: dict[str, Any] = {"id": self.id, "title": self.title, "category": self.category, "summary": self.summary,
                              "measures": list(self.measures), "duration_min": self.duration_min, "input": self.input,
                              "languages": list(self.languages), "variant_of": self.variant_of,
-                             "psytoolkit": self.psytoolkit}
+                             "psytoolkit": self.psytoolkit, "domain": self.domain, "themes": list(self.themes),
+                             "adaptations": [dict(a) for a in self.adaptations]}
         if full:
             d.update(description=self.description, references=list(self.references), see_also=dict(self.see_also),
-                     notes=self.notes, citation=self.citation())
+                     notes=self.notes, adaptation=self.adaptation, citation=self.citation())
         return d
 
 
@@ -134,7 +159,7 @@ def validate_meta(meta: Any, folder: str | Path | None = None) -> list[str]:
         return ["meta.yaml must be a set of 'key: value' lines (id, title, category …), not "
                 f"{type(meta).__name__ if meta is not None else 'empty'}"]
     errors: list[str] = []
-    unknown = [k for k in meta if k not in REQUIRED + OPTIONAL]
+    unknown = [k for k in meta if k not in REQUIRED + OPTIONAL + LISTS]
     for k in REQUIRED:
         if k not in meta or meta[k] is None or meta[k] == "":
             typo = difflib.get_close_matches(k, [str(u) for u in unknown], 1, 0.75)
@@ -181,8 +206,57 @@ def validate_meta(meta: Any, folder: str | Path | None = None) -> list[str]:
             errors.append(f"'{k}' must be text")
     if isinstance(meta.get("variant_of"), str) and not _ID.match(meta["variant_of"]):
         errors.append(f"variant_of '{meta['variant_of']}' must be a task id (e.g. stroop)")
+    errors += _adaptation_errors(meta, folder)
     if folder is not None and isinstance(tid, str) and _ID.match(tid) and not (Path(folder) / f"{tid}.yaml").is_file():
         errors.append(f"the experiment file {tid}.yaml is missing next to meta.yaml")
+    return errors
+
+
+def _adaptation_errors(meta: dict, folder: str | Path | None) -> list[str]:
+    """The operational-adaptation fields: domain, themes (default first) and adaptation go together, with variant_of;
+    the experiment's variable ``theme`` is the default theme."""
+    errors: list[str] = []
+    domain, themes, text = meta.get("domain"), meta.get("themes"), meta.get("adaptation")
+    if domain is None and themes is None and text is None:
+        return errors
+    if domain is None:
+        errors.append("'domain' is missing: themes and adaptation are for operational adaptations "
+                      f"(domain: {DOMAINS[0]})")
+    elif domain not in DOMAINS:
+        errors.append(f"domain '{domain}' is not one of: {', '.join(DOMAINS)}{_suggest(domain, DOMAINS)}")
+    if themes is None:
+        errors.append(f"'themes' is missing: the display themes the adaptation supports, the default first, e.g. "
+                      f"themes: [c2, uav] (choose from {', '.join(THEMES)})")
+    elif not _str_list(themes):
+        errors.append(f"'themes' must be a list of theme names, e.g. themes: [c2, uav] ({', '.join(THEMES)})")
+    else:
+        for x in themes:
+            if x not in THEMES:
+                errors.append(f"theme '{x}' is not one of: {', '.join(THEMES)}{_suggest(x, THEMES)}")
+        if len(set(themes)) != len(themes):
+            errors.append("'themes' names a theme twice")
+        if len(themes) < 2:
+            errors.append("an adaptation supports at least two themes (themes: [c2, uav] …)")
+    if text is None or (isinstance(text, str) and not text.strip()):
+        errors.append("'adaptation' is missing: one paragraph saying what each stimulus stands for operationally")
+    if not meta.get("variant_of"):
+        errors.append("'variant_of' is missing: an adaptation names the task it adapts (variant_of: <id>)")
+    tid = meta.get("id")
+    if folder is not None and isinstance(tid, str) and _ID.match(tid) and _str_list(themes) and themes[0] in THEMES:
+        exp = Path(folder) / f"{tid}.yaml"
+        if exp.is_file():
+            try:
+                doc = yaml.safe_load(exp.read_text(encoding="utf-8")) or {}
+            except (OSError, UnicodeDecodeError, yaml.YAMLError):
+                doc = {}     # the experiment's own validation reports a file that can't be read
+            variables = doc.get("variables") if isinstance(doc, dict) else None
+            current = variables.get("theme") if isinstance(variables, dict) else None
+            if current is None:
+                errors.append(f"{tid}.yaml needs the variable 'theme' (variables: theme: {themes[0]}) that switches "
+                              "the theme")
+            elif current != themes[0]:
+                errors.append(f"{tid}.yaml's variable theme is '{current}' but the default theme (first in themes) is "
+                              f"'{themes[0]}'")
     return errors
 
 
@@ -201,13 +275,15 @@ def load_task(folder: str | Path) -> Task:
     errors = validate_meta(meta, folder)
     if errors:
         raise LibraryError(f"{folder.name}/meta.yaml: " + "; ".join(errors))
-    known = {k: meta.get(k) for k in REQUIRED + OPTIONAL}
+    known = {k: meta.get(k) for k in REQUIRED + OPTIONAL + LISTS}
     return Task(id=known["id"], title=known["title"].strip(), category=known["category"],
                 summary=" ".join(known["summary"].split()), description=" ".join(known["description"].split()),
                 measures=list(known["measures"]), duration_min=known["duration_min"], input=known["input"],
                 languages=list(known["languages"]), references=list(known["references"]),
                 see_also=dict(known["see_also"]), folder=folder, variant_of=known.get("variant_of"),
-                notes=known.get("notes"), extra={k: v for k, v in meta.items() if k not in known})
+                notes=known.get("notes"), domain=known.get("domain"), themes=list(known.get("themes") or []),
+                adaptation=" ".join(known["adaptation"].split()) if known.get("adaptation") else None,
+                extra={k: v for k, v in meta.items() if k not in known})
 
 
 _CACHE: dict[Any, tuple[list[Task], list[str]]] = {}
@@ -228,10 +304,13 @@ def discover(root: str | Path | None = None) -> tuple[list[Task], list[str]]:
             tasks.append(load_task(m.parent))
         except LibraryError as e:
             problems.append(str(e))
-    ids = {t.id for t in tasks}
+    by_id = {t.id: t for t in tasks}
     for t in tasks:
-        if t.variant_of and t.variant_of not in ids:
+        if t.variant_of and t.variant_of not in by_id:
             problems.append(f"{t.id}/meta.yaml: variant_of '{t.variant_of}' is not a task in the library")
+        elif t.variant_of and t.domain:          # the base task links to its operational version(s)
+            by_id[t.variant_of].adaptations.append({"id": t.id, "title": t.title, "domain": t.domain,
+                                                    "themes": list(t.themes)})
     tasks.sort(key=lambda t: (t.title.lower(), t.id))
     if len(_CACHE) > 16:
         _CACHE.clear()
@@ -240,11 +319,24 @@ def discover(root: str | Path | None = None) -> tuple[list[Task], list[str]]:
 
 
 def list_tasks(category: str | None = None, search: str | None = None, input: str | None = None,
-               language: str | None = None, root: str | Path | None = None) -> list[Task]:
+               language: str | None = None, root: str | Path | None = None, domain: str | None = None,
+               theme: str | None = None) -> list[Task]:
     """The library's tasks, optionally only one category (its name or the start of it, any case), those that
-    contain every word of ``search``, one input type (``keyboard`` also matches ``keyboard+mouse``) or one
-    language."""
+    contain every word of ``search``, one input type (``keyboard`` also matches ``keyboard+mouse``), one
+    language, one domain (``defense``: the operational adaptations; ``none``: the classic tasks only) or those that
+    support one display theme (c2, uav, ew, video)."""
     tasks, _ = discover(root)
+    if domain:
+        want = domain.strip().lower()
+        if want in ("none", "classic"):
+            tasks = [t for t in tasks if not t.domain]
+        elif want not in DOMAINS:
+            raise LibraryError(f"domain '{domain}' is not one of: {', '.join(DOMAINS)} (or none){_suggest(want, DOMAINS)}")
+        else:
+            tasks = [t for t in tasks if t.domain == want]
+    if theme:
+        th = theme_name(theme)
+        tasks = [t for t in tasks if th in t.themes]
     if category:
         cat = category_name(category)
         tasks = [t for t in tasks if t.category == cat]
@@ -258,6 +350,31 @@ def list_tasks(category: str | None = None, search: str | None = None, input: st
     if search and search.strip():
         tasks = [t for t in tasks if t.matches(search)]
     return tasks
+
+
+def theme_name(theme: str) -> str:
+    """'uav', 'UAV', 'C2' -> the theme's name; unknown names list the choices."""
+    th = str(theme).strip().lower()
+    if th not in THEMES:
+        raise LibraryError(f"theme '{theme}' is not one of: {', '.join(THEMES)}{_suggest(th, THEMES)}")
+    return th
+
+
+_THEME_LINE = re.compile(r"^(?P<indent>[ \t]+)theme:[ \t]*(?P<value>[^#\n]*?)[ \t]*(?:#.*)?$", re.M)
+
+
+def set_theme(text: str, theme: str) -> str:
+    """The experiment text with its variable ``theme`` set to ``theme``: the first ``  theme: …`` line inside the
+    top-level ``variables:`` block is changed, comments and layout stay as they are. LibraryError when there is
+    none."""
+    block = re.search(r"^variables:[^\n]*\n", text, re.M)
+    if block:
+        end = re.search(r"^\S", text[block.end():], re.M)            # the next top-level key ends the block
+        stop = block.end() + (end.start() if end else len(text) - block.end())
+        m = _THEME_LINE.search(text, block.end(), stop)
+        if m:
+            return text[:m.start("value")] + theme + text[m.end("value"):]
+    raise LibraryError("this task has no variable 'theme' to set (an adaptation has 'theme: <name>' in its variables)")
 
 
 def category_name(category: str) -> str:
@@ -313,11 +430,21 @@ def _slug(name: str) -> str:
     return s
 
 
-def copy_task(task_id: str, dest_dir: str | Path, name: str | None = None, root: str | Path | None = None) -> Path:
+def copy_task(task_id: str, dest_dir: str | Path, name: str | None = None, root: str | Path | None = None,
+              theme: str | None = None) -> Path:
     """Copy library task ``task_id`` into a new experiment folder ``dest_dir/<name>/`` (``name``: the task's id when
     left out) with its stimuli and trial-list files, and a CITATION.md. Nothing is ever overwritten: when that
-    folder exists, the copy goes to ``<name>_2`` (``_3`` …), as for templates. Returns the experiment file."""
+    folder exists, the copy goes to ``<name>_2`` (``_3`` …), as for templates. ``theme``: for an operational
+    adaptation, the display theme the copy starts in (one of the task's themes; default: its first), set in the
+    copy's variable ``theme``. Returns the experiment file."""
     t = get_task(task_id, root)
+    if theme:
+        theme = theme_name(theme)
+        if not t.themes:
+            raise LibraryError(f"'{t.id}' has no display themes; themes are for operational adaptations"
+                               + (f" (e.g. {t.adaptations[0]['id']})" if t.adaptations else ""))
+        if theme not in t.themes:
+            raise LibraryError(f"'{t.id}' has no theme '{theme}': choose one of {', '.join(t.themes)}")
     dest_dir = Path(dest_dir)
     if dest_dir.exists() and not dest_dir.is_dir():
         raise LibraryError(f"'{dest_dir}' is a file, not a folder: choose a folder for the new experiment")
@@ -348,12 +475,18 @@ def copy_task(task_id: str, dest_dir: str | Path, name: str | None = None, root:
         text = re.sub(r"^name:.*$", f"name: {slug}", text, count=1, flags=re.M)
     else:
         text = f"name: {slug}\n{text}"
-    header = f"# From the EDGE task library: {t.title} ({t.id}). How to cite it: CITATION.md\n"
+    if theme and theme != t.themes[0]:
+        text = set_theme(text, theme)
+    shown = theme or (t.themes[0] if t.themes else None)
+    header = (f"# From the EDGE task library: {t.title} ({t.id}). How to cite it: CITATION.md\n"
+              + (f"# Display theme: {THEME_TITLES[shown]}. Switch it with the variable 'theme' "
+                 f"({', '.join(t.themes)}).\n" if shown else ""))
     exp_src.unlink()
     exp.write_text(header + text, encoding="utf-8")
     (target / "CITATION.md").write_text(f"# {t.title}\n\n" + citation_text(t).split("\n", 2)[2], encoding="utf-8")
     return exp
 
 
-__all__ = ["CATEGORIES", "INPUTS", "REQUIRED", "LibraryError", "Task", "tasks_dir", "validate_meta", "load_task",
-           "discover", "list_tasks", "categories", "category_name", "get_task", "citation_text", "copy_task"]
+__all__ = ["CATEGORIES", "INPUTS", "REQUIRED", "DOMAINS", "THEMES", "THEME_TITLES", "LibraryError", "Task", "tasks_dir",
+           "validate_meta", "load_task", "discover", "list_tasks", "categories", "category_name", "theme_name",
+           "set_theme", "get_task", "citation_text", "copy_task"]

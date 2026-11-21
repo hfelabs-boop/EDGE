@@ -1,0 +1,264 @@
+name: search_ops
+description: >
+  Visual search, operational adaptation (the reference pattern for EDGE's defence human-factors adaptations).
+  The same paradigm and measures as the library's `search` task: a display of 4, 8 or 16 items appears and the
+  operator reports as fast as possible whether the target is among them (M) or not (Z). In feature search the
+  target differs from the others by one feature (its colour coding); in conjunction search only the combination
+  of colour coding and shape identifies it. One variable, `theme`, sets the display: c2 (hostile air track on a
+  tactical map), uav (light tracked vehicle in a camera frame, under a reticle), ew (high-threat pulsed emitter on
+  a waterfall) or video (confirmed target box on a camera feed, under a crosshair). All pictures are synthetic and
+  generic (EDGE's defence kit).
+
+# HOW THE THEME SWITCH WORKS (copy this pattern for other adaptations)
+# 1. `theme` is the first variable; change it here, in the builder (Settings > Variables) or with
+#    `edge library new search_ops --theme uav`.
+# 2. What differs between themes in the STIMULI is data, not structure: `looks` maps each theme to its pictures.
+#    The variable item `layout` plans each display in theme-free terms (`kinds`: target / other_colour /
+#    other_shape for each place, `picks`: which picture of that kind), and each image item shows
+#    $looks[theme][kinds[i]][picks[i]]. So one set of 16 image items (item0-item15) serves every theme, exactly
+#    like the 16 letters of the classic task, and the builder's preview shows the current theme's pictures.
+# 3. What differs in the DISPLAY AROUND the stimuli (backgrounds, reticles, telemetry, instruction texts) are items
+#    guarded with `if: "$theme == 'uav'"` (evaluated when the screen starts), one per theme where needed.
+# The trial list, timing, keys, correct answers and measures are the same for every theme (and as in `search`).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2, uav, ew or video
+  # per theme (lists of pictures): the target, the items that share its shape but not its colour coding ("other_colour"; the
+  # distractors of feature search), the items that share its colour coding but not its shape ("other_shape"; with
+  # other_colour, the distractors of conjunction search), the size the pictures are drawn at, and whether they
+  # may be shown turned (vehicles seen from above may face any way; symbols and waterfall traces may not).
+  looks:
+    c2:
+      target: [stimuli/hostile_air_48.png]
+      other_colour: [stimuli/friendly_air_48.png, stimuli/neutral_air_48.png]
+      other_shape: [stimuli/hostile_ground_48.png]
+      size: [48, 48]
+      turn: false
+    uav:
+      target: [stimuli/vehicle_tracked_light.png]
+      other_colour: [stimuli/vehicle_tracked_dark.png]
+      other_shape: [stimuli/vehicle_wheeled_light.png]
+      size: [48, 48]
+      turn: true
+    ew:
+      target: [stimuli/emitter_pulsed_high.png]
+      other_colour: [stimuli/emitter_pulsed_low.png]
+      other_shape: [stimuli/emitter_continuous_high.png]
+      size: [28, 84]
+      turn: false
+    video:
+      target: [stimuli/box_confirmed_64.png]
+      other_colour: [stimuli/box_candidate_64.png]
+      other_shape: [stimuli/ring_confirmed_64.png]
+      size: [64, 64]
+      turn: false
+  # what the operator looks for, in each theme's words (instructions, status line)
+  target_name: {c2: HOSTILE AIR track, uav: LIGHT TRACKED vehicle, ew: HIGH-THREAT PULSED emitter,
+                video: CONFIRMED target box}
+  cameras: [stimuli/terrain_01_farmland.jpg, stimuli/terrain_02_village.jpg, stimuli/terrain_04_river.jpg,
+            stimuli/terrain_05_farmland_ir.jpg]
+  # 24 places on a 6 x 4 grid; each display uses a random selection, shifted by up to 25 px
+  grid: [[-375, 210], [-225, 210], [-75, 210], [75, 210], [225, 210], [375, 210], [-375, 70], [-225, 70], [-75, 70], [75, 70], [225, 70], [375, 70], [-375, -70], [-225, -70], [-75, -70], [75, -70], [225, -70], [375, -70], [-375, -210], [-225, -210], [-75, -210], [75, -210], [225, -210], [375, -210]]
+  # set for every display by the variable item `layout` (these are only starting values, used by the preview)
+  pos: [[-375, 210], [-225, 210], [-75, 210], [75, 210], [225, 210], [375, 210], [-375, 70], [-225, 70], [-75, 70], [75, 70], [225, 70], [375, 70], [-375, -70], [-225, -70], [-75, -70], [75, -70]]
+  kinds: [target, other_colour, other_shape, other_colour, other_shape, other_colour, other_shape, other_colour, other_shape, other_colour, other_shape, other_colour, other_shape, other_colour, other_shape, other_colour]
+  picks: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  oris: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  camera: stimuli/terrain_01_farmland.jpg
+  sensor: EO
+  track_no: 417
+  alt: 2200
+  hdg: 45
+  spd: 90
+
+measures:
+  - {id: rt, label: Search time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: mean, units: s, expect: [0.25, 4.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: search_type, label: Search type, role: factor, column: search_type}
+  - {id: set_size, label: Number of items, role: factor, column: set_size}
+  - {id: target, label: Target present or absent, role: factor, column: target}
+
+routines:
+  instructions:
+    components:
+      # one instruction text per theme (only the current theme's is shown)
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 70]
+        text: |
+          You are monitoring the tactical map of Sector BRAVO.
+
+          A group of tracks will appear. Is there a HOSTILE AIR track among them?
+          (red diamond frame with the air symbol, shown below)
+
+          yes, there is one  ->  press M
+          no, there is none  ->  press Z
+
+          Friendly (blue) and neutral (green) air tracks and hostile ground tracks do not count.
+          Answer as fast as you can, but try not to make mistakes. First 12 practice displays with feedback.
+          Press SPACE to begin.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 70]
+        text: |
+          You are the payload operator of a surveillance aircraft, watching its camera.
+
+          Vehicles will appear in the camera picture. Is there a LIGHT TRACKED vehicle among them?
+          (light vehicle with tracks along both sides, shown below; in the infrared picture it looks hot)
+
+          yes, there is one  ->  press M
+          no, there is none  ->  press Z
+
+          Dark tracked vehicles and light wheeled vehicles do not count. Vehicles can face any way.
+          Answer as fast as you can, but try not to make mistakes. First 12 practice pictures with feedback.
+          Press SPACE to begin.
+      - id: text_ew
+        type: text
+        if: "$theme == 'ew'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 70]
+        text: |
+          You are monitoring the waterfall display of a signal receiver.
+
+          Emitter traces will appear. Is there a HIGH-THREAT PULSED emitter among them?
+          (red, dashed trace, shown below)
+
+          yes, there is one  ->  press M
+          no, there is none  ->  press Z
+
+          Low-threat (blue) pulsed emitters and high-threat continuous (solid) emitters do not count.
+          Answer as fast as you can, but try not to make mistakes. First 12 practice displays with feedback.
+          Press SPACE to begin.
+      - id: text_video
+        type: text
+        if: "$theme == 'video'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 70]
+        text: |
+          You are watching a live camera feed on which an image tracker marks objects.
+
+          Markers will appear on the feed. Is there a CONFIRMED target box among them?
+          (red rounded rectangle, shown below)
+
+          yes, there is one  ->  press M
+          no, there is none  ->  press Z
+
+          Candidate boxes (amber, dashed) and confirmed point markers (red circles) do not count.
+          Answer as fast as you can, but try not to make mistakes. First 12 practice displays with feedback.
+          Press SPACE to begin.
+      # the target, drawn as it will appear (one item for every theme: the picture comes from `looks`)
+      - {id: example_bg, type: shape, shape: rect, size: [140, 140], pos: [0, -270], fill: "#26323a", line_color: "#5a7a8a", line_width: 1}
+      - {id: example, type: image, image: "$looks[theme]['target'][0]", size: "$looks[theme]['size']", pos: [0, -270]}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: "$f'Practice done. The test has 72 displays (about 4 minutes) without feedback.\\n\\n{target_name[theme]} there -> M        none -> Z\\n\\nPress SPACE to start.'"
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      # make this display: random places, then which picture goes where. Item 0 is the target on target-present
+      # trials; in conjunction search the other items alternate other_colour / other_shape, in feature search all
+      # are other_colour (the same rule as the letters of the classic task). `kinds` records the plan in the data.
+      - id: layout
+        type: variable
+        set:
+          shown_theme: $theme      # puts the theme into every trial's data (column layout.shown_theme)
+          pos: "$[[x + random.randint(-25, 25), y + random.randint(-25, 25)] for x, y in random.sample(grid, 16)]"
+          kinds: "$['target' if (target == 'present' and i == 0) else ('other_colour' if search_type == 'feature' or i % 2 == 1 else 'other_shape') for i in range(16)]"
+          picks: "$[random.randrange(len(looks[theme][k])) for k in kinds]"
+          pics: "$[looks[theme][k][i] for k, i in zip(kinds, picks)]"
+          oris: "$[random.choice([0, 90, 180, 270]) if looks[theme]['turn'] else 0 for i in range(16)]"
+          camera: "$random.choice(cameras)"
+          sensor: "$'IR' if '_ir' in camera else 'EO'"
+          track_no: "$random.randint(100, 989)"
+          alt: "$random.randint(1800, 2600)"
+          hdg: "$random.randint(0, 359)"
+          spd: "$random.randint(80, 110)"
+
+      # ---- the display around the items, one block per theme (drawn first, so it is behind the items) ----
+      # c2: tactical map with a status line
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      # uav: a camera frame, a reticle at the centre, telemetry in the corners (text, so the numbers change)
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: $camera, size: [1280, 720]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_cross.png, size: [240, 240]}
+      - {id: tel_uav, type: text, if: "$theme == 'uav'", font: DejaVu Sans Mono, height: 17, color: "#d8ffd8", pos: [-400, -340], text: "$f'ALT {alt} m   HDG {hdg:03d}   SPD {spd} kt'"}
+      - {id: tel2_uav, type: text, if: "$theme == 'uav'", font: DejaVu Sans Mono, height: 17, color: "#d8ffd8", pos: [470, -340], text: "$f'SENSOR {sensor}   TRACK {track_no:04d}'"}
+      # ew: the waterfall (the noise is part of the picture; the emitters are the items)
+      - {id: waterfall_ew, type: image, if: "$theme == 'ew'", image: stimuli/waterfall_1280x720.jpg, size: [1280, 720]}
+      # video: a looping camera feed with a full-screen crosshair
+      - {id: feed_video, type: movie, if: "$theme == 'video'", movie: stimuli/feed_01_pan.mp4, size: [1280, 720], loop: true, volume: 0, duration: 5.5}
+      - {id: cross_video, type: image, if: "$theme == 'video'", image: stimuli/crosshair_full_1280x720.png, size: [1280, 720]}
+      # every theme: a status line at the top saying what to report
+      - {id: status_bar, type: shape, shape: rect, size: [1280, 40], pos: [0, 340], fill: "#0a2232", opacity: 0.85}
+      - {id: status, type: text, font: DejaVu Sans Mono, height: 17, color: "#9fe8ff", pos: [0, 340], text: "$f'REPORT: {target_name[theme]}?   M = yes   Z = no'"}
+
+      # ---- the search display (the same for every theme) ----
+      - {id: fix, type: text, text: "+", height: 36, duration: 0.5}
+      - {id: item0, type: image, marker: "$f'display_{search_type}_{set_size}_{target}'", image: "$looks[theme][kinds[0]][picks[0]]", size: "$looks[theme]['size']", ori: "$oris[0]", pos: "$pos[0]", start: 0.5}
+      - {id: item1, type: image, image: "$looks[theme][kinds[1]][picks[1]]", size: "$looks[theme]['size']", ori: "$oris[1]", pos: "$pos[1]", start: 0.5}
+      - {id: item2, type: image, image: "$looks[theme][kinds[2]][picks[2]]", size: "$looks[theme]['size']", ori: "$oris[2]", pos: "$pos[2]", start: 0.5}
+      - {id: item3, type: image, image: "$looks[theme][kinds[3]][picks[3]]", size: "$looks[theme]['size']", ori: "$oris[3]", pos: "$pos[3]", start: 0.5}
+      - {id: item4, type: image, image: "$looks[theme][kinds[4]][picks[4]]", size: "$looks[theme]['size']", ori: "$oris[4]", pos: "$pos[4]", start: 0.5, if: "$set_size > 4"}
+      - {id: item5, type: image, image: "$looks[theme][kinds[5]][picks[5]]", size: "$looks[theme]['size']", ori: "$oris[5]", pos: "$pos[5]", start: 0.5, if: "$set_size > 5"}
+      - {id: item6, type: image, image: "$looks[theme][kinds[6]][picks[6]]", size: "$looks[theme]['size']", ori: "$oris[6]", pos: "$pos[6]", start: 0.5, if: "$set_size > 6"}
+      - {id: item7, type: image, image: "$looks[theme][kinds[7]][picks[7]]", size: "$looks[theme]['size']", ori: "$oris[7]", pos: "$pos[7]", start: 0.5, if: "$set_size > 7"}
+      - {id: item8, type: image, image: "$looks[theme][kinds[8]][picks[8]]", size: "$looks[theme]['size']", ori: "$oris[8]", pos: "$pos[8]", start: 0.5, if: "$set_size > 8"}
+      - {id: item9, type: image, image: "$looks[theme][kinds[9]][picks[9]]", size: "$looks[theme]['size']", ori: "$oris[9]", pos: "$pos[9]", start: 0.5, if: "$set_size > 9"}
+      - {id: item10, type: image, image: "$looks[theme][kinds[10]][picks[10]]", size: "$looks[theme]['size']", ori: "$oris[10]", pos: "$pos[10]", start: 0.5, if: "$set_size > 10"}
+      - {id: item11, type: image, image: "$looks[theme][kinds[11]][picks[11]]", size: "$looks[theme]['size']", ori: "$oris[11]", pos: "$pos[11]", start: 0.5, if: "$set_size > 11"}
+      - {id: item12, type: image, image: "$looks[theme][kinds[12]][picks[12]]", size: "$looks[theme]['size']", ori: "$oris[12]", pos: "$pos[12]", start: 0.5, if: "$set_size > 12"}
+      - {id: item13, type: image, image: "$looks[theme][kinds[13]][picks[13]]", size: "$looks[theme]['size']", ori: "$oris[13]", pos: "$pos[13]", start: 0.5, if: "$set_size > 13"}
+      - {id: item14, type: image, image: "$looks[theme][kinds[14]][picks[14]]", size: "$looks[theme]['size']", ori: "$oris[14]", pos: "$pos[14]", start: 0.5, if: "$set_size > 14"}
+      - {id: item15, type: image, image: "$looks[theme][kinds[15]][picks[15]]", size: "$looks[theme]['size']", ori: "$oris[15]", pos: "$pos[15]", start: 0.5, if: "$set_size > 15"}
+      - {id: resp, type: keyboard, keys: [m, z], correct: $correct_key, start: 0.5, duration: 5.0, end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else ('Missed: the target was there' if target == 'present' else 'False alarm: there was no target'))"
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "End of the watch. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: search_ops.csv
+    order: random
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: search_ops.csv
+    order: random
+    repeats: 6
+    children: [trial, iti]
+  - thanks

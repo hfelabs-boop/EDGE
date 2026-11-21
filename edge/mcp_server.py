@@ -328,34 +328,40 @@ def create_server(root: str | Path = ".") -> FastMCP:
         return {k: v.get("description", v["name"]) for k, v in public_templates().items()}
 
     @tool
-    def list_library(category: str = "", search: str = "", input: str = "", language: str = "") -> dict[str, Any]:
+    def list_library(category: str = "", search: str = "", input: str = "", language: str = "", domain: str = "",
+                     theme: str = "") -> dict[str, Any]:
         """The task library: ready-made, tested versions of classic paradigms (Stroop, flanker, go/no-go, n-back,
         Simon …), each with instructions, practice, main trials, measures and references. Filter by category
         (Attention, Inhibition and conflict, Cognitive control, Working memory, Vigilance, Decision making, Language,
         Social and implicit, Perception and motor, Problem solving), search words, input (keyboard, mouse, touch,
-        keyboard+mouse) or language (en, de …). Start from one with create_from_library."""
+        keyboard+mouse) or language (en, de …). domain='defense' lists the operational adaptations (same paradigm
+        and measures, with operator-style displays; docs/library/DEFENSE.md), theme narrows them to one display theme
+        (c2, uav, ew, video). Start from one with create_from_library (theme= picks the adaptation's theme)."""
         from . import library
         try:
-            tasks = library.list_tasks(category or None, search or None, input or None, language or None)
+            tasks = library.list_tasks(category or None, search or None, input or None, language or None,
+                                       domain=domain or None, theme=theme or None)
         except library.LibraryError as e:
             raise EditError(str(e)) from None
         return {"tasks": [t.to_dict(full=False) | {"references": t.references} for t in tasks],
                 "categories": [c for c in library.categories() if c["count"]]}
 
     @tool
-    def create_from_library(task: str, directory: str = ".", name: str = "") -> dict[str, Any]:
+    def create_from_library(task: str, directory: str = ".", name: str = "", theme: str = "") -> dict[str, Any]:
         """Copy a task of the library (see list_library) into a new experiment folder <directory>/<name>/ (name: the
         task's id when left out) with its pictures, sounds, trial lists and a CITATION.md. Never overwrites: an
-        existing folder makes the copy <name>_2. Returns the new experiment's path, outline and what to cite; adapt
-        it with the editing tools and check it with dry_run."""
+        existing folder makes the copy <name>_2. theme: for an operational adaptation, the display theme the copy
+        starts in (one of its themes; it sets the experiment's variable 'theme'). Returns the new experiment's path,
+        outline and what to cite; adapt it with the editing tools and check it with dry_run."""
         from . import library
         try:
             t = library.get_task(task)
-            exp = library.copy_task(t.id, ws.path(directory, must_exist=False), name or None)
+            exp = library.copy_task(t.id, ws.path(directory, must_exist=False), name or None, theme=theme or None)
         except library.LibraryError as e:
             raise EditError(str(e)) from None
         doc = ExperimentDoc.open(exp)
         return {"ok": True, "path": ws.rel(exp), "title": t.title, "measures": t.measures, "citation": t.citation(),
+                **({"theme": theme or t.themes[0], "themes": t.themes} if t.themes else {}),
                 "outline": doc.outline(), **_issues(doc)}
 
     # ================================================================ whole documents

@@ -64,6 +64,18 @@ Everything is ordinary EDGE: open the copy in the builder and change what you ne
 
 Say in your methods which version you ran (numbers of trials, timing, keys) and what you changed.
 
+## Operational adaptations (defence human factors)
+
+For research with operators (selection, workload, display design, training), some tasks have an **operational
+adaptation** (id `<task>_ops`, e.g. `search_ops`): the same paradigm, design and measures, with stimuli and wording
+from operator consoles in one of four **display themes**, chosen by the variable `theme`: `c2` (tactical map with
+track symbols), `uav` (camera view with reticle and telemetry), `ew` (spectrum and waterfall) and `video` (camera
+feed with crosshair and target boxes). Everything in them is synthetic and fictional. In the builder they are under
+**Operational adaptations** in the Task library (**Use this task** asks for the theme); on the command line
+`edge library list --domain defense --theme uav` and `edge library new search_ops --theme uav`. The classic task's
+card links to its adaptation. See [Operational adaptations](library/DEFENSE.md) for the themes, the symbol
+conventions, the shared stimulus kit and how to make a new adaptation.
+
 ## Citing a task
 
 Each task names the original papers it implements (on its card, in `edge library show <id>` and in the copy's
@@ -115,6 +127,9 @@ references: ["Author, A. (Year). Title. Journal, volume, pages."]
 see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/go_no_go.html"}
 notes: optional limits ("uses a code item for the scoring rule")
 ```
+
+An operational adaptation adds `domain: defense`, `themes: [c2, uav, …]` (the default first) and `adaptation:` (one
+paragraph), and needs `variant_of`; see *Making a new adaptation* in [Operational adaptations](library/DEFENSE.md).
 
 Before you send it:
 

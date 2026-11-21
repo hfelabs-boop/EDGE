@@ -1,0 +1,46 @@
+id: search_ops
+title: Visual search (operational)
+category: Attention
+summary: Report whether a hostile air track, a vehicle of one kind, a high-threat emitter or a confirmed target box is among 4, 8 or 16 items, in feature and conjunction search.
+description: >
+  The library's visual search task with operator displays. After a 500 ms fixation cross on the display, 4, 8 or
+  16 items appear at random places on a 6 x 4 grid (jittered). The operator reports as fast as possible whether
+  the target is present (M) or absent (Z); the display stays until the answer (max 5 s). In feature search the
+  other items differ from the target by its colour coding alone; in conjunction search they share either its
+  colour coding or its shape, so only the combination identifies it. Target present on half the trials. 12
+  practice trials with feedback, then 72 test trials (search type x set size x present/absent, 6 each, mixed).
+  The main outcome is the search slope (ms per item) from mean correct RT against set size, for each search type
+  and target presence, as in the classic task.
+measures:
+  - RT by search type x set size x target presence (search slopes)
+  - accuracy (misses and false alarms)
+duration_min: 5
+input: keyboard
+languages: [en]
+variant_of: search
+domain: defense
+themes: [c2, uav, ew, video]
+adaptation: >
+  The letters of the classic task become operational objects; the design, timing, keys and measures stay the same.
+  Colour coding stands for the red/blue colour of the letters and shape for T versus L. c2: tracks on a tactical
+  map; the target is a hostile air track (red diamond frame, air icon); feature distractors are friendly (blue
+  rectangle) and neutral (green square) air tracks; conjunction adds hostile ground tracks. uav: vehicles seen from
+  above in a camera frame (daylight or infrared) under a reticle, with telemetry text; the target is a light
+  (hot) tracked vehicle; distractors are dark tracked vehicles and, in conjunction search, light wheeled vehicles;
+  vehicles may face any way, like the turned letters. ew: emitter traces on a waterfall display; the target is a
+  high-threat (red) pulsed emitter; distractors are low-threat (blue) pulsed emitters and, in conjunction search,
+  high-threat continuous emitters. video: markers drawn by an image tracker on a looping camera feed under a
+  crosshair; the target is a confirmed target box (red rounded rectangle); distractors are candidate boxes (amber,
+  dashed) and, in conjunction search, confirmed point markers (red circles). Symbols, platforms, places and signals
+  are generic and fictional.
+references:
+  - "Treisman, A. M., & Gelade, G. (1980). A feature-integration theory of attention. Cognitive Psychology, 12, 97-136."
+  - "Wolfe, J. M. (1998). What can 1 million trials tell us about visual search? Psychological Science, 9(1), 33-39."
+  - "Wolfe, J. M., Horowitz, T. S., & Kenner, N. M. (2005). Rare items often missed in visual searches. Nature, 435, 439-440."
+  - "Biggs, A. T., Cain, M. S., Clark, K., Darling, E. F., & Mitroff, S. R. (2013). Assessing visual search performance differences between Transportation Security Administration Officers and nonprofessional visual searchers. Visual Cognition, 21(3), 330-352."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/search.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav, ew, video). Each display's plan is saved in the
+  layout.* columns (layout.kinds: target / other_colour / other_shape for each place; layout.pics: the pictures).
+  The pictures come from EDGE's defence kit (tools/library/make_search_ops.py copies them). The video theme plays a
+  looping video behind the items; in Try it and the builder preview it plays in the browser.

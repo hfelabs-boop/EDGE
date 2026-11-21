@@ -8,7 +8,7 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
-from . import CATEGORIES, INPUTS, copy_task, discover, get_task, list_tasks
+from . import CATEGORIES, DOMAINS, INPUTS, THEME_TITLES, THEMES, copy_task, discover, get_task, list_tasks
 
 
 def add_cli(sub: Any) -> None:
@@ -21,6 +21,9 @@ def add_cli(sub: Any) -> None:
     ls.add_argument("--search", help="words that must all appear (title, description, measures, references)")
     ls.add_argument("--input", choices=INPUTS, help="only tasks answered this way")
     ls.add_argument("--language", help="only tasks in this language (e.g. en, de)")
+    ls.add_argument("--domain", choices=DOMAINS + ("none",), help="only the operational adaptations of this domain "
+                    "(defense), or none: only the classic tasks")
+    ls.add_argument("--theme", choices=THEMES, help="only adaptations that have this display theme")
     ls.add_argument("--json", action="store_true", help="machine-readable output")
     sh = acts.add_parser("show", help="what a task does, measures and cites")
     sh.add_argument("id", help="the task's id (see edge library list)")
@@ -29,6 +32,8 @@ def add_cli(sub: Any) -> None:
     nw.add_argument("id", help="the task's id (see edge library list)")
     nw.add_argument("directory", nargs="?", default=".", help="where to create the experiment's folder (default: here)")
     nw.add_argument("--name", help="name of the new experiment (default: the task's id)")
+    nw.add_argument("--theme", choices=THEMES, help="operational adaptations: the display theme the copy starts in "
+                    "(default: the task's first theme)")
     lb.set_defaults(fn=cmd_library, action=None)
 
 
@@ -38,20 +43,21 @@ def cmd_library(a: Any) -> int:
     if a.action == "new":
         return _new(a)
     if a.action is None:
-        a.category = a.search = a.input = a.language = None
+        a.category = a.search = a.input = a.language = a.domain = a.theme = None
         a.json = False
     return _list(a)
 
 
 def _list(a: Any) -> int:
-    tasks = list_tasks(a.category, a.search, a.input, a.language)
+    tasks = list_tasks(a.category, a.search, a.input, a.language, domain=a.domain, theme=a.theme)
     _, problems = discover()
     if a.json:
         print(json.dumps({"tasks": [t.to_dict(full=False) for t in tasks], "problems": problems}, indent=1,
                          ensure_ascii=False))
         return 0
     if not tasks:
-        print("No task matches." if any((a.category, a.search, a.input, a.language)) else "The task library is empty.")
+        print("No task matches." if any((a.category, a.search, a.input, a.language, a.domain, a.theme))
+              else "The task library is empty.")
     for cat in CATEGORIES:
         group = [t for t in tasks if t.category == cat]
         if not group:
@@ -59,12 +65,17 @@ def _list(a: Any) -> int:
         print(f"\n{cat}")
         width = max(len(t.id) for t in group)
         for t in group:
-            print(f"  {t.id:<{width}}  {t.title}  ({_minutes(t.duration_min)}, {t.input})")
+            themes = f"; themes: {_themes(t.themes)}" if t.themes else ""
+            print(f"  {t.id:<{width}}  {t.title}  ({_minutes(t.duration_min)}, {t.input}{themes})")
     if tasks:
         print(f"\n{len(tasks)} task(s). More about one:  edge library show <id>    Start from one:  edge library new <id>")
     for p in problems:
         print(f"warning: left out of the library: {p}", file=sys.stderr)
     return 0
+
+
+def _themes(themes: list[str]) -> str:
+    return " · ".join(THEME_TITLES.get(x, x) for x in themes)
 
 
 def _minutes(m: float) -> str:
@@ -80,10 +91,17 @@ def _show(a: Any) -> int:
     print(f"{t.title}  ({t.id})")
     print(f"{t.category} · {_minutes(t.duration_min)} · {t.input} · {', '.join(t.languages)}"
           + (f" · a version of {t.variant_of}" if t.variant_of else ""))
+    if t.themes:
+        print(f"Operational adaptation ({t.domain}) · themes: {_themes(t.themes)} (default {THEME_TITLES[t.themes[0]]})")
+    for ad in t.adaptations:
+        print(f"Operational version: {ad['id']} ({_themes(ad['themes'])})")
     print()
     print(wrap(t.summary, ""))
     print()
     print(wrap(t.description, ""))
+    if t.adaptation:
+        print("\nAdaptation")
+        print(wrap(t.adaptation))
     print("\nMeasures")
     for m in t.measures:
         print(wrap(m, "  - "))
@@ -97,17 +115,20 @@ def _show(a: Any) -> int:
     if t.notes:
         print("\nNotes")
         print(wrap(t.notes))
-    print(f"\nStart from it:  edge library new {t.id} [folder]")
+    print(f"\nStart from it:  edge library new {t.id} [folder]"
+          + (f" [--theme {'|'.join(t.themes)}]" if t.themes else ""))
     return 0
 
 
 def _new(a: Any) -> int:
     from ..cli import shlex_quote
     t = get_task(a.id)
-    path = copy_task(t.id, Path(a.directory), a.name)
+    path = copy_task(t.id, Path(a.directory), a.name, theme=a.theme)
     wanted = a.name or t.id
     if path.parent.name != wanted.strip():
         print(f"a folder '{wanted}' already exists there, so it was left as it is")
     print(f"created {path}  ({t.title}, from the task library; how to cite it: {path.parent / 'CITATION.md'})")
+    if t.themes:
+        print(f"  theme: {THEME_TITLES[a.theme or t.themes[0]]} (switch with the variable 'theme': {', '.join(t.themes)})")
     print(f"  try:   edge run {shlex_quote(str(path))} --dry-run\n  edit:  edge builder {shlex_quote(str(path))}")
     return 0

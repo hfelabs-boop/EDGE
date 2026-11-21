@@ -1928,6 +1928,24 @@ function previewVal(v, row) {
   } catch { return v; }
 }
 
+/* An item's `if:` that the preview can work out and that is false for this row: the item is left out of the picture
+ * (e.g. `$theme == 'uav'` on another theme, `$set_size > 4` on a row of 4). Anything it can't work out is drawn. */
+function previewSkips(cond, row) {
+  if (cond === undefined || cond === null) return false;
+  if (cond === false) return true;
+  if (!isExpr(cond)) return false;
+  // Python's words to JavaScript, outside quoted text: and / or / not, True / False / None
+  const src = cond.slice(1).trim().split(/('[^']*'|"[^"]*")/).map((part, i) => (i % 2 ? part : part
+    .replace(/\band\b/g, "&&").replace(/\bor\b/g, "||").replace(/\bnot\b/g, "!")
+    .replace(/\bTrue\b/g, "true").replace(/\bFalse\b/g, "false").replace(/\bNone\b/g, "null"))).join("");
+  try {  // best effort, like previewVal; anything that can't be worked out here is drawn
+    // eslint-disable-next-line no-new-func
+    const names = Object.keys(row).filter((k) => /^[A-Za-z_]\w*$/.test(k));
+    const v = Function(...names, `"use strict"; return (${src});`)(...names.map((k) => row[k]));
+    return v === false || v === 0 || v === null || v === "";
+  } catch { return false; }
+}
+
 function renderPreview() {
   if (!S.exp) return;
   const t = S.previewT || 0;
@@ -2029,6 +2047,7 @@ function drawScreen(cv, rid, t, opts = {}) {
   cv._boxes = []; cv._k = k; cv._W = W; cv._H = H;
   const box = (c, hw, hh) => cv._boxes.push({id: c.id, type: c.type, x: pos(c.pos || [0, 0])[0], y: pos(c.pos || [0, 0])[1], hw, hh, rot: numOr(c.ori, 0), units});
   for (const c0 of doc.routines?.[rid]?.components || []) {
+    if (previewSkips(c0.if, row)) continue;     // `if:` that is false for this sample row (e.g. another display theme)
     const c = Object.fromEntries(Object.entries(c0).map(([kk, v]) => [kk, previewVal(v, row)]));
     const st = numOr(c.start, 0), du = numOr(c.duration, Infinity);
     if (c.start_after || c.start_if || t < st || t >= st + du || c.disabled === true) continue;

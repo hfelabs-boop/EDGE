@@ -35,6 +35,22 @@
 .tl-see { display: inline-flex; gap: var(--sp-2); align-items: center; font-size: var(--fs-small); }
 .tl-see .ic { width: 14px; height: 14px; }
 .tl-none { grid-column: 1 / -1; }
+/* operational adaptations: sidebar entry, theme filter, theme chips, link from the classic task, theme choice */
+.tl-cat-ops { margin-top: var(--sp-4); border-top: 1px solid var(--border-subtle); border-radius: 0 0 var(--r-md) var(--r-md); }
+.tl-themes { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+.tl-themes .chip { cursor: pointer; font: inherit; font-size: var(--fs-small); }
+.tl-themes .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tl-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.tl-ops { color: var(--text-2); }
+.tl-ops .linkbtn { font-size: var(--fs-small); }
+.tl-card.tl-flash { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tl-theme-body { display: flex; flex-direction: column; gap: var(--sp-4); }
+.tl-theme-body p { margin: 0; }
+.tl-theme-pick { display: flex; flex-direction: column; gap: var(--sp-2); }
+.tl-theme-opt { display: flex; gap: var(--sp-3); align-items: flex-start; padding: var(--sp-3); border-radius: var(--r-md); cursor: pointer; }
+.tl-theme-opt:hover { background: var(--surface-3); }
+.tl-theme-opt input { margin-top: 3px; }
+.tl-theme-about { display: block; }
 @media (max-width: 720px) {
   .tl-main { grid-template-columns: 1fr; }
   .tl-cats { position: static; flex-direction: row; flex-wrap: wrap; }

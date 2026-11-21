@@ -1,0 +1,626 @@
+# The defence kit's index, written by tools/library/make_defense_kit.py (do not edit by hand: re-run it).
+about: 'Shared stimulus kit of EDGE''s operational (defence human-factors) task adaptations. Everything is synthetic
+  and generic: drawn by tools/library/make_defense_kit.py (re-run it to make the kit again). Copy the files a task
+  needs into its own stimuli/ folder. See docs/library/DEFENSE.md.'
+generator: tools/library/make_defense_kit.py
+themes:
+  c2: 'Command and control: tactical plot / map with track symbols, a message panel and alerts'
+  uav: 'UAV payload operator: camera frame or feed, reticle at the centre, telemetry text, boxed targets'
+  ew: 'Electronic-warfare operator: spectrum and waterfall displays, emitter marks, threat colours'
+  video: 'Video interface: a feed with a crosshair and rounded-rectangle target boxes in states'
+palette:
+  affiliation:
+    friendly: '#80e0ff'
+    hostile: '#ff8080'
+    neutral: '#aaffaa'
+    unknown: '#ffff80'
+  frame_shape:
+    friendly: rectangle
+    hostile: diamond
+    neutral: square
+    unknown: quatrefoil
+  box_states:
+    candidate: '#ffc400'
+    selected: '#00e5ff'
+    confirmed: '#ff3b30'
+    cleared: '#34c759'
+  threat:
+    high: '#ff3b30'
+    medium: '#ffb000'
+    low: '#3ad0ff'
+  console:
+    background: '#04121c'
+    grid: '#1d4a5e'
+    text: '#9fe8ff'
+    accent: '#00e5ff'
+    warning: '#ffb000'
+    alert: '#ff3b30'
+    ok: '#34c759'
+    panel: '#0a2232'
+plot_area:
+  spectrum_and_waterfall:
+    x0: 70
+    y0: 50
+    x1: 1250
+    y1: 690
+    note: pixel box of the data area in the 1280x720 spectrum / waterfall pictures (origin top left)
+total_bytes: 3143166
+assets:
+- file: backgrounds/plot_radar_1280x720.png
+  description: 'Tactical plot (radar-scope style): range rings, bearing lines, a sweep, faint clutter; dark console
+    colours. Place track symbols on it.'
+  themes: [c2]
+  size: [1280, 720]
+- file: backgrounds/map_grid_1280x720.jpg
+  description: 'Map grid: a made-up coastline, an 80 px grid with letters/numbers, four sectors ALPHA-DELTA.'
+  themes: [c2]
+  size: [1280, 720]
+- file: backgrounds/plot_radar_800x800.png
+  description: 'Tactical plot (radar-scope style): range rings, bearing lines, a sweep, faint clutter; dark console
+    colours. Place track symbols on it.'
+  themes: [c2]
+  size: [800, 800]
+- file: backgrounds/map_grid_800x800.jpg
+  description: 'Map grid: a made-up coastline, an 80 px grid with letters/numbers, four sectors ALPHA-DELTA.'
+  themes: [c2]
+  size: [800, 800]
+- file: backgrounds/spectrum_1280x720.png
+  description: 'Spectrum display: grid, channel axis CH 0-100 (relative units), a flat noise-floor trace.'
+  themes: [ew]
+  size: [1280, 720]
+- file: backgrounds/waterfall_1280x720.jpg
+  description: 'Empty waterfall (noise only, time runs downwards): background for emitter marks.'
+  themes: [ew]
+  size: [1280, 720]
+- file: waterfall/waterfall_01_continuous.jpg
+  description: Waterfall with a made-up 'continuous' emitter pattern (generic, not a real signal).
+  themes: [ew]
+  size: [1280, 720]
+  pattern: continuous
+- file: waterfall/waterfall_02_pulsed.jpg
+  description: Waterfall with a made-up 'pulsed' emitter pattern (generic, not a real signal).
+  themes: [ew]
+  size: [1280, 720]
+  pattern: pulsed
+- file: waterfall/waterfall_03_hopping.jpg
+  description: Waterfall with a made-up 'hopping' emitter pattern (generic, not a real signal).
+  themes: [ew]
+  size: [1280, 720]
+  pattern: hopping
+- file: waterfall/waterfall_04_sweep.jpg
+  description: Waterfall with a made-up 'sweep' emitter pattern (generic, not a real signal).
+  themes: [ew]
+  size: [1280, 720]
+  pattern: sweep
+- file: waterfall/waterfall_05_mixed.jpg
+  description: Waterfall with a made-up 'mixed' emitter pattern (generic, not a real signal).
+  themes: [ew]
+  size: [1280, 720]
+  pattern: mixed
+- file: terrain/terrain_01_farmland.jpg
+  description: 'Daylight camera frame: fields, crossing roads, a few farm buildings.'
+  themes: [uav, video]
+  size: [1280, 720]
+- file: terrain/terrain_02_village.jpg
+  description: 'Daylight camera frame: a village of small buildings along roads.'
+  themes: [uav, video]
+  size: [1280, 720]
+- file: terrain/terrain_03_forest.jpg
+  description: 'Daylight camera frame: forest with clearings and a track.'
+  themes: [uav, video]
+  size: [1280, 720]
+- file: terrain/terrain_04_river.jpg
+  description: 'Daylight camera frame: a river through fields, roads and buildings.'
+  themes: [uav, video]
+  size: [1280, 720]
+- file: terrain/terrain_05_farmland_ir.jpg
+  description: 'Infrared (''white-hot'') camera frame of farmland: grey, roads and roofs bright.'
+  themes: [uav, video]
+  size: [1280, 720]
+- file: terrain/terrain_06_desert_dusk.jpg
+  description: Hazy dusk camera frame of dry open terrain with a few buildings.
+  themes: [uav, video]
+  size: [1280, 720]
+- file: symbols/friendly_air_32.png
+  description: 'Friendly air track symbol (rectangle frame, #80e0ff), 32 px, transparent.'
+  themes: [c2]
+  size: [32, 32]
+  affiliation: friendly
+  dimension: air
+- file: symbols/friendly_air_48.png
+  description: 'Friendly air track symbol (rectangle frame, #80e0ff), 48 px, transparent.'
+  themes: [c2]
+  size: [48, 48]
+  affiliation: friendly
+  dimension: air
+- file: symbols/friendly_air_64.png
+  description: 'Friendly air track symbol (rectangle frame, #80e0ff), 64 px, transparent.'
+  themes: [c2]
+  size: [64, 64]
+  affiliation: friendly
+  dimension: air
+- file: symbols/friendly_surface_32.png
+  description: 'Friendly surface track symbol (rectangle frame, #80e0ff), 32 px, transparent.'
+  themes: [c2]
+  size: [32, 32]
+  affiliation: friendly
+  dimension: surface
+- file: symbols/friendly_surface_48.png
+  description: 'Friendly surface track symbol (rectangle frame, #80e0ff), 48 px, transparent.'
+  themes: [c2]
+  size: [48, 48]
+  affiliation: friendly
+  dimension: surface
+- file: symbols/friendly_surface_64.png
+  description: 'Friendly surface track symbol (rectangle frame, #80e0ff), 64 px, transparent.'
+  themes: [c2]
+  size: [64, 64]
+  affiliation: friendly
+  dimension: surface
+- file: symbols/friendly_ground_32.png
+  description: 'Friendly ground track symbol (rectangle frame, #80e0ff), 32 px, transparent.'
+  themes: [c2]
+  size: [32, 32]
+  affiliation: friendly
+  dimension: ground
+- file: symbols/friendly_ground_48.png
+  description: 'Friendly ground track symbol (rectangle frame, #80e0ff), 48 px, transparent.'
+  themes: [c2]
+  size: [48, 48]
+  affiliation: friendly
+  dimension: ground
+- file: symbols/friendly_ground_64.png
+  description: 'Friendly ground track symbol (rectangle frame, #80e0ff), 64 px, transparent.'
+  themes: [c2]
+  size: [64, 64]
+  affiliation: friendly
+  dimension: ground
+- file: symbols/hostile_air_32.png
+  description: 'Hostile air track symbol (diamond frame, #ff8080), 32 px, transparent.'
+  themes: [c2]
+  size: [32, 32]
+  affiliation: hostile
+  dimension: air
+- file: symbols/hostile_air_48.png
+  description: 'Hostile air track symbol (diamond frame, #ff8080), 48 px, transparent.'
+  themes: [c2]
+  size: [48, 48]
+  affiliation: hostile
+  dimension: air
+- file: symbols/hostile_air_64.png
+  description: 'Hostile air track symbol (diamond frame, #ff8080), 64 px, transparent.'
+  themes: [c2]
+  size: [64, 64]
+  affiliation: hostile
+  dimension: air
+- file: symbols/hostile_surface_32.png
+  description: 'Hostile surface track symbol (diamond frame, #ff8080), 32 px, transparent.'
+  themes: [c2]
+  size: [32, 32]
+  affiliation: hostile
+  dimension: surface
+- file: symbols/hostile_surface_48.png
+  description: 'Hostile surface track symbol (diamond frame, #ff8080), 48 px, transparent.'
+  themes: [c2]
+  size: [48, 48]
+  affiliation: hostile
+  dimension: surface
+- file: symbols/hostile_surface_64.png
+  description: 'Hostile surface track symbol (diamond frame, #ff8080), 64 px, transparent.'
+  themes: [c2]
+  size: [64, 64]
+  affiliation: hostile
+  dimension: surface
+- file: symbols/hostile_ground_32.png
+  description: 'Hostile ground track symbol (diamond frame, #ff8080), 32 px, transparent.'
+  themes: [c2]
+  size: [32, 32]
+  affiliation: hostile
+  dimension: ground
+- file: symbols/hostile_ground_48.png
+  description: 'Hostile ground track symbol (diamond frame, #ff8080), 48 px, transparent.'
+  themes: [c2]
+  size: [48, 48]
+  affiliation: hostile
+  dimension: ground
+- file: symbols/hostile_ground_64.png
+  description: 'Hostile ground track symbol (diamond frame, #ff8080), 64 px, transparent.'
+  themes: [c2]
+  size: [64, 64]
+  affiliation: hostile
+  dimension: ground
+- file: symbols/neutral_air_32.png
+  description: 'Neutral air track symbol (square frame, #aaffaa), 32 px, transparent.'
+  themes: [c2]
+  size: [32, 32]
+  affiliation: neutral
+  dimension: air
+- file: symbols/neutral_air_48.png
+  description: 'Neutral air track symbol (square frame, #aaffaa), 48 px, transparent.'
+  themes: [c2]
+  size: [48, 48]
+  affiliation: neutral
+  dimension: air
+- file: symbols/neutral_air_64.png
+  description: 'Neutral air track symbol (square frame, #aaffaa), 64 px, transparent.'
+  themes: [c2]
+  size: [64, 64]
+  affiliation: neutral
+  dimension: air
+- file: symbols/neutral_surface_32.png
+  description: 'Neutral surface track symbol (square frame, #aaffaa), 32 px, transparent.'
+  themes: [c2]
+  size: [32, 32]
+  affiliation: neutral
+  dimension: surface
+- file: symbols/neutral_surface_48.png
+  description: 'Neutral surface track symbol (square frame, #aaffaa), 48 px, transparent.'
+  themes: [c2]
+  size: [48, 48]
+  affiliation: neutral
+  dimension: surface
+- file: symbols/neutral_surface_64.png
+  description: 'Neutral surface track symbol (square frame, #aaffaa), 64 px, transparent.'
+  themes: [c2]
+  size: [64, 64]
+  affiliation: neutral
+  dimension: surface
+- file: symbols/neutral_ground_32.png
+  description: 'Neutral ground track symbol (square frame, #aaffaa), 32 px, transparent.'
+  themes: [c2]
+  size: [32, 32]
+  affiliation: neutral
+  dimension: ground
+- file: symbols/neutral_ground_48.png
+  description: 'Neutral ground track symbol (square frame, #aaffaa), 48 px, transparent.'
+  themes: [c2]
+  size: [48, 48]
+  affiliation: neutral
+  dimension: ground
+- file: symbols/neutral_ground_64.png
+  description: 'Neutral ground track symbol (square frame, #aaffaa), 64 px, transparent.'
+  themes: [c2]
+  size: [64, 64]
+  affiliation: neutral
+  dimension: ground
+- file: symbols/unknown_air_32.png
+  description: 'Unknown air track symbol (quatrefoil frame, #ffff80), 32 px, transparent.'
+  themes: [c2]
+  size: [32, 32]
+  affiliation: unknown
+  dimension: air
+- file: symbols/unknown_air_48.png
+  description: 'Unknown air track symbol (quatrefoil frame, #ffff80), 48 px, transparent.'
+  themes: [c2]
+  size: [48, 48]
+  affiliation: unknown
+  dimension: air
+- file: symbols/unknown_air_64.png
+  description: 'Unknown air track symbol (quatrefoil frame, #ffff80), 64 px, transparent.'
+  themes: [c2]
+  size: [64, 64]
+  affiliation: unknown
+  dimension: air
+- file: symbols/unknown_surface_32.png
+  description: 'Unknown surface track symbol (quatrefoil frame, #ffff80), 32 px, transparent.'
+  themes: [c2]
+  size: [32, 32]
+  affiliation: unknown
+  dimension: surface
+- file: symbols/unknown_surface_48.png
+  description: 'Unknown surface track symbol (quatrefoil frame, #ffff80), 48 px, transparent.'
+  themes: [c2]
+  size: [48, 48]
+  affiliation: unknown
+  dimension: surface
+- file: symbols/unknown_surface_64.png
+  description: 'Unknown surface track symbol (quatrefoil frame, #ffff80), 64 px, transparent.'
+  themes: [c2]
+  size: [64, 64]
+  affiliation: unknown
+  dimension: surface
+- file: symbols/unknown_ground_32.png
+  description: 'Unknown ground track symbol (quatrefoil frame, #ffff80), 32 px, transparent.'
+  themes: [c2]
+  size: [32, 32]
+  affiliation: unknown
+  dimension: ground
+- file: symbols/unknown_ground_48.png
+  description: 'Unknown ground track symbol (quatrefoil frame, #ffff80), 48 px, transparent.'
+  themes: [c2]
+  size: [48, 48]
+  affiliation: unknown
+  dimension: ground
+- file: symbols/unknown_ground_64.png
+  description: 'Unknown ground track symbol (quatrefoil frame, #ffff80), 64 px, transparent.'
+  themes: [c2]
+  size: [64, 64]
+  affiliation: unknown
+  dimension: ground
+- file: vehicles/vehicle_tracked_light.png
+  description: Generic tracked vehicle seen from above, light (hot in infrared), pointing up, 48 px, transparent.
+  themes: [uav, video]
+  size: [48, 48]
+  kind: tracked
+  tone: light
+- file: vehicles/vehicle_tracked_dark.png
+  description: Generic tracked vehicle seen from above, dark (cold in infrared), pointing up, 48 px, transparent.
+  themes: [uav, video]
+  size: [48, 48]
+  kind: tracked
+  tone: dark
+- file: vehicles/vehicle_wheeled_light.png
+  description: Generic wheeled vehicle seen from above, light (hot in infrared), pointing up, 48 px, transparent.
+  themes: [uav, video]
+  size: [48, 48]
+  kind: wheeled
+  tone: light
+- file: vehicles/vehicle_wheeled_dark.png
+  description: Generic wheeled vehicle seen from above, dark (cold in infrared), pointing up, 48 px, transparent.
+  themes: [uav, video]
+  size: [48, 48]
+  kind: wheeled
+  tone: dark
+- file: vehicles/vehicle_car_light.png
+  description: Generic car vehicle seen from above, light (hot in infrared), pointing up, 48 px, transparent.
+  themes: [uav, video]
+  size: [48, 48]
+  kind: car
+  tone: light
+- file: vehicles/vehicle_car_dark.png
+  description: Generic car vehicle seen from above, dark (cold in infrared), pointing up, 48 px, transparent.
+  themes: [uav, video]
+  size: [48, 48]
+  kind: car
+  tone: dark
+- file: emitters/emitter_pulsed_high.png
+  description: 'Waterfall emitter mark: pulsed (dashed trace), high threat colour #ff3b30; 28x84, transparent.'
+  themes: [ew]
+  size: [28, 84]
+  signal: pulsed
+  threat: high
+- file: emitters/emitter_pulsed_medium.png
+  description: 'Waterfall emitter mark: pulsed (dashed trace), medium threat colour #ffb000; 28x84, transparent.'
+  themes: [ew]
+  size: [28, 84]
+  signal: pulsed
+  threat: medium
+- file: emitters/emitter_pulsed_low.png
+  description: 'Waterfall emitter mark: pulsed (dashed trace), low threat colour #3ad0ff; 28x84, transparent.'
+  themes: [ew]
+  size: [28, 84]
+  signal: pulsed
+  threat: low
+- file: emitters/emitter_continuous_high.png
+  description: 'Waterfall emitter mark: continuous (solid trace), high threat colour #ff3b30; 28x84, transparent.'
+  themes: [ew]
+  size: [28, 84]
+  signal: continuous
+  threat: high
+- file: emitters/emitter_continuous_medium.png
+  description: 'Waterfall emitter mark: continuous (solid trace), medium threat colour #ffb000; 28x84, transparent.'
+  themes: [ew]
+  size: [28, 84]
+  signal: continuous
+  threat: medium
+- file: emitters/emitter_continuous_low.png
+  description: 'Waterfall emitter mark: continuous (solid trace), low threat colour #3ad0ff; 28x84, transparent.'
+  themes: [ew]
+  size: [28, 84]
+  signal: continuous
+  threat: low
+- file: reticles/reticle_cross.png
+  description: 'Reticle: thin cross with a centre gap and range ticks; light lines with a dark edge, 240 px, transparent.
+    Put it at the centre.'
+  themes: [uav, video]
+  size: [240, 240]
+- file: reticles/reticle_brackets.png
+  description: 'Reticle: four corner brackets and a small centre cross; light lines with a dark edge, 240 px, transparent.
+    Put it at the centre.'
+  themes: [uav, video]
+  size: [240, 240]
+- file: reticles/reticle_circle.png
+  description: 'Reticle: ring with cross hairs and stadia ticks; light lines with a dark edge, 240 px, transparent.
+    Put it at the centre.'
+  themes: [uav, video]
+  size: [240, 240]
+- file: reticles/crosshair_full_1280x720.png
+  description: Full-screen crosshair (lines across the whole 1280x720 view, gap at the centre), transparent.
+  themes: [video, uav]
+  size: [1280, 720]
+- file: boxes/box_candidate_64.png
+  description: Rounded-rectangle target box, state 'candidate' (#ffc400), 64 px, transparent.
+  themes: [uav, video]
+  size: [64, 64]
+  state: candidate
+- file: boxes/box_candidate_96.png
+  description: Rounded-rectangle target box, state 'candidate' (#ffc400), 96 px, transparent.
+  themes: [uav, video]
+  size: [96, 96]
+  state: candidate
+- file: boxes/box_candidate_128.png
+  description: Rounded-rectangle target box, state 'candidate' (#ffc400), 128 px, transparent.
+  themes: [uav, video]
+  size: [128, 128]
+  state: candidate
+- file: boxes/ring_candidate_64.png
+  description: Round point marker, state 'candidate' (#ffc400), 64 px, transparent.
+  themes: [uav, video]
+  size: [64, 64]
+  state: candidate
+- file: boxes/box_selected_64.png
+  description: Rounded-rectangle target box, state 'selected' (#00e5ff), 64 px, transparent.
+  themes: [uav, video]
+  size: [64, 64]
+  state: selected
+- file: boxes/box_selected_96.png
+  description: Rounded-rectangle target box, state 'selected' (#00e5ff), 96 px, transparent.
+  themes: [uav, video]
+  size: [96, 96]
+  state: selected
+- file: boxes/box_selected_128.png
+  description: Rounded-rectangle target box, state 'selected' (#00e5ff), 128 px, transparent.
+  themes: [uav, video]
+  size: [128, 128]
+  state: selected
+- file: boxes/ring_selected_64.png
+  description: Round point marker, state 'selected' (#00e5ff), 64 px, transparent.
+  themes: [uav, video]
+  size: [64, 64]
+  state: selected
+- file: boxes/box_confirmed_64.png
+  description: Rounded-rectangle target box, state 'confirmed' (#ff3b30), 64 px, transparent.
+  themes: [uav, video]
+  size: [64, 64]
+  state: confirmed
+- file: boxes/box_confirmed_96.png
+  description: Rounded-rectangle target box, state 'confirmed' (#ff3b30), 96 px, transparent.
+  themes: [uav, video]
+  size: [96, 96]
+  state: confirmed
+- file: boxes/box_confirmed_128.png
+  description: Rounded-rectangle target box, state 'confirmed' (#ff3b30), 128 px, transparent.
+  themes: [uav, video]
+  size: [128, 128]
+  state: confirmed
+- file: boxes/ring_confirmed_64.png
+  description: Round point marker, state 'confirmed' (#ff3b30), 64 px, transparent.
+  themes: [uav, video]
+  size: [64, 64]
+  state: confirmed
+- file: boxes/box_cleared_64.png
+  description: Rounded-rectangle target box, state 'cleared' (#34c759), 64 px, transparent.
+  themes: [uav, video]
+  size: [64, 64]
+  state: cleared
+- file: boxes/box_cleared_96.png
+  description: Rounded-rectangle target box, state 'cleared' (#34c759), 96 px, transparent.
+  themes: [uav, video]
+  size: [96, 96]
+  state: cleared
+- file: boxes/box_cleared_128.png
+  description: Rounded-rectangle target box, state 'cleared' (#34c759), 128 px, transparent.
+  themes: [uav, video]
+  size: [128, 128]
+  state: cleared
+- file: boxes/ring_cleared_64.png
+  description: Round point marker, state 'cleared' (#34c759), 64 px, transparent.
+  themes: [uav, video]
+  size: [64, 64]
+  state: cleared
+- file: panels/message_panel_400x240.png
+  description: Message / status panel background with a header bar (semi-transparent). Its text is the 'message_panel'
+    recipe below.
+  themes: [c2, ew, uav, video]
+  size: [400, 240]
+- file: video/feed_01_pan.mp4
+  description: 'Camera feed: slow pan back and forth over farmland (daylight), loops seamlessly.'
+  themes: [uav, video]
+  size: [640, 360]
+  seconds: 10
+  fps: 25
+  loops: true
+  moving_vehicles: false
+- file: video/feed_02_zoom.mp4
+  description: 'Camera feed: slow zoom in and out over a village (daylight), loops seamlessly.'
+  themes: [uav, video]
+  size: [640, 360]
+  seconds: 10
+  fps: 25
+  loops: true
+  moving_vehicles: false
+- file: video/feed_03_orbit_ir.mp4
+  description: 'Camera feed (infrared, white-hot): slow circular drift over a river valley, loops seamlessly.'
+  themes: [uav, video]
+  size: [640, 360]
+  seconds: 10
+  fps: 25
+  loops: true
+  moving_vehicles: false
+- file: video/feed_04_vehicles.mp4
+  description: Camera feed with generic vehicles driving along the roads (daylight), loops seamlessly.
+  themes: [uav, video]
+  size: [640, 360]
+  seconds: 10
+  fps: 25
+  loops: true
+  moving_vehicles: true
+recipes:
+  telemetry_overlay:
+    about: 'Generic telemetry text in a UAV camera view: four small monospace text items in the corners, numbers
+      from variables or expressions so they can change every trial (no picture). Paste the items into a screen and
+      set alt / hdg / spd (e.g. in a variable item: alt: "$random.randint(1800, 2600)").'
+    themes: [uav, video]
+    components:
+    - id: tel_tl
+      type: text
+      font: DejaVu Sans Mono
+      height: 18
+      color: '#d8ffd8'
+      pos: [-400, 330]
+      text: $f'ALT {alt:>5} m   HDG {hdg:03d}   SPD {spd:>3} kt'
+    - id: tel_tr
+      type: text
+      font: DejaVu Sans Mono
+      height: 18
+      color: '#d8ffd8'
+      pos: [470, 330]
+      text: $f'SENSOR EO   FOV {fov:.1f}'
+    - id: tel_bl
+      type: text
+      font: DejaVu Sans Mono
+      height: 18
+      color: '#d8ffd8'
+      pos: [-540, -330]
+      text: $f'TRACK {track_no:04d}'
+    - id: tel_br
+      type: text
+      font: DejaVu Sans Mono
+      height: 18
+      color: '#d8ffd8'
+      pos: [580, -330]
+      text: REC  ●
+    variables:
+      alt: 2200
+      hdg: 45
+      spd: 90
+      fov: 12.5
+      track_no: 417
+  message_panel:
+    about: 'A message / status panel: panels/message_panel_400x240.png as the background, a header text and up to
+      four message lines as text items (change them per trial). Place it in a free corner (here: the right edge
+      of a 1280x720 screen). Colours: text #9fe8ff, warning #ffb000, alert #ff3b30.'
+    themes: [c2, ew, uav, video]
+    components:
+    - id: panel
+      type: image
+      image: stimuli/message_panel_400x240.png
+      size: [400, 240]
+      pos: [430, 220]
+    - id: panel_head
+      type: text
+      font: DejaVu Sans Mono
+      height: 17
+      bold: true
+      color: '#9fe8ff'
+      pos: [430, 323]
+      text: MESSAGES
+    - id: panel_l1
+      type: text
+      font: DejaVu Sans Mono
+      height: 16
+      color: '#9fe8ff'
+      pos: [430, 270]
+      wrap_width: 370
+      text: $msg1
+    - id: panel_l2
+      type: text
+      font: DejaVu Sans Mono
+      height: 16
+      color: '#ffb000'
+      pos: [430, 236]
+      wrap_width: 370
+      text: $msg2
+    variables:
+      msg1: 0412  Track 0417 updated
+      msg2: '0413  Sector BRAVO: check contact'
