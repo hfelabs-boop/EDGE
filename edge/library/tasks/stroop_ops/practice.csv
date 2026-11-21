@@ -1,0 +1,9 @@
+word,ink,ink_colour,ink_rgb,congruent,condition,correct_key
+HOSTILE,hostile,red,#ff8080,1,congruent,r
+NEUTRAL,friendly,blue,#80e0ff,0,incongruent,b
+FRIENDLY,unknown,yellow,#ffff80,0,incongruent,y
+UNKNOWN,unknown,yellow,#ffff80,1,congruent,y
+HOSTILE,neutral,green,#aaffaa,0,incongruent,g
+NEUTRAL,neutral,green,#aaffaa,1,congruent,g
+FRIENDLY,friendly,blue,#80e0ff,1,congruent,b
+UNKNOWN,hostile,red,#ff8080,0,incongruent,r

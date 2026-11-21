@@ -1,0 +1,41 @@
+id: prp_ops
+title: Psychological refractory period, radio and alert (operational)
+category: Cognitive control
+summary: Answer a radio call tone and then a track or vehicle alert that follows it after a variable delay; the second answer slows when the two come close together.
+description: >
+  The library's PRP task with operator displays. Each trial presents two stimuli: a radio call tone (low 400 Hz =
+  routine message or high 900 Hz = priority message, 150 ms) 500 ms after a fixation cross, and an alert on the
+  display at a stimulus onset asynchrony (SOA) of 50, 150, 300, 600 or 1000 ms after the tone. The operator
+  answers the tone first with the left hand (A = low, S = high) and then the alert with the right hand (K or L),
+  each within 3 seconds. A short demonstration of the two tones and 10 practice trials with feedback come first,
+  then 80 test trials (2 tones x 2 alerts x 5 SOAs, 4 times each, in random order), with feedback after errors or
+  answers in the wrong order. Main outcome: the PRP effect, the rise of task-2 RT as the SOA gets shorter, with
+  task-1 RT largely unaffected.
+measures:
+  - "Median task-2 (alert) RT by SOA (PRP effect)"
+  - "Median task-1 (radio tone) RT by SOA"
+  - "Accuracy of both tasks by SOA"
+  - "Share of trials answered in the instructed order (check)"
+duration_min: 6
+input: keyboard
+languages: [en]
+variant_of: prp
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The two tasks become a radio message and a display alert that arrive close together. Task 1, the tone, is the
+  radio channel's call tone: low = a routine message (A), high = a priority message (S). Task 2, the letter, is an
+  alert that pops up in the centre with a selection box: c2, a new air track on a radar-style plot, hostile (red
+  diamond; the classic X, K) or friendly (blue rectangle; the classic O, L); uav, a vehicle detected under the
+  reticle of a surveillance camera frame, tracked (K) or wheeled (L). The trial lists keep the classic codes
+  (letter X / O). Radio, tracks and vehicles are generic and fictional.
+references:
+  - "Welford, A. T. (1952). The 'psychological refractory period' and the timing of high-speed performance: A review and a theory. British Journal of Psychology, 43, 2–19."
+  - "Pashler, H. (1994). Dual-task interference in simple tasks: Data and theory. Psychological Bulletin, 116, 220–244."
+  - "McCann, R. S., & Johnston, J. C. (1992). Locus of the single-channel bottleneck in dual-task interference. Journal of Experimental Psychology: Human Perception and Performance, 18, 471–484."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/prp.html"}
+notes: >
+  Needs sound. Switch the display with the variable `theme` (c2, uav). RTs are counted on trials with both answers
+  correct and in the instructed order (order.tone_first). Tone onset timing depends on the computer's audio
+  latency; run a timing test (edge timing-test) if exact SOAs matter. The trial lists are the classic task's,
+  copied with the kit pictures by tools/library/make_prp_ops.py.

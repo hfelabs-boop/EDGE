@@ -1,0 +1,39 @@
+id: negative_priming_ops
+title: Negative priming (operational)
+category: Inhibition and conflict
+summary: Report the designator of the hostile track (or high-threat emitter) of two overlapping ones; reporting one you just ignored is slower.
+description: >
+  The library's negative priming task with operator displays. Every trial is a prime display followed by a probe
+  display. In both, two designator letters (D, F, J or K) overlap, one in red (the one that matters) and one in
+  blue, and the operator presses the key of the red letter within 2 seconds, ignoring the blue one. The prime
+  follows a 500 ms fixation cross; the probe follows the prime response after a 500 ms pause. In
+  ignored-repetition pairs the probe's red letter is the letter that was blue (ignored) in the prime; in control
+  pairs both probe letters are new. All 24 ignored-repetition and 24 control pairs are shown once in random order
+  (48 pairs), after 6 practice pairs with feedback. Main outcome: the negative priming effect, slower (and less
+  accurate) probe responses after ignored repetition than in control pairs, counting only pairs with correct
+  prime and probe responses.
+measures:
+  - "Median probe RT (prime and probe correct), ignored repetition vs control (negative priming effect)"
+  - "Probe accuracy, ignored repetition vs control"
+  - "Prime accuracy (check)"
+duration_min: 5
+input: keyboard
+languages: [en]
+variant_of: negative_priming
+domain: defense
+themes: [c2, ew]
+adaptation: >
+  The red and green overlapping letters become the designator letters of two objects that overlap on an operator
+  display; the red one is to be reported (the target), the blue one ignored (the distractor). c2: two tracks on
+  top of each other on a radar-style plot; the hostile track's designator (hostile red) is reported, the friendly
+  track's (friendly blue) ignored. ew: two emitters in the same channel of the spectrum display; the high-threat
+  emitter's designator (threat red) is reported, the low-threat emitter's (threat blue) ignored. Designators are
+  generic letters.
+references:
+  - "Tipper, S. P. (1985). The negative priming effect: Inhibitory priming by ignored objects. Quarterly Journal of Experimental Psychology, 37A, 571–590."
+  - "Dalrymple-Alford, E. C., & Budayr, B. (1966). Examination of some aspects of the Stroop color-word test. Perceptual and Motor Skills, 23, 1211–1214."
+  - "Mayr, S., & Buchner, A. (2007). Negative priming as a memory phenomenon: A review of 20 years of negative priming research. Zeitschrift für Psychologie / Journal of Psychology, 215, 35–51."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/negative_priming.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, ew); the colours are in the variable looks. The trial lists
+  are the classic task's, copied with the kit pictures by tools/library/make_negative_priming_ops.py.

@@ -1,0 +1,38 @@
+id: dccs_ops
+title: Dimensional Change Card Sort, contact reports (operational)
+category: Cognitive control
+summary: Sort contact reports by affiliation, then by domain (or by vehicle shade, then type), then by a priority-frame rule; measures the ability to switch rules.
+description: >
+  The library's DCCS with operator displays, for adult operators. Two reference reports stay on the screen. Each
+  test report matches one reference on the first dimension and the other on the second, and is sorted by tapping
+  or clicking the reference it belongs to. After two demonstration reports with feedback, the operator sorts 6
+  reports by the first rule (pre-switch), then 6 by the second rule (post-switch), then 12 under the priority
+  frame rule: reports with an amber priority frame by the first rule, reports without by the second. There is no
+  feedback after the demonstration and no time limit. Main outcome: the number (proportion) of correct sorts in
+  the post-switch and frame phases (perseveration on the first rule), plus sorting times.
+measures:
+  - "Correct sorts per phase (post-switch: 5 of 6 or more = passed)"
+  - "Median sorting time on correct sorts per phase"
+duration_min: 4
+input: touch
+languages: [en]
+variant_of: dccs
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The cards become contact reports that differ on two dimensions; the colour game becomes the first rule and the
+  shape game the second. c2: track symbols on dark report cards; references a friendly air track (the classic blue
+  triangle) and a hostile surface track (red circle); test reports a hostile air track (red triangle) and a
+  friendly surface track (blue circle); first rule AFFILIATION (hostile / friendly), second rule DOMAIN (air /
+  surface). uav: vehicles seen from above by a camera; references a dark tracked and a light wheeled vehicle; test
+  reports a light tracked and a dark wheeled vehicle; first rule SHADE (light / dark), second rule TYPE (tracked /
+  wheeled). The black border of the border game becomes an amber priority frame. All generic and fictional.
+references:
+  - "Zelazo, P. D. (2006). The Dimensional Change Card Sort (DCCS): A method of assessing executive function in children. Nature Protocols, 1, 297–301."
+  - "Doebel, S., & Zelazo, P. D. (2015). A meta-analysis of the Dimensional Change Card Sort: Implications for developmental theories and the measurement of executive function in children. Developmental Review, 38, 241–268."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/dccs.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). The trial lists are the classic task's rows (card codes
+  red_triangle / blue_circle, rule colour / shape) without the classic hint column; the rule names shown come
+  from the variable hints. Made, with the kit pictures, by tools/library/make_dccs_ops.py. Adults usually make few
+  errors; the sorting times and the frame phase carry most of the information. Works with a mouse too.

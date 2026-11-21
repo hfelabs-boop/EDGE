@@ -1,0 +1,205 @@
+name: dccs_ops
+description: >
+  Dimensional Change Card Sort (DCCS, after Zelazo, 2006), operational adaptation. The same paradigm, trial lists,
+  timing and measures as the library's `dccs` task, with contact reports instead of picture cards. Two reference
+  reports stay on the screen; each new report is sorted by tapping or clicking the reference it belongs to: first
+  by the FIRST rule (pre-switch, 6 reports), then by the SECOND rule (post-switch, 6 reports), then by the first
+  rule if the report has an amber PRIORITY frame and by the second if not (frame phase, 12 reports). One variable,
+  `theme`, sets the display and the rules: c2 (track symbols; AFFILIATION, then DOMAIN) or uav (vehicles seen by a
+  camera; SHADE, then TYPE).
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops, edge/library/tasks/search_ops/search_ops.yaml)
+# `theme` is the first variable (c2 or uav). The trial lists keep the classic codes (card red_triangle /
+# blue_circle, rule colour / shape); `looks` maps each card to the theme's picture and `txt` holds the theme's
+# words (rule names, instructions), so one set of items serves every theme.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: height}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or uav
+  # per theme: the pictures of the two reference reports (the classic blue triangle left, red circle right), of
+  # the two test reports (red triangle, blue circle), the colour of the report cards and the picture size
+  looks:
+    c2: {left: stimuli/friendly_air_64.png, right: stimuli/hostile_surface_64.png,
+         red_triangle: stimuli/hostile_air_64.png, blue_circle: stimuli/friendly_surface_64.png, card: "#0a2232", pic: [0.17, 0.17]}
+    uav: {left: stimuli/vehicle_tracked_dark.png, right: stimuli/vehicle_wheeled_light.png,
+          red_triangle: stimuli/vehicle_tracked_light.png, blue_circle: stimuli/vehicle_wheeled_dark.png, card: "#7d8a6a", pic: [0.27, 0.27]}
+  # the hint over the report, per phase
+  hints:
+    c2: {demo: AFFILIATION rule, pre_switch: AFFILIATION rule, post_switch: DOMAIN rule, border: Priority frame rule}
+    uav: {demo: SHADE rule, pre_switch: SHADE rule, post_switch: TYPE rule, border: Priority frame rule}
+  txt:
+    c2:
+      intro: |
+        SORTING CONTACT REPORTS
+
+        Here are two reference reports: a FRIENDLY AIR track (blue rectangle with a wing symbol)
+        and a HOSTILE SURFACE track (red diamond with a hull symbol).
+        You will get more reports. Put each one with the reference it belongs to
+        by tapping (or clicking) that reference.
+
+        The sorting rule will change. Read each new rule carefully.
+      colour: |
+        THE AFFILIATION RULE
+
+        Sort by AFFILIATION: hostile tracks go with the HOSTILE reference,
+        friendly tracks go with the FRIENDLY reference. Two reports to try first.
+      colour_go: |
+        Good. Now sort by AFFILIATION: hostile with the HOSTILE reference, friendly with the FRIENDLY reference.
+      shape: |
+        NEW RULE: THE DOMAIN RULE
+
+        We are not sorting by affiliation any more. Sort by DOMAIN:
+        air tracks go with the AIR reference, surface tracks go with the SURFACE reference.
+      border: |
+        NEW RULE: THE PRIORITY FRAME RULE
+
+        If the report has an amber PRIORITY frame, sort it by AFFILIATION.
+        If it has no frame, sort it by DOMAIN.
+      wrong: "Not quite: under the AFFILIATION rule, a hostile track goes with the hostile reference."
+    uav:
+      intro: |
+        SORTING CAMERA REPORTS
+
+        Here are two reference reports from the camera: a DARK TRACKED vehicle
+        and a LIGHT WHEELED vehicle.
+        You will get more reports. Put each one with the reference it belongs to
+        by tapping (or clicking) that reference.
+
+        The sorting rule will change. Read each new rule carefully.
+      colour: |
+        THE SHADE RULE
+
+        Sort by SHADE: light vehicles go with the LIGHT reference,
+        dark vehicles go with the DARK reference. Two reports to try first.
+      colour_go: |
+        Good. Now sort by SHADE: light with the LIGHT reference, dark with the DARK reference.
+      shape: |
+        NEW RULE: THE TYPE RULE
+
+        We are not sorting by shade any more. Sort by TYPE:
+        tracked vehicles go with the TRACKED reference, wheeled vehicles with the WHEELED reference.
+      border: |
+        NEW RULE: THE PRIORITY FRAME RULE
+
+        If the report has an amber PRIORITY frame, sort it by SHADE.
+        If it has no frame, sort it by TYPE.
+      wrong: "Not quite: under the SHADE rule, a light vehicle goes with the light reference."
+
+measures:
+  # the three test phases (the demonstration reports have phase 'demo' and are left out)
+  - {id: accuracy, label: Correct sorts, role: outcome, column: resp.corr, trials: "$phase != 'demo'", summary: proportion}
+  - {id: correct_sorts, label: Number of correct sorts, role: outcome, column: resp.corr, trials: "$phase != 'demo'", summary: sum}
+  - {id: rt, label: Sorting time (correct sorts), role: outcome, column: resp.rt, trials: "$resp.corr == 1 and phase != 'demo'",
+     summary: median, units: s, expect: [0.3, 10]}
+  - {id: phase, label: "Phase (pre-switch, post-switch, priority frame)", role: factor, column: phase}
+
+routines:
+  instructions:
+    components:
+      - {id: text, type: text, text: "$txt[theme]['intro']", height: 0.04, wrap_width: 1.6, color: "#d8eef6", pos: [0, 0.15]}
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#0a2232", line_color: "#9fe8ff", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start", height: 0.045, color: "#9fe8ff", pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  intro_colour:
+    components:
+      - {id: text, type: text, text: "$txt[theme]['colour']", height: 0.045, wrap_width: 1.6, color: "#d8eef6", pos: [0, 0.12]}
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#0a2232", line_color: "#9fe8ff", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start sorting", height: 0.045, color: "#9fe8ff", pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  intro_colour_go:
+    components:
+      - {id: text, type: text, text: "$txt[theme]['colour_go']", height: 0.045, wrap_width: 1.6, color: "#d8eef6", pos: [0, 0.12]}
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#0a2232", line_color: "#9fe8ff", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start sorting", height: 0.045, color: "#9fe8ff", pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  intro_shape:
+    components:
+      - {id: text, type: text, text: "$txt[theme]['shape']", height: 0.045, wrap_width: 1.6, color: "#d8eef6", pos: [0, 0.12]}
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#0a2232", line_color: "#9fe8ff", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start sorting", height: 0.045, color: "#9fe8ff", pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  intro_border:
+    components:
+      - {id: text, type: text, text: "$txt[theme]['border']", height: 0.045, wrap_width: 1.6, color: "#d8eef6", pos: [0, 0.12]}
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#0a2232", line_color: "#9fe8ff", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start sorting", height: 0.045, color: "#9fe8ff", pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  trial:
+    components:
+      - {id: show, type: variable, set: {shown_theme: $theme, shown_report: "$looks[theme][card]"}}   # saved as show.*
+      # reference reports (always the same)
+      - {id: card_left, type: shape, shape: rect, size: [0.32, 0.32], fill: "$looks[theme]['card']", line_color: "#9fe8ff", line_width: 2, pos: [-0.5, -0.22]}
+      - {id: left_pic, type: image, image: "$looks[theme]['left']", size: "$looks[theme]['pic']", pos: [-0.5, -0.22]}
+      - {id: card_right, type: shape, shape: rect, size: [0.32, 0.32], fill: "$looks[theme]['card']", line_color: "#9fe8ff", line_width: 2, pos: [0.5, -0.22]}
+      - {id: right_pic, type: image, image: "$looks[theme]['right']", size: "$looks[theme]['pic']", pos: [0.5, -0.22]}
+      # the report to sort, at the top (an amber priority frame when the frame rule says so)
+      - {id: frame, type: shape, if: "$border == 1", shape: rect, size: [0.36, 0.36], fill: "#ffc400", pos: [0, 0.22], start: 0.3}
+      - {id: test_card, type: shape, shape: rect, size: [0.3, 0.3], fill: "$looks[theme]['card']", line_color: "#9fe8ff", line_width: 2, pos: [0, 0.22], start: 0.3,
+         marker: '$f"card_{phase}"'}
+      - {id: test_pic, type: image, image: "$looks[theme][card]", size: "$looks[theme]['pic']", pos: [0, 0.22], start: 0.3}
+      - {id: rule_hint, type: text, font: DejaVu Sans Mono, text: "$hints[theme][phase]", height: 0.032, color: "#9fe8ff", pos: [0, 0.45], start: 0.3}
+      - id: resp
+        type: mouse
+        clickable: [card_left, card_right]
+        touch: true
+        start: 0.3
+        correct: $correct_card
+        end_routine: true
+
+  feedback:
+    duration: 1.2
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct, that is where it goes.' if resp.corr == 1 else txt[theme]['wrong']"
+        color: "$'#34c759' if resp.corr == 1 else '#ff3b30'"
+        height: 0.045
+        wrap_width: 1.5
+
+  pause:
+    duration: 0.6
+    components:
+      - {id: card_left, type: shape, shape: rect, size: [0.32, 0.32], fill: "$looks[theme]['card']", line_color: "#9fe8ff", line_width: 2, pos: [-0.5, -0.22]}
+      - {id: left_pic, type: image, image: "$looks[theme]['left']", size: "$looks[theme]['pic']", pos: [-0.5, -0.22]}
+      - {id: card_right, type: shape, shape: rect, size: [0.32, 0.32], fill: "$looks[theme]['card']", line_color: "#9fe8ff", line_width: 2, pos: [0.5, -0.22]}
+      - {id: right_pic, type: image, image: "$looks[theme]['right']", size: "$looks[theme]['pic']", pos: [0.5, -0.22]}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "All reports sorted. Thank you!", height: 0.06, color: "#d8eef6"}
+
+flow:
+  - instructions
+  - intro_colour
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    children: [trial, feedback, pause]
+  - intro_colour_go
+  - loop: pre_switch
+    conditions: pre_switch.csv
+    order: random
+    max_repeat: {card: 2}
+    children: [trial, pause]
+  - intro_shape
+  - loop: post_switch
+    conditions: post_switch.csv
+    order: random
+    max_repeat: {card: 2}
+    children: [trial, pause]
+  - intro_border
+  - loop: border_game
+    conditions: border.csv
+    order: random
+    max_repeat: {card: 2}
+    children: [trial, pause]
+  - thanks

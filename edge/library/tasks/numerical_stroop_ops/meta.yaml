@@ -1,0 +1,36 @@
+id: numerical_stroop_ops
+title: Numerical Stroop task (operational)
+category: Inhibition and conflict
+summary: Report which of two sector or band counts is numerically larger while ignoring their print size.
+description: >
+  The library's size congruity task with operator displays. After a 500 ms fixation cross two counts appear in
+  two panels, left and right, and the operator presses A (left) or L (right) for the panel whose count has the
+  larger value, within 2 seconds. On congruent trials the larger value is also printed larger, on incongruent
+  trials smaller, on neutral trials both have the same size. Pairs differ by 1 or by 5 and the larger value is
+  equally often left and right: 48 combinations, shown twice in random order (96 test trials) after 8 practice
+  trials with feedback. Main outcome: the size congruity effect (incongruent minus congruent RT), plus the
+  numerical distance effect.
+measures:
+  - "Median RT on correct trials by size congruity (congruent, neutral, incongruent)"
+  - "Accuracy by size congruity"
+  - "Numerical distance effect (distance 1 vs 5)"
+duration_min: 5
+input: keyboard
+languages: [en]
+variant_of: numerical_stroop
+domain: defense
+themes: [c2, ew]
+adaptation: >
+  The two digits become two counts on an operator display; the comparison, keys and print sizes stay as in the
+  classic task. c2: the number of hostile tracks reported by sector ALPHA (left panel) and sector BRAVO (right
+  panel), drawn in the hostile colour over the map grid; the operator reports which sector holds more. ew: the
+  number of emitters detected in band A (left) and band B (right), in amber over the spectrum display; the
+  operator reports which band holds more. Sectors, bands and counts are generic and fictional.
+references:
+  - "Henik, A., & Tzelgov, J. (1982). Is three greater than five: The relation between physical and semantic size in comparison tasks. Memory & Cognition, 10, 389–395."
+  - "Besner, D., & Coltheart, M. (1979). Ideographic and alphabetic processing in skilled reading of English. Neuropsychologia, 17, 467–472."
+  - "Reike, D., & Schwarz, W. (2017). Exploring the origin of the number-size congruency effect: Sensitivity or response bias? Attention, Perception, & Psychophysics, 79, 383–388."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/numerical_stroop.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, ew). The trial lists are the classic task's, copied by
+  tools/library/make_numerical_stroop_ops.py with the kit pictures. The print size is the variable digit_size (px).

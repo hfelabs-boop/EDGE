@@ -1,0 +1,128 @@
+name: wcst_ops
+description: >
+  Card sorting task inspired by the Wisconsin Card Sorting Test, operational adaptation. The same paradigm, card
+  design (4 x 4 x 4), rule sequence, scoring and measures as the library's `wcst` task, with contact report cards
+  instead of coloured shapes. Four key reports are on the screen; each new report is sorted by clicking (or
+  tapping) the key report it belongs with. The rule (one of three dimensions) is never told: the only help is
+  "Right" or "Wrong". After 10 correct sorts in a row the rule changes without warning. The task ends after 6
+  completed rules or 128 cards. One variable, `theme`, sets the cards: c2 (track symbols: affiliation, type,
+  number of tracks) or ew (emitter traces: threat level, signal type, number of emitters).
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops, edge/library/tasks/search_ops/search_ops.yaml)
+# `theme` is the first variable (c2 or ew). The trial list names each card theme-free with the classic codes
+# (card 1_red_triangle, colour, shape, number); both themes have a picture of every card under the same name in
+# stimuli/<theme>/, so every image item shows $f'stimuli/{theme}/{card}.png'. Rules, scoring and measures do not
+# depend on the theme.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: height}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2                          # display theme: c2 or ew
+  rules: [colour, shape, number]     # the order the sorting rule cycles through
+  run_length: 10                     # correct sorts in a row that complete a rule (a "category")
+  max_categories: 6                  # the task stops after this many completed categories
+  categories: 0                      # completed categories so far
+  streak: 0                          # correct sorts in a row under the current rule
+  prev_rule: ""                      # the rule of the previous category (for perseverative errors)
+  # what the operator is told about the reports (the dimensions are named, the rule is not)
+  about:
+    c2: "Each report shows 1 to 4 tracks. Tracks differ in affiliation (frame and colour), type (the icon) and number."
+    ew: "Each report shows 1 to 4 emitters. Emitters differ in threat level (colour), signal type (the trace) and number."
+
+measures:
+  - {id: categories, label: Categories completed, role: outcome, column: score.categories, loop: trials, summary: last}
+  - {id: errors, label: Errors, role: outcome, column: score.error, loop: trials, summary: sum}
+  - {id: persev_errors, label: Perseverative errors, role: outcome, column: score.persev_error, loop: trials, summary: sum}
+  - {id: accuracy, label: Correct sorts, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: cards, label: Cards used, role: outcome, column: resp.corr, loop: trials, summary: count}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          SORTING REPORTS
+
+          At the top you see four key reports. Below them a new report will appear.
+          Click (or tap) the key report that you think the new report goes with.
+
+          You are not told how to sort the reports. After each report you will only see
+          whether it was RIGHT or WRONG. Use this to find the rule.
+          The rule may change during the task; when it does, find the new rule.
+
+          There is no time limit. Click Start when you are ready.
+        height: 0.038
+        wrap_width: 1.5
+        color: "#d8eef6"
+        pos: [0, 0.12]
+      - {id: about_text, type: text, text: "$about[theme]", height: 0.032, wrap_width: 1.5, color: "#9fe8ff", pos: [0, -0.18]}
+      - {id: start_btn, type: shape, shape: rect, size: [0.36, 0.09], fill: "#0a2232", line_color: "#9fe8ff", pos: [0, -0.33]}
+      - {id: start_label, type: text, text: "Start", height: 0.04, color: "#9fe8ff", pos: [0, -0.33]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  trial:
+    components:
+      - id: rule_now                  # the current rule and the key card that is right for this card
+        type: variable
+        set:
+          shown_theme: $theme         # the theme in every trial's data (rule_now.shown_theme)
+          streak: "$0 if streak >= run_length else streak"
+          rule: $rules[categories % len(rules)]
+          target: "$'key' + str({'colour': key_colour, 'shape': key_shape, 'number': key_number}[rule])"
+      - {id: key1, type: image, image: "$f'stimuli/{theme}/1_red_triangle.png'", size: [0.22, 0.308], pos: [-0.54, 0.24]}
+      - {id: key2, type: image, image: "$f'stimuli/{theme}/2_green_star.png'", size: [0.22, 0.308], pos: [-0.18, 0.24]}
+      - {id: key3, type: image, image: "$f'stimuli/{theme}/3_yellow_cross.png'", size: [0.22, 0.308], pos: [0.18, 0.24]}
+      - {id: key4, type: image, image: "$f'stimuli/{theme}/4_blue_circle.png'", size: [0.22, 0.308], pos: [0.54, 0.24]}
+      - {id: card_img, type: image, image: "$f'stimuli/{theme}/{card}.png'", size: [0.22, 0.308], pos: [0, -0.24], marker: card_on}
+      - id: resp
+        type: mouse
+        clickable: [key1, key2, key3, key4]
+        touch: true
+        correct: $target
+        end_routine: true
+      - id: score                     # scoring, in order: each line can use the ones above it
+        type: variable
+        when: end
+        set:
+          chosen: "$int(resp.clicked[-1]) if resp.clicked else 0"
+          error: "$int(resp.corr != 1)"
+          # an error that would have been right under the previous category's rule
+          persev_error: "$int(resp.corr != 1 and prev_rule != '' and {'colour': key_colour, 'shape': key_shape, 'number': key_number}[prev_rule] == chosen)"
+          streak: "$streak + 1 if resp.corr == 1 else 0"
+          category_done: "$int(streak >= run_length)"
+          prev_rule: "$rule if streak >= run_length else prev_rule"
+          categories: "$categories + (1 if streak >= run_length else 0)"
+
+  feedback:
+    duration: 0.9
+    components:
+      - {id: key1, type: image, image: "$f'stimuli/{theme}/1_red_triangle.png'", size: [0.22, 0.308], pos: [-0.54, 0.24]}
+      - {id: key2, type: image, image: "$f'stimuli/{theme}/2_green_star.png'", size: [0.22, 0.308], pos: [-0.18, 0.24]}
+      - {id: key3, type: image, image: "$f'stimuli/{theme}/3_yellow_cross.png'", size: [0.22, 0.308], pos: [0.18, 0.24]}
+      - {id: key4, type: image, image: "$f'stimuli/{theme}/4_blue_circle.png'", size: [0.22, 0.308], pos: [0.54, 0.24]}
+      - id: fb
+        type: text
+        text: "$'RIGHT' if resp.corr == 1 else 'WRONG'"
+        color: "$'#34c759' if resp.corr == 1 else '#ff3b30'"
+        height: 0.08
+        bold: true
+        pos: [0, -0.24]
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "All reports sorted. Thank you!", height: 0.05, color: "#d8eef6"}
+
+flow:
+  - instructions
+  - loop: trials
+    conditions: cards.csv
+    order: random
+    repeats: 2
+    max_repeat: {colour: 2, shape: 2, number: 2}
+    stop_if: "$categories >= max_categories"
+    children: [trial, feedback]
+  - thanks

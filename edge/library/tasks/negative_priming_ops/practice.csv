@@ -1,0 +1,7 @@
+prime_target,prime_distractor,probe_target,probe_distractor,condition,prime_key,probe_key
+D,F,F,J,ignored_repetition,d,f
+D,K,F,J,control,d,f
+F,J,J,D,ignored_repetition,f,j
+J,D,F,K,control,j,f
+J,K,K,D,ignored_repetition,j,k
+K,F,D,J,control,k,d

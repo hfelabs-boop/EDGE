@@ -1,0 +1,39 @@
+id: taskswitching_ops
+title: Task switching, alternating runs (operational)
+category: Cognitive control
+summary: Judge a contact's affiliation (or threat level) or its domain (or signal type); the task changes predictably every second trial.
+description: >
+  The library's alternating-runs task switching with operator displays. A contact appears in one of four boxes
+  and moves clockwise one box per trial. In the two top boxes the operator judges its identity (A or L key), in
+  the two bottom boxes its kind (A or L key), so the task alternates in runs of two and every other trial is a
+  switch. The contact appears 600 ms after the previous response (variable rsi) and stays until the answer (3 s
+  at most). 16 practice trials with feedback, then 96 test trials. Half of the contacts are congruent (both tasks
+  give the same key). Main outcome: the switch cost, slower and less accurate switch trials than repeat trials
+  (the first trial of a block is excluded).
+measures:
+  - "Median RT on correct trials, switch vs repeat (switch cost), per task"
+  - "Accuracy, switch vs repeat"
+duration_min: 5
+input: keyboard
+languages: [en]
+variant_of: taskswitching
+domain: defense
+themes: [c2, ew]
+adaptation: >
+  The letter-digit pair becomes one contact with two attributes; the letter task becomes the identity task and the
+  digit task the kind task, each with the same A / L keys. c2: a track symbol on a radar-style plot; identity =
+  AFFILIATION (hostile red diamond = A, friendly blue rectangle = L), kind = DOMAIN (air = A, surface = L), with a
+  track number. ew: an emitter trace on the spectrum display; identity = THREAT (high, red = A; low, blue = L),
+  kind = SIGNAL (pulsed, dashed = A; continuous, solid = L), with an emitter number. The trial list codes contacts
+  as hostile / friendly x air / surface; in the ew theme hostile stands for high threat and air for pulsed. All
+  generic and fictional.
+references:
+  - "Rogers, R. D., & Monsell, S. (1995). Costs of a predictable switch between simple cognitive tasks. Journal of Experimental Psychology: General, 124, 207–231."
+  - "Jersild, A. T. (1927). Mental set and shift. Archives of Psychology, 89, 5–82."
+  - "Monsell, S. (2003). Task switching. Trends in Cognitive Sciences, 7, 134–140."
+  - "Vandierendonck, A., Liefooghe, B., & Verbruggen, F. (2010). Task switching: Interplay of reconfiguration and interference control. Psychological Bulletin, 136, 601–626."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/taskswitching.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, ew). The grid position, task (identity / kind) and transition
+  (first / switch / repeat) come from the trial counter (variable step) and are saved as cond.quadrant, cond.task
+  and cond.transition. stimuli.csv and the kit pictures are made by tools/library/make_taskswitching_ops.py.

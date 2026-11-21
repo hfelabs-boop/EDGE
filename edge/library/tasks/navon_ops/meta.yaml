@@ -1,0 +1,38 @@
+id: navon_ops
+title: Navon task, formations (operational)
+category: Perception and motor
+summary: Report either the shape of a formation (diamond or square) or the shape of the track symbols it is made of.
+description: >
+  The library's Navon global/local task with operator displays. A formation (a big diamond or square outline made
+  of 12 or 16 small diamond or square symbols) appears in the centre 500 ms after a fixation cross; the operator
+  presses H (diamond) or S (square) within 2 seconds. In the global block the answer is the shape of the
+  formation, in the local block the shape of the symbols; the block order is counterbalanced across participants.
+  Consistent stimuli have the same shape at both levels, inconsistent ones a different shape. Each block has 8
+  practice trials with feedback and 48 test trials (the four stimuli, 12 times each, in random order). Main
+  outcomes: faster global than local responses (global advantage) and interference from the unattended level on
+  inconsistent trials.
+measures:
+  - "Median RT on correct trials by level (global, local) and consistency"
+  - "Accuracy by level and consistency"
+duration_min: 6
+input: keyboard
+languages: [en]
+variant_of: navon
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The compound letter becomes a formation of track symbols: the global level is the formation's shape, the local
+  level the shape of each symbol. The two shapes are frame shapes of the symbology convention, a diamond (the
+  hostile frame; H key) and a square (S key); all symbols have one colour, so only the shape tells them apart,
+  as only the letter identity does in the classic task. c2: the formation of track symbols (console cyan) on a
+  radar-style plot. uav: the image tracker's markers (amber, as candidate markers) standing in a formation in a
+  camera frame, inside the corner-bracket reticle. Formations are generic and fictional.
+references:
+  - "Navon, D. (1977). Forest before trees: The precedence of global features in visual perception. Cognitive Psychology, 9, 353–383."
+  - "Navon, D. (2003). What does a compound letter tell the psychologist's mind? Acta Psychologica, 114, 273–309."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/navon.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). The formation is drawn from 20 shape items on a 7 x 7
+  grid; the experiment file, its trial list and the kit pictures are made by tools/library/make_navon_ops.py.
+  The diamond formation has 12 symbols and the square 16, as the classic H and S letters also differ in their
+  number of small letters.

@@ -1,0 +1,36 @@
+id: taskswitching_cued_ops
+title: Task switching, cued (operational)
+category: Cognitive control
+summary: A cue says whether to judge a contact's affiliation (or threat) or its domain (or signal); the task changes at random.
+description: >
+  The library's cued task switching with operator displays. Each trial starts with a 500 ms blank; then a cue
+  word (the identity task's in purple, the kind task's in orange, with a frame of the same colour) appears, and
+  after a cue-target interval of 200 or 1000 ms a contact is shown under it. The operator judges the cued
+  attribute with the A or L key; the contact stays until the answer (3 s at most). Task and CTI are crossed with
+  the 16 contacts (64 combinations) and shown twice in random order (128 test trials) after 16 practice trials
+  with feedback. Trials are classified as switch or repeat from the previous trial's task. Main outcomes: the
+  switch cost (switch minus repeat RT) and its reduction with the long CTI (preparation effect).
+measures:
+  - "Median RT on correct trials, switch vs repeat, by cue-target interval"
+  - "Accuracy, switch vs repeat, by cue-target interval"
+duration_min: 7
+input: keyboard
+languages: [en]
+variant_of: taskswitching_cued
+domain: defense
+themes: [c2, ew]
+adaptation: >
+  As in taskswitching_ops: the letter-digit pair becomes one contact with two attributes, and the cue words name
+  the attribute to judge. c2: a track symbol on a radar-style plot; cue AFFILIATION (hostile red diamond = A,
+  friendly blue rectangle = L) or DOMAIN (air = A, surface = L). ew: an emitter trace on the spectrum display; cue
+  THREAT (high, red = A; low, blue = L) or SIGNAL (pulsed, dashed = A; continuous, solid = L). The trial list
+  codes contacts as hostile / friendly x air / surface; in the ew theme hostile stands for high threat and air for
+  pulsed. All generic and fictional.
+references:
+  - "Meiran, N. (1996). Reconfiguration of processing mode prior to task performance. Journal of Experimental Psychology: Learning, Memory, and Cognition, 22, 1423–1442."
+  - "Monsell, S. (2003). Task switching. Trends in Cognitive Sciences, 7, 134–140."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/taskswitching_cued.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, ew). Switch/repeat comes from the variable prev_task and is
+  saved as cond.transition. The trial list and the kit pictures are made by tools/library/make_taskswitching_ops.py;
+  change the CTIs there or in trials.csv.

@@ -1,0 +1,7 @@
+phase,card,shape,colour,colour_rgb,border,rule,correct_card
+post_switch,red_triangle,triangle,red,#e8312f,0,shape,card_left
+post_switch,blue_circle,circle,blue,#3d6df2,0,shape,card_right
+post_switch,red_triangle,triangle,red,#e8312f,0,shape,card_left
+post_switch,blue_circle,circle,blue,#3d6df2,0,shape,card_right
+post_switch,red_triangle,triangle,red,#e8312f,0,shape,card_left
+post_switch,blue_circle,circle,blue,#3d6df2,0,shape,card_right

@@ -1,0 +1,181 @@
+name: prp_ops
+description: >
+  Psychological refractory period (PRP), operational adaptation. The same paradigm, trial lists, timing, keys and
+  measures as the library's `prp` task, with a radio message and a track alert as the two tasks: first a radio
+  call tone (low = routine message, A; high = priority message, S; left hand), then, after a stimulus onset
+  asynchrony (SOA) of 50 to 1000 ms, an alert on the display (c2: hostile = K, friendly = L air track; uav:
+  tracked = K, wheeled = L vehicle; right hand). Operators answer the tone first, then the alert, each as fast as
+  possible. The second response slows down as the SOA gets shorter (the PRP effect), while the first stays about
+  the same. One variable, `theme`, sets the display: c2 (radar plot) or uav (camera frame with a reticle).
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops, edge/library/tasks/search_ops/search_ops.yaml)
+# `theme` is the first variable (c2 or uav). The trial lists keep the classic codes (letter X / O for the two
+# kinds of alert); `looks` maps them to the theme's picture, so one image item serves every theme. The display
+# around the alert (plot or camera frame, reticle, instructions) are items guarded with `if: "$theme == 'uav'"`.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or uav
+  # per theme: the alert picture for the classic letters X (K key) and O (L key), and the words for them
+  looks:
+    c2: {X: stimuli/hostile_air_64.png, O: stimuli/friendly_air_64.png, size: [72, 72]}
+    uav: {X: stimuli/vehicle_tracked_light.png, O: stimuli/vehicle_wheeled_light.png, size: [72, 72]}
+  names:
+    c2: {X: HOSTILE track, O: FRIENDLY track, alert: "NEW AIR TRACK"}
+    uav: {X: TRACKED vehicle, O: WHEELED vehicle, alert: "VEHICLE DETECTED"}
+
+measures:
+  - {id: rt2, label: Task 2 (alert) RT, role: outcome, column: resp2.rt,
+     trials: "$resp1.corr == 1 and resp2.corr == 1 and order.tone_first == 1", loop: trials, summary: median, units: s, expect: [0.25, 3.0]}
+  - {id: rt1, label: Task 1 (radio tone) RT, role: outcome, column: resp1.rt,
+     trials: "$resp1.corr == 1 and resp2.corr == 1 and order.tone_first == 1", loop: trials, summary: median, units: s, expect: [0.25, 3.0]}
+  - {id: accuracy1, label: Task 1 accuracy, role: outcome, column: resp1.corr, loop: trials, summary: proportion}
+  - {id: accuracy2, label: Task 2 accuracy, role: outcome, column: resp2.corr, loop: trials, summary: proportion}
+  - {id: order_ok, label: Answered the tone first, role: check, column: order.tone_first, loop: trials, summary: proportion}
+  - {id: soa, label: SOA (ms), role: factor, column: soa_ms}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        text: |
+          RADIO AND TRACK ALERTS
+
+          You are watching the radar plot and listening to the radio. On every trial a radio message
+          arrives (you hear its call tone) and then a new air track pops up on the plot.
+
+          1. THE RADIO TONE (left hand):   low tone = routine message = A     high tone = priority message = S
+          2. THE TRACK (right hand):       HOSTILE (red diamond) = K     FRIENDLY (blue rectangle) = L
+
+          Answer the tone FIRST and then the track, both as fast as you can.
+          Sometimes the track comes almost together with the tone; still answer the tone first.
+
+          Please turn on your sound. First you hear the two tones, then a short practice.
+          Press SPACE to continue.
+        height: 23
+        wrap_width: 1200
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        text: |
+          RADIO AND DETECTIONS
+
+          You are the payload operator of a surveillance aircraft and listen to the radio. On every trial a
+          radio message arrives (you hear its call tone) and then a vehicle is detected under the reticle.
+
+          1. THE RADIO TONE (left hand):   low tone = routine message = A     high tone = priority message = S
+          2. THE VEHICLE (right hand):     TRACKED = K     WHEELED = L
+
+          Answer the tone FIRST and then the vehicle, both as fast as you can.
+          Sometimes the vehicle comes almost together with the tone; still answer the tone first.
+
+          Please turn on your sound. First you hear the two tones, then a short practice.
+          Press SPACE to continue.
+        height: 23
+        wrap_width: 1200
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  tone_demo:
+    components:
+      - {id: lbl_low, type: text, text: "This is the LOW tone: a routine message (A)", height: 30, pos: [0, 60], duration: 1.5}
+      - {id: low, type: sound, sound: 400, tone_duration: 0.15, start: 0.3}
+      - {id: lbl_high, type: text, text: "This is the HIGH tone: a priority message (S)", height: 30, pos: [0, -20], start: 1.5, duration: 1.5}
+      - {id: high, type: sound, sound: 900, tone_duration: 0.15, start: 1.8}
+      - {id: more, type: text, text: "Press SPACE to hear them again, or ENTER to start the practice.", height: 22,
+         color: "#aaaaaa", pos: [0, -200], start: 3.0}
+      - {id: go, type: keyboard, keys: [space, return], start: 3.0, end_routine: true}
+
+  trial:
+    duration: 5.0
+    end_if: "$resp1.keys is not None and resp2.keys is not None"
+    components:
+      - {id: show, type: variable, set: {shown_theme: $theme}}    # the theme in every trial's data (show.shown_theme)
+      # ---- the display around the alert, one block per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_03_forest.jpg, size: [1280, 720]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_circle.png, size: [240, 240]}
+      - {id: status_bar, type: shape, shape: rect, size: [1280, 40], pos: [0, 340], fill: "#0a2232", opacity: 0.85}
+      - {id: status, type: text, font: DejaVu Sans Mono, height: 17, color: "#9fe8ff", pos: [0, 340],
+         text: "$f'RADIO: low = A  high = S      ALERT: {names[theme][\"X\"]} = K  {names[theme][\"O\"]} = L'"}
+      # ---- the two tasks (the same in every theme) ----
+      - {id: fix, type: fixation, size: 30}
+      - {id: tone_stim, type: sound, sound: $tone_hz, tone_duration: 0.15, start: 0.5, marker: '$f"tone_{tone}"'}
+      - {id: alert_stim, type: image, image: "$looks[theme][letter]", size: "$looks[theme]['size']", start: $0.5 + soa,
+         marker: '$f"alert_soa{soa_ms}"'}
+      - {id: alert_box, type: image, image: stimuli/box_selected_96.png, size: [110, 110], start: $0.5 + soa}
+      - {id: alert_text, type: text, font: DejaVu Sans Mono, text: "$names[theme]['alert']", color: "#00e5ff", height: 17, pos: [0, 80], start: $0.5 + soa}
+      - {id: resp1, type: keyboard, keys: [a, s], start: 0.5, duration: 3.0, correct: $correct_key1}
+      - {id: resp2, type: keyboard, keys: [k, l], start: $0.5 + soa, duration: 3.0, correct: $correct_key2}
+      - id: order
+        type: variable
+        when: end
+        set:
+          tone_first: "$int(resp1.rt is not None and resp2.rt is not None and resp1.rt < soa + resp2.rt)"
+
+  feedback:
+    duration: 1.2
+    components:
+      - id: fb1
+        type: text
+        text: "$'Tone: correct' if resp1.corr == 1 else ('Tone: too slow' if resp1.keys is None else 'Tone: wrong key')"
+        color: "$'#55dd55' if resp1.corr == 1 else '#ff5555'"
+        height: 30
+        pos: [0, 40]
+      - id: fb2
+        type: text
+        text: "$'Alert: correct' if resp2.corr == 1 else ('Alert: too slow' if resp2.keys is None else 'Alert: wrong key')"
+        color: "$'#55dd55' if resp2.corr == 1 else '#ff5555'"
+        height: 30
+        pos: [0, -10]
+      - id: fb3
+        type: text
+        text: "$'' if order.tone_first == 1 else 'Remember: answer the tone first'"
+        color: "#ffcc44"
+        height: 24
+        pos: [0, -70]
+
+  iti:
+    duration: 0.8
+    components:
+      - {id: blank, type: wait}
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: "$f'Practice finished.\\n\\nNow the real test (about 5 minutes). Tone first (A / S), then the alert:\\n{names[theme][\"X\"]} = K,  {names[theme][\"O\"]} = L.\\nYou will only see a message after a mistake.\\n\\nPress SPACE to start.'"
+        height: 26
+        wrap_width: 1150
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "End of the watch. Thank you!", height: 34}
+
+flow:
+  - instructions
+  - loop: demo
+    conditions: [{}]
+    repeats: 5
+    stop_if: "$go.keys == 'return'"
+    children: [tone_demo]
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    children: [trial, feedback, iti]
+  - practice_done
+  - loop: trials
+    conditions: trials.csv
+    order: random
+    repeats: 4
+    children:
+      - trial
+      - {routine: feedback, if: "$resp1.corr != 1 or resp2.corr != 1 or order.tone_first != 1"}
+      - iti
+  - thanks

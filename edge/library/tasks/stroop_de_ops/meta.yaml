@@ -1,0 +1,34 @@
+id: stroop_de_ops
+title: Stroop task, German (operational)
+category: Inhibition and conflict
+summary: German Stroop task with operator displays; report the colour of the affiliation label FEIND, NEUTRAL, FREUND or UNBEKANNT, ignoring the word.
+description: >
+  The German colour-word Stroop task (`stroop_de`) with operator displays and German instructions. After a 500 ms
+  fixation cross an affiliation label (FEIND, NEUTRAL, FREUND or UNBEKANNT) appears in one of the four affiliation
+  colours and the operator presses the key for the label's colour within 2 seconds: D (red), F (green), J (blue),
+  K (yellow), the position keys of `stroop_de`. Half of the trials are congruent, half incongruent; 8 practice
+  trials with feedback, then 96 test trials in random order with feedback after errors only. The Stroop effect is
+  the slowing (and extra errors) on incongruent trials.
+measures:
+  - "Median RT on correct trials, congruent vs incongruent (Stroop effect)"
+  - "Accuracy, congruent vs incongruent"
+duration_min: 5
+input: keyboard
+languages: [de]
+variant_of: stroop_de
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  As in stroop_ops, in German: the colour words become affiliation words (FEIND hostile, NEUTRAL neutral, FREUND
+  friendly, UNBEKANNT unknown) and the inks the affiliation colours of the common symbology convention (red, green,
+  blue, yellow), so FEIND written in red is congruent and FEIND written in blue incongruent. The response is the
+  colour (D F J K). c2: a new track's label on a radar-style tactical plot (Lagebild) with a track number. uav: a
+  target tag under the reticle of a surveillance aircraft's camera frame, with telemetry text. All generic and
+  fictional.
+references:
+  - "Stroop, J. R. (1935). Studies of interference in serial verbal reactions. Journal of Experimental Psychology, 18, 643–662."
+  - "MacLeod, C. M. (1991). Half a century of research on the Stroop effect: An integrative review. Psychological Bulletin, 109, 163–203."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/stroop_de.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). Same design as stroop_ops; trial lists and pictures made
+  by tools/library/make_stroop_ops.py.

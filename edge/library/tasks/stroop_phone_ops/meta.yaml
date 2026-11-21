@@ -1,0 +1,32 @@
+id: stroop_phone_ops
+title: Stroop task for phones (operational)
+category: Inhibition and conflict
+summary: Operational Stroop task for a portrait touchscreen; tap the colour of an affiliation label (HOSTILE, NEUTRAL, FRIENDLY, UNKNOWN), ignoring the word.
+description: >
+  The phone version of the Stroop task (`stroop_phone`) with operator displays. In the upper half of a portrait
+  screen an affiliation label (HOSTILE, NEUTRAL, FRIENDLY or UNKNOWN) appears in one of the four affiliation
+  colours after a 500 ms fixation cross; the operator taps one of four colour buttons (2 x 2, always in the same
+  places) within 2.5 seconds. Half of the trials are congruent, half incongruent; 8 practice trials with feedback,
+  then 96 test trials in random order (no more than three of the same colour in a row) with feedback after errors
+  only. Outcome: the Stroop effect in tapping time and accuracy.
+measures:
+  - "Median RT on correct taps, congruent vs incongruent (Stroop effect)"
+  - "Accuracy, congruent vs incongruent"
+duration_min: 5
+input: touch
+languages: [en]
+variant_of: stroop_phone
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  As in stroop_ops: the colour words become affiliation words and the inks the affiliation colours of the common
+  symbology convention (hostile red, neutral green, friendly blue, unknown yellow); the four buttons are those
+  colours. c2: a new track's label on a radar-style tactical plot, with a track number. uav: a target tag under
+  the reticle of a surveillance camera picture (daylight or infrared). All generic and fictional.
+references:
+  - "Stroop, J. R. (1935). Studies of interference in serial verbal reactions. Journal of Experimental Psychology, 18, 643–662."
+  - "MacLeod, C. M. (1991). Half a century of research on the Stroop effect: An integrative review. Psychological Bulletin, 109, 163–203."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/stroop_phone.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). Answers are taps (a mouse item with touch on). Trial
+  lists and pictures made by tools/library/make_stroop_ops.py.

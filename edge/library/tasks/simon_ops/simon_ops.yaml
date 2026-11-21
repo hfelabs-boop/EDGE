@@ -1,0 +1,172 @@
+name: simon_ops
+description: >
+  Simon task, operational adaptation. The same paradigm, trial list, timing, keys and measures as the library's
+  `simon` task: a contact appears left or right of the centre and the operator classifies it (A, left hand, for
+  one kind; L, right hand, for the other), ignoring where it appears. Congruent trials: the contact is on the side
+  of the correct key; incongruent: on the opposite side. One variable, `theme`, sets the display: c2 (a friendly or
+  hostile air track left or right of own ship on a radar plot) or uav (a wheeled or tracked vehicle left or right
+  of the reticle in a camera frame).
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops, edge/library/tasks/search_ops/search_ops.yaml)
+# `theme` is the first variable (c2 or uav). The trial list keeps the classic codes (colour: blue / orange);
+# `looks` maps each code to the theme's picture, so one image item serves every theme. The display around the
+# contact (plot or camera frame, reticle, telemetry, instructions) are items guarded with `if: "$theme == 'uav'"`.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or uav
+  # per theme: the picture for the classic "blue" (A, left hand) and "orange" (L, right hand) stimulus, and its size
+  looks:
+    c2: {blue: stimuli/friendly_air_64.png, orange: stimuli/hostile_air_64.png, size: [96, 96]}
+    uav: {blue: stimuli/vehicle_wheeled_light.png, orange: stimuli/vehicle_tracked_light.png, size: [96, 96]}
+  keys_line:
+    c2: "FRIENDLY air track = A        HOSTILE air track = L"
+    uav: "WHEELED vehicle = A        TRACKED vehicle = L"
+  cameras: [stimuli/terrain_01_farmland.jpg, stimuli/terrain_05_farmland_ir.jpg]
+  # set for every trial by the variable item `show` (these are only starting values, used by the preview)
+  camera: stimuli/terrain_01_farmland.jpg
+  sensor: EO
+  alt: 2200
+  hdg: 45
+  spd: 90
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.2, 1.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: condition, label: Spatially congruent or incongruent, role: factor, column: condition}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        text: |
+          NEW CONTACTS
+
+          You are watching the radar plot around your own ship (the cross in the middle).
+          Keep your eyes on the cross. A new air track will appear on the left or on the right.
+
+          FRIENDLY air track (blue rectangle)  -> press A (left hand)
+          HOSTILE air track (red diamond)      -> press L (right hand)
+
+          Only the kind of track matters, not where it appears.
+          Answer as fast as you can without making mistakes.
+
+          First a short practice. Press SPACE to start.
+        height: 26
+        wrap_width: 1100
+        pos: [0, 40]
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        text: |
+          NEW CONTACTS
+
+          You are watching the camera of a surveillance aircraft. Keep your eyes on the reticle.
+          A vehicle will appear on the left or on the right of it.
+
+          WHEELED vehicle (wheels along the sides)  -> press A (left hand)
+          TRACKED vehicle (tracks along the sides)  -> press L (right hand)
+
+          Only the kind of vehicle matters, not where it appears.
+          Answer as fast as you can without making mistakes.
+
+          First a short practice. Press SPACE to start.
+        height: 26
+        wrap_width: 1100
+        pos: [0, 40]
+      # the two kinds of contact, drawn as they will appear (one pair of items for every theme)
+      - {id: example_a, type: image, image: "$looks[theme]['blue']", size: "$looks[theme]['size']", pos: [-120, -260]}
+      - {id: label_a, type: text, text: "A", height: 26, pos: [-120, -330]}
+      - {id: example_l, type: image, image: "$looks[theme]['orange']", size: "$looks[theme]['size']", pos: [120, -260]}
+      - {id: label_l, type: text, text: "L", height: 26, pos: [120, -330]}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - id: show
+        type: variable
+        set:
+          shown_theme: $theme      # puts the theme into every trial's data (column show.shown_theme)
+          contact: "$looks[theme][colour]"
+          camera: "$random.choice(cameras)"
+          sensor: "$'IR' if '_ir' in camera else 'EO'"
+          alt: "$random.randint(1800, 2600)"
+          hdg: "$random.randint(0, 359)"
+          spd: "$random.randint(80, 110)"
+      # ---- the display around the contact, one block per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: $camera, size: [1280, 720]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_cross.png, size: [240, 240]}
+      - {id: tel_uav, type: text, if: "$theme == 'uav'", font: DejaVu Sans Mono, height: 17, color: "#d8ffd8", pos: [-400, -340], text: "$f'ALT {alt} m   HDG {hdg:03d}   SPD {spd} kt'"}
+      - {id: tel2_uav, type: text, if: "$theme == 'uav'", font: DejaVu Sans Mono, height: 17, color: "#d8ffd8", pos: [470, -340], text: "$f'SENSOR {sensor}'"}
+      - {id: status_bar, type: shape, shape: rect, size: [1280, 40], pos: [0, 340], fill: "#0a2232", opacity: 0.85}
+      - {id: status, type: text, font: DejaVu Sans Mono, height: 17, color: "#9fe8ff", pos: [0, 340], text: "$keys_line[theme]"}
+      # ---- the Simon stimulus (the same in every theme) ----
+      - {id: fix, type: fixation, size: 30}
+      - id: target
+        type: image
+        image: "$looks[theme][colour]"
+        size: "$looks[theme]['size']"
+        pos: $[x, 0]
+        start: 0.5
+        marker: $f"contact_{condition}"
+      - id: resp
+        type: keyboard
+        keys: [a, l]
+        start: 0.5
+        duration: 1.5
+        correct: $correct_key
+        end_routine: true
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr == 1 else ('Too slow' if resp.keys is None else 'Wrong key')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 40
+
+  iti:
+    duration: 0.5
+    components:
+      - {id: fix, type: fixation, size: 30}
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: "$f'Practice finished.\\n\\nNow the real test (about 3 minutes). You will only see a message after a mistake.\\nRemember: {keys_line[theme]}\\n\\nPress SPACE to start.'"
+        height: 28
+        wrap_width: 1100
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "End of the watch. Thank you!", height: 34}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: trials.csv
+    order: random
+    repeats: 2
+    children: [trial, feedback, iti]
+  - practice_done
+  - loop: trials
+    conditions: trials.csv
+    order: random
+    repeats: 20
+    max_repeat: {colour: 4, side: 4}
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+      - iti
+  - thanks
