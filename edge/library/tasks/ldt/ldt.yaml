@@ -1,0 +1,86 @@
+name: ldt
+description: >
+  Lexical decision task (after Meyer & Schvaneveldt, 1971). A letter string appears after a fixation cross:
+  press J if it is an English word, F if it is not. 80 trials (20 frequent words, 20 rare words, 40 pronounceable
+  non-words) in random order, after 8 practice trials with feedback. Main outcomes: response time to words vs
+  non-words (and frequent vs rare words) on correct trials, and accuracy.
+
+settings:
+  window: {size: [1280, 720], background: "#f2f2f2", units: px}
+  participant: {participant: "001", session: "1"}
+
+measures:
+  - {id: rt, label: Response time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.25, 2.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: lexicality, label: Word or non-word, role: factor, column: lexicality}
+  - {id: frequency, label: Word frequency (high / low), role: factor, column: frequency}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        color: black
+        height: 26
+        wrap_width: 1000
+        text: |
+          Letters will appear in the middle of the screen.
+
+          Press J if they make an English word (for example: table).
+          Press F if they do not (for example: plinder).
+
+          Answer as quickly and as accurately as you can.
+          First a few practice trials.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: fix, type: fixation, fill: black, line_color: black, duration: 0.5}
+      - {id: target, type: text, text: $letters, color: black, height: 52, font: Courier New, start: 0.5}
+      - {id: keymap, type: text, text: "F = not a word          J = word", color: "#777777", height: 20, pos: [0, -300]}
+      - {id: resp, type: keyboard, keys: [f, j], correct: $corr_key, start: 0.5, duration: 2.0, end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 34
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#1a8f1a' if resp.corr else '#c62828'"
+
+  iti:
+    duration: 0.5
+    components:
+      - {id: blank, type: wait}
+
+  ready:
+    components:
+      - id: text
+        type: text
+        color: black
+        height: 26
+        text: "Practice done. Now the real test begins, without feedback.\n\nPress SPACE to start."
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, color: black, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: ldt_practice.csv
+    order: random
+    children: [trial, feedback, iti]
+  - ready
+  - loop: trials
+    conditions: ldt_trials.csv
+    order: random
+    max_repeat: {lexicality: 4}
+    children: [trial, iti]
+  - thanks

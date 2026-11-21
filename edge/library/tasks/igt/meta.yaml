@@ -1,0 +1,26 @@
+id: igt
+title: Iowa Gambling Task
+category: Decision making
+summary: 'Choose cards from four decks with hidden long-run payoffs: learning to avoid high-reward, high-risk decks.'
+description: 'Measures decision making under initial ambiguity. 100 choices from four decks, starting with a loan
+  of 2000. Decks A and B pay 100 per card but lose 1250 every 10 cards (net -250); decks C and D pay 50 but lose
+  250 every 10 cards (net +250). A and C give frequent small losses, B and D one larger loss per 10 cards. Each
+  choice is followed by the win and the loss. Main outcome: the net score (C+D minus A+B) in each of the five blocks
+  of 20 choices, which rises as people learn.'
+measures:
+- net score (good minus bad deck choices) per block of 20
+- proportion of good-deck choices
+- money at the end
+- choice time
+duration_min: 6
+input: mouse
+languages:
+- en
+references:
+- Bechara, A., Damasio, A. R., Damasio, H., & Anderson, S. W. (1994). Insensitivity to future consequences following
+  damage to human prefrontal cortex. Cognition, 50, 7–15.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/igt.html
+notes: 'The losses follow a fixed 40-card schedule per deck with the original totals per 10 cards (own placement
+  of the losses within each 10 cards); the payoffs are worked out by variable items, no code item. Unlike the original,
+  a deck does not run out after 40 cards: it starts again from its first card.'

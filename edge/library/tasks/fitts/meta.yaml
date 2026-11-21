@@ -1,0 +1,27 @@
+id: fitts
+title: Fitts's law pointing task
+category: Perception and motor
+summary: Click targets of different widths and distances; movement time grows with the index of difficulty.
+description: 'Measures speed-accuracy trade-off in aimed movements. Click the start circle in the middle; a target
+  bar appears left or right; move and click it as fast and accurately as possible. Width (20, 40, 80 px) × distance
+  (120, 240, 480 px) × side = 18 conditions, twice each (36 trials) after 4 practice trials. Index of difficulty
+  ID = log2(2D/W) from 1.6 to 5.6 bits. Main outcome: movement time rising linearly with ID (MT = a + b × ID, fitted
+  at the end); hit rate.'
+measures:
+- movement time by index of difficulty (hits)
+- hit rate
+- Fitts slope b and intercept a
+duration_min: 3
+input: mouse
+languages:
+- en
+references:
+- Fitts, P. M. (1954). The information capacity of the human motor system in controlling the amplitude of movement.
+  Journal of Experimental Psychology, 47(6), 381–391.
+- MacKenzie, I. S. (1992). Fitts' law as a research and design tool in human-computer interaction. Human-Computer
+  Interaction, 7(1), 91–139.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/fitts.html
+notes: Discrete (one movement per trial) rather than reciprocal tapping. Sizes are in screen pixels, so the physical
+  sizes depend on the monitor; the mouse path of every movement is saved (click.path). The least-squares fit is
+  computed by a variable item at the end; a touchscreen works too (taps count as clicks).

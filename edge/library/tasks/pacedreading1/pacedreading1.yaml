@@ -1,0 +1,108 @@
+name: pacedreading1
+description: >
+  Self-paced reading, whole sentence (see Jegerski, 2014). Each sentence appears as a whole; the participant
+  presses SPACE as soon as it has been read, then answers a yes/no question about it. 20 items, each with a
+  subject-relative version ("The lawyer who called the banker left ...") and an object-relative version ("The
+  lawyer who the banker called left ..."); every participant reads half of the items in each version (which half
+  alternates with the participant number). Main outcome: reading time per sentence (and per word) for the two
+  sentence structures; comprehension accuracy.
+
+settings:
+  window: {size: [1280, 720], background: "#fafafa", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  list_no: 0            # 0 or 1, from the participant number: which half of the items is read in which version
+  structure: filler
+  sentence: ""
+  n_words: 1
+
+measures:
+  - {id: reading_time, label: Sentence reading time, role: outcome, column: read.rt, loop: sentences, summary: median,
+     units: s, expect: [0.3, 30]}
+  - {id: time_per_word, label: Reading time per word, role: outcome, column: per_word.ms_per_word, loop: sentences,
+     summary: median, units: ms}
+  - {id: comprehension, label: Comprehension accuracy, role: outcome, column: reply.corr, loop: sentences, summary: proportion}
+  - {id: structure, label: Sentence structure (subject / object relative), role: factor, column: structure}
+
+routines:
+  instructions:
+    components:
+      - id: lists
+        type: variable
+        set: {list_no: "$int(''.join([c for c in str(participant) if c.isdigit()]) or '0') % 2"}
+      - id: text
+        type: text
+        color: black
+        height: 26
+        wrap_width: 1000
+        text: |
+          You will read sentences, one at a time.
+
+          Read each sentence at your normal pace, and press SPACE as soon as you have understood it.
+          After each sentence there is a short question: press Y for yes or N for no.
+
+          First two practice sentences.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  prepare:
+    components:
+      # which version of this item: alternates over items, and between participants (list_no)
+      - id: setup
+        type: variable
+        set:
+          structure: "$'filler' if practice else ('subject' if (item + list_no) % 2 == 0 else 'object')"
+          sentence: "$object_version if structure == 'object' else subject_version"
+          n_words: $len(sentence.split())
+      - {id: cue, type: text, text: "+", color: black, height: 40}
+      - {id: cue_help, type: text, text: "Press SPACE for the sentence", color: "#888888", height: 20, pos: [0, -300]}
+      - {id: start_key, type: keyboard, keys: [space], end_routine: true}
+
+  read:
+    components:
+      - {id: text, type: text, text: $sentence, color: black, height: 30, wrap_width: 1150}
+      - {id: read, type: keyboard, keys: [space], duration: 30, end_routine: true}
+      - id: per_word
+        type: variable
+        when: end
+        set: {ms_per_word: "$round(1000 * read.rt / n_words, 1) if read.rt is not None else None"}
+
+  question:
+    components:
+      - {id: q, type: text, text: $question, color: black, height: 30, wrap_width: 1100}
+      - {id: q_help, type: text, text: "Y = yes          N = no", color: "#888888", height: 22, pos: [0, -120]}
+      - {id: reply, type: keyboard, keys: [y, n], correct: $answer, duration: 15, end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 32
+        text: "$'Correct' if reply.corr else 'Wrong'"
+        color: "$'#1a8f1a' if reply.corr else '#c62828'"
+
+  ready:
+    components:
+      - {id: ready_text, type: text, color: black, height: 26, text: "Now the real sentences begin.\n\nPress SPACE to start."}
+      - {id: ready_key, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, color: black, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice_items
+    conditions: practice.csv
+    order: sequential
+    children: [prepare, read, question, feedback]
+  - ready
+  - loop: sentences
+    conditions: sentences.csv
+    order: random
+    children: [prepare, read, question]
+  - thanks

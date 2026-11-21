@@ -1,0 +1,30 @@
+id: pacedreading1
+title: Self-paced reading (whole sentence)
+category: Language
+summary: Read sentences at your own pace; the time spent on each sentence shows how hard it is to process.
+description: 'Measures sentence processing difficulty. Each sentence appears whole after a cue; the participant
+  presses SPACE when it has been read and then answers a yes/no question (Y/N) about it. 2 practice sentences with
+  feedback, then 20 items in random order, half as subject-relative clauses and half as object-relative clauses.
+  Main outcome: reading time per sentence and per word for the two structures (object relatives are usually read
+  more slowly); comprehension accuracy.'
+measures:
+- sentence reading time by structure
+- reading time per word
+- comprehension accuracy
+duration_min: 4
+input: keyboard
+languages:
+- en
+references:
+- 'Just, M. A., Carpenter, P. A., & Woolley, J. D. (1982). Paradigms and processes in reading comprehension. Journal
+  of Experimental Psychology: General, 111(2), 228–238.'
+- 'Jegerski, J. (2014). Self-paced reading. In J. Jegerski & B. VanPatten (Eds.), Research methods in second language
+  psycholinguistics (pp. 20–49). New York: Routledge.'
+- 'King, J., & Just, M. A. (1991). Individual differences in syntactic processing: The role of working memory. Journal
+  of Memory and Language, 30(5), 580–602.'
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/pacedreading1.html
+notes: 20 own items, each in a subject-relative and an object-relative version with the same words; each participant
+  reads half of the items in each version (which half alternates with odd/even participant numbers), so the items
+  are counterbalanced across pairs of participants. Edit sentences.csv (or tools/library/make_reading.py) for other
+  sentences; the word positions of the regions (embedded verb 3 or 5, main verb 6) assume this sentence frame.

@@ -1,0 +1,171 @@
+name: vaast_images
+description: >
+  Visual Approach/Avoidance by the Self Task, online version with pictures (after Rougier et al., 2018, and Aubé et
+  al., 2019). A corridor seen in perspective fills the screen; a picture (a simple drawn face, smiling or frowning)
+  appears in the middle. Pressing Y moves you forward into the corridor (approach: the scene and the picture grow),
+  pressing N moves you backward (avoid: they shrink). In one block you approach smiling faces and avoid frowning ones,
+  in the other block the reverse; which block comes first alternates with the participant number. Each block: 4
+  practice trials and 32 test trials (16 pictures twice). A wrong key shows a red X. Main outcome: the
+  approach-avoidance compatibility effect, response time when approaching frowning / avoiding smiling faces minus
+  approaching smiling / avoiding frowning faces. Other pictures: put them in stimuli/ and list them in images.csv.
+
+settings:
+  window: {size: [1280, 720], background: "#101418", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  order: 1            # 1: approach smiling faces first, 2: approach frowning faces first (from the participant number)
+  approach: smiling   # the category to approach in the current block
+  move_dir: 0         # 0 = standing still, 1 = moving forward, -1 = moving backward
+  step: 0.62          # the corridor's frames shrink by this factor with depth; one step forward grows them by 1/step
+
+measures:
+  - {id: rt, label: Response time (correct trials), role: outcome, column: resp.rt,
+     trials: "$phase == 'test' and resp.corr == 1", summary: median, units: s, expect: [0.3, 2.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, trials: "$phase == 'test'", summary: proportion}
+  - {id: valence, label: Picture category (smiling / frowning), role: factor, column: valence}
+  - {id: movement, label: Movement (approach / avoid), role: factor, column: cond.movement}
+
+routines:
+  instructions:
+    components:
+      - id: counterbalance
+        type: variable
+        set: {order: "$1 if int(''.join([c for c in str(participant) if c.isdigit()]) or '0') % 2 == 1 else 2"}
+      - id: text
+        type: text
+        height: 25
+        wrap_width: 1050
+        text: |
+          Imagine you are standing in a long corridor.
+          Faces will appear in front of you, one at a time.
+
+          Press Y to walk FORWARD, towards the face.
+          Press N to walk BACKWARD, away from the face.
+
+          Which faces to walk towards changes between the two parts of the task:
+          the instructions before each part tell you. Respond as fast and as accurately as you can.
+
+          Press SPACE to continue.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  block_intro:
+    components:
+      - id: rule
+        type: variable
+        set:
+          approach: "$'smiling' if (order == 1) == (block == 1) else 'frowning'"
+          avoid: "$'frowning' if approach == 'smiling' else 'smiling'"
+      - id: intro
+        type: text
+        height: 27
+        wrap_width: 1100
+        text: "$f\"{'Practice for part ' + str(block) if phase == 'practice' else 'Part ' + str(block) + ': the real trials'}\\n\\nWalk FORWARD (Y) towards {approach.upper()} faces.\\nWalk BACKWARD (N) away from {avoid.upper()} faces.\\n\\nPress SPACE to start.\""
+      - {id: ready, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - id: cond
+        type: variable
+        set:
+          move_dir: 0
+          movement: "$'approach' if valence == approach else 'avoid'"
+          compatible: "$1 if approach == 'smiling' else 0"
+          corr_key: "$'y' if valence == approach else 'n'"
+      # the corridor: frames that get smaller with depth. They grow (forward) or shrink (backward) by one step during
+      # the 'move' screen, where move_dir is 1 or -1; here move_dir = 0, so the factor is 1.
+      # one frame nearer than the screen edge: comes into view when you step back
+      - &fout {id: frame_near, type: shape, shape: rect, fill: transparent, line_color: "#606b78", line_width: 7,
+             size: "$[1240 / step * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 / step * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f0 {id: frame0, type: shape, shape: rect, fill: transparent, line_color: "#56606c", line_width: 6,
+             size: "$[1240 * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f1 {id: frame1, type: shape, shape: rect, fill: transparent, line_color: "#4c5560", line_width: 5,
+             size: "$[1240 * step * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * step * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f2 {id: frame2, type: shape, shape: rect, fill: transparent, line_color: "#424a54", line_width: 4,
+             size: "$[1240 * step ** 2 * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * step ** 2 * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f3 {id: frame3, type: shape, shape: rect, fill: transparent, line_color: "#383f48", line_width: 3,
+             size: "$[1240 * step ** 3 * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * step ** 3 * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f4 {id: frame4, type: shape, shape: rect, fill: transparent, line_color: "#2f353d", line_width: 2,
+             size: "$[1240 * step ** 4 * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * step ** 4 * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f5 {id: frame5, type: shape, shape: rect, fill: transparent, line_color: "#272c32", line_width: 2,
+             size: "$[1240 * step ** 5 * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * step ** 5 * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f6 {id: frame6, type: shape, shape: rect, fill: transparent, line_color: "#22262b", line_width: 1,
+             size: "$[1240 * step ** 6 * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * step ** 6 * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - {id: fix, type: fixation, duration: 0.5}
+      # the picture grows (forward) or shrinks (backward) together with the corridor in the 'move' screen
+      - &pic {id: stim, type: image, image: $stimulus, start: 0.5,
+              size: "$[200 * (1 / step) ** (move_dir * min(t / 0.5, 1)), 200 * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - {id: resp, type: keyboard, keys: [y, n], correct: $corr_key, start: 0.5, duration: 2.5, end_routine: true}
+
+  move:
+    duration: 0.6
+    components:
+      - id: direction
+        type: variable
+        save: false
+        set: {move_dir: "$1 if resp.keys == 'y' else (-1 if resp.keys == 'n' else 0)"}
+      - *fout
+      - *f0
+      - *f1
+      - *f2
+      - *f3
+      - *f4
+      - *f5
+      - *f6
+      - {<<: *pic, start: 0}
+      - {id: error_x, type: text, if: "$not resp.corr", text: "$'X' if resp.keys else 'Too slow'", color: "#ff3b30",
+         height: 70, pos: [0, -150]}
+
+  iti:
+    duration: 0.4
+    components:
+      - {id: blank, type: wait}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: block1_practice
+    conditions: [{block: 1, phase: practice}]
+    children:
+      - block_intro
+      - loop: trials1_practice
+        conditions: practice_images.csv
+        order: random
+        repeats: 1
+        max_repeat: {valence: 3}
+        children: [trial, move, iti]
+  - loop: block1_test
+    conditions: [{block: 1, phase: test}]
+    children:
+      - block_intro
+      - loop: trials1_test
+        conditions: images.csv
+        order: random
+        repeats: 2
+        max_repeat: {valence: 3}
+        children: [trial, move, iti]
+  - loop: block2_practice
+    conditions: [{block: 2, phase: practice}]
+    children:
+      - block_intro
+      - loop: trials2_practice
+        conditions: practice_images.csv
+        order: random
+        repeats: 1
+        max_repeat: {valence: 3}
+        children: [trial, move, iti]
+  - loop: block2_test
+    conditions: [{block: 2, phase: test}]
+    children:
+      - block_intro
+      - loop: trials2_test
+        conditions: images.csv
+        order: random
+        repeats: 2
+        max_repeat: {valence: 3}
+        children: [trial, move, iti]
+  - thanks

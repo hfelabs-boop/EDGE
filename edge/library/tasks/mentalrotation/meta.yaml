@@ -1,0 +1,26 @@
+id: mentalrotation
+title: Mental rotation (2-D shapes)
+category: Perception and motor
+summary: Decide whether a turned shape is the same as another one or its mirror image; RT grows with the angle.
+description: 'Measures spatial transformation speed. Two shapes made of five squares are shown side by side; the
+  right one is the left one turned by 0–315 degrees in 45-degree steps, either as it is or mirrored. F = same, J
+  = mirror image, within 7.5 s. 8 practice trials with feedback, then 64 trials (4 shapes × 8 angles × same/mirror)
+  in random order. Main outcome: response time on correct trials as a function of the angular difference (0–180
+  degrees), whose slope is the rotation rate; accuracy.'
+measures:
+- RT by angular difference (correct trials)
+- accuracy
+- same vs mirror
+duration_min: 5
+input: keyboard
+languages:
+- en
+references:
+- Shepard, R. N., & Metzler, J. (1971). Mental rotation of three-dimensional objects. Science, 171, 701–703.
+- Collins, D. W., & Kimura, D. (1997). A large sex difference on a two-dimensional mental rotation task. Behavioral
+  Neuroscience, 111(4), 845–849.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/mentalrotation.html
+notes: 'Own shapes: four chiral pentominoes defined as square centres under variables (shapes); each square is a
+  polygon item whose corners are computed (mirrored and turned) by a variable item, so the shapes look the same
+  in every backend. Change cell, shapes or the angles in mr_trials.csv to adapt.'

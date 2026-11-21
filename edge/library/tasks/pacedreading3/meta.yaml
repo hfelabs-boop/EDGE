@@ -1,0 +1,31 @@
+id: pacedreading3
+title: Self-paced reading, moving window
+category: Language
+summary: 'Read a sentence through a one-word window over dashes: the standard moving-window self-paced reading task.'
+description: 'Measures word-by-word processing difficulty without the look-back a cumulative display allows. The
+  sentence first appears as dashes (one per letter); each press of SPACE uncovers the next word and covers the previous
+  one again. Then a yes/no question. 2 practice sentences, then 20 items, half subject-relative and half object-relative.
+  Main outcome: reading times of the embedded verb and the main verb in the two structures; also mean word reading
+  time and comprehension accuracy.'
+measures:
+- word reading time at the embedded verb and the main verb, by structure
+- mean word reading time
+- comprehension accuracy
+duration_min: 5
+input: keyboard
+languages:
+- en
+variant_of: pacedreading1
+references:
+- 'Just, M. A., Carpenter, P. A., & Woolley, J. D. (1982). Paradigms and processes in reading comprehension. Journal
+  of Experimental Psychology: General, 111(2), 228–238.'
+- 'Jegerski, J. (2014). Self-paced reading. In J. Jegerski & B. VanPatten (Eds.), Research methods in second language
+  psycholinguistics (pp. 20–49). New York: Routledge.'
+- 'King, J., & Just, M. A. (1991). Individual differences in syntactic processing: The role of working memory. Journal
+  of Memory and Language, 30(5), 580–602.'
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/pacedreading3.html
+notes: 20 own items, each in a subject-relative and an object-relative version with the same words; each participant
+  reads half of the items in each version (which half alternates with odd/even participant numbers), so the items
+  are counterbalanced across pairs of participants. Edit sentences.csv (or tools/library/make_reading.py) for other
+  sentences; the word positions of the regions (embedded verb 3 or 5, main verb 6) assume this sentence frame.

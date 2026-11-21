@@ -1,0 +1,184 @@
+name: tower_hanoi
+description: >
+  Tower of Hanoi (see Byrnes & Spitz, 1979; Davis & Klebe, 2001). Disks of different sizes sit on three pegs; move the
+  whole tower to the goal peg, one disk at a time, never putting a larger disk on a smaller one. Click a peg to pick
+  up its top disk, then click the peg where it should go. A practice problem with 2 disks is followed by three test
+  problems (3 disks, 4 disks, 4 disks to the middle peg). Main outcomes per problem: number of moves (the fewest
+  possible is 2^n - 1), excess moves, rule violations (attempts to put a larger disk on a smaller one; the move is
+  refused) and solution time.
+
+settings:
+  window: {size: [1280, 720], background: "#f3efe6", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  peg_x: [-360, 0, 360]
+  pegs: [[], [], []]           # disks on each peg, bottom to top (1 = smallest)
+  held: null                   # peg whose top disk is picked up, or null
+  moves: 0
+  violations: 0
+  last_violation: false
+  solved: false
+  disk_pos: {}
+  t_start: 0
+  solve_time: 0
+
+measures:
+  - {id: moves, label: Moves, role: outcome, column: result.moves, loop: problems, summary: mean}
+  - {id: excess_moves, label: Moves above the minimum (solved problems), role: outcome, column: result.excess_moves,
+     trials: $result.solved == 1, loop: problems, summary: mean, expect: [0, 300]}
+  - {id: violations, label: Rule violations, role: outcome, column: result.violations, loop: problems, summary: sum}
+  - {id: solved, label: Problems solved, role: outcome, column: result.solved, loop: problems, summary: proportion}
+  - {id: solve_time, label: Solution time, role: outcome, column: result.solve_time, trials: $result.solved == 1,
+     loop: problems, summary: mean, units: s}
+  - {id: n_disks, label: Number of disks, role: factor, column: n_disks}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        color: black
+        height: 25
+        wrap_width: 1050
+        text: |
+          The Tower of Hanoi
+
+          Disks of different sizes are stacked on the left peg. Move the whole tower to the
+          peg marked GOAL, in as few moves as you can.
+
+          Rules: move one disk at a time, and only the top disk of a peg.
+          A larger disk may never be put on a smaller disk.
+
+          Click a peg to pick up its top disk (it rises), then click the peg where it should go.
+          Click the same peg again to put the disk back.
+
+          First a practice problem with 2 disks. Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  problem_intro:
+    components:
+      - id: setup
+        type: variable
+        set:
+          pegs: "$[list(range(n_disks, 0, -1)) if p == start_peg else [] for p in range(3)]"
+          held: null
+          moves: 0
+          violations: 0
+          last_violation: false
+          solved: false
+      - id: intro_text
+        type: text
+        color: black
+        height: 28
+        text: "$f'{title}\\n\\nMove all {n_disks} disks to the peg marked GOAL.\\nIt can be done in {min_moves} moves.\\n\\nPress SPACE to start.'"
+      - {id: intro_key, type: keyboard, keys: [space], end_routine: true}
+      - id: start_timer
+        type: code
+        on_end: |
+          t_start = session.clock()
+
+  board:
+    components:
+      # where to draw each disk: on its peg at its height in the stack; the picked-up disk floats above its peg
+      - id: layout
+        type: code
+        save: false
+        on_begin: |
+          disk_pos = {}
+          for _p, _stack in enumerate(pegs):
+              for _level, _d in enumerate(_stack):
+                  disk_pos[_d] = [peg_x[_p], -186 + _level * 30]
+          if held is not None:
+              disk_pos[pegs[held][-1]] = [peg_x[held], 150]
+      - {id: base, type: shape, shape: rect, size: [1150, 24], pos: [0, -212], fill: "#7a5a3a"}
+      - {id: peg0, type: shape, shape: rect, size: [14, 230], pos: [-360, -90], fill: "#7a5a3a"}
+      - {id: peg1, type: shape, shape: rect, size: [14, 230], pos: [0, -90], fill: "#7a5a3a"}
+      - {id: peg2, type: shape, shape: rect, size: [14, 230], pos: [360, -90], fill: "#7a5a3a"}
+      - {id: goal_label, type: text, text: GOAL, pos: "$[peg_x[goal_peg], -250]", height: 24, bold: true, color: "#1a7a1a"}
+      - {id: disk1, type: shape, if: "$n_disks >= 1", shape: rect, size: [90, 26], pos: "$disk_pos.get(1, [0, -2000])", fill: "#e0533d"}
+      - {id: disk2, type: shape, if: "$n_disks >= 2", shape: rect, size: [130, 26], pos: "$disk_pos.get(2, [0, -2000])", fill: "#e8a33d"}
+      - {id: disk3, type: shape, if: "$n_disks >= 3", shape: rect, size: [170, 26], pos: "$disk_pos.get(3, [0, -2000])", fill: "#3d9be0"}
+      - {id: disk4, type: shape, if: "$n_disks >= 4", shape: rect, size: [210, 26], pos: "$disk_pos.get(4, [0, -2000])", fill: "#6a4ec2"}
+      - {id: status, type: text, pos: [0, 300], height: 24, color: black,
+         text: "$f'Moves: {moves}        (fewest possible: {min_moves})'"}
+      - {id: warning, type: text, pos: [0, 250], height: 22, color: "#c62828",
+         text: "$'A larger disk cannot go on a smaller one.' if last_violation else ''"}
+      # one click area per peg (invisible), wide enough to click anywhere above the peg
+      - {id: zone0, type: shape, shape: rect, size: [340, 520], pos: [-360, -20], fill: transparent}
+      - {id: zone1, type: shape, shape: rect, size: [340, 520], pos: [0, -20], fill: transparent}
+      - {id: zone2, type: shape, shape: rect, size: [340, 520], pos: [360, -20], fill: transparent}
+      - {id: click, type: mouse, clickable: [zone0, zone1, zone2], end_routine: true, duration: 60}
+      # the move: pick up a top disk, put it down on another peg if the rules allow it, or count a violation
+      - id: move
+        type: code
+        on_end: |
+          _p = int(click.clicked[-1]) if click.clicked else None
+          last_violation = False
+          if _p is not None:
+              if held is None:
+                  if pegs[_p]:
+                      held = _p
+              elif _p == held:
+                  held = None
+              else:
+                  if pegs[_p] and pegs[_p][-1] < pegs[held][-1]:
+                      violations += 1
+                      last_violation = True
+                  else:
+                      pegs[_p].append(pegs[held].pop())
+                      moves += 1
+                  held = None
+          solved = len(pegs[goal_peg]) == n_disks
+
+  problem_end:
+    duration: 2.5
+    components:
+      - id: timer
+        type: code
+        on_begin: |
+          solve_time = round(session.clock() - t_start, 3)
+      - id: result
+        type: variable
+        set:
+          solved: "$1 if solved else 0"
+          moves: $moves
+          min_moves: $min_moves
+          excess_moves: "$moves - min_moves if solved else None"
+          violations: $violations
+          solve_time: $solve_time
+      - id: end_text
+        type: text
+        color: black
+        height: 30
+        text: "$f'Solved in {moves} moves (fewest possible: {min_moves}).' if solved else 'Time to go on to the next problem.'"
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, color: black, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: [{title: Practice, phase: practice, n_disks: 2, start_peg: 0, goal_peg: 2, min_moves: 3}]
+    children:
+      - problem_intro
+      - loop: practice_clicks
+        conditions: [{step: click}]
+        repeats: 200
+        stop_if: $solved
+        children: [board]
+      - problem_end
+  - loop: problems
+    conditions: hanoi_problems.csv
+    order: sequential
+    children:
+      - problem_intro
+      - loop: clicks
+        conditions: [{step: click}]
+        repeats: 300
+        stop_if: $solved
+        children: [board]
+      - problem_end
+  - thanks

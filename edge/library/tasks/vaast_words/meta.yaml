@@ -1,0 +1,30 @@
+id: vaast_words
+title: Visual approach/avoidance task (VAAST), words
+category: Social and implicit
+summary: Walk towards or away from words in a virtual corridor; faster approach to pleasant words shows an approach
+  tendency.
+description: 'Measures spontaneous approach and avoidance tendencies with visual whole-body movement. A corridor
+  in perspective fills the screen and a word appears in the middle; Y moves you forward (the scene and the word
+  grow), N moves you backward (they shrink). In one block pleasant words are approached and unpleasant ones avoided,
+  in the other the reverse; the order alternates with the participant number. Each block: 8 practice and 32 test
+  trials (16 words twice); a wrong key shows a red X. Main outcome: the compatibility effect in response times (valence
+  × movement).'
+measures:
+- RT by word valence × movement (approach / avoid)
+- accuracy
+duration_min: 4
+input: keyboard
+languages:
+- en
+references:
+- 'Rougier, M., Muller, D., Ric, F., Alexopoulos, T., Batailler, C., Smeding, A., & Aubé, B. (2018). A new look
+  at sensorimotor aspects in approach/avoidance tendencies: The role of visual whole-body movement information.
+  Journal of Experimental Social Psychology, 76, 42–53.'
+- 'Aubé, B., Rougier, M., Muller, D., Ric, F., & Yzerbyt, V. (2019). The online-VAAST: A short and online tool to
+  measure spontaneous approach and avoidance tendencies. Acta Psychologica, 201, 102942.'
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/vaast_words.html
+notes: 'Own neutral-domain stimuli (everyday pleasant and unpleasant words) and an own corridor drawn with rectangle
+  items that grow or shrink over 0.5 s; the word is redrawn larger or smaller every 5 frames. The online VAAST''s
+  start key (H) is left out: trials start by themselves after a fixation cross. Other words: edit words.csv and
+  practice_words.csv (valence must be pleasant or unpleasant, or change the names in block_intro).'

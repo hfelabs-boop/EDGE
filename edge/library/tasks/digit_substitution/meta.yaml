@@ -1,0 +1,25 @@
+id: digit_substitution
+title: Digit symbol substitution test
+category: Attention
+summary: Type the number that belongs to each symbol, using a key, as many as possible in 90 seconds.
+description: 'Measures processing speed (with attention and visual scanning). A key at the top pairs the digits
+  1–9 with nine symbols; one symbol at a time appears in the middle and the matching digit is typed on the number
+  row. 9 practice items with feedback, then a 90-second test, one item after another. Main outcome: the number of
+  correct answers in 90 s; also accuracy and the time per item.'
+measures:
+- correct answers in 90 s
+- accuracy
+- time per item
+duration_min: 3
+input: keyboard
+languages:
+- en
+references:
+- 'Jaeger, J. (2018). Digit symbol substitution test: The case for sensitivity over specificity in neuropsychological
+  testing. Journal of Clinical Psychopharmacology, 38(5), 513–519.'
+- 'Wechsler, D. (1939). The measurement of adult intelligence. Baltimore: Williams & Wilkins.'
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/digit_substitution.html
+notes: 'Own symbol set: nine simple filled shapes defined under variables (symbols), drawn as polygon items. The
+  90 s are timed on the master clock by a tiny code item, so the test ends exactly on time; an item left unanswered
+  for 15 s counts as missed. Use the number row (numeric keypad keys are not accepted).'

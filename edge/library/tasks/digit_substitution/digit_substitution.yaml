@@ -1,0 +1,156 @@
+name: digit_substitution
+description: >
+  Digit symbol substitution test, computer version (see Jaeger, 2018). A key at the top of the screen pairs the
+  digits 1-9 with nine symbols. One symbol at a time appears in the middle; type the digit that goes with it. After 9
+  practice items with feedback, the test lasts 90 seconds: as many items as possible, one after another. Main
+  outcome: the number of correct answers in 90 s; also accuracy and the time per item.
+
+settings:
+  window: {size: [1280, 720], background: "#f4f4f4", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  time_limit: 90          # length of the test (s)
+  time_left: 90
+  t_block: 0
+  # the nine symbols: corner points of a shape around (0, 0), about 50 px across (all convex, so every backend
+  # draws them the same way). Change them here to use another symbol set.
+  symbols:
+    "1": [[0, 26], [-26, -20], [26, -20]]
+    "2": [[-26, 20], [26, 20], [0, -26]]
+    "3": [[0, 28], [-22, 0], [0, -28], [22, 0]]
+    "4": [[-14, 24], [14, 24], [27, 0], [14, -24], [-14, -24], [-27, 0]]
+    "5": [[-24, 20], [8, 20], [28, 0], [8, -20], [-24, -20]]
+    "6": [[-22, 22], [22, 22], [22, -22], [-22, -22]]
+    "7": [[0, 28], [24, 8], [24, -24], [-24, -24], [-24, 8]]
+    "8": [[-28, 18], [28, 18], [14, -18], [-14, -18]]
+    "9": [[-10, 20], [28, 20], [10, -20], [-28, -20]]
+
+measures:
+  - {id: n_correct, label: Correct answers in 90 s, role: outcome, column: resp.corr, loop: test, summary: sum, expect: [5, 150]}
+  - {id: accuracy, label: Accuracy (answered items), role: outcome, column: resp.corr, trials: "$resp.keys is not None",
+     loop: test, summary: proportion}
+  - {id: item_time, label: Time per item (correct answers), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: test, summary: median, units: s, expect: [0.3, 10]}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        color: black
+        height: 25
+        wrap_width: 1050
+        pos: [0, -110]
+        text: |
+          At the top of the screen is a key: every symbol has a number.
+
+          A symbol will appear in the middle of the screen.
+          Type the number that belongs to it (with the number keys above the letters).
+
+          First 9 practice items. Then the test: 90 seconds, as many as you can.
+
+          Press SPACE to start the practice.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - &key1 {id: sym1, type: shape, shape: polygon, vertices: "$symbols['1']", pos: [-480, 270], fill: "#222222"}
+      - &key2 {id: sym2, type: shape, shape: polygon, vertices: "$symbols['2']", pos: [-360, 270], fill: "#222222"}
+      - &key3 {id: sym3, type: shape, shape: polygon, vertices: "$symbols['3']", pos: [-240, 270], fill: "#222222"}
+      - &key4 {id: sym4, type: shape, shape: polygon, vertices: "$symbols['4']", pos: [-120, 270], fill: "#222222"}
+      - &key5 {id: sym5, type: shape, shape: polygon, vertices: "$symbols['5']", pos: [0, 270], fill: "#222222"}
+      - &key6 {id: sym6, type: shape, shape: polygon, vertices: "$symbols['6']", pos: [120, 270], fill: "#222222"}
+      - &key7 {id: sym7, type: shape, shape: polygon, vertices: "$symbols['7']", pos: [240, 270], fill: "#222222"}
+      - &key8 {id: sym8, type: shape, shape: polygon, vertices: "$symbols['8']", pos: [360, 270], fill: "#222222"}
+      - &key9 {id: sym9, type: shape, shape: polygon, vertices: "$symbols['9']", pos: [480, 270], fill: "#222222"}
+      - &num1 {id: num1, type: text, text: "1", pos: [-480, 205], height: 30, color: black}
+      - &num2 {id: num2, type: text, text: "2", pos: [-360, 205], height: 30, color: black}
+      - &num3 {id: num3, type: text, text: "3", pos: [-240, 205], height: 30, color: black}
+      - &num4 {id: num4, type: text, text: "4", pos: [-120, 205], height: 30, color: black}
+      - &num5 {id: num5, type: text, text: "5", pos: [0, 205], height: 30, color: black}
+      - &num6 {id: num6, type: text, text: "6", pos: [120, 205], height: 30, color: black}
+      - &num7 {id: num7, type: text, text: "7", pos: [240, 205], height: 30, color: black}
+      - &num8 {id: num8, type: text, text: "8", pos: [360, 205], height: 30, color: black}
+      - &num9 {id: num9, type: text, text: "9", pos: [480, 205], height: 30, color: black}
+
+  item:
+    components:
+      - *key1
+      - *key2
+      - *key3
+      - *key4
+      - *key5
+      - *key6
+      - *key7
+      - *key8
+      - *key9
+      - *num1
+      - *num2
+      - *num3
+      - *num4
+      - *num5
+      - *num6
+      - *num7
+      - *num8
+      - *num9
+      - {id: frame, type: shape, shape: rect, size: [1160, 170], pos: [0, 235], fill: transparent, line_color: "#999999", line_width: 2}
+      - {id: target, type: shape, shape: polygon, vertices: "$[[x * 2, y * 2] for x, y in symbols[str(digit)]]", pos: [0, -60], fill: "#1f4e9c"}
+      - {id: score, type: text, if: "$timed", text: "$f'{test.n} done'", pos: [0, -300], height: 20, color: "#999999"}
+      - id: resp
+        type: keyboard
+        keys: ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
+        correct: $str(digit)
+        duration: "$min(time_left, 15) if timed else 30"     # an item left for 15 s counts as missed
+        end_routine: true
+      # the test clock: time left of the 90 s (exact, from the master clock), for the response window and the end
+      - id: clock
+        type: code
+        if: $timed
+        on_begin: |
+          time_left = max(0.0, time_limit - (session.clock() - t_block))
+        on_end: |
+          time_left = max(0.0, time_limit - (session.clock() - t_block))
+
+  feedback:
+    duration: 0.7
+    components:
+      - id: fb
+        type: text
+        height: 32
+        pos: [0, -60]
+        text: "$'Correct' if resp.corr else f'Wrong: that symbol is {digit}'"
+        color: "$'#1a8f1a' if resp.corr else '#c62828'"
+
+  ready:
+    components:
+      - {id: ready_text, type: text, color: black, height: 26,
+         text: "Now the test: 90 seconds. Work as fast as you can without mistakes.\n\nPress SPACE to start."}
+      - {id: ready_key, type: keyboard, keys: [space], end_routine: true}
+      - id: start_clock
+        type: code
+        on_end: |
+          t_block = session.clock()
+          time_left = time_limit
+
+  thanks:
+    duration: 4
+    components:
+      - {id: bye, type: text, color: black, height: 30, text: "$f'Time is up. You got {test.n_correct} right.\\n\\nThank you!'"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: [{digit: 1, timed: false}, {digit: 2, timed: false}, {digit: 3, timed: false}, {digit: 4, timed: false},
+                 {digit: 5, timed: false}, {digit: 6, timed: false}, {digit: 7, timed: false}, {digit: 8, timed: false},
+                 {digit: 9, timed: false}]
+    order: random
+    children: [item, feedback]
+  - ready
+  - loop: test
+    conditions: [{digit: 1, timed: true}, {digit: 2, timed: true}, {digit: 3, timed: true}, {digit: 4, timed: true},
+                 {digit: 5, timed: true}, {digit: 6, timed: true}, {digit: 7, timed: true}, {digit: 8, timed: true},
+                 {digit: 9, timed: true}]
+    order: random
+    repeats: 25
+    max_repeat: {digit: 1}
+    stop_if: "$time_left <= 0.05"
+    children: [item]
+  - thanks

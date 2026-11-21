@@ -1,0 +1,25 @@
+id: deary_liewald
+title: Deary-Liewald reaction time task
+category: Perception and motor
+summary: Simple and four-choice reaction time to a cross appearing in a box.
+description: 'Measures processing speed. Simple RT: a cross appears in one box after a random 1–3 s wait; press
+  SPACE (8 practice, 20 test trials). Four-choice RT: four boxes in a row, press the key under the box where the
+  cross appears (Z, X, N, M; 8 practice, 40 test trials, 10 per box). Responses within 2 s. Main outcomes: mean
+  and SD of simple RT; mean and SD of choice RT on correct trials and choice accuracy.'
+measures:
+- simple RT mean and SD
+- choice RT mean and SD (correct trials)
+- choice accuracy
+duration_min: 4
+input: keyboard
+languages:
+- en
+references:
+- 'Deary, I. J., Liewald, D., & Nissan, J. (2011). A free, easy-to-use, computer-based simple and four-choice reaction
+  time programme: The Deary-Liewald reaction time task. Behavior Research Methods, 43(1), 258–268.'
+- 'Jensen, A. R. (2006). Clocking the mind: Mental chronometry and individual differences. Amsterdam: Elsevier.'
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/deary_liewald.html
+notes: The choice keys are Z, X, N and M (the original uses Z, X, comma and full stop); change the keys in the trial
+  routine and corr_key in choice_*.csv to use others. The wait before the cross is drawn anew on every trial by
+  a variable item.

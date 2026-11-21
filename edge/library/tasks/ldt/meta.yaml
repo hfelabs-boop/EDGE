@@ -1,0 +1,25 @@
+id: ldt
+title: Lexical decision task
+category: Language
+summary: Decide as quickly as possible whether a letter string is a real word.
+description: 'Measures word recognition speed. A fixation cross (500 ms) is followed by a letter string until a
+  response (at most 2 s): J for an English word, F for a non-word. 8 practice trials with feedback, then 80 test
+  trials in random order: 20 frequent words, 20 rare words and 40 pronounceable non-words. Main outcomes: response
+  time on correct trials for words vs non-words and for frequent vs rare words (the word frequency effect); accuracy.'
+measures:
+- RT words vs non-words (correct trials)
+- RT frequent vs rare words
+- accuracy
+duration_min: 4
+input: keyboard
+languages:
+- en
+references:
+- 'Meyer, D. E., & Schvaneveldt, R. W. (1971). Facilitation in recognizing pairs of words: Evidence of a dependence
+  between retrieval operations. Journal of Experimental Psychology, 90(2), 227–234.'
+- Balota, D. A., Yap, M. J., Cortese, M. J., Hutchison, K. A., Kessler, B., Loftis, B., Neely, J. H., Nelson, D.
+  L., Simpson, G. B., & Treiman, R. (2007). The English Lexicon Project. Behavior Research Methods, 39(3), 445–459.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/ldt.html
+notes: Own word and non-word lists (ldt_trials.csv); the frequency classes are rough (common everyday words vs rare
+  words), so for a frequency study take matched lists from a lexical database such as the English Lexicon Project.
