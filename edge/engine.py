@@ -387,6 +387,8 @@ class Runner:
                     continue
                 self.run_routine(self.exp.routines[node.routine])
             elif isinstance(node, Loop):
+                if node.if_ and not self._eval(node.if_):
+                    continue
                 self.run_loop(node)
             elif isinstance(node, Branch):
                 self.run_nodes(node.then if self._eval(node.condition) else node.else_)

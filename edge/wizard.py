@@ -697,7 +697,33 @@ def estimate_experiment(exp) -> dict[str, Any]:
 
     repeating: list[tuple[str, int]] = []      # workflow states that may run more than once (practice until ...)
 
-    def count(nodes, mult: float, worst: bool) -> tuple[float, float]:
+    def outer_rows_of(n) -> list[dict]:
+        try:
+            from .conditions import load_conditions
+            return load_conditions(n.conditions, exp.base_dir) if not n.staircase else []
+        except Exception:
+            return []
+
+    def column_file_rows(spec: Any, outer: list[list[dict]]) -> float | None:
+        """conditions: $col: the mean row count of the files that the enclosing trial lists' column names."""
+        from .conditions import load_conditions
+        col = spec.strip()[1:].strip() if isinstance(spec, str) and spec.strip().startswith("$") else ""
+        if not col.isidentifier():
+            return None
+        for rows in reversed(outer):
+            files = [r.get(col) for r in rows if isinstance(r.get(col), str) and r.get(col)]
+            if files:
+                counts = []
+                for f in files:
+                    try:
+                        counts.append(len(load_conditions(f, exp.base_dir)))
+                    except Exception:
+                        return None
+                return sum(counts) / len(counts)
+        return None
+
+    def count(nodes, mult: float, worst: bool, outer: list[list[dict]] | None = None) -> tuple[float, float]:
+        outer = outer or []
         trials = secs = 0.0
         for n in nodes:
             if isinstance(n, RoutineRef):
@@ -708,17 +734,19 @@ def estimate_experiment(exp) -> dict[str, Any]:
                 else:
                     cols = loop_columns(n, exp.base_dir)
                     rows = _row_count(n, exp.base_dir) if cols is not None else 1
+                    if cols is None:
+                        rows = column_file_rows(n.conditions, outer) or 1
                     r = n.repeats if isinstance(n.repeats, (int, float)) else 1
                     empty = isinstance(n.conditions, list) and not n.conditions    # `conditions: []` runs 0 times
                     reps = (0 if empty else max(rows, 1)) * r
-                t, s = count(n.children, mult * reps, worst)
+                t, s = count(n.children, mult * reps, worst, outer + [outer_rows_of(n)])
                 has_inner_loop = any(isinstance(c, Loop) for c in n.children)
                 trials += t if has_inner_loop or t else 0
                 if not has_inner_loop and not t:
                     trials += mult * reps
                 secs += s
             elif isinstance(n, Branch):
-                t, s = count(n.then, mult, worst)
+                t, s = count(n.then, mult, worst, outer)
                 trials += t
                 secs += s
             elif isinstance(n, StateMachine):
@@ -729,7 +757,7 @@ def estimate_experiment(exp) -> dict[str, Any]:
                         visits = st.max_visits if worst else 1
                         if worst:
                             repeating.append((st.name, st.max_visits))
-                    t, s = count(st.run, mult * visits, worst)
+                    t, s = count(st.run, mult * visits, worst, outer)
                     trials += t
                     secs += s
         return trials, secs

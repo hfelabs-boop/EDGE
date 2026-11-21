@@ -1835,6 +1835,12 @@ function factorialRows(spec) {
 function loopRows(spec, path = S.path) {
   if (!spec) return [];
   if (Array.isArray(spec)) return spec.filter((r) => r && typeof r === "object");
+  if (typeof spec === "string" && spec.trim().startsWith("$")) {   // e.g. $block_file: an outer trial list names the file
+    const col = spec.trim().slice(1).trim();
+    if (!/^[A-Za-z_]\w*$/.test(col)) return [];                    // a formula: can't be previewed
+    const file = sampleColumnValue(col);
+    return file === null ? null : (typeof file === "string" && file ? loopRows(file, path) : []);
+  }
   if (spec.factorial) return factorialRows(spec);
   const key = JSON.stringify(spec) + "|" + (path || "");
   const have = BUILD.rows[key];
@@ -1848,6 +1854,19 @@ function loopRows(spec, path = S.path) {
       .catch((e) => { BUILD.rows[key] = {error: e.message, at: Date.now()}; scheduleBuildRender(); });
   }
   return null;
+}
+/* The first value of a trial-list column in any trial list of the experiment (null while a file is loading), used to
+   preview a trial list whose file comes from that column, e.g. conditions: $block_file. */
+function sampleColumnValue(col) {
+  let found, loading = false;
+  walkFlow((n) => {
+    if (found !== undefined || !n || n.loop === undefined || typeof n.conditions === "string" && n.conditions.trim().startsWith("$")) return;
+    const rows = loopRows(n.conditions);
+    if (rows === null) { loading = true; return; }
+    const r = rows.find((x) => x && x[col] !== undefined && x[col] !== "");
+    if (r) found = r[col];
+  });
+  return found !== undefined ? found : (loading ? null : "");
 }
 function loopRowsError(spec, path = S.path) { const v = BUILD.rows[JSON.stringify(spec) + "|" + (path || "")]; return v && v.error ? v.error : null; }
 /* Kept for inspector.js: the first row of a trial list ({} while a file loads). */

@@ -235,6 +235,7 @@ class Loop:
     stop_if: str | None = None    # checked after each iteration
     staircase: dict[str, Any] | None = None    # adaptive procedure (see conditions.Staircase)
     select: Any = None            # subset of rows, e.g. "0:10" or [0, 2, 5]
+    if_: str | None = None        # YAML "if": the whole trial list runs only when this is true
 
 
 @dataclass
@@ -520,6 +521,8 @@ class Experiment:
                     if n.routine not in self.routines:
                         issues.append(Issue("error", w, f"unknown routine '{n.routine}'"))
                 elif isinstance(n, Loop):
+                    if n.if_:
+                        _check_expr(n.if_ if n.if_.startswith("$") else "$" + n.if_, w + ".if", issues)
                     if n.order not in LOOP_ORDERS:
                         issues.append(Issue("error", w, f"unknown loop order '{n.order}'", hint=", ".join(LOOP_ORDERS)))
                     if not n.children:
@@ -831,6 +834,7 @@ def _parse_flow_node(n: Any, idx: Any, where: str = "flow") -> FlowNode:
             stop_if=n.get("stop_if"),
             staircase=n.get("staircase"),
             select=n.get("select"),
+            if_=_condition(n.get("if"), f"{where}.if"),
         )
     if "if" in n:
         return Branch(_condition(n["if"], f"{where}.if") or "$False", _parse_nodes(n.get("then"), f"if{idx}", f"{where}.then"),
@@ -875,6 +879,8 @@ def _flow_to_dict(n: FlowNode) -> Any:
             v = getattr(n, k)
             if v is not None and not (k == "order" and v == "sequential") and not (k == "repeats" and v == 1):
                 d[k] = v
+        if n.if_:
+            d["if"] = n.if_
         d["children"] = [_flow_to_dict(c) for c in n.children]
         return d
     if isinstance(n, Branch):

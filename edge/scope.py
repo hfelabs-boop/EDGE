@@ -357,6 +357,9 @@ def scope_issues(exp) -> list:
                         report(src, w + ".if", scope, unknown, enclosing)
                 check_routine(n.routine, scope, unknown, enclosing)
             elif isinstance(n, Loop):
+                if n.if_:                                   # decided before the trial list starts: outer scope
+                    for src in _expr_sources(n.if_, bare=True):
+                        report(src, w + ".if", scope, unknown, enclosing)
                 for src in _expr_sources(n.conditions if isinstance(n.conditions, str) else None):
                     report(src, w + ".conditions", scope, unknown, enclosing)
                 for src in _expr_sources(n.repeats if isinstance(n.repeats, str) else None, bare=True):
