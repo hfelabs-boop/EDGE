@@ -1,0 +1,133 @@
+name: ldt_ops
+description: >
+  Lexical decision task, operational adaptation (after Meyer & Schvaneveldt, 1971). The same paradigm and measures as
+  the library's `ldt` task: after a fixation cross a string of letters appears in an incoming message line; press J
+  if it is a real message word, F if it is a malformed one. 80 trials (20 frequent and 20 rarer words of operator
+  messages, 40 malformed message words that are pronounceable non-words) in random order, after 8 practice trials
+  with feedback. One variable, `theme`, sets the display: c2 (a message panel on the tactical map) or uav (a text
+  line over the payload camera picture). Main outcomes: response time to words vs malformed words (and frequent vs
+  rare words) on correct trials, and accuracy.
+
+# The theme switch follows search_ops (see that file): `theme` is the first variable; the display around the
+# string and the instructions are items guarded with `if: "$theme == ..."`. The trial lists, timing, keys, correct
+# answers and measures are the same for every theme (and the same design as `ldt`).
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2               # display theme: c2 or uav
+  msg_no: 1200            # a running message number on the display (changes every trial)
+
+measures:
+  - {id: rt, label: Response time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.25, 2.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: lexicality, label: Word or malformed word, role: factor, column: lexicality}
+  - {id: frequency, label: Word frequency (high / low), role: factor, column: frequency}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        color: "#e8f8ff"
+        height: 25
+        wrap_width: 1050
+        text: |
+          You are reading incoming messages on the message panel of the tactical display.
+          The message link is noisy: some words arrive malformed.
+
+          One word at a time appears in the message panel.
+          Press J if it is a real message word (for example: REPORT).
+          Press F if it is malformed, not a real word (for example: REPORF).
+
+          Answer as quickly and as accurately as you can.
+          First a few practice trials.
+
+          Press SPACE to start.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        color: "#e8f8ff"
+        height: 25
+        wrap_width: 1050
+        text: |
+          You are the payload operator of a surveillance air vehicle. Short text messages arrive
+          over the camera picture, and the link is noisy: some words arrive malformed.
+
+          One word at a time appears in the message line.
+          Press J if it is a real message word (for example: REPORT).
+          Press F if it is malformed, not a real word (for example: REPORF).
+
+          Answer as quickly and as accurately as you can.
+          First a few practice trials.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: count, type: variable, set: {msg_no: "$msg_no + random.randint(1, 3)", shown_theme: $theme}}
+      # c2: the tactical map (faint) and the message panel in the middle
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720], opacity: 0.45}
+      - {id: panel_c2, type: image, if: "$theme == 'c2'", image: stimuli/message_panel_400x240.png, size: [560, 240]}
+      - {id: head_c2, type: text, if: "$theme == 'c2'", font: DejaVu Sans Mono, bold: true, height: 17, color: "#9fe8ff",
+         pos: [0, 103], text: "$f'MESSAGES   MSG {msg_no:04d}   SECTOR BRAVO'"}
+      # uav: the camera picture with the reticle, telemetry, and a dark message line across the middle
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_04_river.jpg, size: [1280, 720]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_cross.png, size: [240, 240], opacity: 0.5}
+      - {id: tel_uav, type: text, if: "$theme == 'uav'", font: DejaVu Sans Mono, height: 17, color: "#d8ffd8", pos: [-400, 330],
+         text: "$f'ALT 2300 m   HDG 090   SPD 95 kt   MSG {msg_no:04d}'"}
+      - {id: line_uav, type: shape, if: "$theme == 'uav'", shape: rect, size: [520, 90], fill: "#04121c", opacity: 0.85,
+         line_color: "#d8ffd8", line_width: 1}
+      # every theme: fixation, then the string (in capitals, as on a message display)
+      - {id: fix, type: text, text: "+", color: "#9fe8ff", height: 36, duration: 0.5}
+      - {id: target, type: text, text: $letters.upper(), color: "#e8f8ff", height: 48, font: DejaVu Sans Mono, start: 0.5}
+      - {id: keymap_bar, type: shape, shape: rect, size: [1280, 40], pos: [0, -300], fill: "#0a2232", opacity: 0.85}
+      - {id: keymap, type: text, text: "F = malformed          J = real word", font: DejaVu Sans Mono, color: "#9fe8ff", height: 18, pos: [0, -300]}
+      - {id: resp, type: keyboard, keys: [f, j], correct: $corr_key, start: 0.5, duration: 2.0, end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 34
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  iti:
+    duration: 0.5
+    components:
+      - {id: blank, type: wait}
+
+  ready:
+    components:
+      - id: text
+        type: text
+        color: "#e8f8ff"
+        height: 26
+        text: "Practice done. Now the real test begins, without feedback.\n\nPress SPACE to start."
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, color: "#9fe8ff", height: 30, text: "End of the watch. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: ldt_practice.csv
+    order: random
+    children: [trial, feedback, iti]
+  - ready
+  - loop: trials
+    conditions: ldt_trials.csv
+    order: random
+    max_repeat: {lexicality: 4}
+    children: [trial, iti]
+  - thanks

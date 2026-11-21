@@ -1,0 +1,43 @@
+id: ldt_ops
+title: Lexical decision task (operational)
+category: Language
+summary: Decide as quickly as possible whether a string in an incoming message is a real message word or a malformed one.
+description: >-
+  The library's lexical decision task with operator displays. A fixation cross (500 ms) is followed by a string of letters
+  in an incoming message line until the answer (max 2 s): J = a real word, F = malformed (not a word). 8 practice trials
+  with feedback, then 80 trials in random order (no more than 4 of a kind in a row): 20 frequent words of operator messages
+  (report, status, signal ...), 20 rarer ones (loiter, azimuth, squelch ...) and 40 pronounceable malformed message words
+  (reporf, stadus ...). Main outcomes: correct-trial response time for words vs malformed words and for frequent vs rare
+  words (the frequency effect), and accuracy.
+measures:
+- RT words vs malformed words (correct trials)
+- RT frequent vs rare words
+- accuracy
+duration_min: 4
+input: keyboard
+languages:
+- en
+variant_of: ldt
+domain: defense
+themes:
+- c2
+- uav
+adaptation: >-
+  The letter strings of the classic task become words arriving over a noisy message link: real words of operator messages
+  and status reports (frequent vs rarer) and malformed message words made by changing letters of real ones, which play the
+  part of the pronounceable non-words. Design, timing, keys and measures stay the same. c2: the string appears in the message
+  panel (with a running message number) over a faint tactical map. uav: it appears in a dark message line over the payload
+  camera picture, with a reticle and telemetry text. The words are generic English vocabulary; there are no real brevity
+  codes, code words or call signs.
+references:
+- 'Meyer, D. E., & Schvaneveldt, R. W. (1971). Facilitation in recognizing pairs of words: Evidence of a dependence between
+  retrieval operations. Journal of Experimental Psychology, 90(2), 227–234.'
+- Balota, D. A., Yap, M. J., Cortese, M. J., Hutchison, K. A., Kessler, B., Loftis, B., Neely, J. H., Nelson, D. L., Simpson,
+  G. B., & Treiman, R. (2007). The English Lexicon Project. Behavior Research Methods, 39(3), 445–459.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/ldt.html
+notes: >-
+  Switch the display with the variable `theme` (c2, uav). Strings are shown in capitals, as on a message display. The frequency
+  classes are rough (everyday operator vocabulary vs rarer technical words), as in `ldt`; for a study of frequency, check
+  the words against a word-frequency list. Word lists in tools/library/make_ldt_ops.py (re-run it to rewrite ldt_trials.csv
+  and ldt_practice.csv).

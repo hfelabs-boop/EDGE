@@ -1,0 +1,217 @@
+name: vaast_words_ops
+description: >
+  Visual Approach/Avoidance by the Self Task with words, operational adaptation (after Rougier et al., 2018, and Aubé
+  et al., 2019): the same design, keys and measures as the library's `vaast_words` task, with status words that
+  signal safety or threat. A display seen in depth fills the screen; a word appears in the middle. Pressing Y moves
+  you forward into the display (approach: the scene and the word grow), pressing N moves you backward (avoid: they
+  shrink). In one block you approach SAFE words and avoid THREAT words, in the other block the reverse; which block
+  comes first alternates with the participant number. Each block: 8 practice trials and 32 test trials (16 words
+  twice). A wrong key shows a red X. One variable, `theme`, sets the display: c2 (zooming into the depth of a
+  console plot, frames in console colours) or uav (the payload camera zooming in and out over an infrared picture).
+  Main outcome: the approach-avoidance compatibility effect, response time when approaching threat / avoiding safe
+  words minus approaching safe / avoiding threat words.
+
+# The theme switch follows search_ops (see that file): `theme` is the first variable; the scene that moves with the
+# operator (c2: frames in depth; uav: the camera picture) is items guarded with `if: "$theme == ..."`, in the trial
+# and the move screens. Word lists, keys, timing, blocks and measures are those of `vaast_words`.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2           # display theme: c2 or uav
+  order: 1            # 1: approach safe words first, 2: approach threat words first (from the participant number)
+  approach: safe      # the category to approach in the current block
+  move_dir: 0         # 0 = standing still, 1 = moving forward, -1 = moving backward
+  step: 0.62          # the frames shrink by this factor with depth; one step forward grows them by 1/step
+
+measures:
+  - {id: rt, label: Response time (correct trials), role: outcome, column: resp.rt,
+     trials: "$phase == 'test' and resp.corr == 1", summary: median, units: s, expect: [0.3, 2.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, trials: "$phase == 'test'", summary: proportion}
+  - {id: valence, label: Word category (safe / threat), role: factor, column: valence}
+  - {id: movement, label: Movement (approach / avoid), role: factor, column: cond.movement}
+
+routines:
+  instructions:
+    components:
+      - id: counterbalance
+        type: variable
+        set: {order: "$1 if int(''.join([c for c in str(participant) if c.isdigit()]) or '0') % 2 == 1 else 2"}
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        color: "#e8f8ff"
+        height: 24
+        wrap_width: 1050
+        text: |
+          Imagine you are moving through the depth of a console display.
+          Status words will appear in front of you, one at a time: SAFE words (such as CLEAR)
+          and THREAT words (such as DANGER).
+
+          Press Y to move FORWARD, towards the word.
+          Press N to move BACKWARD, away from the word.
+
+          Which words to move towards changes between the two parts of the task:
+          the instructions before each part tell you. Respond as fast and as accurately as you can.
+
+          Press SPACE to continue.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        color: "#e8f8ff"
+        height: 24
+        wrap_width: 1050
+        text: |
+          Imagine you are flying a surveillance air vehicle and looking through its camera.
+          Status words will appear in the middle of the picture, one at a time: SAFE words
+          (such as CLEAR) and THREAT words (such as DANGER).
+
+          Press Y to move FORWARD, towards the word (the camera closes in).
+          Press N to move BACKWARD, away from the word (the camera pulls back).
+
+          Which words to move towards changes between the two parts of the task:
+          the instructions before each part tell you. Respond as fast and as accurately as you can.
+
+          Press SPACE to continue.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  block_intro:
+    components:
+      - id: rule
+        type: variable
+        set:
+          approach: "$'safe' if (order == 1) == (block == 1) else 'threat'"
+          avoid: "$'threat' if approach == 'safe' else 'safe'"
+      - id: intro
+        type: text
+        height: 27
+        wrap_width: 1100
+        color: "#e8f8ff"
+        text: "$f\"{'Practice for part ' + str(block) if phase == 'practice' else 'Part ' + str(block) + ': the real trials'}\\n\\nMove FORWARD (Y) towards {approach.upper()} words.\\nMove BACKWARD (N) away from {avoid.upper()} words.\\n\\nPress SPACE to start.\""
+      - {id: ready, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - id: cond
+        type: variable
+        set:
+          move_dir: 0
+          movement: "$'approach' if valence == approach else 'avoid'"
+          compatible: "$1 if approach == 'safe' else 0"
+          corr_key: "$'y' if valence == approach else 'n'"
+          shown_theme: $theme
+      # uav: the camera picture, drawn 1/step times the screen so that a step backward still fills the screen; it
+      # grows (forward) or shrinks (backward) by one step during the 'move' screen, where move_dir is 1 or -1
+      - &cam {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_05_farmland_ir.jpg,
+              size: "$[1280 / step * (1 / step) ** (move_dir * min(t / 0.5, 1)), 720 / step * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &ret {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_cross.png, size: [240, 240], opacity: 0.7}
+      # c2: frames in depth, in console colours; they grow (forward) or shrink (backward) by one step during the
+      # 'move' screen. One frame nearer than the screen edge comes into view when you step back.
+      - &fout {id: frame_near, type: shape, if: "$theme == 'c2'", shape: rect, fill: transparent, line_color: "#2f86a8", line_width: 7,
+             size: "$[1240 / step * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 / step * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f0 {id: frame0, type: shape, if: "$theme == 'c2'", shape: rect, fill: transparent, line_color: "#2a7898", line_width: 6,
+             size: "$[1240 * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f1 {id: frame1, type: shape, if: "$theme == 'c2'", shape: rect, fill: transparent, line_color: "#256a86", line_width: 5,
+             size: "$[1240 * step * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * step * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f2 {id: frame2, type: shape, if: "$theme == 'c2'", shape: rect, fill: transparent, line_color: "#205c74", line_width: 4,
+             size: "$[1240 * step ** 2 * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * step ** 2 * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f3 {id: frame3, type: shape, if: "$theme == 'c2'", shape: rect, fill: transparent, line_color: "#1b4e62", line_width: 3,
+             size: "$[1240 * step ** 3 * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * step ** 3 * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f4 {id: frame4, type: shape, if: "$theme == 'c2'", shape: rect, fill: transparent, line_color: "#164050", line_width: 2,
+             size: "$[1240 * step ** 4 * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * step ** 4 * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f5 {id: frame5, type: shape, if: "$theme == 'c2'", shape: rect, fill: transparent, line_color: "#12343f", line_width: 2,
+             size: "$[1240 * step ** 5 * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * step ** 5 * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - &f6 {id: frame6, type: shape, if: "$theme == 'c2'", shape: rect, fill: transparent, line_color: "#0e2a33", line_width: 1,
+             size: "$[1240 * step ** 6 * (1 / step) ** (move_dir * min(t / 0.5, 1)), 700 * step ** 6 * (1 / step) ** (move_dir * min(t / 0.5, 1))]"}
+      - {id: fix, type: text, text: "+", color: "#e8f8ff", height: 36, duration: 0.5}
+      - {id: stim, type: text, text: $stimulus, color: "#e8f8ff", font: DejaVu Sans Mono, bold: true, start: 0.5, height: 40}
+      - {id: resp, type: keyboard, keys: [y, n], correct: $corr_key, start: 0.5, duration: 2.5, end_routine: true}
+
+  move:
+    duration: 0.6
+    components:
+      - id: direction
+        type: variable
+        save: false
+        set: {move_dir: "$1 if resp.keys == 'y' else (-1 if resp.keys == 'n' else 0)"}
+      - *cam
+      - *ret
+      - *fout
+      - *f0
+      - *f1
+      - *f2
+      - *f3
+      - *f4
+      - *f5
+      - *f6
+      # the word moves with you: drawn a little larger (forward) or smaller (backward) every 5 frames (83 ms at 60 Hz)
+      - {id: grow0, type: text, text: $stimulus, color: "#e8f8ff", font: DejaVu Sans Mono, bold: true, start_frame: 0, duration_frames: 5,
+         height: "$40 * (1 / step) ** (move_dir * 0 / 5)"}
+      - {id: grow1, type: text, text: $stimulus, color: "#e8f8ff", font: DejaVu Sans Mono, bold: true, start_frame: 5, duration_frames: 5,
+         height: "$40 * (1 / step) ** (move_dir * 1 / 5)"}
+      - {id: grow2, type: text, text: $stimulus, color: "#e8f8ff", font: DejaVu Sans Mono, bold: true, start_frame: 10, duration_frames: 5,
+         height: "$40 * (1 / step) ** (move_dir * 2 / 5)"}
+      - {id: grow3, type: text, text: $stimulus, color: "#e8f8ff", font: DejaVu Sans Mono, bold: true, start_frame: 15, duration_frames: 5,
+         height: "$40 * (1 / step) ** (move_dir * 3 / 5)"}
+      - {id: grow4, type: text, text: $stimulus, color: "#e8f8ff", font: DejaVu Sans Mono, bold: true, start_frame: 20, duration_frames: 5,
+         height: "$40 * (1 / step) ** (move_dir * 4 / 5)"}
+      - {id: grow5, type: text, text: $stimulus, color: "#e8f8ff", font: DejaVu Sans Mono, bold: true, start_frame: 25,
+         height: "$40 * (1 / step) ** (move_dir * 5 / 5)"}
+      - {id: error_x, type: text, if: "$not resp.corr", text: "$'X' if resp.keys else 'Too slow'", color: "#ff3b30",
+         height: 70, pos: [0, -150]}
+
+  iti:
+    duration: 0.4
+    components:
+      - {id: blank, type: wait}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, color: "#9fe8ff", text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: block1_practice
+    conditions: [{block: 1, phase: practice}]
+    children:
+      - block_intro
+      - loop: trials1_practice
+        conditions: practice_words.csv
+        order: random
+        repeats: 1
+        max_repeat: {valence: 3}
+        children: [trial, move, iti]
+  - loop: block1_test
+    conditions: [{block: 1, phase: test}]
+    children:
+      - block_intro
+      - loop: trials1_test
+        conditions: words.csv
+        order: random
+        repeats: 2
+        max_repeat: {valence: 3}
+        children: [trial, move, iti]
+  - loop: block2_practice
+    conditions: [{block: 2, phase: practice}]
+    children:
+      - block_intro
+      - loop: trials2_practice
+        conditions: practice_words.csv
+        order: random
+        repeats: 1
+        max_repeat: {valence: 3}
+        children: [trial, move, iti]
+  - loop: block2_test
+    conditions: [{block: 2, phase: test}]
+    children:
+      - block_intro
+      - loop: trials2_test
+        conditions: words.csv
+        order: random
+        repeats: 2
+        max_repeat: {valence: 3}
+        children: [trial, move, iti]
+  - thanks

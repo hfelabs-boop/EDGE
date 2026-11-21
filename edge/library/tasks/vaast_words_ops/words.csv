@@ -1,0 +1,17 @@
+stimulus,valence
+CLEAR,safe
+SECURE,safe
+NOMINAL,safe
+SAFE,safe
+STABLE,safe
+RESOLVED,safe
+CALM,safe
+NORMAL,safe
+THREAT,threat
+DANGER,threat
+ALARM,threat
+HOSTILE,threat
+HAZARD,threat
+BREACH,threat
+INTRUSION,threat
+EMERGENCY,threat

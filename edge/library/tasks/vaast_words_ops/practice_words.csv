@@ -1,0 +1,9 @@
+stimulus,valence
+OKAY,safe
+STEADY,safe
+ROUTINE,safe
+QUIET,safe
+WARNING,threat
+INCOMING,threat
+MAYDAY,threat
+FIRE,threat

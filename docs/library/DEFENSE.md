@@ -174,3 +174,28 @@ the **telemetry overlay** (monospace text in the corners: `ALT … m  HDG …  S
 The spectrum and waterfall pictures have their data area at pixels x 70-1250, y 50-690 (from the top left of the
 1280x720 picture; `plot_area` in `kit.yaml`), which is x -570 to 610, y 310 to -330 in EDGE's centred pixel
 coordinates. Channels are labelled CH 0-100 in relative units: they are not real frequencies.
+
+## Adaptations of decision, language, motor and problem-solving tasks
+
+Fourteen adaptations keep the design, keys and measures of their classic task and change only what the stimuli
+stand for. The first theme listed is the default.
+
+| adaptation | themes | what the operator sees |
+|---|---|---|
+| `bart_ops` | c2, uav | Keeps a patrol or a surveillance air vehicle on station pass by pass for coverage points. The datalink can be lost at any pass, like the balloon's burst. |
+| `igt_ops` | c2, uav | Chooses among four patrol routes or sensor packages A-D with the hidden payoff schedules of the four decks. |
+| `iat2_ops` | c2, ew | Sorts Own systems vs Other systems (friendly vs hostile track symbols, or named emitters) and Reliable vs Unreliable status words. The categories are about systems only. |
+| `ldt_ops` | c2, uav | Decides whether a string in an incoming message line is a real message word or a malformed one. |
+| `pacedreading1_ops`, `pacedreading2_ops`, `pacedreading3_ops` | c2, uav | Reads short fictional situation reports and orders (subject- vs object-relative) on a message terminal, then answers a question about each. |
+| `mentalrotation_ops` | c2, uav | Judges same vs mirrored for area outlines on the plot or vehicles seen from above. |
+| `deary_liewald_ops` | c2, video | Responds to an alert in one of four places: a hostile track in a sector panel, or a target box on a camera feed turning red. |
+| `digit_substitution_ops` | c2, ew | Types the code of each track symbol or emitter mark, using a code table. |
+| `fitts_ops` | uav, video | Moves the cursor from the reticle's centre onto rounded-rectangle target boxes of different widths and distances. |
+| `tower_hanoi_ops` | c2, uav | Re-orders a stack of tasked assets (or waiting air vehicles) between three holding points under the Tower of Hanoi rules. |
+| `vaast_words_ops` | c2, uav | Approaches or avoids status words that signal safety or threat, moving into a console display or through a camera. |
+| `vaast_images_ops` | c2, uav | Approaches or avoids friendly vs hostile track symbols, or vehicles that the tracker has boxed as cleared or hostile. |
+
+Their pictures are kit copies plus a few drawn for the task by its generator: the IAT's numbered tracks, the
+rotation shapes and vehicles, the hopping emitter marks, the Fitts target boxes and the VAAST pictures. Each
+generator is `tools/library/make_<id>.py`; the three reading tasks share `make_reading_ops.py`. The tests are in
+`tests/test_library_ops_decision.py`.

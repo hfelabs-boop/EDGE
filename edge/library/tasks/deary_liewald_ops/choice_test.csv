@@ -1,0 +1,5 @@
+task,phase,box,xpos,corr_key
+choice,test,1,-330,z
+choice,test,2,-110,x
+choice,test,3,110,n
+choice,test,4,330,m

@@ -1,0 +1,145 @@
+name: fitts_ops
+description: >
+  Fitts's law pointing task, operational adaptation (after Fitts, 1954; see MacKenzie, 1992): the same discrete
+  design and measures as the library's `fitts` task, as moving the cursor from the reticle onto a target box. Click
+  the centre of the reticle; a rounded-rectangle target box then appears to the left or right; move onto it and
+  click it as fast and accurately as possible. Target width (20, 40, 80 px) and distance (120, 240, 480 px) are
+  crossed with side: 18 conditions, 2 repetitions each (36 trials) after 4 practice trials. Index of difficulty ID =
+  log2(2D/W), 1.6-5.6 bits. One variable, `theme`, sets the display: uav (a still camera picture with a ring
+  reticle) or video (a looping camera feed with a full-screen crosshair). Main outcome: movement time rising
+  linearly with ID (MT = a + b x ID); hit rate. The fitted intercept and slope are computed at the end.
+
+# The theme switch follows search_ops (see that file): `theme` is the first variable; the display around the
+# reticle and the target box (camera picture or feed, reticle or crosshair) is items guarded with
+# `if: "$theme == ..."`. The target box picture is chosen by its width (target_box_<width>x260.png); trial lists,
+# timing, clickable areas and measures are those of `fitts`.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: uav              # display theme: uav or video
+  pts: []                 # [ID, movement time] of every hit in the test, for the fit at the end
+
+measures:
+  - {id: movement_time, label: Movement time (hits), role: outcome, column: click.rt, trials: "$click.corr == 1",
+     loop: trials, summary: mean, units: s, expect: [0.1, 3]}
+  - {id: hit_rate, label: Hit rate, role: outcome, column: click.corr, loop: trials, summary: proportion}
+  - {id: slope, label: Fitts slope b (s per bit), role: outcome, column: fit.slope, summary: last, units: s/bit}
+  - {id: intercept, label: Fitts intercept a, role: outcome, column: fit.intercept, summary: last, units: s}
+  - {id: index_of_difficulty, label: Index of difficulty (bits), role: factor, column: index_of_difficulty}
+
+routines:
+  instructions:
+    components:
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        color: "#e8f8ff"
+        height: 24
+        wrap_width: 1050
+        text: |
+          You are the payload operator of a surveillance air vehicle, marking targets on its camera picture
+          with the mouse cursor.
+
+          Click the centre of the reticle in the middle of the picture.
+          A cyan target box then appears on the left or on the right.
+          Move the cursor onto the box and click it, as quickly and as accurately as you can.
+
+          The boxes differ in width and distance. First 4 practice trials.
+
+          Press SPACE to start.
+      - id: text_video
+        type: text
+        if: "$theme == 'video'"
+        color: "#e8f8ff"
+        height: 24
+        wrap_width: 1050
+        text: |
+          You are watching a camera feed and selecting the objects an image tracker marks,
+          with the mouse cursor.
+
+          Click the small circle where the crosshair lines meet, in the middle of the feed.
+          A cyan target box then appears on the left or on the right.
+          Move the cursor onto the box and click it, as quickly and as accurately as you can.
+
+          The boxes differ in width and distance. First 4 practice trials.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  home:
+    components:
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_02_village.jpg, size: [1280, 720]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_circle.png, size: [240, 240]}
+      - {id: feed_video, type: movie, if: "$theme == 'video'", movie: stimuli/feed_01_pan.mp4, size: [1280, 720], loop: true, volume: 0, duration: 30}
+      - {id: cross_video, type: image, if: "$theme == 'video'", image: stimuli/crosshair_full_1280x720.png, size: [1280, 720]}
+      # the start point: the reticle's centre (a small ring that can be clicked)
+      - {id: start_dot, type: shape, shape: circle, radius: 14, fill: "#04121c", opacity: 0.6, line_color: "#d8ffd8", line_width: 2}
+      - {id: home_bar, type: shape, shape: rect, size: [420, 34], pos: [0, -300], fill: "#0a2232", opacity: 0.85}
+      - {id: home_help, type: text, text: "Click the centre of the reticle", font: DejaVu Sans Mono, color: "#9fe8ff", height: 18, pos: [0, -300]}
+      - {id: home_click, type: mouse, clickable: [start_dot], end_routine: true, duration: 30}
+
+  target:
+    components:
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_02_village.jpg, size: [1280, 720]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_circle.png, size: [240, 240]}
+      - {id: feed_video, type: movie, if: "$theme == 'video'", movie: stimuli/feed_01_pan.mp4, size: [1280, 720], loop: true, volume: 0, duration: 5}
+      - {id: cross_video, type: image, if: "$theme == 'video'", image: stimuli/crosshair_full_1280x720.png, size: [1280, 720]}
+      # everything outside the box counts as a miss (listed first, so the box wins where they overlap)
+      - {id: miss_area, type: shape, shape: rect, size: [1280, 720], fill: transparent}
+      - {id: bar, type: image, image: "$f'stimuli/target_box_{width}x260.png'", size: "$[width, 260]", pos: "$[side * distance, 0]"}
+      - {id: click, type: mouse, clickable: [miss_area, bar], correct: bar, track: true, end_routine: true, duration: 5}
+      - id: collect
+        type: variable
+        when: end
+        set:
+          pts: "$pts + [[index_of_difficulty, click.rt]] if phase == 'test' and click.corr == 1 else pts"
+          shown_theme: $theme
+
+  feedback:
+    duration: 0.5
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$'' if click.corr else ('Too slow' if click.clicked is None else 'Missed')"
+        color: "#ff3b30"
+
+  ready:
+    components:
+      - {id: ready_text, type: text, color: "#e8f8ff", height: 26, text: "Practice done. Now the real trials.\n\nPress SPACE to start."}
+      - {id: ready_key, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    components:
+      # least-squares line through (ID, movement time) of every hit: MT = intercept + slope x ID
+      - id: fit
+        type: variable
+        set:
+          n: $len(pts)
+          mean_id: "$sum([p[0] for p in pts]) / len(pts) if pts else None"
+          mean_mt: "$sum([p[1] for p in pts]) / len(pts) if pts else None"
+          slope: "$round(sum([(p[0] - fit.mean_id) * (p[1] - fit.mean_mt) for p in pts]) / sum([(p[0] - fit.mean_id) ** 2 for p in pts]), 4) if len(set([p[0] for p in pts])) > 1 else None"
+          intercept: "$round(fit.mean_mt - fit.slope * fit.mean_id, 4) if fit.slope is not None else None"
+      - id: bye
+        type: text
+        color: "#e8f8ff"
+        height: 28
+        text: "$f'Finished. Thank you!\\n\\nYour movement time = {fit.intercept} s + {fit.slope} s per bit of difficulty.\\n\\nPress SPACE to end.' if fit.slope is not None else 'Finished. Thank you!\\n\\nPress SPACE to end.'"
+      - {id: done, type: keyboard, keys: [space], end_routine: true, duration: 15}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: fitts_practice.csv
+    order: random
+    children: [home, target, feedback]
+  - ready
+  - loop: trials
+    conditions: fitts_trials.csv
+    order: random
+    repeats: 2
+    children: [home, target, feedback]
+  - thanks

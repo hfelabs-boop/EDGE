@@ -1,0 +1,4 @@
+title,phase,n_disks,start_peg,goal_peg,min_moves
+Problem 1,test,3,0,2,7
+Problem 2,test,4,0,2,15
+Problem 3,test,4,0,1,15

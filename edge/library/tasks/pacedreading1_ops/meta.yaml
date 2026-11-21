@@ -1,0 +1,46 @@
+id: pacedreading1_ops
+title: Self-paced reading, whole sentence (operational)
+category: Language
+summary: Read short situation reports at your own pace on a message display; the time spent on each report shows how hard
+  it is to process.
+description: >-
+  The library's whole-sentence self-paced reading task with operator displays. Each report appears whole after a cue; the
+  operator presses SPACE when it has been read (max 30 s), then answers a yes/no question about it (Y / N). 2 practice reports
+  with feedback, then 20 reports in random order. Each report has a subject-relative and an object-relative version with
+  the same words; each participant reads half the items in each version (alternating with the participant number). Main
+  outcome: reading time per report and per word for object- vs subject-relative reports (object relatives take longer),
+  and comprehension accuracy.
+measures:
+- sentence reading time by structure
+- reading time per word
+- comprehension accuracy
+duration_min: 4
+input: keyboard
+languages:
+- en
+variant_of: pacedreading1
+domain: defense
+themes:
+- c2
+- uav
+adaptation: >-
+  The sentences of the classic task become short fictional situation reports and orders ("The patrol that the convoy relieved
+  reached checkpoint BRAVO at dawn."), built exactly like the classic items: the same words in a subject-relative and an
+  object-relative version, the embedded verb at word 3 or 5 and the main verb at word 6, and a yes/no question about the
+  main clause with the same answer in both versions. Design, keys, timing, word regions and measures stay the same. c2:
+  the reports appear on the message terminal of Sector BRAVO (a console panel with a header line over a faint tactical map).
+  uav: they appear in the message window of a surveillance air vehicle's payload station, over its camera picture. Vehicles,
+  stations, teams and checkpoints are generic and fictional.
+references:
+- 'Just, M. A., Carpenter, P. A., & Woolley, J. D. (1982). Paradigms and processes in reading comprehension. Journal of
+  Experimental Psychology: General, 111(2), 228–238.'
+- 'Jegerski, J. (2014). Self-paced reading. In J. Jegerski & B. VanPatten (Eds.), Research methods in second language psycholinguistics
+  (pp. 20–49). New York: Routledge.'
+- 'King, J., & Just, M. A. (1991). Individual differences in syntactic processing: The role of working memory. Journal of
+  Memory and Language, 30(5), 580–602.'
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/pacedreading1.html
+notes: >-
+  Switch the display with the variable `theme` (c2, uav). The 20 items and 2 practice reports are written by tools/library/make_reading_ops.py
+  (the same lists for all three operational reading tasks); edit them there and re-run it. Reading research usually needs
+  more items per condition than this short version; add items in the same pattern.

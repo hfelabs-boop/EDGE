@@ -1,0 +1,21 @@
+item,practice,subject_version,object_version,question,answer
+1,0,The patrol that relieved the convoy reached checkpoint BRAVO at dawn.,The patrol that the convoy relieved reached checkpoint BRAVO at dawn.,Did the patrol reach the checkpoint?,y
+2,0,The tanker that refuelled the escort returned to base before noon.,The tanker that the escort refuelled returned to base before noon.,Did the escort return to base?,n
+3,0,The drone that followed the truck lost the signal near the bridge.,The drone that the truck followed lost the signal near the bridge.,Did the drone lose the signal?,y
+4,0,The tug that towed the barge entered the harbour after midnight.,The tug that the barge towed entered the harbour after midnight.,Did the barge enter the harbour?,n
+5,0,The helicopter that guided the ambulance landed in the field at sunset.,The helicopter that the ambulance guided landed in the field at sunset.,Did the helicopter land in the field?,y
+6,0,The aircraft that tracked the drone reported a fault at 0400.,The aircraft that the drone tracked reported a fault at 0400.,Did the drone report a fault?,n
+7,0,The team that contacted the outpost requested more water and fuel.,The team that the outpost contacted requested more water and fuel.,Did the team request water and fuel?,y
+8,0,The vehicle that overtook the column stopped at the river crossing.,The vehicle that the column overtook stopped at the river crossing.,Did the column stop at the crossing?,n
+9,0,The station that warned the ship changed its watch plan twice.,The station that the ship warned changed its watch plan twice.,Did the station change its watch plan?,y
+10,0,The fighter that escorted the transport turned north over the coast.,The fighter that the transport escorted turned north over the coast.,Did the transport turn north?,n
+11,0,The squad that supported the platoon crossed the ridge without delay.,The squad that the platoon supported crossed the ridge without delay.,Did the squad cross the ridge?,y
+12,0,The crew that called the tower cancelled the second flight.,The crew that the tower called cancelled the second flight.,Did the tower cancel the flight?,n
+13,0,The tower that alerted the station sent a weather report to all units.,The tower that the station alerted sent a weather report to all units.,Did the tower send a weather report?,y
+14,0,The ship that signalled the ferry anchored outside the port.,The ship that the ferry signalled anchored outside the port.,Did the ferry anchor outside the port?,n
+15,0,The operator that briefed the pilot updated the route at once.,The operator that the pilot briefed updated the route at once.,Did the operator update the route?,y
+16,0,The truck that passed the tractor blocked the road for an hour.,The truck that the tractor passed blocked the road for an hour.,Did the tractor block the road?,n
+17,0,The escort that shadowed the tanker switched off its lights at dusk.,The escort that the tanker shadowed switched off its lights at dusk.,Did the escort switch off its lights?,y
+18,0,The team that met the convoy set up camp near the well.,The team that the convoy met set up camp near the well.,Did the convoy set up camp?,n
+19,0,The pilot that called the controller asked for a new heading.,The pilot that the controller called asked for a new heading.,Did the pilot ask for a new heading?,y
+20,0,The tug that pushed the ferry left the dock at six.,The tug that the ferry pushed left the dock at six.,Did the ferry leave the dock?,n

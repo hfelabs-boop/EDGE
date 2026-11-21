@@ -1,0 +1,44 @@
+id: fitts_ops
+title: Fitts's law pointing task (operational)
+category: Perception and motor
+summary: Move the cursor from the reticle onto target boxes of different widths and distances on a camera picture; movement
+  time grows with the index of difficulty.
+description: >-
+  The library's discrete Fitts task with operator displays. Click the centre of the reticle in the middle of the camera
+  picture; a rounded-rectangle target box (cyan) appears to the left or right; move onto it and click it as fast and accurately
+  as possible (max 5 s; clicks beside it are misses). Width 20, 40 or 80 px x distance 120, 240 or 480 px x side: 18 conditions,
+  each twice (36 trials) after 4 practice trials; index of difficulty log2(2D/W) from 1.6 to 5.6 bits. Main outcome: mean
+  movement time of hits as a linear function of the index of difficulty (Fitts slope b and intercept a, fitted at the end);
+  hit rate.
+measures:
+- movement time by index of difficulty (hits)
+- hit rate
+- Fitts slope b and intercept a
+duration_min: 3
+input: mouse
+languages:
+- en
+variant_of: fitts
+domain: defense
+themes:
+- uav
+- video
+adaptation: >-
+  The start circle and the target bar of the classic task become the reticle's centre and a target box an operator selects
+  with the cursor; widths, distances, timing and measures stay the same. uav: a still camera picture of a village seen from
+  above with a ring reticle in the middle; the box is a cyan ('selected') rounded rectangle 260 px high and as wide as the
+  classic bar. video: the same on a looping camera feed under a full-screen crosshair, as on a video interface where boxes
+  mark tracked objects. Pointing time at a console depends on target size and distance in the same way (Fitts's law), which
+  is why it is used to compare display layouts and input devices. The picture and feed are synthetic and generic.
+references:
+- Fitts, P. M. (1954). The information capacity of the human motor system in controlling the amplitude of movement. Journal
+  of Experimental Psychology, 47(6), 381–391.
+- MacKenzie, I. S. (1992). Fitts' law as a research and design tool in human-computer interaction. Human-Computer Interaction,
+  7(1), 91–139.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/fitts.html
+notes: >-
+  Switch the display with the variable `theme` (uav, video). Sizes are in screen pixels, so the physical sizes depend on
+  the monitor (as in `fitts`). The target boxes are drawn by tools/library/make_fitts_ops.py (the box's outer edge is the
+  picture's edge, so the clickable area is exactly the box); the camera picture, reticle, crosshair and feed come from EDGE's
+  defence kit. The video theme plays a looping feed (in Try it and the builder preview it plays in the browser).

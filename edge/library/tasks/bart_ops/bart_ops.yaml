@@ -1,0 +1,217 @@
+name: bart_ops
+description: >
+  Balloon Analogue Risk Task, operational adaptation (after Lejuez et al., 2002). The same paradigm and measures as
+  the library's `bart` task: 30 sorties instead of 30 balloons. Each press of SPACE keeps the aircraft on station
+  for one more pass and adds 5 coverage points to the sortie; ENTER ends the sortie and banks its points. But the
+  datalink can be lost at any time, and then the sortie's points are lost. Each sortie loses its link at a point
+  drawn at random between 1 and 128 passes (as the balloon's burst point). Main outcome: the adjusted number of
+  passes (mean passes on sorties that kept their link). One variable, `theme`, sets the display: c2 (a patrol on
+  the tactical map whose coverage area grows) or uav (the payload camera, whose surveyed area grows).
+
+# The theme switch follows search_ops (see that file): `theme` is the first variable; the display around the
+# "balloon" is items guarded with `if: "$theme == ..."`; wording that differs is in per-theme lists (`words`).
+# The flow, keys, burst rule and result columns are those of `bart` (the column names balloon_pumps and total_cents
+# are kept so that results compare directly; here they are passes and coverage points).
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2               # display theme: c2 or uav
+  max_pumps: 128          # the link is lost at the latest on this pass
+  cents_per_pump: 5       # coverage points per pass (named as in `bart`)
+  total: 0                # points banked so far
+  pumps: 0                # passes in the current sortie
+  burst_at: 128           # pass on which the current sortie loses its link (drawn anew for every sortie)
+  popped: false
+  collected: false
+  # each theme's words for the pass, the sortie and what is lost
+  words:
+    c2: {pass: pass, extend: one more pass, platform: PATROL 0417, lost: "LINK LOST: the patrol broke off. The points of this sortie are lost."}
+    uav: {pass: orbit, extend: one more orbit, platform: AIR VEHICLE 2, lost: "DATALINK LOST: the recording of this sortie is lost."}
+
+measures:
+  - {id: adjusted_pumps, label: Adjusted passes (sorties that kept their link), role: outcome, column: result.balloon_pumps,
+     trials: $result.exploded == 0, loop: balloons, summary: mean, expect: [0, 128]}
+  - {id: all_pumps, label: Passes on all sorties, role: outcome, column: result.balloon_pumps, loop: balloons, summary: mean}
+  - {id: explosions, label: Sorties that lost their link, role: outcome, column: result.exploded, loop: balloons, summary: sum}
+  - {id: earnings, label: Coverage points banked, role: outcome, column: result.total_cents, loop: balloons, summary: last}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 24
+        wrap_width: 1050
+        text: |
+          You direct an air patrol over Sector BRAVO on the tactical map.
+
+          Every pass the patrol flies (SPACE) adds 5 coverage points to the sortie.
+          When you call the patrol home (ENTER), the sortie's points are banked and the next sortie starts.
+
+          But the patrol's link can be lost at any time! If that happens before you call it home,
+          the sortie's points are lost. Some links fail early, others hold for a long time:
+          you cannot know in advance.
+
+          There are 30 sorties. Try to bank as many points as you can.
+
+          Press SPACE to start.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 24
+        wrap_width: 1050
+        text: |
+          You are the payload operator of a surveillance air vehicle that loiters over an area.
+
+          Every extra orbit (SPACE) widens the surveyed area and adds 5 coverage points to the sortie.
+          When you end the sortie (ENTER), the recording is downloaded, its points are banked
+          and the next sortie starts.
+
+          But the datalink can be lost at any time! If that happens before you end the sortie,
+          the sortie's recording and its points are lost. Some links fail early, others hold for a
+          long time: you cannot know in advance.
+
+          There are 30 sorties. Try to bank as many points as you can.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  new_balloon:
+    duration: 0.6
+    components:
+      # draw this sortie's link-loss point (uniform over 1..max_pumps) and reset the per-sortie state
+      - id: setup
+        type: variable
+        set: {burst_at: "$random.randint(1, max_pumps)", pumps: 0, popped: false, collected: false}
+      - id: next_text
+        type: text
+        height: 28
+        color: "#9fe8ff"
+        text: "$f'Sortie {balloons.n + 1} of {balloons.total}'"
+
+  pump:
+    components:
+      # c2: the map, the patrol's coverage area (grows with every pass) and its track symbol
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - id: balloon
+        type: shape
+        if: "$theme == 'c2'"
+        shape: ellipse
+        size: "$[60 + pumps * 3.0, 50 + pumps * 2.4]"
+        pos: [-120, -20]
+        fill: "#80e0ff"
+        opacity: 0.35
+        line_color: "#80e0ff"
+        line_width: 2
+      - {id: patrol_c2, type: image, if: "$theme == 'c2'", image: stimuli/friendly_air_48.png, size: [48, 48], pos: [-120, -20]}
+      - {id: label_c2, type: text, if: "$theme == 'c2'", font: DejaVu Sans Mono, height: 16, color: "#80e0ff", pos: [-120, 20],
+         text: "$f'PATROL 0417  PASS {pumps}'"}
+      # uav: the camera picture, the surveyed area (grows with every orbit), the reticle and telemetry
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_03_forest.jpg, size: [1280, 720]}
+      - id: area_uav
+        type: shape
+        if: "$theme == 'uav'"
+        shape: rect
+        size: "$[70 + pumps * 4.2, 50 + pumps * 2.9]"
+        pos: [-120, -20]
+        fill: "#00e5ff"
+        opacity: 0.18
+        line_color: "#00e5ff"
+        line_width: 3
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_brackets.png, size: [160, 160], pos: [-120, -20]}
+      - {id: tel_uav, type: text, if: "$theme == 'uav'", font: DejaVu Sans Mono, height: 17, color: "#d8ffd8", pos: [-400, 330],
+         text: "$f'ALT 2400 m   ORBIT {pumps}   LINK OK'"}
+      # every theme: the sortie's panel on the right
+      - {id: panel, type: shape, shape: rect, size: [380, 170], pos: [440, 220], fill: "#0a2232", opacity: 0.9, line_color: "#1d4a5e", line_width: 2}
+      - {id: info_balloon, type: text, font: DejaVu Sans Mono, pos: [440, 270], height: 22, color: "#9fe8ff",
+         text: "$f'This sortie: {pumps * cents_per_pump} pts'"}
+      - {id: info_total, type: text, font: DejaVu Sans Mono, pos: [440, 225], height: 22, color: "#9fe8ff", text: "$f'Banked: {total} pts'"}
+      - {id: info_count, type: text, font: DejaVu Sans Mono, pos: [440, 180], height: 18, color: "#6f9fb0",
+         text: "$f'Sortie {balloons.n + 1} of {balloons.total}'"}
+      - {id: keys_bar, type: shape, shape: rect, size: [1280, 40], pos: [0, -310], fill: "#0a2232", opacity: 0.85}
+      - id: keys_help
+        type: text
+        font: DejaVu Sans Mono
+        pos: [0, -310]
+        height: 18
+        color: "#9fe8ff"
+        text: "$'SPACE = ' + words[theme]['extend'] + '        ENTER = end the sortie and bank the points'"
+      - id: resp
+        type: keyboard
+        keys: [space, return]
+        end_routine: true
+      # after the key: count the pass, or note that the sortie ended, then see whether the link was lost
+      - id: update
+        type: variable
+        when: end
+        set:
+          pumps: "$pumps + (1 if resp.keys == 'space' else 0)"
+          collected: "$resp.keys == 'return'"
+          popped: "$resp.keys == 'space' and pumps >= burst_at"
+
+  outcome:
+    duration: 1.5
+    components:
+      - id: result
+        type: variable
+        set:
+          balloon_pumps: $pumps
+          exploded: "$1 if popped else 0"
+          earned_cents: "$0 if popped else pumps * cents_per_pump"
+          total_cents: "$total + (0 if popped else pumps * cents_per_pump)"
+          burst_point: $burst_at
+          shown_theme: $theme
+      - id: bank
+        type: variable
+        set: {total: $result.total_cents}
+      # link lost: a red cross over the place of the coverage area
+      - id: burst
+        type: shape
+        if: $popped
+        shape: polygon
+        pos: [-120, -20]
+        fill: "#ff3b30"
+        vertices: [[-90, 70], [-70, 90], [0, 20], [70, 90], [90, 70], [20, 0], [90, -70], [70, -90], [0, -20], [-70, -90],
+                   [-90, -70], [-20, 0]]
+      - id: message
+        type: text
+        height: 30
+        wrap_width: 1100
+        pos: [0, 200]
+        text: "$words[theme]['lost'] if popped else f'Sortie ended: {result.earned_cents} points banked'"
+        color: "$'#ff3b30' if popped else '#34c759'"
+      - id: total_text
+        type: text
+        font: DejaVu Sans Mono
+        height: 24
+        pos: [0, -300]
+        color: "#9fe8ff"
+        text: "$f'Banked: {total} pts'"
+
+  thanks:
+    components:
+      - id: bye
+        type: text
+        height: 30
+        color: "#9fe8ff"
+        text: "$f'End of the mission. You banked {total} coverage points.\\n\\nThank you. Press SPACE to end.'"
+      - {id: done, type: keyboard, keys: [space], end_routine: true, duration: 10}
+
+flow:
+  - instructions
+  - loop: balloons
+    conditions: [{balloon_size: standard}]
+    repeats: 30
+    children:
+      - new_balloon
+      - loop: pumps_loop
+        conditions: [{step: pump}]
+        repeats: $max_pumps
+        stop_if: $popped or collected
+        children: [pump]
+      - outcome
+  - thanks

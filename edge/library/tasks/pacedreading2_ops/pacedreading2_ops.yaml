@@ -1,0 +1,187 @@
+name: pacedreading2_ops
+description: >
+  Self-paced reading, word by word with a cumulative display, operational adaptation (see Jegerski, 2014): the
+  same paradigm and measures as the library's `pacedreading2` task, with short fictional situation reports and
+  orders. Each press of SPACE adds the next word of the report; earlier words stay on the screen in their places.
+  The time between presses is the reading time of each word. 20 items, each with a subject-relative and an
+  object-relative version (same words, different order); each participant reads half of the items in each version
+  (alternating with the participant number). A yes/no question follows every report. One variable, `theme`, sets
+  the display: c2 (message terminal over the tactical map) or uav (message window over the payload camera picture).
+  Main outcome: word reading times at the embedded verb and the main verb for the two structures; comprehension
+  accuracy.
+
+# The theme switch follows search_ops (see that file): `theme` is the first variable; the display around the text
+# (background, message panel, its header) is items guarded with `if: "$theme == ..."` or looked up per theme
+# (`heads`), and the instructions are one text per theme. Sentence lists, keys, timing, regions and measures are
+# those of the classic task (tools/library/make_reading_ops.py writes the lists).
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2            # display theme: c2 or uav
+  heads: {c2: "SITREP / ORDERS   SECTOR BRAVO", uav: "MESSAGES   AIR VEHICLE 2   LINK OK"}
+  list_no: 0            # 0 or 1, from the participant number: which half of the items is read in which version
+  structure: filler
+  sentence: ""
+  n_words: 1
+  verb_pos: 3           # position of the embedded verb (counting from 0): 3 subject-relative, 5 object-relative
+  pos: -1               # position of the word now on screen
+  nbsp: "\u00a0"        # a no-break space: kept even at the end of a line
+
+measures:
+  - {id: word_rt, label: Reading time per word, role: outcome, column: next.rt, loop: words, summary: median,
+     units: s, expect: [0.1, 10]}
+  - {id: embedded_verb_rt, label: Reading time of the embedded verb, role: outcome, column: next.rt,
+     trials: "$cur.region == 'embedded_verb'", loop: words, summary: mean, units: s}
+  - {id: main_verb_rt, label: Reading time of the main verb, role: outcome, column: next.rt,
+     trials: "$cur.region == 'main_verb'", loop: words, summary: mean, units: s}
+  - {id: comprehension, label: Comprehension accuracy, role: outcome, column: reply.corr, loop: sentences, summary: proportion}
+  - {id: structure, label: Sentence structure (subject / object relative), role: factor, column: structure}
+
+routines:
+  instructions:
+    components:
+      - id: lists
+        type: variable
+        set: {list_no: "$int(''.join([c for c in str(participant) if c.isdigit()]) or '0') % 2"}
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        color: "#e8f8ff"
+        height: 25
+        wrap_width: 1050
+        text: |
+          You are reading situation reports and orders on the message terminal of Sector BRAVO.
+
+          You will read them one word at a time.
+
+          Each time you press SPACE the next word appears; the earlier words stay.
+          Read at your normal pace and press SPACE as soon as you have read each word.
+          After each report there is a short question: press Y for yes or N for no.
+
+          First two practice reports.
+
+          Press SPACE to start.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        color: "#e8f8ff"
+        height: 25
+        wrap_width: 1050
+        text: |
+          You are the payload operator of a surveillance air vehicle. Short reports and orders
+          arrive in the message window over the camera picture.
+
+          You will read them one word at a time.
+
+          Each time you press SPACE the next word appears; the earlier words stay.
+          Read at your normal pace and press SPACE as soon as you have read each word.
+          After each report there is a short question: press Y for yes or N for no.
+
+          First two practice reports.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  prepare:
+    components:
+      # the display around the text: the tactical map (c2) or the camera picture (uav), faint, and the message panel
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720], opacity: 0.3}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_06_desert_dusk.jpg, size: [1280, 720], opacity: 0.45}
+      - {id: panel, type: shape, shape: rect, size: [1270, 300], fill: "#0a2232", opacity: 0.92, line_color: "#1d4a5e", line_width: 2}
+      - {id: head, type: text, font: DejaVu Sans Mono, bold: true, height: 17, color: "#9fe8ff", pos: [0, 128], text: "$heads[theme]"}
+      # which version of this item: alternates over items, and between participants (list_no)
+      - id: setup
+        type: variable
+        set:
+          structure: "$'filler' if practice else ('subject' if (item + list_no) % 2 == 0 else 'object')"
+          sentence: "$object_version if structure == 'object' else subject_version"
+          n_words: $len(sentence.split())
+          verb_pos: "$5 if structure == 'object' else 3"
+          pos: -1
+      - {id: cue, type: text, text: "+", color: "#e8f8ff", height: 40}
+      - {id: cue_help, type: text, text: "Press SPACE for the first word", color: "#7fa8b8", height: 20, pos: [0, -300]}
+      - {id: start_key, type: keyboard, keys: [space], end_routine: true}
+
+  word:
+    components:
+      # the display around the text: the tactical map (c2) or the camera picture (uav), faint, and the message panel
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720], opacity: 0.3}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_06_desert_dusk.jpg, size: [1280, 720], opacity: 0.45}
+      - {id: panel, type: shape, shape: rect, size: [1270, 300], fill: "#0a2232", opacity: 0.92, line_color: "#1d4a5e", line_width: 2}
+      - {id: head, type: text, font: DejaVu Sans Mono, bold: true, height: 17, color: "#9fe8ff", pos: [0, 128], text: "$heads[theme]"}
+      - id: cur
+        type: variable
+        set:
+          pos: $pos + 1
+          word: $sentence.split()[pos]
+          position: $pos
+          region: "$'filler' if structure == 'filler' else ('main_verb' if pos == 6 else ('embedded_verb' if pos == verb_pos else 'other'))"
+      # the words read so far, with blanks of the same length for the words still to come (a fixed-width font keeps
+      # every word in its place; nbsp is a space that is never dropped at the end of a line)
+      - id: line
+        type: text
+        text: "$nbsp.join([w if i <= pos else nbsp * len(w) for i, w in enumerate(sentence.split())])"
+        font: DejaVu Sans Mono
+        color: "#e8f8ff"
+        height: 24
+        wrap_width: 1240
+      - {id: next, type: keyboard, keys: [space], duration: 10, end_routine: true}
+
+  question:
+    components:
+      # the display around the text: the tactical map (c2) or the camera picture (uav), faint, and the message panel
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720], opacity: 0.3}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_06_desert_dusk.jpg, size: [1280, 720], opacity: 0.45}
+      - {id: panel, type: shape, shape: rect, size: [1270, 300], fill: "#0a2232", opacity: 0.92, line_color: "#1d4a5e", line_width: 2}
+      - {id: head, type: text, font: DejaVu Sans Mono, bold: true, height: 17, color: "#9fe8ff", pos: [0, 128], text: "$heads[theme]"}
+      - {id: q, type: text, text: $question, color: "#e8f8ff", height: 30, wrap_width: 1100}
+      - {id: q_help, type: text, text: "Y = yes          N = no", color: "#7fa8b8", height: 22, pos: [0, -120]}
+      - {id: reply, type: keyboard, keys: [y, n], correct: $answer, duration: 15, end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 32
+        text: "$'Correct' if reply.corr else 'Wrong'"
+        color: "$'#34c759' if reply.corr else '#ff3b30'"
+
+  ready:
+    components:
+      - {id: ready_text, type: text, color: "#e8f8ff", height: 26, text: "Now the real reports begin.\n\nPress SPACE to start."}
+      - {id: ready_key, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, color: "#e8f8ff", height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice_items
+    conditions: practice.csv
+    order: sequential
+    children:
+      - prepare
+      - loop: practice_words
+        conditions: [{step: word}]
+        repeats: $n_words
+        children: [word]
+      - question
+      - feedback
+  - ready
+  - loop: sentences
+    conditions: sentences.csv
+    order: random
+    children:
+      - prepare
+      - loop: words
+        conditions: [{step: word}]
+        repeats: $n_words
+        children: [word]
+      - question
+  - thanks
