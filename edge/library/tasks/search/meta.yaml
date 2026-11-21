@@ -1,0 +1,28 @@
+id: search
+title: Visual search
+category: Attention
+summary: Decide whether a red T is present among 4, 8 or 16 letters, in feature and conjunction search.
+description: >
+  Visual search measures how attention scans a display. After a 500 ms fixation cross, 4, 8 or 16 letters
+  appear at random places on a 6 x 4 grid (jittered, randomly rotated). The participant reports as fast
+  as possible whether a red T is present (M) or absent (Z); the display stays until the answer (max 5 s).
+  In feature search the distractors are blue T's, so the target differs by colour alone; in conjunction
+  search they are blue T's and red L's, so only the combination of colour and shape defines it. Target
+  present on half the trials. 12 practice trials with feedback, then 72 test trials (search type x set
+  size x present/absent, 6 each, mixed). The main outcome is the search slope (ms per item) from mean
+  correct RT against set size: near flat for feature search, steep for conjunction search, and about
+  twice as steep on absent as on present trials.
+measures:
+  - RT by search type x set size x target presence (search slopes)
+  - accuracy (misses and false alarms)
+duration_min: 5
+input: keyboard
+languages: [en]
+references:
+  - "Treisman, A. M., & Gelade, G. (1980). A feature-integration theory of attention. Cognitive Psychology, 12, 97-136."
+  - "Treisman, A. (1977). Focused attention in the perception and retrieval of multidimensional stimuli. Perception & Psychophysics, 22, 1-11."
+  - "Wolfe, J. M. (1998). What can 1 million trials tell us about visual search? Psychological Science, 9(1), 33-39."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/search.html"}
+notes: >
+  Each display (places, rotations, letters, colours) is saved in the layout.* columns. Set sizes are rows of
+  search.csv; up to 16 letters are drawn (items item0-item15), so larger sets need more items.

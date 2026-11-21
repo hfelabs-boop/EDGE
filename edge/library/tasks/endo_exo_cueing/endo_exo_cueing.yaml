@@ -1,0 +1,109 @@
+name: endo_exo_cueing
+description: >
+  Endogenous versus exogenous spatial cueing. In one block a central arrow predicts the side of the target
+  (75% valid): attention is moved voluntarily. In the other block one of the two boxes flashes briefly and
+  does not predict the side (50% valid): attention is captured automatically. Cue-target intervals of
+  100 and 600 ms show the different time courses. Block order is counterbalanced by participant number.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: mean, units: s, expect: [0.15, 1.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: cue_type, label: Cue type, role: factor, column: cue_type}
+  - {id: validity, label: Cue validity, role: factor, column: validity}
+  - {id: soa, label: Cue-target interval (s), role: factor, column: soa}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Where is the dot?
+
+          Keep your eyes on the centre of the screen. A dot will appear in the left or right box.
+          Press the LEFT or RIGHT arrow key for the side of the dot, as fast as you can.
+
+          There are two parts. Each starts with a short practice.
+          Press SPACE to continue.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  block_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: >-
+          $('In this part an ARROW in the centre points to one side before the dot appears.\n'
+          'The arrow is right 3 times out of 4, so it pays to follow it.')
+          if cue_type == 'endogenous' else
+          ('In this part one of the boxes FLASHES briefly before the dot appears.\n'
+          'The flash does not tell you where the dot will be: it is right only half of the time.')
+      - {id: more, type: text, height: 24, pos: [0, -150], text: "Practice first (8 trials, with feedback). Press SPACE."}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - {id: text, type: text, height: 26, text: "Practice done. 48 test trials follow without feedback. Press SPACE to start."}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: box_l, type: shape, shape: rect, size: [110, 110], pos: [-300, 0], fill: transparent, line_color: white, line_width: 3}
+      - {id: box_r, type: shape, shape: rect, size: [110, 110], pos: [300, 0], fill: transparent, line_color: white, line_width: 3}
+      - {id: fix, type: text, text: "+", height: 36, duration: 1.0, marker: {offset: "$f'cue_{cue_type}_{cue_side}'"}}
+      - {id: fix_after, type: text, text: "+", height: 36, start: 1.0, if: "$cue_type == 'exogenous'"}
+      # endogenous cue: a central arrow that stays on until the response
+      - {id: cue_arrow, type: text, text: $cue, height: 60, start: 1.0, if: "$cue_type == 'endogenous'"}
+      # exogenous cue: the box on one side flashes (thick outline) for 100 ms
+      - {id: cue_flash, type: shape, shape: rect, size: [124, 124], pos: "$[cue_x, 0]", fill: transparent,
+         line_color: white, line_width: 9, start: 1.0, duration: 0.1, if: "$cue_type == 'exogenous'"}
+      - {id: target, type: shape, shape: circle, radius: 18, fill: white, pos: "$[target_x, 0]", start: $1.0 + soa,
+         marker: "$f'target_{validity}'"}
+      - {id: resp, type: keyboard, keys: [left, right], correct: $correct_key, start: $1.0 + soa, duration: 1.5,
+         end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong side')"
+        color: "$'#55dd55' if resp.corr else '#ff5555'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: blocks
+    conditions: blocks.csv
+    order: counterbalance
+    children:
+      - block_intro
+      - loop: practice
+        conditions: $trial_file
+        order: random
+        stop_if: $practice.n >= 7
+        children: [trial, feedback]
+      - main_intro
+      - loop: main
+        conditions: $trial_file
+        order: random
+        repeats: 3
+        children: [trial, iti]
+  - thanks

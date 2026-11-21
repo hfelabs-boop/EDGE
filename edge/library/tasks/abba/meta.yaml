@@ -1,0 +1,26 @@
+id: abba
+title: ABBA reversed-compatibility task
+category: Cognitive control
+summary: Planning a left or right action slows a quick second action on the same side (action-feature binding).
+description: >
+  The ABBA paradigm shows that planning an action ties up its features. On each trial an arrow (1 s)
+  tells the participant which response to prepare (A: Q for left, P for right) without executing it.
+  After a 1 s blank a coloured circle (200 ms) requires an immediate speeded response B (blue: F with the
+  left hand; yellow: J with the right hand). After B, a question mark prompts the planned response A.
+  When A and B share a side (compatible) B is slower and more error-prone than when they do not
+  (incompatible): the reverse of the usual compatibility effect. 8 practice trials with feedback, then 48
+  test trials (each of the four A x B combinations 12 times). The main outcome is the B reaction time,
+  compatible minus incompatible, on trials where both responses were correct.
+measures:
+  - RT of response B, compatible vs incompatible (positive difference = ABBA effect)
+  - accuracy of responses B and A
+duration_min: 6
+input: keyboard
+languages: [en]
+references:
+  - "Stoet, G., & Hommel, B. (1999). Action planning and the temporal binding of response codes. Journal of Experimental Psychology: Human Perception and Performance, 25, 1625-1640."
+  - "Stoet, G., & Hommel, B. (2002). Interaction between feature binding in perception and action. In W. Prinz & B. Hommel (Eds.), Common mechanisms in perception and action: Attention and Performance XIX (pp. 538-552). Oxford: Oxford University Press."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/abba.html"}
+notes: >
+  Simplified from the original, where response A was a short sequence of key presses; here A is one key
+  press on the same side as the arrow. Keys and circle colours are columns of abba.csv.

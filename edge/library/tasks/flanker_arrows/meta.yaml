@@ -1,0 +1,24 @@
+id: flanker_arrows
+title: Flanker task (arrows)
+category: Inhibition and conflict
+summary: Press the arrow key matching the middle arrow of a row while ignoring the arrows beside it.
+description: >
+  The arrow version of the flanker task measures interference from irrelevant information next to the
+  item that matters. Each trial shows five symbols; the participant reports the direction of the middle
+  arrow with the left or right arrow key. The four flankers point the same way (congruent), the opposite
+  way (incongruent) or are dashes without a direction (neutral). A 500 ms fixation cross precedes the row,
+  which stays until the answer (max 2 s), followed by a 500 ms blank. 12 practice trials with feedback,
+  then 96 test trials (6 combinations x 16, random order, a condition at most 3 times in a row). The
+  flanker effect is the RT (and error) difference between incongruent and congruent trials.
+measures:
+  - RT by flanker condition (flanker effect = incongruent minus congruent)
+  - accuracy by flanker condition
+duration_min: 4
+input: keyboard
+languages: [en]
+variant_of: flanker
+references:
+  - "Eriksen, B. A., & Eriksen, C. W. (1974). Effects of noise letters upon the identification of a target letter in a nonsearch task. Perception & Psychophysics, 16, 143-149."
+  - "Stoffels, E. J., & van der Molen, M. W. (1988). Effects of visual and auditory noise on visual choice reaction time in a continuous-flow paradigm. Perception & Psychophysics, 44, 7-14."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/flanker_arrows.html"}
+notes: Arrows are drawn as text characters (U+2190, U+2192); a font without them shows boxes.

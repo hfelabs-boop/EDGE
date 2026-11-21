@@ -1,0 +1,27 @@
+id: dotprobe
+title: Dot-probe task
+category: Social and implicit
+summary: Measures attentional bias toward threat words by how fast a dot is found in their place.
+description: >
+  The dot-probe task measures whether emotional material draws attention. After a 500 ms fixation cross,
+  two words appear for 500 ms, one 80 px above and one below fixation; on test trials one is threat-related
+  (e.g. "failure") and the other a neutral word of the same length (e.g. "kitchen"). A dot then appears at
+  the position of one word and the participant presses UP or DOWN for its location (max 2 s). Every pair
+  appears four times (threat word top/bottom x dot top/bottom), so the dot is equally often at the threat
+  and the neutral word. 8 practice trials with neutral pairs and feedback, then 80 test trials (20 pairs).
+  The attentional bias index is the mean correct RT on incongruent trials (dot at the neutral word) minus
+  congruent trials (dot at the threat word); positive values mean vigilance toward threat.
+measures:
+  - RT congruent vs incongruent (attentional bias index = incongruent - congruent)
+  - accuracy
+duration_min: 4
+input: keyboard
+languages: [en]
+references:
+  - "MacLeod, C., Mathews, A., & Tata, P. (1986). Attentional bias in emotional disorders. Journal of Abnormal Psychology, 95, 15-20."
+  - "Putwain, D. W., Langdale, H. C., Woods, K. A., & Nicholson, L. J. (2011). Developing and piloting a dot-probe measure of attentional bias for test anxiety. Learning and Individual Differences, 21(4), 478-482."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/dotprobe.html"}
+notes: >
+  The word pairs were chosen for this library (matched on length only, not on frequency); for a study,
+  replace them in dotprobe.csv with a validated set for your population (e.g. test-anxiety words) and keep the
+  four rows per pair. Picture versions work the same way with image items in place of the words.

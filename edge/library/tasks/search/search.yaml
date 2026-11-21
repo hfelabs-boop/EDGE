@@ -1,0 +1,126 @@
+name: search
+description: >
+  Visual search. A display of 4, 8 or 16 letters appears; the participant decides as fast as possible
+  whether a red T is among them. In feature search the other letters are blue T's (the target differs by
+  colour alone and pops out); in conjunction search they are blue T's and red L's (only the combination
+  of colour and shape identifies the target). Search time grows with the number of letters in
+  conjunction search but hardly in feature search.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  red: "#ff4040"
+  blue: "#4a90ff"
+  # 24 places on a 6 x 4 grid; each display uses a random selection, shifted by up to 25 px
+  grid: [[-375, 210], [-225, 210], [-75, 210], [75, 210], [225, 210], [375, 210], [-375, 70], [-225, 70], [-75, 70], [75, 70], [225, 70], [375, 70], [-375, -70], [-225, -70], [-75, -70], [75, -70], [225, -70], [375, -70], [-375, -210], [-225, -210], [-75, -210], [75, -210], [225, -210], [375, -210]]
+  pos: [[-375, 210], [-225, 210], [-75, 210], [75, 210], [225, 210], [375, 210], [-375, 70], [-225, 70], [-75, 70], [75, 70], [225, 70], [375, 70], [-375, -70], [-225, -70], [-75, -70], [75, -70]]
+  letters: [T, L, T, L, T, L, T, L, T, L, T, L, T, L, T, L]
+  colors: ["#ff4040", "#ff4040", "#4a90ff", "#ff4040", "#4a90ff", "#ff4040", "#4a90ff", "#ff4040", "#4a90ff", "#ff4040", "#4a90ff", "#ff4040", "#4a90ff", "#ff4040", "#4a90ff", "#ff4040"]
+  oris: [0, 90, 180, 270, 0, 90, 180, 270, 0, 90, 180, 270, 0, 90, 180, 270]
+
+measures:
+  - {id: rt, label: Search time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: mean, units: s, expect: [0.25, 4.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: search_type, label: Search type, role: factor, column: search_type}
+  - {id: set_size, label: Number of letters, role: factor, column: set_size}
+  - {id: target, label: Target present or absent, role: factor, column: target}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Find the red T
+
+          A group of letters will appear. Is there a RED T among them?
+
+          yes, there is a red T  ->  press M
+          no red T               ->  press Z
+
+          The letters may be turned sideways or upside down. Answer as fast as you can,
+          but try not to make mistakes. First 12 practice trials with feedback.
+          Press SPACE to begin.
+      - {id: example, type: text, text: T, color: $red, height: 60, bold: true, pos: [0, -250]}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Practice done. The test has 72 trials (about 4 minutes) without feedback.
+
+          red T there -> M        no red T -> Z
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      # make this display: random places, then the letters. Item 0 is the target on target-present trials;
+      # in conjunction search the other items alternate red L / blue T, in feature search all are blue T.
+      - id: layout
+        type: variable
+        set:
+          pos: "$[[x + random.randint(-25, 25), y + random.randint(-25, 25)] for x, y in random.sample(grid, 16)]"
+          oris: "$[random.choice([0, 90, 180, 270]) for i in range(16)]"
+          letters: "$['T' if (target == 'present' and i == 0) or search_type == 'feature' or i % 2 == 1 else 'L' for i in range(16)]"
+          colors: "$[red if (target == 'present' and i == 0) or (search_type == 'conjunction' and i % 2 == 0) else blue for i in range(16)]"
+      - {id: fix, type: text, text: "+", height: 36, duration: 0.5}
+      - {id: item0, type: text, marker: "$f'display_{search_type}_{set_size}_{target}'", text: "$letters[0]", color: "$colors[0]", ori: "$oris[0]", pos: "$pos[0]", height: 44, bold: true, start: 0.5}
+      - {id: item1, type: text, text: "$letters[1]", color: "$colors[1]", ori: "$oris[1]", pos: "$pos[1]", height: 44, bold: true, start: 0.5}
+      - {id: item2, type: text, text: "$letters[2]", color: "$colors[2]", ori: "$oris[2]", pos: "$pos[2]", height: 44, bold: true, start: 0.5}
+      - {id: item3, type: text, text: "$letters[3]", color: "$colors[3]", ori: "$oris[3]", pos: "$pos[3]", height: 44, bold: true, start: 0.5}
+      - {id: item4, type: text, text: "$letters[4]", color: "$colors[4]", ori: "$oris[4]", pos: "$pos[4]", height: 44, bold: true, start: 0.5, if: "$set_size > 4"}
+      - {id: item5, type: text, text: "$letters[5]", color: "$colors[5]", ori: "$oris[5]", pos: "$pos[5]", height: 44, bold: true, start: 0.5, if: "$set_size > 5"}
+      - {id: item6, type: text, text: "$letters[6]", color: "$colors[6]", ori: "$oris[6]", pos: "$pos[6]", height: 44, bold: true, start: 0.5, if: "$set_size > 6"}
+      - {id: item7, type: text, text: "$letters[7]", color: "$colors[7]", ori: "$oris[7]", pos: "$pos[7]", height: 44, bold: true, start: 0.5, if: "$set_size > 7"}
+      - {id: item8, type: text, text: "$letters[8]", color: "$colors[8]", ori: "$oris[8]", pos: "$pos[8]", height: 44, bold: true, start: 0.5, if: "$set_size > 8"}
+      - {id: item9, type: text, text: "$letters[9]", color: "$colors[9]", ori: "$oris[9]", pos: "$pos[9]", height: 44, bold: true, start: 0.5, if: "$set_size > 9"}
+      - {id: item10, type: text, text: "$letters[10]", color: "$colors[10]", ori: "$oris[10]", pos: "$pos[10]", height: 44, bold: true, start: 0.5, if: "$set_size > 10"}
+      - {id: item11, type: text, text: "$letters[11]", color: "$colors[11]", ori: "$oris[11]", pos: "$pos[11]", height: 44, bold: true, start: 0.5, if: "$set_size > 11"}
+      - {id: item12, type: text, text: "$letters[12]", color: "$colors[12]", ori: "$oris[12]", pos: "$pos[12]", height: 44, bold: true, start: 0.5, if: "$set_size > 12"}
+      - {id: item13, type: text, text: "$letters[13]", color: "$colors[13]", ori: "$oris[13]", pos: "$pos[13]", height: 44, bold: true, start: 0.5, if: "$set_size > 13"}
+      - {id: item14, type: text, text: "$letters[14]", color: "$colors[14]", ori: "$oris[14]", pos: "$pos[14]", height: 44, bold: true, start: 0.5, if: "$set_size > 14"}
+      - {id: item15, type: text, text: "$letters[15]", color: "$colors[15]", ori: "$oris[15]", pos: "$pos[15]", height: 44, bold: true, start: 0.5, if: "$set_size > 15"}
+      - {id: resp, type: keyboard, keys: [m, z], correct: $correct_key, start: 0.5, duration: 5.0, end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#55dd55' if resp.corr else '#ff5555'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: search.csv
+    order: random
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: search.csv
+    order: random
+    repeats: 6
+    children: [trial, iti]
+  - thanks

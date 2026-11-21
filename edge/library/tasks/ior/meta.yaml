@@ -1,0 +1,29 @@
+id: ior
+title: Inhibition of return (IOR)
+category: Attention
+summary: An uninformative flash speeds detection at its location after 100 ms but slows it after 800 ms.
+description: >
+  Inhibition of return is the bias against re-attending a location that was recently attended. Three
+  outlined boxes are shown (left, centre, right). After 1 s one side box flashes for 100 ms; this cue does
+  not predict the target side (50% valid). On long-interval trials the centre box flashes 300 ms after the
+  cue to bring attention back to fixation. A white dot then appears in the cued or the uncued box 100 ms
+  or 800 ms after cue onset, and the participant presses SPACE as soon as they detect it (max 1.2 s).
+  20% of trials are catch trials without a dot, which discourage anticipations. 10 practice trials with
+  feedback, then 80 test trials. The main outcome is the cueing effect (uncued minus cued RT) at each
+  interval: positive (facilitation) at 100 ms, negative (IOR) at 800 ms.
+measures:
+  - detection RT cued vs uncued at short and long cue-target intervals
+  - false alarms on catch trials
+duration_min: 5
+input: keyboard
+languages: [en]
+references:
+  - "Posner, M. I., & Cohen, Y. (1984). Components of visual orienting. In H. Bouma & D. G. Bouwhuis (Eds.), Attention and Performance X: Control of language processes (pp. 531-556). Hillsdale, NJ: Erlbaum."
+  - "Klein, R. M. (2000). Inhibition of return. Trends in Cognitive Sciences, 4, 138-146."
+  - "Pratt, J., & Abrams, R. A. (1999). Inhibition of return in discrimination tasks. Journal of Experimental Psychology: Human Perception and Performance, 25, 229-242."
+  - "Abrams, R. A., & Dobkin, R. S. (1994). Inhibition of return: Effects of attentional cuing on eye movement latencies. Journal of Experimental Psychology: Human Perception and Performance, 20, 467-477."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/ior.html"}
+notes: >
+  This is the manual detection version; the cited Abrams & Dobkin studies measured eye movements (an eye
+  tracker and a gaze_roi item could record saccade latencies instead). Valid/invalid/catch and the
+  intervals are rows of ior.csv.

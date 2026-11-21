@@ -1,0 +1,92 @@
+name: cueing
+description: >
+  Posner spatial cueing. Two boxes sit left and right of the centre. An arrow in the centre points to one
+  box; 500 ms later a dot appears in one of the boxes and the participant presses the arrow key for its
+  side. The arrow points to the correct side on 80% of trials (valid) and to the wrong side on 20% (invalid).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  soa: 0.5             # time from the arrow cue to the dot (s)
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: mean, units: s, expect: [0.15, 1.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: validity, label: Cue validity, role: factor, column: validity}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Where is the dot?
+
+          Keep your eyes on the centre of the screen. A dot will appear in the left or right box.
+          Press the LEFT or RIGHT arrow key for the side of the dot, as fast as you can.
+
+          Just before the dot, an arrow in the centre points to one side.
+          The arrow is usually right, but not always.
+
+          First 10 practice trials with feedback. Press SPACE to begin.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Practice done. The test has 80 trials (about 4 minutes) without feedback.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: box_l, type: shape, shape: rect, size: [110, 110], pos: [-300, 0], fill: transparent, line_color: white, line_width: 3}
+      - {id: box_r, type: shape, shape: rect, size: [110, 110], pos: [300, 0], fill: transparent, line_color: white, line_width: 3}
+      - {id: fix, type: text, text: "+", height: 36, duration: 1.0}
+      - {id: cue_arrow, type: text, text: $cue, height: 60, start: 1.0, marker: "$f'cue_{cue_side}'"}
+      - {id: target, type: shape, shape: circle, radius: 18, fill: white, pos: "$[target_x, 0]", start: $1.0 + soa,
+         marker: "$f'target_{validity}'"}
+      - {id: resp, type: keyboard, keys: [left, right], correct: $correct_key, start: $1.0 + soa, duration: 1.5,
+         end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong side')"
+        color: "$'#55dd55' if resp.corr else '#ff5555'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: cueing.csv
+    order: random
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: cueing.csv
+    order: random
+    repeats: 8
+    children: [trial, iti]
+  - thanks

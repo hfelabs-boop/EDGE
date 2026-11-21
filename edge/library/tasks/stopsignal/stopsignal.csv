@@ -1,0 +1,9 @@
+arrow,direction,trial_type,correct_key
+←,left,go,left
+←,left,go,left
+←,left,go,left
+→,right,go,right
+→,right,go,right
+→,right,go,right
+←,left,stop,none
+→,right,stop,none

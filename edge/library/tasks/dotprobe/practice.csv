@@ -1,0 +1,17 @@
+pair_type,threat_word,neutral_word,threat_pos,probe_pos,congruence,top_word,bottom_word,probe_y,correct_key
+neutral,spoon,ladder,top,top,neutral,spoon,ladder,80,up
+neutral,spoon,ladder,top,bottom,neutral,spoon,ladder,-80,down
+neutral,spoon,ladder,bottom,top,neutral,ladder,spoon,80,up
+neutral,spoon,ladder,bottom,bottom,neutral,ladder,spoon,-80,down
+neutral,coffee,folder,top,top,neutral,coffee,folder,80,up
+neutral,coffee,folder,top,bottom,neutral,coffee,folder,-80,down
+neutral,coffee,folder,bottom,top,neutral,folder,coffee,80,up
+neutral,coffee,folder,bottom,bottom,neutral,folder,coffee,-80,down
+neutral,cotton,bucket,top,top,neutral,cotton,bucket,80,up
+neutral,cotton,bucket,top,bottom,neutral,cotton,bucket,-80,down
+neutral,cotton,bucket,bottom,top,neutral,bucket,cotton,80,up
+neutral,cotton,bucket,bottom,bottom,neutral,bucket,cotton,-80,down
+neutral,pillow,marble,top,top,neutral,pillow,marble,80,up
+neutral,pillow,marble,top,bottom,neutral,pillow,marble,-80,down
+neutral,pillow,marble,bottom,top,neutral,marble,pillow,80,up
+neutral,pillow,marble,bottom,bottom,neutral,marble,pillow,-80,down

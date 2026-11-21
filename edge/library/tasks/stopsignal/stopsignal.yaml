@@ -1,0 +1,138 @@
+name: stopsignal
+description: >
+  Stop-signal task. An arrow appears; press the matching arrow key as fast as possible. On a quarter of
+  the trials the arrow turns red after a short delay (the stop-signal delay, SSD): then try not to press.
+  The SSD follows a staircase: +50 ms after a successful stop, -50 ms after a failed one, so that stopping
+  succeeds on about half of the stop trials. The stop-signal reaction time (SSRT) is estimated at the end.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  ssd: 0.25            # current stop-signal delay (s); the staircase starts here
+  ssd_step: 0.05       # staircase step (s)
+  ssd_min: 0.05
+  ssd_max: 0.9
+  stop_tone: false     # true: also play a short 750 Hz beep with the visual stop signal
+  go_rt_sum: 0         # running totals for the SSRT estimate (reset before the test block)
+  go_n: 0
+  stop_ssd_sum: 0
+  stop_n: 0
+
+measures:
+  - {id: go_rt, label: Go reaction time (correct go trials), role: outcome, column: resp.rt,
+     trials: "$trial_type == 'go' and resp.corr == 1", loop: main, summary: mean, units: s, expect: [0.2, 1.0]}
+  - {id: accuracy, label: Accuracy (go - correct direction; stop - stopped successfully), role: outcome,
+     column: resp.corr, loop: main, summary: proportion}
+  - {id: ssd, label: Stop-signal delay on stop trials, role: outcome, column: delay.trial_ssd,
+     trials: "$trial_type == 'stop'", loop: main, summary: mean, units: s, expect: [0.05, 0.9]}
+  - {id: ssrt, label: Stop-signal reaction time (mean method), role: outcome, column: estimate.ssrt,
+     summary: first, units: s}
+  - {id: trial_type, label: Trial type, role: factor, column: trial_type}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Go and stop
+
+          A white arrow will appear. Press the arrow key that points the same way
+          (LEFT or RIGHT) as fast as you can.
+
+          Sometimes the arrow turns RED shortly after it appears.
+          Then try NOT to press any key.
+
+          Stopping will not always work, and that is fine. Do not wait for the red arrow:
+          always respond as fast as you can, and stop when you can.
+
+          First a short practice with feedback. Press SPACE to begin.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: reset
+        type: variable
+        set: {go_rt_sum: 0, go_n: 0, stop_ssd_sum: 0, stop_n: 0}
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Practice done. Now the real task (about 4 minutes, no feedback).
+
+          Respond as fast as you can to the white arrow; try to stop when it turns red.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: delay, type: variable, set: {trial_ssd: $ssd}}
+      - {id: fix, type: fixation, size: 24, line_width: 3, duration: 0.5}
+      - {id: arrow_stim, type: text, text: $arrow, height: 90, start: 0.5, duration: 1.0, marker: "$f'go_{direction}'"}
+      - {id: signal, type: text, text: $arrow, height: 90, color: "#ff2020", start: $0.5 + trial_ssd,
+         duration: $1.0 - trial_ssd, if: "$trial_type == 'stop'", marker: stop_signal}
+      - {id: beep, type: sound, sound: 750, tone_duration: 0.1, start: $0.5 + trial_ssd,
+         if: "$stop_tone and trial_type == 'stop'"}
+      - {id: resp, type: keyboard, keys: [left, right], correct: $correct_key, start: 0.5, duration: 1.0,
+         end_routine: true}
+      # The staircase: after each stop trial the delay goes up one step if the participant stopped and
+      # down one step if they pressed; go trials leave it alone. The sums feed the SSRT estimate.
+      - id: track
+        type: variable
+        when: end
+        set:
+          ssd: >-
+            $ssd if trial_type == 'go' else (min(ssd + ssd_step, ssd_max) if resp.keys is None
+            else max(ssd - ssd_step, ssd_min))
+          go_rt_sum: "$go_rt_sum + (resp.rt if trial_type == 'go' and resp.corr == 1 else 0)"
+          go_n: "$go_n + (1 if trial_type == 'go' and resp.corr == 1 else 0)"
+          stop_ssd_sum: "$stop_ssd_sum + (trial_ssd if trial_type == 'stop' else 0)"
+          stop_n: "$stop_n + (1 if trial_type == 'stop' else 0)"
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: >-
+          $('Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong direction'))
+          if trial_type == 'go' else ('Well stopped' if resp.corr else 'Try to stop when the arrow turns red')
+        color: "$'#55dd55' if resp.corr else '#ff5555'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 4
+    components:
+      - id: estimate
+        type: variable
+        set:
+          mean_go_rt: "$go_rt_sum / go_n if go_n else None"
+          mean_ssd: "$stop_ssd_sum / stop_n if stop_n else None"
+          ssrt: "$go_rt_sum / go_n - stop_ssd_sum / stop_n if go_n and stop_n else None"
+      - {id: bye, type: text, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: stopsignal.csv
+    order: random
+    repeats: 2
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: stopsignal.csv
+    order: random
+    repeats: 15
+    max_repeat: {trial_type: {stop: 2}}
+    children: [trial, iti]
+  - thanks

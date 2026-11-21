@@ -1,0 +1,92 @@
+name: flanker
+description: >
+  Eriksen flanker task with letters. A row of five letters appears; the participant classifies only the
+  middle letter (H or K: one key, S or C: the other) and ignores the letters on either side. The flankers
+  are the same letter (identical), a different letter with the same answer (same_response), a letter with
+  the other answer (incongruent) or a letter with no answer (neutral, X).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: median, units: s, expect: [0.2, 1.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: condition, label: Flanker condition, role: factor, column: condition}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: |
+          Letter task
+
+          A row of five letters will appear. Look only at the letter in the MIDDLE.
+
+          Middle letter H or K  ->  press Z
+          Middle letter S or C  ->  press M
+
+          The other letters try to distract you: ignore them.
+          Answer as quickly as you can while staying accurate.
+
+          We start with a few practice rounds with feedback.
+          Press SPACE to begin.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: |
+          Practice done. Now the real task begins (no more feedback).
+
+          H or K  ->  Z          S or C  ->  M
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: fix, type: fixation, size: 24, line_width: 3, duration: 0.5}
+      - {id: stim, type: text, text: $stimulus, height: 56, start: 0.5, marker: "$f'flanker_{condition}'"}
+      - {id: resp, type: keyboard, keys: [z, m], correct: $correct_key, start: 0.5, duration: 2.0,
+         end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 32
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong key')"
+        color: "$'#55dd55' if resp.corr else '#ff5555'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "$f'Finished. You were correct on {round(100 * main.accuracy)}% of the trials. Thank you!'"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: flanker.csv
+    order: random
+    stop_if: $practice.n >= 11
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: flanker.csv
+    order: random
+    repeats: 5
+    children: [trial, iti]
+  - thanks

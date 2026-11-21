@@ -1,0 +1,23 @@
+id: cueing
+title: Spatial cueing (Posner task)
+category: Attention
+summary: A central arrow predicts where a dot will appear; responses are faster when the prediction is right.
+description: >
+  Posner's spatial cueing task measures the benefit of directing attention to a location in advance and
+  the cost of having to move it elsewhere. Two outlined boxes stay on screen left and right of fixation.
+  After a 1 s fixation an arrow replaces the cross and points left or right; 500 ms later a white dot
+  appears in one box and the participant presses the arrow key for its side (max 1.5 s). The arrow is
+  valid on 80% of trials and invalid on 20%, so it is worth using. 10 practice trials with feedback, then
+  80 test trials (64 valid, 16 invalid) in random order. The main outcome is the validity effect: mean
+  correct RT on invalid minus valid trials.
+measures:
+  - RT valid vs invalid (validity effect)
+  - accuracy
+duration_min: 5
+input: keyboard
+languages: [en]
+references:
+  - "Posner, M. I. (1980). Orienting of attention. Quarterly Journal of Experimental Psychology, 32, 3-25."
+  - "Posner, M. I., Snyder, C. R. R., & Davidson, B. J. (1980). Attention and the detection of signals. Journal of Experimental Psychology: General, 109(2), 160-174."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/cueing.html"}
+notes: The cue-target interval is the variable soa (0.5 s). The validity ratio comes from the rows of cueing.csv (8 valid, 2 invalid).

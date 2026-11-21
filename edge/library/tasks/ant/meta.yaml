@@ -1,0 +1,27 @@
+id: ant
+title: Attention Network Test (ANT)
+category: Attention
+summary: A cued arrow-flanker task that gives separate scores for alerting, orienting and executive attention.
+description: >
+  The ANT combines cueing and flanker manipulations to measure three attention networks in one short task.
+  Each trial begins with a fixation cross for a random 400-1600 ms, then a 100 ms asterisk cue: no cue,
+  a centre cue, a double cue (both possible target places) or a spatial cue (the coming target place).
+  After a further 400 ms a row of five arrows appears above or below fixation; the participant reports the
+  direction of the middle arrow. The flankers point the same way (congruent), the other way (incongruent)
+  or are dashes (neutral). Trials last 4 s in total. 24 practice trials with feedback, then 96 test trials
+  (all 48 cue x flanker x direction x location combinations twice). Scores from mean correct RTs:
+  alerting = no cue - double cue; orienting = centre cue - spatial cue; executive = incongruent - congruent.
+measures:
+  - RT by cue (alerting = none - double; orienting = center - spatial)
+  - RT by flanker (executive/conflict = incongruent - congruent)
+  - accuracy
+duration_min: 9
+input: keyboard
+languages: [en]
+references:
+  - "Fan, J., McCandliss, B. D., Sommer, T., Raz, A., & Posner, M. I. (2002). Testing the efficiency and independence of attentional networks. Journal of Cognitive Neuroscience, 14(3), 340-347."
+  - "Posner, M. I. (2008). Measuring alertness. Annals of the New York Academy of Sciences, 1129, 193-199. https://doi.org/10.1196/annals.1417.011"
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/ant.html"}
+notes: >
+  The original has three test blocks of 96 trials; raise the repeats of the main trial list (2 = 96 trials) for
+  the full length. Network scores are differences of the per-cue and per-flanker means in measures.csv.

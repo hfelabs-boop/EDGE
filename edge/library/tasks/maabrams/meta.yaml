@@ -1,0 +1,30 @@
+id: maabrams
+title: Attentional capture and visual grouping
+category: Attention
+summary: Shape search with a salient colour distractor that is or is not grouped with the target by a connecting bar.
+description: >
+  This task measures attentional capture by a salient but irrelevant item, and whether perceptual grouping
+  with the target changes it (additional-singleton paradigm with a grouping manipulation). After an 800 ms
+  fixation cross, six filled shapes appear on a circle around fixation: five green circles and one green
+  diamond (the target). The participant reports the orientation of the line inside the diamond
+  (horizontal: Z, vertical: M; max 3 s); the lines in the circles are tilted. On two thirds of trials one
+  circle next to the target is red (colour-singleton distractor). A grey bar always links two neighbouring
+  shapes: on grouped trials it joins the distractor to the target, on ungrouped trials it joins the
+  distractor to its other neighbour, and on no-distractor trials it sits at that same place. 12 practice
+  trials with feedback, then 72 test trials (each condition x line orientation 12 times). Outcomes: the
+  capture cost (distractor minus no-distractor RT) and its size for grouped vs ungrouped distractors.
+measures:
+  - RT by distractor condition (capture cost = distractor - none; grouped vs ungrouped)
+  - accuracy by distractor condition
+duration_min: 5
+input: keyboard
+languages: [en]
+references:
+  - "Ma, X., & Abrams, R. A. (2023). Visual distraction's \"silver lining\": Distractor suppression boosts attention to competing stimuli. Psychological Science, 34(12), 1336-1349. https://doi.org/10.1177/09567976231201853"
+  - "Theeuwes, J. (1992). Perceptual selectivity for color and form. Perception & Psychophysics, 51(6), 599-606."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/maabrams.html"}
+notes: >
+  A generic additional-singleton task with a connectedness (grouping) manipulation, written for this library
+  from the general paradigm; it is not a replication of the exact displays, timing or design of Ma and
+  Abrams (2023). Check their paper and materials before using it to replicate their study. The layout of
+  each trial is saved in the pick.* and place.* columns (tp = target place, dp = distractor place).

@@ -1836,6 +1836,7 @@ function loopRows(spec, path = S.path) {
   if (!spec) return [];
   if (Array.isArray(spec)) return spec.filter((r) => r && typeof r === "object");
   if (spec.factorial) return factorialRows(spec);
+  if (typeof spec === "string" && spec.startsWith("$")) return [];   // chosen while it runs (conditions: $block_file)
   const key = JSON.stringify(spec) + "|" + (path || "");
   const have = BUILD.rows[key];
   if (Array.isArray(have)) return have;

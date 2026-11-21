@@ -1,0 +1,3 @@
+cue_type,trial_file
+endogenous,endogenous.csv
+exogenous,exogenous.csv

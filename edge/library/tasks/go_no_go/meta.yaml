@@ -1,0 +1,24 @@
+id: go_no_go
+title: Go/no-go task
+category: Inhibition and conflict
+summary: Respond quickly to a frequent letter and withhold the response to a rare one.
+description: >
+  The go/no-go task measures response inhibition: the ability to stop a prepared, habitual response.
+  Letters appear every 1.5 s (500 ms fixation, letter for 500 ms, 1 s to respond). The go letter P
+  (75% of trials) requires a fast SPACE press; the no-go letter R (25%) requires no press. Because most
+  trials are go trials, pressing becomes automatic and stopping on no-go trials is hard. 12 practice
+  trials with feedback, then 100 test trials in random order (never two no-go trials in a row). Main
+  outcomes are the commission error rate (presses on no-go trials), the omission rate on go trials and
+  the go reaction time.
+measures:
+  - "commission errors: accuracy on no-go trials (1 - false alarm rate)"
+  - hit rate on go trials
+  - go reaction time
+duration_min: 3
+input: keyboard
+languages: [en]
+references:
+  - "Verbruggen, F., & Logan, G. D. (2008). Automatic and controlled response inhibition: Associative learning in the go/no-go and stop-signal paradigms. Journal of Experimental Psychology: General, 137(4), 649-672."
+  - "Criaud, M., & Boulinguez, P. (2013). Have we been asking the right questions when assessing response inhibition in go/no-go tasks with fMRI? A meta-analysis and critical review. Neuroscience & Biobehavioral Reviews, 37(1), 11-23."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/go-no-go.html"}
+notes: The go/no-go ratio is set by the rows of go_no_go.csv (3 go rows, 1 no-go row); add rows to change it.

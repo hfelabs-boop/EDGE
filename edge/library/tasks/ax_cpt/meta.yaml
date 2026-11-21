@@ -1,0 +1,27 @@
+id: ax_cpt
+title: AX Continuous Performance Test (AX-CPT)
+category: Cognitive control
+summary: Respond to X only when it follows A; rare AY and BX pairs reveal how much people use context.
+description: >
+  The AX-CPT measures context processing and goal maintenance. Each trial is a cue letter (300 ms), a
+  1 s blank and a probe letter (300 ms; 1.2 s to respond). The target response (M) is required only for
+  an X preceded by an A; every other probe gets the other key (Z). AX pairs make up 70% of trials and AY,
+  BX and BY 10% each ("B" and "Y" stand for any other letter, chosen at random each trial). Using the cue
+  well helps on BX trials (a B means "not a target" whatever follows) but hurts on AY trials (an A
+  prepares a target response that must then be overridden). 10 practice trials with feedback, then 80
+  test trials. Main outcomes: errors and RT per pair type, especially AY vs BX (proactive vs reactive
+  control; d'-context can be computed from AX hits and BX false alarms).
+measures:
+  - accuracy by pair type (AX, AY, BX, BY)
+  - RT by pair type
+duration_min: 6
+input: keyboard
+languages: [en]
+references:
+  - "Rosvold, H. E., Mirsky, A. F., Sarason, I., Bransome, E. D., Jr., & Beck, L. H. (1956). A continuous performance test of brain damage. Journal of Consulting Psychology, 20(5), 343-350."
+  - "Polizzotto, N. R., Hill-Jarrett, T., Walker, C., & Cho, R. Y. (2018). Normal development of context processing using the AXCPT paradigm. PLoS ONE, 13(5), e0197812."
+  - "Braver, T. S. (2012). The variable nature of cognitive control: A dual mechanisms framework. Trends in Cognitive Sciences, 16(2), 106-113."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/ax-cpt.html"}
+notes: >
+  The cue-probe delay is the variable delay (1 s); longer delays (e.g. 4-5 s) load goal maintenance more.
+  The letters actually shown are saved in letters.cue_letter and letters.probe_letter.
