@@ -1,0 +1,44 @@
+id: vaast_words_ops
+title: Visual approach/avoidance task (VAAST), words (operational)
+category: Social and implicit
+summary: Move towards or away from status words that signal safety or threat, on a console display or through a camera;
+  faster approach to safe words shows an approach-avoidance tendency.
+description: >-
+  The library's online VAAST with words, on operator displays. A scene seen in depth fills the screen and a status word
+  appears in the middle (after a 500 ms fixation cross). Y moves the operator forward (the scene and the word grow), N backward
+  (they shrink). In one block SAFE words are approached and THREAT words avoided, in the other the reverse; which comes
+  first alternates with the participant number. Each block: 8 practice trials, then 32 test trials (16 words twice, no more
+  than 3 of a category in a row); a wrong key shows a red X. Main outcome: the compatibility effect, correct-trial RT in
+  the incompatible block (approach threat / avoid safe) minus the compatible block, by word category and movement; accuracy.
+measures:
+- RT by word category (safe / threat) x movement (approach / avoid)
+- accuracy
+duration_min: 4
+input: keyboard
+languages:
+- en
+variant_of: vaast_words
+domain: defense
+themes:
+- c2
+- uav
+adaptation: >-
+  The corridor and the pleasant / unpleasant words of the classic task become an operator's display and status words that
+  signal safety (CLEAR, SECURE, NOMINAL ...) or threat (THREAT, DANGER, ALARM ...); blocks, keys, timing, the visual whole-body
+  movement and the measures stay the same. c2: the corridor's frames are drawn in console colours, as if moving into the
+  depth of a plot. uav: the scene is the infrared camera picture of a surveillance air vehicle under its reticle, which
+  closes in (approach) or pulls back (avoid). The task measures the spontaneous tendency to approach safety and avoid threat
+  signals. The words are generic status words.
+references:
+- 'Rougier, M., Muller, D., Ric, F., Alexopoulos, T., Batailler, C., Smeding, A., & Aubé, B. (2018). A new look at sensorimotor
+  aspects in approach/avoidance tendencies: The role of visual whole-body movement information. Journal of Experimental
+  Social Psychology, 76, 42–53.'
+- 'Aubé, B., Rougier, M., Muller, D., Ric, F., & Yzerbyt, V. (2019). The online-VAAST: A short and online tool to measure
+  spontaneous approach and avoidance tendencies. Acta Psychologica, 201, 102942.'
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/vaast_words.html
+notes: >-
+  Switch the display with the variable `theme` (c2, uav). Word lists in tools/library/make_vaast_words_ops.py (re-run it
+  to rewrite words.csv and practice_words.csv). The scene's movement is drawn frame by frame from the routine time t, as
+  in `vaast_words`; in the uav theme the camera picture is drawn larger than the screen so that a step back still fills
+  it.

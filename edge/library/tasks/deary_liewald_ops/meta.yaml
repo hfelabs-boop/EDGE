@@ -1,0 +1,42 @@
+id: deary_liewald_ops
+title: Deary-Liewald reaction time task (operational)
+category: Perception and motor
+summary: 'Simple and four-choice reaction time to an alert: a hostile track appearing in a sector panel, or a target box
+  on a camera feed turning red.'
+description: >-
+  The library's Deary-Liewald task as an alert response at a console. Simple RT: an alert appears in one box after a random
+  1-3 s wait; press SPACE (8 practice, 20 test trials). Choice RT: four boxes in a row; the alert appears in one of them
+  and the key under it is pressed (Z, X, N, M; 8 practice, 40 test trials, each box 10 times, no more than 3 in a row in
+  the same box). Responses within 2 s. Main outcomes: mean and SD of simple and of choice reaction time (correct trials),
+  and choice accuracy.
+measures:
+- simple RT mean and SD
+- choice RT mean and SD (correct trials)
+- choice accuracy
+duration_min: 4
+input: keyboard
+languages:
+- en
+variant_of: deary_liewald
+domain: defense
+themes:
+- c2
+- video
+adaptation: >-
+  The boxes and the cross of the classic task become the places and the alert an operator watches for; design, keys, timing
+  and measures stay the same. c2: the boxes are sector panels (one in the middle for simple RT; ALPHA, BRAVO, CHARLIE and
+  DELTA for choice RT) on the tactical plot, and the alert is a hostile air track (red diamond frame) appearing in a panel.
+  video: the boxes are candidate target boxes (amber, dashed) drawn by an image tracker on a looping camera feed with vehicles,
+  under a full-screen crosshair, and the alert is the tracker confirming a target (the box turns red). The task measures
+  the processing speed behind alert response. Sectors, tracks and the feed are generic and fictional.
+references:
+- 'Deary, I. J., Liewald, D., & Nissan, J. (2011). A free, easy-to-use, computer-based simple and four-choice reaction time
+  programme: The Deary-Liewald reaction time task. Behavior Research Methods, 43(1), 258–268.'
+- 'Jensen, A. R. (2006). Clocking the mind: Mental chronometry and individual differences. Amsterdam: Elsevier.'
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/deary_liewald.html
+notes: >-
+  Switch the display with the variable `theme` (c2, video). The choice keys are Z, X, N and M, as in `deary_liewald`. The
+  video theme plays a looping feed behind the boxes (in Try it and the builder preview it plays in the browser); its length
+  follows each trial's wait. Pictures and the feed from EDGE's defence kit (tools/library/make_deary_liewald_ops.py copies
+  them and writes the trial lists).

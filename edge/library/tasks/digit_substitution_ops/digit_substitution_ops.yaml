@@ -1,0 +1,199 @@
+name: digit_substitution_ops
+description: >
+  Digit symbol substitution test, operational adaptation (computer version as in the library's
+  `digit_substitution` task; see Jaeger, 2018): the same design, timing and measures. A code table at the top of the
+  screen pairs the codes 1-9 with nine operational symbols. One symbol at a time appears in the middle; type its code.
+  After 9 practice items with feedback, the test lasts 90 seconds: as many items as possible, one after another. One
+  variable, `theme`, sets the symbols: c2 (track symbols: friendly / hostile / neutral x air / surface / ground, on
+  the tactical map) or ew (emitter marks: pulsed / continuous / hopping x three threat colours, on the waterfall).
+  Main outcome: the number of correct codes in 90 s; also accuracy and the time per item.
+
+# The theme switch follows search_ops (see that file): `theme` is the first variable. The symbols are data:
+# `symbols` maps each theme and code to its picture, so the same nine key items and the target item serve every
+# theme. The background and the instructions are items guarded with `if: "$theme == ..."`. Flow, timing, keys and
+# measures are those of `digit_substitution`.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2               # display theme: c2 or ew
+  time_limit: 90          # length of the test (s)
+  time_left: 90
+  t_block: 0
+  # the nine symbols of each theme, by code (mixed, so that the table has no simple order)
+  symbols:
+    c2:
+      "1": stimuli/hostile_surface_48.png
+      "2": stimuli/friendly_air_48.png
+      "3": stimuli/neutral_ground_48.png
+      "4": stimuli/friendly_surface_48.png
+      "5": stimuli/hostile_air_48.png
+      "6": stimuli/neutral_surface_48.png
+      "7": stimuli/hostile_ground_48.png
+      "8": stimuli/neutral_air_48.png
+      "9": stimuli/friendly_ground_48.png
+    ew:
+      "1": stimuli/emitter_pulsed_medium.png
+      "2": stimuli/emitter_continuous_high.png
+      "3": stimuli/emitter_hopping_low.png
+      "4": stimuli/emitter_pulsed_high.png
+      "5": stimuli/emitter_hopping_medium.png
+      "6": stimuli/emitter_continuous_low.png
+      "7": stimuli/emitter_hopping_high.png
+      "8": stimuli/emitter_pulsed_low.png
+      "9": stimuli/emitter_continuous_medium.png
+  key_size: {c2: [56, 56], ew: [24, 72]}      # size of a symbol in the code table (the target is shown twice as big)
+
+measures:
+  - {id: n_correct, label: Correct answers in 90 s, role: outcome, column: resp.corr, loop: test, summary: sum, expect: [5, 150]}
+  - {id: accuracy, label: Accuracy (answered items), role: outcome, column: resp.corr, trials: "$resp.keys is not None",
+     loop: test, summary: proportion}
+  - {id: item_time, label: Time per item (correct answers), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: test, summary: median, units: s, expect: [0.3, 10]}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        color: "#e8f8ff"
+        height: 24
+        wrap_width: 1050
+        pos: [0, -110]
+        text: |
+          At the top of the screen is a code table: every track symbol has a code number.
+
+          A track symbol will appear in the middle of the display.
+          Type the code that belongs to it (with the number keys above the letters).
+          Look closely: the frame (friendly, hostile, neutral) and the icon (air, surface, ground) both count.
+
+          First 9 practice items. Then the test: 90 seconds, as many as you can.
+
+          Press SPACE to start the practice.
+      - id: text_ew
+        type: text
+        if: "$theme == 'ew'"
+        color: "#e8f8ff"
+        height: 24
+        wrap_width: 1050
+        pos: [0, -110]
+        text: |
+          At the top of the screen is a code table: every kind of emitter mark has a code number.
+
+          An emitter mark will appear in the middle of the waterfall.
+          Type the code that belongs to it (with the number keys above the letters).
+          Look closely: the pattern (pulsed, continuous, hopping) and the threat colour both count.
+
+          First 9 practice items. Then the test: 90 seconds, as many as you can.
+
+          Press SPACE to start the practice.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - &key1 {id: sym1, type: image, image: "$symbols[theme]['1']", size: "$key_size[theme]", pos: [-480, 270]}
+      - &key2 {id: sym2, type: image, image: "$symbols[theme]['2']", size: "$key_size[theme]", pos: [-360, 270]}
+      - &key3 {id: sym3, type: image, image: "$symbols[theme]['3']", size: "$key_size[theme]", pos: [-240, 270]}
+      - &key4 {id: sym4, type: image, image: "$symbols[theme]['4']", size: "$key_size[theme]", pos: [-120, 270]}
+      - &key5 {id: sym5, type: image, image: "$symbols[theme]['5']", size: "$key_size[theme]", pos: [0, 270]}
+      - &key6 {id: sym6, type: image, image: "$symbols[theme]['6']", size: "$key_size[theme]", pos: [120, 270]}
+      - &key7 {id: sym7, type: image, image: "$symbols[theme]['7']", size: "$key_size[theme]", pos: [240, 270]}
+      - &key8 {id: sym8, type: image, image: "$symbols[theme]['8']", size: "$key_size[theme]", pos: [360, 270]}
+      - &key9 {id: sym9, type: image, image: "$symbols[theme]['9']", size: "$key_size[theme]", pos: [480, 270]}
+      - &num1 {id: num1, type: text, text: "1", font: DejaVu Sans Mono, pos: [-480, 205], height: 30, color: "#9fe8ff"}
+      - &num2 {id: num2, type: text, text: "2", font: DejaVu Sans Mono, pos: [-360, 205], height: 30, color: "#9fe8ff"}
+      - &num3 {id: num3, type: text, text: "3", font: DejaVu Sans Mono, pos: [-240, 205], height: 30, color: "#9fe8ff"}
+      - &num4 {id: num4, type: text, text: "4", font: DejaVu Sans Mono, pos: [-120, 205], height: 30, color: "#9fe8ff"}
+      - &num5 {id: num5, type: text, text: "5", font: DejaVu Sans Mono, pos: [0, 205], height: 30, color: "#9fe8ff"}
+      - &num6 {id: num6, type: text, text: "6", font: DejaVu Sans Mono, pos: [120, 205], height: 30, color: "#9fe8ff"}
+      - &num7 {id: num7, type: text, text: "7", font: DejaVu Sans Mono, pos: [240, 205], height: 30, color: "#9fe8ff"}
+      - &num8 {id: num8, type: text, text: "8", font: DejaVu Sans Mono, pos: [360, 205], height: 30, color: "#9fe8ff"}
+      - &num9 {id: num9, type: text, text: "9", font: DejaVu Sans Mono, pos: [480, 205], height: 30, color: "#9fe8ff"}
+
+  item:
+    components:
+      # the display behind the table: the tactical map (c2) or the waterfall (ew), faint
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720], opacity: 0.35}
+      - {id: waterfall_ew, type: image, if: "$theme == 'ew'", image: stimuli/waterfall_1280x720.jpg, size: [1280, 720], opacity: 0.5}
+      - {id: table, type: shape, shape: rect, size: [1160, 170], pos: [0, 235], fill: "#0a2232", opacity: 0.92}
+      - *key1
+      - *key2
+      - *key3
+      - *key4
+      - *key5
+      - *key6
+      - *key7
+      - *key8
+      - *key9
+      - *num1
+      - *num2
+      - *num3
+      - *num4
+      - *num5
+      - *num6
+      - *num7
+      - *num8
+      - *num9
+      - {id: frame, type: shape, shape: rect, size: [1160, 170], pos: [0, 235], fill: transparent, line_color: "#1d4a5e", line_width: 2}
+      - {id: target, type: image, image: "$symbols[theme][str(digit)]", size: "$[2 * key_size[theme][0], 2 * key_size[theme][1]]", pos: [0, -60]}
+      - {id: score, type: text, if: "$timed", text: "$f'{test.n} done'", pos: [0, -300], height: 20, color: "#7fa8b8"}
+      - id: resp
+        type: keyboard
+        keys: ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
+        correct: $str(digit)
+        duration: "$min(time_left, 15) if timed else 30"     # an item left for 15 s counts as missed
+        end_routine: true
+      # the test clock: time left of the 90 s (exact, from the master clock), for the response window and the end
+      - id: clock
+        type: code
+        if: $timed
+        on_begin: |
+          time_left = max(0.0, time_limit - (session.clock() - t_block))
+        on_end: |
+          time_left = max(0.0, time_limit - (session.clock() - t_block))
+
+  feedback:
+    duration: 0.7
+    components:
+      - id: fb
+        type: text
+        height: 32
+        pos: [0, -60]
+        text: "$'Correct' if resp.corr else f'Wrong: that symbol is code {digit}'"
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  ready:
+    components:
+      - {id: ready_text, type: text, color: "#e8f8ff", height: 26,
+         text: "Now the test: 90 seconds. Work as fast as you can without mistakes.\n\nPress SPACE to start."}
+      - {id: ready_key, type: keyboard, keys: [space], end_routine: true}
+      - id: start_clock
+        type: code
+        on_end: |
+          t_block = session.clock()
+          time_left = time_limit
+
+  thanks:
+    duration: 4
+    components:
+      - {id: bye, type: text, color: "#9fe8ff", height: 30, text: "$f'Time is up. You coded {test.n_correct} symbols correctly.\\n\\nThank you!'"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: [{digit: 1, timed: false}, {digit: 2, timed: false}, {digit: 3, timed: false}, {digit: 4, timed: false},
+                 {digit: 5, timed: false}, {digit: 6, timed: false}, {digit: 7, timed: false}, {digit: 8, timed: false},
+                 {digit: 9, timed: false}]
+    order: random
+    children: [item, feedback]
+  - ready
+  - loop: test
+    conditions: [{digit: 1, timed: true}, {digit: 2, timed: true}, {digit: 3, timed: true}, {digit: 4, timed: true},
+                 {digit: 5, timed: true}, {digit: 6, timed: true}, {digit: 7, timed: true}, {digit: 8, timed: true},
+                 {digit: 9, timed: true}]
+    order: random
+    repeats: 25
+    max_repeat: {digit: 1}
+    stop_if: "$time_left <= 0.05"
+    children: [item]
+  - thanks

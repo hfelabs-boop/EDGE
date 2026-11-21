@@ -1,0 +1,46 @@
+id: pacedreading3_ops
+title: Self-paced reading, moving window (operational)
+category: Language
+summary: 'Read a situation report through a one-word window over dashes: the standard moving-window self-paced reading task
+  on a message display.'
+description: >-
+  The library's moving-window self-paced reading task with operator displays. A report is first shown as dashes (one per
+  letter, spaces kept). Each press of SPACE uncovers the next word and covers the previous one again, in its place in the
+  line. The time between presses is each word's reading time. 2 practice reports with feedback, then 20 reports in random
+  order, each followed by a yes/no question (Y / N). Each report has a subject-relative and an object-relative version with
+  the same words; each participant reads half the items in each version. Main outcome: reading times at the embedded verb
+  and the main verb for the two structures, and comprehension accuracy.
+measures:
+- word reading time at the embedded verb and the main verb, by structure
+- mean word reading time
+- comprehension accuracy
+duration_min: 5
+input: keyboard
+languages:
+- en
+variant_of: pacedreading3
+domain: defense
+themes:
+- c2
+- uav
+adaptation: >-
+  The sentences of the classic task become short fictional situation reports and orders ("The patrol that the convoy relieved
+  reached checkpoint BRAVO at dawn."), built exactly like the classic items: the same words in a subject-relative and an
+  object-relative version, the embedded verb at word 3 or 5 and the main verb at word 6, and a yes/no question about the
+  main clause with the same answer in both versions. Design, keys, timing, word regions and measures stay the same. c2:
+  the reports appear on the message terminal of Sector BRAVO (a console panel with a header line over a faint tactical map).
+  uav: they appear in the message window of a surveillance air vehicle's payload station, over its camera picture. Vehicles,
+  stations, teams and checkpoints are generic and fictional.
+references:
+- 'Just, M. A., Carpenter, P. A., & Woolley, J. D. (1982). Paradigms and processes in reading comprehension. Journal of
+  Experimental Psychology: General, 111(2), 228–238.'
+- 'Jegerski, J. (2014). Self-paced reading. In J. Jegerski & B. VanPatten (Eds.), Research methods in second language psycholinguistics
+  (pp. 20–49). New York: Routledge.'
+- 'King, J., & Just, M. A. (1991). Individual differences in syntactic processing: The role of working memory. Journal of
+  Memory and Language, 30(5), 580–602.'
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/pacedreading3.html
+notes: >-
+  Switch the display with the variable `theme` (c2, uav). The 20 items and 2 practice reports are written by tools/library/make_reading_ops.py
+  (the same lists for all three operational reading tasks); edit them there and re-run it. Reading research usually needs
+  more items per condition than this short version; add items in the same pattern.

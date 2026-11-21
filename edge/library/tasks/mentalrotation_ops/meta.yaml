@@ -1,0 +1,43 @@
+id: mentalrotation_ops
+title: Mental rotation (operational)
+category: Perception and motor
+summary: Decide whether a turned area outline or a vehicle seen from above is the same as another one or its mirror image;
+  RT grows with the angle.
+description: >-
+  The library's two-dimensional mental rotation task with operator displays. Two pictures are shown side by side; the right
+  one is the left one turned by 0-315 degrees in steps of 45, either as it is or mirror-reversed. F = same, J = mirror image
+  (max 7.5 s). 4 shapes x 8 angles x same/mirror = 64 trials in random order after 8 practice trials with feedback. Main
+  outcome: correct-trial response time as a function of the angular difference (0-180 degrees), which rises about linearly
+  (the mental rotation slope); accuracy.
+measures:
+- RT by angular difference (correct trials)
+- accuracy
+- same vs mirror
+duration_min: 5
+input: keyboard
+languages:
+- en
+variant_of: mentalrotation
+domain: defense
+themes:
+- c2
+- uav
+adaptation: >-
+  The flat five-square shapes of the classic task become operational pictures; trial list, angles, keys, timing and measures
+  stay the same. c2: the four shapes are areas of responsibility on the tactical plot, drawn as friendly-blue area outlines
+  made of the same five squares as the classic shapes. uav: the four shapes are generic vehicles seen from above in the
+  payload camera picture (a tracked vehicle, a truck, a boat and an aircraft), each with parts placed off its centre line
+  (turret, spare wheel, superstructure, wing pod), so that it cannot be turned into its mirror image; each sits in a bracket
+  reticle. Matching a turned silhouette or plot symbol to a reference is part of identifying objects from above. All pictures
+  are drawn by a script and are generic.
+references:
+- Shepard, R. N., & Metzler, J. (1971). Mental rotation of three-dimensional objects. Science, 171, 701–703.
+- Collins, D. W., & Kimura, D. (1997). A large sex difference on a two-dimensional mental rotation task. Behavioral Neuroscience,
+  111(4), 845–849.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/mentalrotation.html
+notes: >-
+  Switch the display with the variable `theme` (c2, uav). The pictures (and their left-right mirror images) are drawn by
+  tools/library/make_mentalrotation_ops.py; the right picture is turned by the image item's `ori` (counter-clockwise by
+  `angle`, as in the classic task). The trial lists are the classic task's (mr_trials.csv, mr_practice.csv). shown.probe_pic
+  records the right-hand picture of every trial.

@@ -1,0 +1,166 @@
+name: igt_ops
+description: >
+  Iowa Gambling Task, operational adaptation (after Bechara, Damasio, Damasio & Anderson, 1994). The same paradigm,
+  payoffs and measures as the library's `igt` task: 100 choices among four options, starting with 2000 points.
+  Options A and B earn 100 points per choice but lose 1250 every 10 choices (net -250 per 10); options C and D earn
+  50 but lose 250 every 10 choices (net +250 per 10). A has frequent small losses, B one large loss per 10 choices;
+  C frequent small losses, D one loss per 10 choices. One variable, `theme`, sets the display: c2 (four routes for
+  a patrol on the tactical map) or uav (four sensor packages for the next tasking). Main outcome: the net score
+  (good options C+D minus bad options A+B) in each block of 20 choices.
+
+# The theme switch follows search_ops (see that file): `theme` is the first variable; backgrounds and the
+# instructions are items guarded with `if: "$theme == ..."`; the names of the options and of the gains and losses
+# are per-theme words (`words`). The payoff schedules, clickable areas (deck_A-deck_D) and result columns are those
+# of `igt`.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2                                     # display theme: c2 or uav
+  total: 2000                                   # the points everyone starts with
+  gains: {A: 100, B: 100, C: 50, D: 50}         # earned on every choice of the option
+  # loss on each of the 40 choices of an option (per 10 choices: A 5 losses = 1250, B 1 loss of 1250,
+  # C 5 losses = 250, D 1 loss of 250). After choice 40 an option starts again from its first entry.
+  losses:
+    A: [0, 0, 350, 0, 250, 0, 300, 0, 150, 200, 0, 150, 200, 0, 300, 0, 0, 350, 0, 250,
+        0, 0, 250, 150, 0, 200, 0, 350, 0, 300, 0, 0, 200, 250, 350, 150, 0, 0, 300, 0]
+    B: [0, 0, 0, 1250, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1250,
+        1250, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1250, 0, 0, 0]
+    C: [0, 0, 0, 50, 25, 50, 0, 75, 50, 0, 0, 50, 0, 50, 25, 0, 0, 0, 75, 50,
+        0, 25, 75, 50, 50, 50, 0, 0, 0, 0, 0, 50, 0, 75, 0, 0, 50, 0, 25, 50]
+    D: [0, 0, 0, 0, 0, 0, 0, 0, 250, 0, 0, 0, 0, 0, 0, 0, 0, 0, 250, 0,
+        250, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 250, 0, 0]
+  drawn: {A: 0, B: 0, C: 0, D: 0}               # choices of each option so far
+  # each theme's words: the option, what is gained, what a loss stands for, the hint under the options
+  words:
+    c2: {option: ROUTE, gain: information gathered, loss: "lost to a delay on the route", hint: Click a route for the next patrol}
+    uav: {option: SENSOR, gain: coverage gathered, loss: "lost to re-tasking and gaps", hint: Click a sensor package for the next tasking}
+
+measures:
+  - {id: net_score, label: Net score (C+D minus A+B), role: outcome, column: card.net_choice, loop: trials,
+     summary: sum, expect: [-100, 100]}
+  - {id: good_choices, label: Proportion of good-option choices, role: outcome, column: card.good, loop: trials,
+     summary: proportion}
+  - {id: final_money, label: Points at the end, role: outcome, column: card.total, loop: trials, summary: last}
+  - {id: choice_rt, label: Choice time, role: outcome, column: choice.rt, loop: trials, summary: median, units: s,
+     expect: [0.2, 20]}
+  - {id: block, label: Block of 20 choices, role: factor, column: block}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 24
+        wrap_width: 1050
+        text: |
+          You plan the patrols of Sector BRAVO. On the next screen you see four routes: A, B, C and D.
+
+          Click a route to send the next patrol along it. Every patrol brings back information points,
+          but on some runs points are also lost (the patrol is delayed or has to turn back).
+
+          Some routes are better than others. You may switch between routes as often as you like.
+          Try to end with as many points as possible.
+
+          You start with 2000 points. There are 100 patrols.
+
+          Press SPACE to start.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 24
+        wrap_width: 1050
+        text: |
+          You task the sensors of a surveillance air vehicle. On the next screen you see four sensor
+          packages: A, B, C and D.
+
+          Click a package to use it for the next tasking. Every tasking brings back coverage points,
+          but on some taskings points are also lost (re-tasking, gaps in the coverage).
+
+          Some packages are better than others. You may switch between them as often as you like.
+          Try to end with as many points as possible.
+
+          You start with 2000 points. There are 100 taskings.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  choose:
+    components:
+      # the display around the options: map (c2) or camera picture under a reticle (uav), dimmed
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720], opacity: 0.55}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_02_village.jpg, size: [1280, 720], opacity: 0.55}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_cross.png, size: [240, 240], pos: [0, 250], opacity: 0.6}
+      - {id: money_bar, type: shape, shape: rect, size: [420, 46], pos: [0, 280], fill: "#0a2232", opacity: 0.9, line_color: "#1d4a5e", line_width: 2}
+      - {id: money, type: text, font: DejaVu Sans Mono, pos: [0, 280], height: 26, color: "#9fe8ff", text: "$f'Points: {total}'"}
+      # the four options (the decks of the classic task): console panels with the option's letter
+      - {id: deck_A, type: shape, shape: rect, size: [170, 250], pos: [-390, -20], fill: "#0a2232", line_color: "#00e5ff", line_width: 3}
+      - {id: deck_B, type: shape, shape: rect, size: [170, 250], pos: [-130, -20], fill: "#0a2232", line_color: "#00e5ff", line_width: 3}
+      - {id: deck_C, type: shape, shape: rect, size: [170, 250], pos: [130, -20], fill: "#0a2232", line_color: "#00e5ff", line_width: 3}
+      - {id: deck_D, type: shape, shape: rect, size: [170, 250], pos: [390, -20], fill: "#0a2232", line_color: "#00e5ff", line_width: 3}
+      - {id: name_A, type: text, text: "$words[theme]['option']", font: DejaVu Sans Mono, pos: [-390, 60], height: 20, color: "#9fe8ff"}
+      - {id: name_B, type: text, text: "$words[theme]['option']", font: DejaVu Sans Mono, pos: [-130, 60], height: 20, color: "#9fe8ff"}
+      - {id: name_C, type: text, text: "$words[theme]['option']", font: DejaVu Sans Mono, pos: [130, 60], height: 20, color: "#9fe8ff"}
+      - {id: name_D, type: text, text: "$words[theme]['option']", font: DejaVu Sans Mono, pos: [390, 60], height: 20, color: "#9fe8ff"}
+      - {id: label_A, type: text, text: A, pos: [-390, -30], height: 60, bold: true, color: "#e8f8ff"}
+      - {id: label_B, type: text, text: B, pos: [-130, -30], height: 60, bold: true, color: "#e8f8ff"}
+      - {id: label_C, type: text, text: C, pos: [130, -30], height: 60, bold: true, color: "#e8f8ff"}
+      - {id: label_D, type: text, text: D, pos: [390, -30], height: 60, bold: true, color: "#e8f8ff"}
+      - {id: hint_bar, type: shape, shape: rect, size: [700, 36], pos: [0, -260], fill: "#0a2232", opacity: 0.9}
+      - {id: hint, type: text, font: DejaVu Sans Mono, pos: [0, -260], height: 18, color: "#9fe8ff", text: "$words[theme]['hint']"}
+      - {id: choice, type: mouse, clickable: [deck_A, deck_B, deck_C, deck_D], end_routine: true}
+      # the payoff of the chosen option: its gain, and the loss on its next entry of the schedule
+      - id: card
+        type: variable
+        when: end
+        set:
+          deck: "$choice.clicked[-1] if choice.clicked else ''"
+          win: "$gains[card.deck] if card.deck else 0"
+          loss: "$losses[card.deck][drawn[card.deck] % 40] if card.deck else 0"
+          good: "$1 if card.deck in ('C', 'D') else 0"
+          net_choice: "$1 if card.deck in ('C', 'D') else -1"
+          total: "$total + card.win - card.loss"
+          shown_theme: $theme
+      - id: tally
+        type: variable
+        when: end
+        set:
+          total: $card.total
+          drawn: "${**drawn, card.deck: drawn[card.deck] + 1} if card.deck else drawn"
+
+  feedback:
+    duration: 1.6
+    components:
+      - id: won
+        type: text
+        pos: [0, 60]
+        height: 36
+        color: "#34c759"
+        text: "$f\"{words[theme]['option'].title()} {card.deck}:  +{card.win} points ({words[theme]['gain']})\""
+      - id: lost
+        type: text
+        pos: [0, -10]
+        height: 36
+        color: "#ff3b30"
+        text: "$f\"but -{card.loss} points {words[theme]['loss']}\" if card.loss else ''"
+      - {id: money_now, type: text, font: DejaVu Sans Mono, pos: [0, -120], height: 26, color: "#9fe8ff", text: "$f'Points: {total}'"}
+
+  thanks:
+    components:
+      - id: bye
+        type: text
+        height: 30
+        color: "#9fe8ff"
+        text: "$f'End of the mission. You ended with {total} points.\\n\\nThank you! Press SPACE to finish.'"
+      - {id: done, type: keyboard, keys: [space], end_routine: true, duration: 10}
+
+flow:
+  - instructions
+  - loop: trials
+    conditions: igt_trials.csv
+    order: sequential
+    children: [choose, feedback]
+  - thanks

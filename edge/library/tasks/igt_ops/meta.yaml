@@ -1,0 +1,42 @@
+id: igt_ops
+title: Iowa Gambling Task (operational)
+category: Decision making
+summary: 'Choose among four patrol routes or sensor packages with hidden long-run payoffs: learning to avoid high-gain,
+  high-loss options.'
+description: >-
+  The library's Iowa Gambling Task with operator displays. 100 choices among four options, starting with 2000 points. Options
+  A and B earn 100 points per choice but lose 1250 every 10 choices (net -250); options C and D earn 50 but lose 250 every
+  10 choices (net +250). A and C give frequent small losses, B and D one larger loss per 10 choices. Each choice is followed
+  by the gain and the loss. Main outcome: the net score (C+D minus A+B) in each of the five blocks of 20 choices, which
+  rises as people learn.
+measures:
+- net score (good minus bad option choices) per block of 20
+- proportion of good-option choices
+- points at the end
+- choice time
+duration_min: 6
+input: mouse
+languages:
+- en
+variant_of: igt
+domain: defense
+themes:
+- c2
+- uav
+adaptation: >-
+  The four decks become four operational options with hidden payoff schedules; the schedules, the 100 choices, the mouse
+  response and the measures are those of the classic task, with points instead of money. c2: four patrol routes A-D for
+  Sector BRAVO, shown as console panels over the tactical map; a choice sends the next patrol along that route, the gain
+  is information gathered and a loss is a delay on the route. uav: four sensor packages A-D for the next tasking of a surveillance
+  air vehicle, over its camera picture; the gain is coverage gathered and a loss stands for re-tasking and gaps in the coverage.
+  Routes, sensors and places are generic and fictional.
+references:
+- Bechara, A., Damasio, A. R., Damasio, H., & Anderson, S. W. (1994). Insensitivity to future consequences following damage
+  to human prefrontal cortex. Cognition, 50, 7–15.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/igt.html
+notes: >-
+  Switch the display with the variable `theme` (c2, uav). The payoff schedules (variables gains / losses) are those of `igt`
+  (fixed 40-entry schedule per option with the original totals per 10 choices); the payoffs are worked out by variable items,
+  no code item. card.shown_theme records the theme in every trial. Pictures from EDGE's defence kit (tools/library/make_igt_ops.py
+  copies them and writes the trial list).

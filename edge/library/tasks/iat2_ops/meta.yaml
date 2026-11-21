@@ -1,0 +1,52 @@
+id: iat2_ops
+title: Implicit Association Test (operational)
+category: Social and implicit
+summary: Sort own and other systems and reliable and unreliable status words with two keys; faster sorting for one pairing
+  reveals an implicit association between a system's origin and its reliability.
+description: >-
+  The library's IAT with operator displays and system categories: Own systems vs Other systems (targets) and Reliable vs
+  Unreliable (attributes, status words). Seven blocks as in Greenwald, Nosek and Banaji (2003): 20 target trials, 20 attribute
+  trials, 20 + 40 combined trials, 40 target trials with the sides swapped, 20 + 40 combined trials with the opposite pairing.
+  E = left category, I = right category; an error shows a red X and must be corrected, so latencies include the correction.
+  Which pairing comes first alternates with the participant number. Main outcome: the D score (positive = faster when Own
+  systems share a key with Reliable); also latency per pairing, accuracy, and the share of very fast responses as an exclusion
+  check.
+measures:
+- D score (Greenwald et al., 2003)
+- latency per pairing (compatible / incompatible)
+- accuracy of the first key
+- share of responses under 300 ms (exclusion check)
+duration_min: 6
+input: keyboard
+languages:
+- en
+variant_of: iat2
+domain: defense
+themes:
+- c2
+- ew
+adaptation: >-
+  The flowers / insects and pleasant / unpleasant words of the classic task become categories of systems: the design, keys,
+  error correction, counterbalancing, D score and measures stay the same. The categories are about systems only, never about
+  people, nations or groups. c2: Own systems are friendly track symbols (blue rectangle frame) and Other systems hostile
+  track symbols (red diamond frame), each with a fictional track number, shown as pictures over a faint tactical plot. ew:
+  Own systems and Other systems are named emitters of an emitter console ("own datalink", "other datalink" ...), shown over
+  a faint spectrum display. In both themes Reliable and Unreliable are console status words ("verified", "stable" ... "dropout",
+  "fault" ...). A positive D score means that own systems are more readily associated with reliability, a question of trust
+  in systems studied in human-automation research. Track numbers and emitters are fictional.
+references:
+- 'Greenwald, A. G., McGhee, D. E., & Schwartz, J. L. K. (1998). Measuring individual differences in implicit cognition:
+  The Implicit Association Test. Journal of Personality and Social Psychology, 74(6), 1464–1480.'
+- 'Greenwald, A. G., Nosek, B. A., & Banaji, M. R. (2003). Understanding and using the Implicit Association Test: I. An
+  improved scoring algorithm. Journal of Personality and Social Psychology, 85(2), 197–216.'
+- 'Merritt, S. M., Heimbaugh, H., LaChapell, J., & Lee, D. (2013). I trust it, but I don''t know why: Effects of implicit
+  attitudes toward automation on trust in an automated system. Human Factors, 55(3), 520–534.'
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/iat2.html
+notes: >-
+  Switch the display with the variable `theme` (c2, ew). The trial lists (lists/block1-7.csv, written by tools/library/make_iat2_ops.py)
+  name each stimulus by its category (role) and its place in the category's list (item, 0-7); the stimuli themselves are
+  under variables (targets per theme, attr_words), so other systems or words can be put in there without touching the lists
+  (keep 8 per category). The stimulus shown is saved in key.stimulus, the theme in key.shown_theme. In the ew theme the
+  two target categories differ by their first word; for a harder classification, use names that do not carry the category.
+  The D score is worked out by a small code item, as in `iat2`.

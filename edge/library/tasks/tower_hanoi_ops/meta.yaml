@@ -1,0 +1,45 @@
+id: tower_hanoi_ops
+title: Tower of Hanoi (operational)
+category: Problem solving
+summary: Re-order a stack of tasked assets (or waiting air vehicles) to another holding point, one at a time, never a larger
+  one on a smaller one.
+description: >-
+  The library's Tower of Hanoi with operator displays. Assets of four sizes are stacked at one of three holding points;
+  the operator moves the whole stack to the goal point by clicking a point to lift its top asset, then the point where it
+  goes (clicking the same point puts it back). A larger asset may never go on a smaller one: such a move is refused and
+  counted as a violation. A practice problem with 2 assets, then three test problems (3 assets, 4 assets, 4 assets to the
+  middle point). Main outcomes per problem: moves and excess moves over the minimum (2^n - 1), rule violations, problems
+  solved and solution time.
+measures:
+- moves and excess moves over the minimum
+- rule violations
+- problems solved
+- solution time
+duration_min: 7
+input: mouse
+languages:
+- en
+variant_of: tower_hanoi
+domain: defense
+themes:
+- c2
+- uav
+adaptation: >-
+  The pegs and disks of the classic task become holding points and a stack of tasked assets to be re-ordered under a fixed
+  rule; the problems, rules, mouse input and measures stay the same. c2: three holding points (HOLD ALPHA, BRAVO, CHARLIE)
+  over the tactical map; the disks are tasked assets, blue cards of four sizes labelled ASSET 1-4. uav: three waypoints
+  over the camera picture; the disks are air vehicles waiting in a stack (amber cards AV 1-4). The task measures planning
+  a sequence of moves under constraints, as in re-sequencing taskings; assets and places are generic and fictional.
+references:
+- Byrnes, M. M., & Spitz, H. H. (1979). Developmental progression of performance on the Tower of Hanoi problem. Bulletin
+  of the Psychonomic Society, 14(5), 379–381.
+- Davis, H. P., & Klebe, K. J. (2001). A longitudinal study of the performance of the elderly and the young on the Tower
+  of Hanoi puzzle and Rey recall. Brain and Cognition, 46(1–2), 95–99.
+- Simon, H. A. (1975). The functional equivalence of problem solving skills. Cognitive Psychology, 7(2), 268–288.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/tower_hanoi.html
+notes: >-
+  Switch the display with the variable `theme` (c2, uav). As in `tower_hanoi`, the moves are handled by two short code items
+  (where the assets are drawn; what a click does). The names, labels and colours of the stacks and assets are under variables
+  (`look`, per theme). Result columns as in the classic task (result.moves, result.excess_moves, result.violations, result.solved,
+  result.solve_time; result.shown_theme records the theme). Backgrounds from EDGE's defence kit (tools/library/make_tower_hanoi_ops.py).

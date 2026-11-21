@@ -1,0 +1,260 @@
+name: iat2_ops
+description: >
+  Implicit Association Test, operational adaptation (after Greenwald, McGhee & Schwartz, 1998), with the standard
+  seven blocks and the improved D score of Greenwald, Nosek & Banaji (2003): the same paradigm and measures as the
+  library's `iat2` task. The categories are about systems only: Own systems vs Other systems, and Reliable vs
+  Unreliable status words. Stimuli are sorted with E (left) and I (right); a wrong key shows a red X and the correct
+  key must then be pressed. Blocks 3+4 and 6+7 pair the categories in the two opposite ways; which pairing comes
+  first alternates with the participant number (odd: Own systems + Reliable first). D > 0: faster when Own systems
+  share a key with Reliable. One variable, `theme`, sets the display: c2 (own and other systems are friendly and
+  hostile track symbols with track numbers, on a tactical plot) or ew (own and other emitters, named on a spectrum
+  console).
+
+# The theme switch follows search_ops (see that file): `theme` is the first variable. The stimuli are data: each
+# row of lists/block1-7.csv names a category (role) and an `item` (0-7), and the trial looks the stimulus up for the
+# current theme: targets[theme][role][item] (a picture in c2, a word in ew) or attr_words[role][item]. Backgrounds
+# and instructions are items guarded with `if: "$theme == ..."`. Keys, blocks, counterbalancing, the D score and
+# the measures are those of `iat2`.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2                              # display theme: c2 or ew
+  cat_a: Own systems                     # target category expected to go with the positive attribute
+  cat_b: Other systems
+  attr_pos: Reliable
+  attr_neg: Unreliable
+  # the stimuli of each category (8 each; the trial lists give the place in the list, `item`)
+  targets:
+    c2:
+      target_a: [stimuli/own_1.png, stimuli/own_2.png, stimuli/own_3.png, stimuli/own_4.png, stimuli/own_5.png,
+                 stimuli/own_6.png, stimuli/own_7.png, stimuli/own_8.png]
+      target_b: [stimuli/other_1.png, stimuli/other_2.png, stimuli/other_3.png, stimuli/other_4.png,
+                 stimuli/other_5.png, stimuli/other_6.png, stimuli/other_7.png, stimuli/other_8.png]
+    ew:
+      target_a: [own datalink, own nav radar, own radio net, own beacon, own altimeter, own transponder,
+                 own weather radar, own satcom]
+      target_b: [other datalink, other nav radar, other radio net, other beacon, other altimeter, other transponder,
+                 other weather radar, other satcom]
+  pictures: {c2: true, ew: false}        # whether the theme's target stimuli are pictures (else words)
+  attr_words:
+    positive: [nominal, stable, verified, accurate, steady, consistent, dependable, confirmed]
+    negative: [fault, dropout, erratic, corrupted, failed, drifting, stale, garbled]
+  order: 1                               # 1 = compatible pairing first, 2 = incompatible first (set from the participant number)
+  lat: {3: [], 4: [], 6: [], 7: []}       # latencies of the combined blocks, for the D score
+  n_fast: 0                              # combined-block responses faster than 300 ms
+  n_combined: 0
+  d_score: null
+  shown_block: 0                         # block whose instructions were shown last
+  a_left: true                           # whether target A is on the left (E) in the current block
+  left_target: ""
+  right_target: ""
+  left_attr: ""
+  right_attr: ""
+  pairing: none
+
+measures:
+  - {id: d_score, label: IAT D score, role: outcome, column: result.d_score, summary: last, expect: [-2, 2]}
+  - {id: rt, label: Latency to the correct key, role: outcome, column: fix.rt, trials: "$phase in ('practice', 'test') and fix.rt < 10",
+     summary: mean, units: s, expect: [0.2, 10]}
+  - {id: accuracy, label: Accuracy of the first key, role: outcome, column: first.corr, trials: "$phase in ('practice', 'test')",
+     summary: proportion}
+  - {id: pairing, label: Pairing (compatible = Own systems with Reliable), role: factor, column: pairing}
+  - {id: fast_share, label: Share of responses under 300 ms (exclude if > 0.10), role: check, column: result.fast_share,
+     summary: last, expect: [0, 0.1]}
+
+routines:
+  instructions:
+    components:
+      # odd participant numbers start with the compatible pairing, even ones with the incompatible pairing
+      - id: counterbalance
+        type: variable
+        set: {order: "$1 if int(''.join([c for c in str(participant) if c.isdigit()]) or '0') % 2 == 1 else 2"}
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 23
+        wrap_width: 1100
+        color: "#e8f8ff"
+        text: |
+          In this task you sort items on the tactical display into groups, as fast as you can.
+
+          OWN SYSTEMS are friendly tracks: a blue rectangle frame with a track number.
+          OTHER SYSTEMS are hostile tracks: a red diamond frame with a track number.
+          RELIABLE and UNRELIABLE are status words, such as "verified" or "dropout".
+
+          The group names are shown in the top left and top right corners.
+          Press E (left hand) for items that belong to the group on the left,
+          and I (right hand) for items that belong to the group on the right.
+          If you make a mistake, a red X appears: then press the other key to go on.
+
+          Keep your fingers on E and I. Go as fast as you can while making few mistakes.
+          Press SPACE to start.
+      - id: text_ew
+        type: text
+        if: "$theme == 'ew'"
+        height: 23
+        wrap_width: 1100
+        color: "#e8f8ff"
+        text: |
+          In this task you sort the entries of the emitter console into groups, as fast as you can.
+
+          OWN SYSTEMS are our own emitters, such as "own datalink".
+          OTHER SYSTEMS are emitters that are not ours, such as "other datalink".
+          RELIABLE and UNRELIABLE are status words, such as "verified" or "dropout".
+
+          The group names are shown in the top left and top right corners.
+          Press E (left hand) for entries that belong to the group on the left,
+          and I (right hand) for entries that belong to the group on the right.
+          If you make a mistake, a red X appears: then press the other key to go on.
+
+          Keep your fingers on E and I. Go as fast as you can while making few mistakes.
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  block_intro:
+    components:
+      # the layout of this block: target A is on the left in blocks 1-4 for order 1 and in blocks 5-7 for order 2;
+      # the positive attribute is always on the left
+      - id: layout
+        type: variable
+        set:
+          shown_block: $block
+          a_left: "$(order == 1) == (block < 5)"
+          left_target: "$'' if block == 2 else (cat_a if a_left else cat_b)"
+          right_target: "$'' if block == 2 else (cat_b if a_left else cat_a)"
+          left_attr: "$attr_pos if block in (2, 3, 4, 6, 7) else ''"
+          right_attr: "$attr_neg if block in (2, 3, 4, 6, 7) else ''"
+          pairing: "$('compatible' if a_left else 'incompatible') if block in (3, 4, 6, 7) else 'none'"
+      - id: title
+        type: text
+        pos: [0, 220]
+        height: 30
+        color: "#9fe8ff"
+        text: "$f'Part {block} of 7'"
+      - id: rule
+        type: text
+        height: 26
+        wrap_width: 1100
+        color: "#e8f8ff"
+        text: "$f\"Press E for:  {' or '.join([x for x in [left_target, left_attr] if x])}\\n\\nPress I for:  {' or '.join([x for x in [right_target, right_attr] if x])}\\n\\nThe group names stay in the corners.\\n\\nPress SPACE to begin.\""
+      - {id: ready, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - id: key
+        type: variable
+        set:
+          corr_key: "$'e' if role == 'positive' or (role == 'target_a' and a_left) or (role == 'target_b' and not a_left) else 'i'"
+          colour: "$'#80e0ff' if kind == 'target' else '#ffffff'"
+          stimulus: "$targets[theme][role][item] if kind == 'target' else attr_words[role][item]"
+          shown_theme: $theme
+      # the console behind the stimuli, faint: tactical plot (c2) or spectrum display (ew)
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720], opacity: 0.25}
+      - {id: spectrum_ew, type: image, if: "$theme == 'ew'", image: stimuli/spectrum_1280x720.png, size: [1280, 720], opacity: 0.25}
+      - {id: lt, type: text, text: $left_target, pos: [-470, 290], height: 26, color: "#80e0ff"}
+      - {id: lor, type: text, text: "$'or' if left_target and left_attr else ''", pos: [-470, 252], height: 20}
+      - {id: la, type: text, text: $left_attr, pos: "$[-470, 214 if left_target else 290]", height: 26}
+      - {id: rtl, type: text, text: $right_target, pos: [470, 290], height: 26, color: "#80e0ff"}
+      - {id: ror, type: text, text: "$'or' if right_target and right_attr else ''", pos: [470, 252], height: 20}
+      - {id: ra, type: text, text: $right_attr, pos: "$[470, 214 if right_target else 290]", height: 26}
+      # the stimulus: a picture (c2 targets) or a word (ew targets and every attribute)
+      - {id: stim_pic, type: image, if: "$kind == 'target' and pictures[theme]", image: $stimulus, size: [180, 165], start: 0.25}
+      - {id: stim, type: text, if: "$not (kind == 'target' and pictures[theme])", text: $stimulus, color: $colour,
+         font: DejaVu Sans Mono, height: 42, start: 0.25}
+      - {id: error_x, type: text, text: X, color: "#ff3030", height: 80, pos: [0, -130], start_if: "$first.corr == 0"}
+      # the first key pressed (accuracy) ...
+      - {id: first, type: keyboard, keys: [e, i], correct: $corr_key, start: 0.25}
+      # ... and the correct key, which ends the trial (its RT includes the time to correct an error)
+      - {id: fix, type: keyboard, keys: "$[corr_key]", correct: $corr_key, start: 0.25, end_routine: true}
+      - id: collect
+        type: variable
+        if: "$block in (3, 4, 6, 7)"
+        when: end
+        set:
+          lat: "${**lat, block: lat[block] + [fix.rt]}"
+          n_fast: "$n_fast + (1 if first.rt is not None and first.rt < 0.3 else 0)"
+          n_combined: $n_combined + 1
+
+  thanks:
+    components:
+      - {id: reset, type: variable, set: {pairing: ""}}      # the scores below belong to no pairing
+      - id: dcalc
+        type: code
+        on_begin: |
+          # D score (Greenwald, Nosek & Banaji, 2003, with the built-in error penalty): latencies to the correct
+          # key, trials of 10 s or more dropped. Part 1 compares blocks 3 and 6, part 2 blocks 4 and 7:
+          # (mean of the later block - mean of the earlier block) / SD of both blocks together. D = mean of the parts,
+          # signed so that D > 0 means faster when the first target category shares a key with the positive words.
+          import statistics as _st
+          _keep = {b: [x for x in lat[b] if x is not None and x < 10] for b in lat}
+          _parts = []
+          for _early, _late in ((3, 6), (4, 7)):
+              _both = _keep[_early] + _keep[_late]
+              if len(_keep[_early]) > 1 and len(_keep[_late]) > 1 and _st.stdev(_both) > 0:
+                  _parts.append((_st.fmean(_keep[_late]) - _st.fmean(_keep[_early])) / _st.stdev(_both))
+          d_score = round(sum(_parts) / len(_parts) * (1 if order == 1 else -1), 4) if len(_parts) == 2 else None
+      - id: result
+        type: variable
+        set:
+          d_score: $d_score
+          order: $order
+          fast_share: "$round(n_fast / n_combined, 4) if n_combined else None"
+
+      - {id: bye, type: text, height: 30, color: "#9fe8ff", text: "That's all. Thank you!\n\nPress SPACE to finish."}
+      - {id: done, type: keyboard, keys: [space], end_routine: true, duration: 10}
+
+flow:
+  - instructions
+  - loop: block1
+    conditions: lists/block1.csv
+    order: random
+    max_repeat: {alternate: {target: 1, attribute: 1}, role: 3}
+    children:
+      - {routine: block_intro, if: "$block != shown_block"}
+      - trial
+  - loop: block2
+    conditions: lists/block2.csv
+    order: random
+    max_repeat: {alternate: {target: 1, attribute: 1}, role: 3}
+    children:
+      - {routine: block_intro, if: "$block != shown_block"}
+      - trial
+  - loop: block3
+    conditions: lists/block3.csv
+    order: random
+    max_repeat: {alternate: {target: 1, attribute: 1}, role: 3}
+    children:
+      - {routine: block_intro, if: "$block != shown_block"}
+      - trial
+  - loop: block4
+    conditions: lists/block4.csv
+    order: random
+    max_repeat: {alternate: {target: 1, attribute: 1}, role: 3}
+    children:
+      - {routine: block_intro, if: "$block != shown_block"}
+      - trial
+  - loop: block5
+    conditions: lists/block5.csv
+    order: random
+    max_repeat: {alternate: {target: 1, attribute: 1}, role: 3}
+    children:
+      - {routine: block_intro, if: "$block != shown_block"}
+      - trial
+  - loop: block6
+    conditions: lists/block6.csv
+    order: random
+    max_repeat: {alternate: {target: 1, attribute: 1}, role: 3}
+    children:
+      - {routine: block_intro, if: "$block != shown_block"}
+      - trial
+  - loop: block7
+    conditions: lists/block7.csv
+    order: random
+    max_repeat: {alternate: {target: 1, attribute: 1}, role: 3}
+    children:
+      - {routine: block_intro, if: "$block != shown_block"}
+      - trial
+  - thanks

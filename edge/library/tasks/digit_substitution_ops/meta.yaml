@@ -1,0 +1,42 @@
+id: digit_substitution_ops
+title: Digit symbol substitution test (operational)
+category: Attention
+summary: Type the code that belongs to each track symbol or emitter mark, using a code table, as many as possible in 90
+  seconds.
+description: >-
+  The library's digit symbol substitution test with operator symbols. A code table at the top pairs the codes 1-9 with nine
+  symbols; one symbol at a time appears in the middle and the operator types its code with the number keys. 9 practice items
+  with feedback (each symbol once), then a 90-second test with items one after another (no symbol twice in a row; an item
+  left for 15 s counts as missed). Main outcome: the number of correct codes in 90 s; also accuracy and the median time
+  per correct item.
+measures:
+- correct codes in 90 s
+- accuracy
+- time per item
+duration_min: 3
+input: keyboard
+languages:
+- en
+variant_of: digit_substitution
+domain: defense
+themes:
+- c2
+- ew
+adaptation: >-
+  The nine abstract symbols of the classic task become operational symbols that have to be told apart by two features at
+  once, as when decoding symbols on a display; the code table, timing, keys and measures stay the same. c2: the kit's track
+  symbols, friendly (blue rectangle), hostile (red diamond) and neutral (green square) frames with an air, surface or ground
+  icon, over a faint tactical map. ew: waterfall emitter marks, pulsed (dashed), continuous (solid) and hopping (offset
+  bursts) traces in the three threat colours, over a faint waterfall. The codes are arbitrary table entries; symbols and
+  emitters are generic.
+references:
+- 'Jaeger, J. (2018). Digit symbol substitution test: The case for sensitivity over specificity in neuropsychological testing.
+  Journal of Clinical Psychopharmacology, 38(5), 513–519.'
+- 'Wechsler, D. (1939). The measurement of adult intelligence. Baltimore: Williams & Wilkins.'
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/digit_substitution.html
+notes: >-
+  Switch the display with the variable `theme` (c2, ew). The symbol of each code is set under variables (`symbols`, per
+  theme); change the pairing there. The 90-second clock is kept by a small code item, as in `digit_substitution`. Track
+  symbols and six emitter marks come from EDGE's defence kit; the three hopping marks are drawn by tools/library/make_digit_substitution_ops.py
+  in the kit's style.

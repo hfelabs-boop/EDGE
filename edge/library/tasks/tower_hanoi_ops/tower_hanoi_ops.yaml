@@ -1,0 +1,237 @@
+name: tower_hanoi_ops
+description: >
+  Tower of Hanoi, operational adaptation (see Byrnes & Spitz, 1979; Davis & Klebe, 2001): the same problems, rules
+  and measures as the library's `tower_hanoi` task, as re-ordering a stack of tasked assets. Assets of four sizes
+  are stacked at three holding points; move the whole stack to the goal holding point, one asset at a time, never
+  putting a larger asset on a smaller one. Click a holding point to pick up its top asset, then click the holding
+  point where it should go. A practice problem with 2 assets is followed by three test problems (3 assets, 4 assets,
+  4 assets to the middle). One variable, `theme`, sets the display: c2 (holding points ALPHA-CHARLIE on the tactical
+  map; tasked assets) or uav (waypoints on the camera picture; air vehicles waiting in a stack). Main outcomes per
+  problem: number of moves (the fewest possible is 2^n - 1), excess moves, rule violations (attempts to put a larger
+  asset on a smaller one; the move is refused) and solution time.
+
+# The theme switch follows search_ops (see that file): `theme` is the first variable; the background and the
+# instructions are items guarded with `if: "$theme == ..."`, and the names and colours of the stacks and assets are
+# per-theme data (`look`). The rules, the two small code items (where the assets are drawn; what a click does),
+# the problems and the result columns are those of `tower_hanoi`.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2                    # display theme: c2 or uav
+  # per theme: the names of the three stacks, the label and colour of each asset (1 = smallest)
+  look:
+    c2:
+      places: [HOLD ALPHA, HOLD BRAVO, HOLD CHARLIE]
+      labels: [ASSET 1, ASSET 2, ASSET 3, ASSET 4]
+      fills: ["#bfefff", "#80e0ff", "#3ab4dc", "#1d7fa8"]
+      post: "#00e5ff"
+    uav:
+      places: [WAYPOINT 1, WAYPOINT 2, WAYPOINT 3]
+      labels: [AV 1, AV 2, AV 3, AV 4]
+      fills: ["#ffe08a", "#ffc400", "#e0a000", "#b07800"]
+      post: "#d8ffd8"
+  peg_x: [-360, 0, 360]
+  pegs: [[], [], []]           # assets at each stack, bottom to top (1 = smallest)
+  held: null                   # stack whose top asset is picked up, or null
+  moves: 0
+  violations: 0
+  last_violation: false
+  solved: false
+  disk_pos: {}
+  t_start: 0
+  solve_time: 0
+
+measures:
+  - {id: moves, label: Moves, role: outcome, column: result.moves, loop: problems, summary: mean}
+  - {id: excess_moves, label: Moves above the minimum (solved problems), role: outcome, column: result.excess_moves,
+     trials: $result.solved == 1, loop: problems, summary: mean, expect: [0, 300]}
+  - {id: violations, label: Rule violations, role: outcome, column: result.violations, loop: problems, summary: sum}
+  - {id: solved, label: Problems solved, role: outcome, column: result.solved, loop: problems, summary: proportion}
+  - {id: solve_time, label: Solution time, role: outcome, column: result.solve_time, trials: $result.solved == 1,
+     loop: problems, summary: mean, units: s}
+  - {id: n_disks, label: Number of assets, role: factor, column: n_disks}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        color: "#e8f8ff"
+        height: 24
+        wrap_width: 1100
+        text: |
+          Re-ordering tasked assets
+
+          Tasked assets of different sizes are stacked at holding point ALPHA, the largest at the bottom.
+          Move the whole stack to the holding point marked GOAL, in as few moves as you can.
+
+          Rules: move one asset at a time, and only the top asset of a stack.
+          A larger asset may never be put on top of a smaller one.
+
+          Click a holding point to pick up its top asset (it rises), then click the holding point
+          where it should go. Click the same holding point again to put the asset back.
+
+          First a practice problem with 2 assets. Press SPACE to start.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        color: "#e8f8ff"
+        height: 24
+        wrap_width: 1100
+        text: |
+          Re-ordering a stack of air vehicles
+
+          Air vehicles of different sizes wait in a stack over waypoint 1, the largest at the bottom.
+          Move the whole stack to the waypoint marked GOAL, in as few moves as you can.
+
+          Rules: move one air vehicle at a time, and only the top one of a stack.
+          A larger air vehicle may never be put above a smaller one.
+
+          Click a waypoint to pick up its top air vehicle (it rises), then click the waypoint
+          where it should go. Click the same waypoint again to put it back.
+
+          First a practice problem with 2 air vehicles. Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  problem_intro:
+    components:
+      - id: setup
+        type: variable
+        set:
+          pegs: "$[list(range(n_disks, 0, -1)) if p == start_peg else [] for p in range(3)]"
+          held: null
+          moves: 0
+          violations: 0
+          last_violation: false
+          solved: false
+      - id: intro_text
+        type: text
+        color: "#e8f8ff"
+        height: 28
+        text: "$f\"{title}\\n\\nMove all {n_disks} {'assets' if theme == 'c2' else 'air vehicles'} to {look[theme]['places'][goal_peg]} (GOAL).\\nIt can be done in {min_moves} moves.\\n\\nPress SPACE to start.\""
+      - {id: intro_key, type: keyboard, keys: [space], end_routine: true}
+      - id: start_timer
+        type: code
+        on_end: |
+          t_start = session.clock()
+
+  board:
+    components:
+      # where to draw each asset: on its stack at its height; the picked-up asset floats above its stack
+      - id: layout
+        type: code
+        save: false
+        on_begin: |
+          disk_pos = {}
+          for _p, _stack in enumerate(pegs):
+              for _level, _d in enumerate(_stack):
+                  disk_pos[_d] = [peg_x[_p], -186 + _level * 30]
+          if held is not None:
+              disk_pos[pegs[held][-1]] = [peg_x[held], 150]
+      # the display: the tactical map (c2) or the camera picture (uav), faint
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720], opacity: 0.45}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_04_river.jpg, size: [1280, 720], opacity: 0.6}
+      - {id: base, type: shape, shape: rect, size: [1150, 24], pos: [0, -212], fill: "#0a2232", line_color: "$look[theme]['post']", line_width: 2}
+      - {id: peg0, type: shape, shape: rect, size: [6, 230], pos: [-360, -90], fill: "$look[theme]['post']"}
+      - {id: peg1, type: shape, shape: rect, size: [6, 230], pos: [0, -90], fill: "$look[theme]['post']"}
+      - {id: peg2, type: shape, shape: rect, size: [6, 230], pos: [360, -90], fill: "$look[theme]['post']"}
+      - {id: name0, type: text, text: "$look[theme]['places'][0]", font: DejaVu Sans Mono, pos: [-360, 50], height: 18, color: "$look[theme]['post']"}
+      - {id: name1, type: text, text: "$look[theme]['places'][1]", font: DejaVu Sans Mono, pos: [0, 50], height: 18, color: "$look[theme]['post']"}
+      - {id: name2, type: text, text: "$look[theme]['places'][2]", font: DejaVu Sans Mono, pos: [360, 50], height: 18, color: "$look[theme]['post']"}
+      - {id: goal_label, type: text, text: GOAL, pos: "$[peg_x[goal_peg], -250]", height: 24, bold: true, color: "#34c759"}
+      - {id: disk1, type: shape, if: "$n_disks >= 1", shape: rect, size: [90, 26], pos: "$disk_pos.get(1, [0, -2000])", fill: "$look[theme]['fills'][0]", line_color: "#04121c", line_width: 2}
+      - {id: disk2, type: shape, if: "$n_disks >= 2", shape: rect, size: [130, 26], pos: "$disk_pos.get(2, [0, -2000])", fill: "$look[theme]['fills'][1]", line_color: "#04121c", line_width: 2}
+      - {id: disk3, type: shape, if: "$n_disks >= 3", shape: rect, size: [170, 26], pos: "$disk_pos.get(3, [0, -2000])", fill: "$look[theme]['fills'][2]", line_color: "#04121c", line_width: 2}
+      - {id: disk4, type: shape, if: "$n_disks >= 4", shape: rect, size: [210, 26], pos: "$disk_pos.get(4, [0, -2000])", fill: "$look[theme]['fills'][3]", line_color: "#04121c", line_width: 2}
+      - {id: label1, type: text, if: "$n_disks >= 1", text: "$look[theme]['labels'][0]", font: DejaVu Sans Mono, bold: true, height: 15, color: "#04121c", pos: "$disk_pos.get(1, [0, -2000])"}
+      - {id: label2, type: text, if: "$n_disks >= 2", text: "$look[theme]['labels'][1]", font: DejaVu Sans Mono, bold: true, height: 15, color: "#04121c", pos: "$disk_pos.get(2, [0, -2000])"}
+      - {id: label3, type: text, if: "$n_disks >= 3", text: "$look[theme]['labels'][2]", font: DejaVu Sans Mono, bold: true, height: 15, color: "#04121c", pos: "$disk_pos.get(3, [0, -2000])"}
+      - {id: label4, type: text, if: "$n_disks >= 4", text: "$look[theme]['labels'][3]", font: DejaVu Sans Mono, bold: true, height: 15, color: "#e8f8ff", pos: "$disk_pos.get(4, [0, -2000])"}
+      - {id: status_bar, type: shape, shape: rect, size: [1280, 40], pos: [0, 300], fill: "#0a2232", opacity: 0.85}
+      - {id: status, type: text, font: DejaVu Sans Mono, pos: [0, 300], height: 20, color: "#9fe8ff",
+         text: "$f'Moves: {moves}        (fewest possible: {min_moves})'"}
+      - {id: warning, type: text, pos: [0, 250], height: 22, color: "#ff3b30",
+         text: "$('A larger asset cannot go on a smaller one.' if theme == 'c2' else 'A larger air vehicle cannot go above a smaller one.') if last_violation else ''"}
+      # one click area per stack (invisible), wide enough to click anywhere above it
+      - {id: zone0, type: shape, shape: rect, size: [340, 520], pos: [-360, -20], fill: transparent}
+      - {id: zone1, type: shape, shape: rect, size: [340, 520], pos: [0, -20], fill: transparent}
+      - {id: zone2, type: shape, shape: rect, size: [340, 520], pos: [360, -20], fill: transparent}
+      - {id: click, type: mouse, clickable: [zone0, zone1, zone2], end_routine: true, duration: 60}
+      # the move: pick up a top asset, put it down on another stack if the rules allow it, or count a violation
+      - id: move
+        type: code
+        on_end: |
+          _p = int(click.clicked[-1]) if click.clicked else None
+          last_violation = False
+          if _p is not None:
+              if held is None:
+                  if pegs[_p]:
+                      held = _p
+              elif _p == held:
+                  held = None
+              else:
+                  if pegs[_p] and pegs[_p][-1] < pegs[held][-1]:
+                      violations += 1
+                      last_violation = True
+                  else:
+                      pegs[_p].append(pegs[held].pop())
+                      moves += 1
+                  held = None
+          solved = len(pegs[goal_peg]) == n_disks
+
+  problem_end:
+    duration: 2.5
+    components:
+      - id: timer
+        type: code
+        on_begin: |
+          solve_time = round(session.clock() - t_start, 3)
+      - id: result
+        type: variable
+        set:
+          solved: "$1 if solved else 0"
+          moves: $moves
+          min_moves: $min_moves
+          excess_moves: "$moves - min_moves if solved else None"
+          violations: $violations
+          solve_time: $solve_time
+          shown_theme: $theme
+      - id: end_text
+        type: text
+        color: "#e8f8ff"
+        height: 30
+        text: "$f'Solved in {moves} moves (fewest possible: {min_moves}).' if solved else 'Time to go on to the next problem.'"
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, color: "#9fe8ff", height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: [{title: Practice, phase: practice, n_disks: 2, start_peg: 0, goal_peg: 2, min_moves: 3}]
+    children:
+      - problem_intro
+      - loop: practice_clicks
+        conditions: [{step: click}]
+        repeats: 200
+        stop_if: $solved
+        children: [board]
+      - problem_end
+  - loop: problems
+    conditions: hanoi_problems.csv
+    order: sequential
+    children:
+      - problem_intro
+      - loop: clicks
+        conditions: [{step: click}]
+        repeats: 300
+        stop_if: $solved
+        children: [board]
+      - problem_end
+  - thanks

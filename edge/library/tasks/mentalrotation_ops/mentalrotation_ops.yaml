@@ -1,0 +1,144 @@
+name: mentalrotation_ops
+description: >
+  Mental rotation, operational adaptation (after Shepard & Metzler, 1971; two-dimensional version as in the library's
+  `mentalrotation` task): the same design, keys and measures. Two pictures are shown side by side: the right one is
+  the left one turned by 0-315 degrees (in steps of 45), either as it is or mirror-reversed. Press F if they are the
+  same, J if one is the mirror image of the other. 4 shapes x 8 angles x same/mirror = 64 trials after 8 practice
+  trials with feedback. One variable, `theme`, sets the display: c2 (area outlines on the tactical plot, the five-
+  square shapes of the classic task) or uav (vehicles seen from above in the camera picture). Main outcome: response
+  time (correct trials) rising with the angular difference (0, 45, 90, 135, 180 degrees); accuracy.
+
+# The theme switch follows search_ops (see that file): `theme` is the first variable. The stimuli are data: `looks`
+# maps each theme and shape (F, L, N, P, the shapes of the classic task's trial list) to its picture and its mirror
+# image, so the same two image items serve every theme; the right one is turned with `ori`. The background and the
+# instructions are items guarded with `if: "$theme == ..."`. Trial lists, timing, keys and measures are those of
+# `mentalrotation`.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2                   # display theme: c2 or uav
+  # per theme and shape: [the picture, its mirror image] (220 x 220 px, the shape's centre in the middle)
+  looks:
+    c2:
+      F: [stimuli/area_F.png, stimuli/area_F_mirror.png]
+      L: [stimuli/area_L.png, stimuli/area_L_mirror.png]
+      N: [stimuli/area_N.png, stimuli/area_N_mirror.png]
+      P: [stimuli/area_P.png, stimuli/area_P_mirror.png]
+    uav:
+      F: [stimuli/top_F.png, stimuli/top_F_mirror.png]
+      L: [stimuli/top_L.png, stimuli/top_L_mirror.png]
+      N: [stimuli/top_N.png, stimuli/top_N_mirror.png]
+      P: [stimuli/top_P.png, stimuli/top_P_mirror.png]
+  names: {c2: area outlines, uav: vehicles}
+
+measures:
+  - {id: rt, label: Response time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.3, 7.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: disparity, label: Angular difference (degrees), role: factor, column: disparity}
+  - {id: match, label: Same or mirror image, role: factor, column: match}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 24
+        wrap_width: 1050
+        color: "#e8f8ff"
+        pos: [0, 60]
+        text: |
+          You compare area outlines on the tactical plot.
+
+          Two areas are shown side by side. The right one is always turned compared with the left one.
+          Sometimes it is the very same area, only turned; sometimes it is its mirror image (flipped over).
+
+          Press F if the areas are the SAME (only turned).
+          Press J if one is the MIRROR image of the other.
+
+          Answer as quickly as you can without making mistakes. First 8 practice trials.
+          Press SPACE to start.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 24
+        wrap_width: 1050
+        color: "#e8f8ff"
+        pos: [0, 60]
+        text: |
+          You are the payload operator of a surveillance air vehicle, comparing vehicles seen from above.
+
+          Two vehicles are shown side by side. The right one is always turned compared with the left one.
+          Sometimes it is the very same vehicle, only turned; sometimes it is its mirror image (flipped over):
+          look at where its parts are.
+
+          Press F if the vehicles are the SAME (only turned).
+          Press J if one is the MIRROR image of the other.
+
+          Answer as quickly as you can without making mistakes. First 8 practice trials.
+          Press SPACE to start.
+      # an example pair (same, turned by 90 degrees), drawn as in the trials
+      - {id: example_left, type: image, image: "$looks[theme]['P'][0]", size: [150, 150], pos: [-110, -250]}
+      - {id: example_right, type: image, image: "$looks[theme]['P'][0]", size: [150, 150], pos: [110, -250], ori: -90}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      # the theme and the right-hand picture, saved in the data (shown.shown_theme, shown.probe_pic)
+      - {id: shown, type: variable, set: {shown_theme: $theme, probe_pic: "$looks[theme][shape][0 if mirror_sign == 1 else 1]"}}
+      # the display: the tactical plot (c2) or the camera picture with two bracket reticles (uav)
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720], opacity: 0.6}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_01_farmland.jpg, size: [1280, 720]}
+      - {id: bracket_left_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_brackets.png, size: [300, 300], pos: [-260, 0]}
+      - {id: bracket_right_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_brackets.png, size: [300, 300], pos: [260, 0]}
+      - {id: fix, type: text, text: "+", color: "#e8f8ff", height: 36, duration: 0.5}
+      # the left picture as it is; the right one mirrored (its mirror file) or not, and turned counter-clockwise by
+      # 'angle' degrees (ori turns clockwise, so ori = -angle, kept within -180..180)
+      - {id: ref, type: image, image: "$looks[theme][shape][0]", size: [220, 220], pos: [-260, 0], start: 0.5}
+      - {id: probe, type: image, image: "$looks[theme][shape][0 if mirror_sign == 1 else 1]", size: [220, 220], pos: [260, 0],
+         ori: "$-angle if angle <= 180 else 360 - angle", start: 0.5}
+      - {id: keymap_bar, type: shape, shape: rect, size: [1280, 40], pos: [0, -300], fill: "#0a2232", opacity: 0.85}
+      - {id: keymap, type: text, text: "F = same          J = mirror image", font: DejaVu Sans Mono, color: "#9fe8ff", height: 18, pos: [0, -300]}
+      - {id: resp, type: keyboard, keys: [f, j], correct: $corr_key, start: 0.5, duration: 7.5, end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 34
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  iti:
+    duration: 0.4
+    components:
+      - {id: blank, type: wait}
+
+  ready:
+    components:
+      - {id: ready_text, type: text, height: 26, color: "#e8f8ff", text: "Practice done. Now the real test begins, without feedback.\n\nPress SPACE to start."}
+      - {id: ready_key, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, color: "#9fe8ff", text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: mr_practice.csv
+    order: random
+    children: [trial, feedback]
+  - ready
+  - loop: trials
+    conditions: mr_trials.csv
+    order: random
+    max_repeat: {match: 4, shape: 2}
+    children: [trial, iti]
+  - thanks
