@@ -1,0 +1,70 @@
+# A colour-word interference task written for EDGE's importer tests,
+# in the PsyToolkit scripting language (version 3). Original script.
+
+options
+  bitmapdir stroop_pictures
+  background color 0 0 0
+  resolution 1024 768
+  fullscreen
+  scale
+
+fonts
+  arial 32
+
+bitmaps
+  fixpoint
+  right
+  wrong
+  instruction
+
+# description  word  ink colour (r g b)  correct key  congruent
+table colourwords
+  "red in red"     "RED"    255 0 0   1  1
+  "red in green"   "RED"    0 200 0   2  0
+  "green in green" "GREEN"  0 200 0   2  1
+  "green in red"   "GREEN"  255 0 0   1  0
+
+task colourword
+  table colourwords
+  keys r g
+  show bitmap fixpoint
+  delay 400
+  clear 1
+  delay 100
+  show text @2 0 0 @3 @4 @5
+  readkey @6 2000
+  clear 2
+  if STATUS == CORRECT
+    show bitmap right
+    set &hits increase
+  fi
+  if STATUS != CORRECT
+    show bitmap wrong 0 -100
+    show text "Press r for red and g for green" 0 100 255 255 255
+  fi
+  delay 600
+  clear screen
+  save BLOCKNAME @1 @7 RT STATUS &hits
+
+block practice
+  message instruction
+  tasks colourword 6
+  feedback
+    text align center
+    set &meanrt mean c4 ; select c5 == 1
+    set &errs count ; select c5 != 1
+    text 0 -50 "Practice done"
+    text 0 0 "Average speed: &meanrt ms"
+    text 0 50 "Mistakes: &errs"
+  end
+
+block test
+  tasks colourword 8
+  feedback
+    set &med median c4 ; select c5 == 1 && c3 == 0
+    text 0 0 "Median speed on mixed words: &med ms"
+  end
+
+blockorder
+  practice
+  test

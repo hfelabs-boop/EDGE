@@ -1,0 +1,25 @@
+name: colour_choice_touch
+description: Tap the patch of the colour named on the screen (a sample library task for tests).
+settings:
+  window: {size: [1280, 720], background: "#808080"}
+measures:
+  - {id: rt, label: Reaction time, role: outcome, column: tap.rt, trials: $tap.corr == 1, loop: trials, summary: median, units: s}
+  - {id: accuracy, label: Accuracy, role: outcome, column: tap.corr, loop: trials, summary: proportion}
+routines:
+  instructions:
+    components:
+      - {id: msg, type: text, text: "Tap the patch of the colour you read.\n\nTap anywhere to start.", height: 30}
+      - {id: go, type: mouse, touch: true, end_routine: true}
+  trial:
+    components:
+      - {id: word, type: text, text: $colour, pos: [0, 200], height: 40}
+      - {id: red_patch, type: shape, shape: rect, size: [200, 200], pos: [-250, -50], fill: red}
+      - {id: blue_patch, type: shape, shape: rect, size: [200, 200], pos: [250, -50], fill: blue}
+      - {id: tap, type: mouse, touch: true, clickable: [red_patch, blue_patch], correct: $target, duration: 3, end_routine: true}
+flow:
+  - instructions
+  - loop: trials
+    conditions: [{colour: RED, target: red_patch}, {colour: BLUE, target: blue_patch}]
+    order: random
+    repeats: 2
+    children: [trial]

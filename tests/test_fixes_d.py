@@ -112,7 +112,7 @@ def test_a_wrong_platform_is_refused_and_keeps_the_earlier_import(tmp_path):
     assert good.read_text() == before
     assert platform_name("PsychoPy") == "psychopy" and platform_name("E-Prime") == "eprime"
     assert platform_name("PsychoPy 2023.2.3") == "psychopy"
-    with pytest.raises(ImportError_, match="choose psychopy, eprime, opensesame, inquisit, presentation, psychtoolbox, gorilla, jspsych"):
+    with pytest.raises(ImportError_, match="choose psychopy, eprime, opensesame, inquisit, presentation, psychtoolbox, gorilla, psytoolkit, jspsych"):
         platform_name("superlab")
 
 
@@ -413,7 +413,7 @@ def test_mcp_import_platform_and_name(tmp_path):
     assert not bad["ok"] and "not E-Prime" in bad["error"]
     assert (tmp_path / ok["path"]).read_text() == before
     unknown = call(server, "import_experiment", source="pp/stroop.psyexp", platform="SuperLab")
-    assert not unknown["ok"] and "choose psychopy, eprime, opensesame, inquisit, presentation, psychtoolbox, gorilla, jspsych" in unknown["error"]
+    assert not unknown["ok"] and "choose psychopy, eprime, opensesame, inquisit, presentation, psychtoolbox, gorilla, psytoolkit, jspsych" in unknown["error"]
 
 
 def test_try_it_error_keeps_its_quotes(tmp_path):

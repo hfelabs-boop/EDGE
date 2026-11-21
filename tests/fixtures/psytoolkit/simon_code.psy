@@ -1,0 +1,60 @@
+# A spatial compatibility (Simon-like) task written for EDGE's importer tests,
+# in the PsyToolkit scripting language (version 3). Original script.
+# Respond to the COLOUR of the square (red: a, green: l), ignore where it is.
+
+options
+  background color 40 40 40
+  mouse on
+
+bitmaps
+  fix fix.png
+  red red_square.png
+  green green_square.png
+  oops
+
+table squares
+  "red left"    red   -250  1  "compatible"
+  "red right"   red    250  1  "incompatible"
+  "green left"  green -250  2  "incompatible"
+  "green right" green  250  2  "compatible"
+
+part fixation
+  show bitmap fix
+  delay 300
+  clear -1
+
+task simon
+  table squares
+  keys a l
+  part fixation
+  set $wait random 200 400
+  delay $wait
+  show bitmap @2 @3 0
+  readkey @4 1500
+  clear -1
+  if STATUS == WRONG
+    set &total_errors increase
+    show bitmap oops
+    delay 500
+    clear -1
+  fi
+  if STATUS == TIMEOUT
+    show text "Too slow" 0 0 255 255 0
+    delay 500
+    clear -1
+  fi
+  show circle 0 0 5 128 128 128
+  delay 200
+  readmouse l 5 3000
+  while &total_errors > 100
+  while-end
+  save BLOCKNAME TRIALCOUNT @1 @5 RT STATUS KEY
+
+message "Red square: press A.  Green square: press L.  Ignore where it is.  Press space to start."
+
+block main
+  tasks simon 12
+  feedback
+    set &m mean c5 ; select c6 == 1
+    text 0 0 "Your average: &m ms"
+  end

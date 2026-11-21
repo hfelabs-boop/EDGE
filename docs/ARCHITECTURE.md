@@ -39,7 +39,8 @@ edge/
   hotplug.py        plug and play: detection backends (USB/serial, LSL, gamepads, microphones, monitors, Tobii, Gazepoint,
                     LabJack, parallel), the watcher (connect/disconnect events), whether the experiment's devices are there
   hardware_db.py    what a device probably is and how to add it (built-in list + the lab's hardware.yaml)
-  importers/        PsychoPy, E-Prime, OpenSesame and jsPsych importers (`edge import`)
+  importers/        importers from PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Psychtoolbox, Gorilla, PsyToolkit (`edge import`)
+  library/          the task library: tasks/<id>/ folders (experiment, meta.yaml, stimuli), loader, copies, `edge library`
   templates.py      starter experiments (and hidden starting points for tutorials)
   survey.py         survey questions: model, validation, display logic, page renderer, auto-answers, data, scoring
   survey_library.py validated questionnaires and answer scales (citations, licences, scoring rules)

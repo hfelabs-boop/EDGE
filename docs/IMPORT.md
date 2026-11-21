@@ -9,6 +9,7 @@ edge import stroop.iqx                    # Inquisit (.iqx, older .exp scripts)
 edge import stroop.sce                    # Presentation (scenario + its .pcl program)
 edge import task.json                     # Gorilla (task structure and/or spreadsheet .csv/.xlsx)
 edge import stroop.m                      # Psychtoolbox (MATLAB script; partial translation)
+edge import stroop.zip                    # PsyToolkit (the zip from your account, or its script code.psy)
 ```
 
 You can also use the builder's **Import** button (drop all the files at once: experiment,
@@ -239,3 +240,53 @@ code, `while` loops that are not response loops, drawing with explicit rectangle
 (pictures are centred at their own size; `DrawFormattedText` positions become the centre), screen
 colours that change per trial (`FillRect`), frame-exact flip timing other than `(n - 0.5) * ifi`
 (converted at 60 Hz), and anything that calls other toolboxes.
+
+## PsyToolkit (.zip, .psy)
+
+In your PsyToolkit account, download the experiment: you get a **zip** with the experiment's script (usually
+`code.psy`) and its pictures and sounds. Import the zip as it is (`edge import stroop.zip`, or drop it on the
+builder's Home); EDGE finds the script inside and copies the files it uses. You can also import the script file
+itself, with its pictures next to it (in the folder its `bitmapdir` names, if it names one). Scripts written for
+PsyToolkit version 3 are understood; older scripts mostly work too.
+
+| Converted | EDGE |
+|---|---|
+| `options`: `resolution`, `fullscreen`, `background color`, `bitmapdir`, `sounddir` | window size, full screen, background, where the files are |
+| `fonts` (the first size), `font <name>` in a task | text height |
+| `bitmaps`, `sounds` (a name, or a name and a file) | pictures and sounds, copied with the experiment |
+| `table <name>`: rows of "quoted texts" and numbers | a trial list with columns `col1`, `col2` …; `@1`, `@2` … read them |
+| `task <name>` with `keys` and `table` | the screens of one trial (below), run by the block's trial list |
+| `show bitmap / text / rectangle / circle` with x, y (y grows downwards in PsyToolkit, upwards in EDGE: converted) and colours, also from columns (`show bitmap @2`, `show text @2 0 0 @3 @4 @5`) | picture, text and shape items |
+| `delay` (also `delay &isi`), `clear` / `hide` (a number, `-1`, `screen`, `range`) | when each item starts and how long it stays |
+| `readkey <correct> <timeout>` (the correct key by its number in `keys`, also `readkey @4 2000`) | keyboard item with the correct key and the time limit; it ends the screen |
+| `readmouse l <stimulus> <timeout>` | mouse item: the stimuli on the screen can be clicked, the one named is correct |
+| `RT`, `STATUS` (`CORRECT`, `WRONG`, `TIMEOUT`), `KEY` | variables of the same names, set after each response (RT in ms, as in PsyToolkit) |
+| `if … else … fi` that only show things or set variables | items shown only when the condition holds, on the same screen (so a `delay` after `fi` keeps them up) |
+| other `if … fi` (with delays or responses inside) | an if / otherwise in the trial, with its own screens |
+| `set &var` with a number, a column, `random a b`, `random from …`, `increase`, `decrease`, `expression …` | variable items |
+| `part <name>` | its lines, in place |
+| `save …` | nothing to do: EDGE saves every response, the trial list's columns and the variables in each data row |
+| `block <name>`: `tasks <task> <n>`, `message <bitmap>` or `message "text"`, `maxtrials` | a trial list of n trials (with a "stop early" when n is not a multiple of the table's rows), a screen that waits for SPACE (or a click, with `mouse`) |
+| block `feedback … end`: `text x y "…&var…"`, `set &v mean c4 ; select c5 == 1` (also median, count, sd, min, max, sum) | a feedback screen; the values are collected while the trials run and computed in EDGE |
+| `blockorder` | the order of the blocks |
+| `include file` | the other file's lines (from the zip or next to the script) |
+
+A trial is split into screens at each response: what is shown and cleared between two responses is one screen
+with exact timing; after a response the next screen carries on with what is still visible. Each response item
+gets the usual measures (reaction time of correct answers, accuracy), so the session summary is meaningful.
+
+**Converted approximately** (listed in the report with the line numbers): PsyToolkit picks a table row **at random
+for each trial**, EDGE shows the rows in a shuffled order, each equally often (choose another order on the trial
+list); `scale` (EDGE draws at the window size in Settings); several `blockorder`s (the first is used); `tasks a b n`
+with several tasks (the first is used); things shown inside a complex `if … fi` and not cleared there (they stay
+on that screen only).
+
+**Not converted** (listed with line numbers): `while` loops inside a trial, `readkeys` (typed answers: add a
+text-entry item), `xyplot` and other charts in feedback, videos, and any other command the importer does not
+know. Always dry-run the result and compare the number of trials and the timing with PsyToolkit's version.
+
+**PsyToolkit's own experiment library.** The ready-made experiments on psytoolkit.org are Prof. Gijsbert Stoet's
+work; downloading their code needs a free PsyToolkit account, and they are for non-commercial use. EDGE does not
+include or download them: if you want to work from one, download it yourself from your account and import the
+zip; the terms of PsyToolkit's library still apply to what you import. For most classic paradigms, EDGE's own
+[task library](LIBRARY.md) has a ready-made version (EDGE's own implementation, citing the original papers).

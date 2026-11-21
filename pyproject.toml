@@ -45,7 +45,11 @@ include = ["edge*"]
 [tool.setuptools.package-data]
 "edge.builder" = ["static/*"]
 "edge" = ["tutorials/*.yaml", "survey_page/*", "assets/*"]
+"edge.library" = ["tasks/**/*"]     # the task library: one folder per task (experiment, meta.yaml, stimuli)
 # The guides in docs/ are copied into the package as edge/docs by setup.py (edge help, Help Center, MCP).
+
+[tool.setuptools.exclude-package-data]
+"edge.library" = ["tasks/*/data/**/*", "tasks/**/__pycache__/*", "tasks/*/.*", "tasks/*/*/.*"]   # test runs, caches
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

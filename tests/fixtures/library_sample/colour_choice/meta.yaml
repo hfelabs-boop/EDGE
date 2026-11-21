@@ -1,0 +1,14 @@
+id: colour_choice
+title: Colour choice (sample)
+category: Decision making
+summary: Say whether a patch is red or blue with two keys.
+description: >
+  A sample task for EDGE's own tests of the task library. A red or a blue patch (a picture in stimuli/) is shown;
+  participants press F for red and J for blue. Choice reaction time and accuracy per colour.
+measures: ["choice reaction time", "accuracy"]
+duration_min: 2
+input: keyboard
+languages: [en, de]
+references: ["Hick, W. E. (1952). On the rate of gain of information. Quarterly Journal of Experimental Psychology, 4, 11-26."]
+see_also: {}
+notes: The German texts are in the trial list.

@@ -1,0 +1,41 @@
+/* library.css: the Task library dialog (library.js). Owner: task library. Tokens from tokens.css. */
+.dialog.lg.tl-dialog { width: min(1080px, calc(100vw - 32px)); }
+.tl { display: flex; flex-direction: column; gap: var(--sp-5); min-height: 0; }
+.tl-intro { margin: 0; max-width: 80ch; }
+.tl-main { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: var(--sp-6); align-items: start; }
+.tl-cats { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 0; }
+.tl-cat { all: unset; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); cursor: pointer; color: var(--text-1); font-size: var(--fs-small); line-height: var(--lh-small); }
+.tl-cat:hover { background: var(--surface-3); }
+.tl-cat:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tl-cat.on { background: var(--accent-subtle); color: var(--accent-text); font-weight: var(--fw-semibold); }
+.tl-cat.on .t-caption { color: var(--accent-text); }
+.tl-right { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+.tl-search { max-width: 520px; }
+.tl-count { margin: 0; }
+.tl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: var(--sp-4); align-content: start; }
+.tl-card { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-5); min-width: 0; }
+.tl-head { display: flex; gap: var(--sp-4); align-items: flex-start; }
+.tl-head .tile { width: 36px; height: 36px; border-radius: var(--r-md); display: grid; place-items: center; flex: none;
+  background: var(--surface-3); color: var(--text-2); }
+.tl-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tl-card h4 { margin: 0; font-size: var(--fs-body); line-height: var(--lh-body); }
+.tl-card p { margin: 0; }
+.tl-summary { font-size: var(--fs-small); line-height: var(--lh-small); color: var(--text-1); }
+.tl-measures { color: var(--text-2); }
+.tl-measures b { color: var(--text-1); font-weight: var(--fw-semibold); }
+.tl-cite { color: var(--text-3); }
+.tl-more { font-size: var(--fs-small); line-height: var(--lh-small); color: var(--text-2); }
+.tl-more summary { cursor: pointer; color: var(--accent); width: fit-content; }
+.tl-more[open] { display: flex; flex-direction: column; gap: var(--sp-3); }
+.tl-refs { margin: 0; padding-left: var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-2); font-size: var(--fs-caption); line-height: var(--lh-caption); }
+.tl-refs-head { margin: 0; }
+.tl-actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; margin-top: auto; padding-top: var(--sp-3); }
+.tl-actions .grow { flex: 1; }
+.tl-see { display: inline-flex; gap: var(--sp-2); align-items: center; font-size: var(--fs-small); }
+.tl-see .ic { width: 14px; height: 14px; }
+.tl-none { grid-column: 1 / -1; }
+@media (max-width: 720px) {
+  .tl-main { grid-template-columns: 1fr; }
+  .tl-cats { position: static; flex-direction: row; flex-wrap: wrap; }
+}
