@@ -1,0 +1,146 @@
+name: flanker_arrows_ops
+description: >
+  Flanker task with arrows, operational adaptation. The same paradigm and measures as the library's
+  `flanker_arrows` task: five objects appear in a row; the operator presses the arrow key for the way the MIDDLE
+  one is heading. The outer ones head the same way (congruent), the other way (incongruent), or are not moving
+  (neutral). One variable, `theme`, sets the display: c2 (a formation of surface tracks with course leaders on the
+  map grid) or uav (a column of tracked vehicles with the tracker's motion vectors in a camera frame). All pictures
+  are synthetic and generic (EDGE's defence kit).
+
+# Theme switch as in search_ops: `theme` is the first variable; `looks` maps each theme to its heading pictures
+# (left / right / none), the variable item `look` works out the flankers' heading from the trial list (congruent:
+# the same as the middle one, incongruent: the other way, neutral: none), and the display around the row (map,
+# camera frame, reticle, instruction texts) is guarded with `if: $theme == ...`.
+# The trial list, timing, keys, correct answers and measures are the same for every theme (and as in flanker_arrows).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or uav
+  looks:
+    c2: {left: stimuli/c2_heading_left.png, right: stimuli/c2_heading_right.png, none: stimuli/c2_heading_none.png}
+    uav: {left: stimuli/uav_heading_left.png, right: stimuli/uav_heading_right.png, none: stimuli/uav_heading_none.png}
+  # x positions of the five objects (the middle one is the target)
+  row_x: [-260, -130, 0, 130, 260]
+  flank: none
+  track_no: 417
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: median, units: s, expect: [0.2, 1.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: condition, label: Flanker condition, role: factor, column: condition}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 90]
+        text: |
+          You are monitoring the tactical map. A group of five surface tracks will appear in a row.
+          Look only at the track in the MIDDLE and report which way it is heading
+          (the line with an arrowhead is its course):
+
+          middle track heads left   ->  LEFT arrow key
+          middle track heads right  ->  RIGHT arrow key
+
+          Ignore the tracks on either side (some head the same way, some the other way, some are not moving).
+          Be fast but accurate. First a short practice with feedback. Press SPACE to begin.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 90]
+        text: |
+          You are the payload operator of a surveillance aircraft. A column of five vehicles will appear
+          in the camera picture. Look only at the vehicle in the MIDDLE and report which way it is driving
+          (the cyan arrow is the tracker's motion vector):
+
+          middle vehicle drives left   ->  LEFT arrow key
+          middle vehicle drives right  ->  RIGHT arrow key
+
+          Ignore the vehicles on either side (some drive the same way, some the other way, some are parked).
+          Be fast but accurate. First a short practice with feedback. Press SPACE to begin.
+      - {id: example_bg, type: shape, shape: rect, size: [460, 110], pos: [0, -250], fill: "#26323a", line_color: "#5a7a8a", line_width: 1}
+      - {id: example_l, type: image, image: "$looks[theme]['left']", size: [120, 56], pos: [-140, -250]}
+      - {id: example_n, type: image, image: "$looks[theme]['none']", size: [120, 56], pos: [0, -250]}
+      - {id: example_r, type: image, image: "$looks[theme]['right']", size: [120, 56], pos: [140, -250]}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: |
+          Practice done. Now the real task begins (no more feedback).
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - id: look
+        type: variable
+        set:
+          shown_theme: $theme      # puts the theme into every trial's data (column look.shown_theme)
+          flank: "$direction if condition == 'congruent' else ({'left': 'right', 'right': 'left'}[direction] if condition == 'incongruent' else 'none')"
+          track_no: "$random.randint(100, 989)"
+      # ---- the display around the row, one block per theme ----
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - {id: tn_c2, type: text, if: "$theme == 'c2'", font: DejaVu Sans Mono, height: 16, color: "#9fe8ff", pos: [0, -50],
+         text: "$f'TN {track_no:04d}'", start: 0.5}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_02_village.jpg, size: [1280, 720]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_brackets.png, size: [240, 240], opacity: 0.6}
+      # ---- fixation, then the row of five (the same for every theme) ----
+      - {id: fix, type: text, text: "+", height: 36, color: "#9fe8ff", duration: 0.5}
+      - {id: f0, type: image, image: "$looks[theme][flank]", size: [120, 56], pos: "$[row_x[0], 0]", start: 0.5}
+      - {id: f1, type: image, image: "$looks[theme][flank]", size: [120, 56], pos: "$[row_x[1], 0]", start: 0.5}
+      - {id: stim, type: image, image: "$looks[theme][direction]", size: [120, 56], pos: [0, 0], start: 0.5,
+         marker: "$f'flanker_{condition}'"}
+      - {id: f3, type: image, image: "$looks[theme][flank]", size: [120, 56], pos: "$[row_x[3], 0]", start: 0.5}
+      - {id: f4, type: image, image: "$looks[theme][flank]", size: [120, 56], pos: "$[row_x[4], 0]", start: 0.5}
+      - {id: resp, type: keyboard, keys: [left, right], correct: $correct_key, start: 0.5, duration: 2.0,
+         end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 32
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong way')"
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "$f'End of the watch. You were correct on {round(100 * main.accuracy)}% of the trials. Thank you!'"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: flanker_arrows_ops.csv
+    order: random
+    repeats: 2
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: flanker_arrows_ops.csv
+    order: random
+    repeats: 16
+    max_repeat: {condition: 3}
+    children: [trial, iti]
+  - thanks

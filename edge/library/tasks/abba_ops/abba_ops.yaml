@@ -1,0 +1,152 @@
+name: abba_ops
+description: >
+  ABBA task (reversed compatibility), operational adaptation. The same paradigm and measures as the library's
+  `abba` task: an order tells the operator which response (A) to prepare, but not to carry out yet. Then a new
+  contact asks for an immediate second response (B). Only after B is response A carried out. Responding B is
+  slower when B is on the SAME side as the planned A response than when it is on the other side: planning an action
+  binds its features and makes them less available. One variable, `theme`, sets the display: c2 (a handover order,
+  then a friendly or unknown air track to report, on a radar-style plot) or ew (an antenna-steering order, then a
+  low- or medium-threat emitter to report, on a waterfall). All pictures are synthetic and generic (EDGE's defence
+  kit).
+
+# Theme switch as in search_ops: `theme` is the first variable; `looks` maps each theme to the pictures of the two
+# B stimuli (by their key, f or j: the classic blue and yellow circles), and the display around the stimuli (plot,
+# waterfall, instruction texts) is guarded with `if: $theme == ...`. The trial list, timing, keys, correct answers
+# and measures are the same for every theme (and as in abba).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or ew
+  looks:
+    c2: {f: stimuli/friendly_air_64.png, j: stimuli/unknown_air_64.png, size: [80, 80]}
+    ew: {f: stimuli/emitter_pulsed_low.png, j: stimuli/emitter_pulsed_medium.png, size: [40, 120]}
+  order_word: {c2: HAND OVER, ew: STEER ANTENNA}
+  side_word: {left: WEST, right: EAST}
+
+measures:
+  - {id: rt_b, label: Reaction time to the contact (response B), role: outcome, column: resp_b.rt,
+     trials: "$resp_b.corr == 1 and resp_a.corr == 1", loop: main, summary: mean, units: s, expect: [0.2, 2.0]}
+  - {id: accuracy_b, label: Accuracy of response B, role: outcome, column: resp_b.corr, loop: main, summary: proportion}
+  - {id: accuracy_a, label: Accuracy of the planned response A, role: outcome, column: resp_a.corr, loop: main,
+     summary: proportion}
+  - {id: compatibility, label: B on the same side as A (compatible) or not, role: factor, column: compatibility}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 23
+        wrap_width: 1150
+        pos: [0, 70]
+        text: |
+          Plan, react, then act. You are the air-picture controller.
+
+          1. An ORDER appears: hand over a track to the WEST (arrow left) or EAST (arrow right) controller.
+             Remember it, but do not press anything yet.  West = Q later, east = P later.
+
+          2. Then a new TRACK pops up. Report it straight away:
+             FRIENDLY air track (blue rectangle) -> F (left hand)    UNKNOWN air track (yellow) -> J (right hand)
+
+          3. Then a question mark appears: now carry out the order (Q or P).
+
+          Report the track as fast as you can. Take your time for the order, but get it right.
+          First 8 practice trials with feedback. Press SPACE to begin.
+      - id: text_ew
+        type: text
+        if: "$theme == 'ew'"
+        height: 23
+        wrap_width: 1150
+        pos: [0, 70]
+        text: |
+          Plan, react, then act. You are monitoring the waterfall display of a signal receiver.
+
+          1. An ORDER appears: steer the antenna WEST (arrow left) or EAST (arrow right).
+             Remember it, but do not press anything yet.  West = Q later, east = P later.
+
+          2. Then a new EMITTER appears. Report it straight away:
+             LOW-THREAT emitter (blue) -> F (left hand)    MEDIUM-THREAT emitter (amber) -> J (right hand)
+
+          3. Then a question mark appears: now carry out the order (Q or P).
+
+          Report the emitter as fast as you can. Take your time for the order, but get it right.
+          First 8 practice trials with feedback. Press SPACE to begin.
+      - {id: example_bg, type: shape, shape: rect, size: [300, 150], pos: [0, -270], fill: "#26323a", line_color: "#5a7a8a", line_width: 1}
+      - {id: example_f, type: image, image: "$looks[theme]['f']", size: "$looks[theme]['size']", pos: [-70, -270]}
+      - {id: example_j, type: image, image: "$looks[theme]['j']", size: "$looks[theme]['size']", pos: [70, -270]}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1100
+        text: "$f'Practice done. The test has 48 trials (about 5 minutes) without feedback.\\n\\nOrder: plan Q (west) or P (east).   New contact: F or J, at once.   Then: Q or P.\\n\\nPress SPACE to start.'"
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  plan_and_react:
+    components:
+      - {id: look, type: variable, set: {shown_theme: $theme}}   # puts the theme into every trial's data
+      # ---- the display around the stimuli, one block per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: waterfall_ew, type: image, if: "$theme == 'ew'", image: stimuli/waterfall_1280x720.jpg, size: [1280, 720]}
+      # ---- order (A), then the contact (B) (the same timing for every theme) ----
+      - {id: fix, type: text, text: "+", height: 36, color: "#9fe8ff", duration: 0.5}
+      - {id: order_box, type: shape, shape: rect, size: [420, 150], fill: "#0a2232", line_color: "#5aa0c0", line_width: 2, start: 0.5, duration: 1.0}
+      - {id: order_text, type: text, text: "$f'ORDER: {order_word[theme]} {side_word[a_side]}'", font: DejaVu Sans Mono, height: 22,
+         color: "#9fe8ff", pos: [0, 40], start: 0.5, duration: 1.0}
+      - {id: arrow_a, type: text, text: $a_arrow, height: 70, color: "#9fe8ff", pos: [0, -20], start: 0.5, duration: 1.0, marker: "$f'plan_{a_side}'"}
+      - {id: contact_b, type: image, image: "$looks[theme][b_key]", size: "$looks[theme]['size']", start: 2.5, duration: 0.2,
+         marker: "$f'stim_b_{compatibility}'"}
+      - {id: resp_b, type: keyboard, keys: [f, j], correct: $b_key, start: 2.5, duration: 2.0, end_routine: true}
+
+  act:
+    components:
+      - {id: ask, type: text, text: "?", height: 70, color: "#9fe8ff"}
+      - {id: ask_words, type: text, text: CARRY OUT THE ORDER (Q or P), font: DejaVu Sans Mono, height: 18, color: "#9fe8ff", pos: [0, -70]}
+      - {id: resp_a, type: keyboard, keys: [q, p], correct: $a_key, duration: 4.0, end_routine: true}
+
+  feedback:
+    duration: 1.5
+    components:
+      - id: fb_b
+        type: text
+        height: 28
+        pos: [0, 30]
+        text: "$'Contact report: correct' if resp_b.corr else ('Contact report: too slow' if resp_b.keys is None else 'Contact report: wrong key')"
+        color: "$'#34c759' if resp_b.corr else '#ff3b30'"
+      - id: fb_a
+        type: text
+        height: 28
+        pos: [0, -30]
+        text: "$'Order: correct' if resp_a.corr else ('Order: you were asked for ' + a_key.upper())"
+        color: "$'#34c759' if resp_a.corr else '#ff3b30'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.8}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "End of the watch. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: abba_ops.csv
+    order: random
+    repeats: 2
+    children: [plan_and_react, act, feedback]
+  - main_intro
+  - loop: main
+    conditions: abba_ops.csv
+    order: random
+    repeats: 12
+    children: [plan_and_react, act, iti]
+  - thanks

@@ -1,0 +1,36 @@
+id: cueing_ops
+title: Spatial cueing (Posner task, operational)
+category: Attention
+summary: A central arrow cue predicts in which sensor sector or candidate box a contact will appear; responses are faster when the cue is right.
+description: >
+  The library's spatial cueing task with operator displays. Two places stay on screen left and right of the
+  centre. After a 1 s fixation an arrow replaces the cross and points left or right; 500 ms later a contact appears
+  in one of the places and the operator presses the arrow key for its side (max 1.5 s). The arrow is valid on 80% of
+  trials and invalid on 20%, so it is worth using. 10 practice trials with feedback, then 80 test trials (64 valid,
+  16 invalid) in random order. The main outcome, as in the classic task, is the validity effect: mean correct RT
+  on invalid minus valid trials.
+measures:
+  - RT valid vs invalid (validity effect)
+  - accuracy
+duration_min: 5
+input: keyboard
+languages: [en]
+variant_of: cueing
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The two boxes, the arrow and the dot of the classic task become two sensor sectors or candidate boxes, a cue from
+  the sensor chain or tracker, and a new contact; the design, timing, keys and measures stay the same. c2: a
+  radar-style plot with two outlined sectors (WEST and EAST); the cyan arrow cue points to a sector and the target
+  is a new unknown air contact (yellow quatrefoil frame), so the validity effect stands for the cost of a cue that
+  sends the operator's attention to the wrong sector. uav: a camera frame under a reticle with two candidate boxes
+  (amber, dashed) from the image tracker; the arrow points to a box and the target is a vehicle appearing in it.
+  Everything is generic and fictional.
+references:
+  - "Posner, M. I. (1980). Orienting of attention. Quarterly Journal of Experimental Psychology, 32, 3-25."
+  - "Posner, M. I., Snyder, C. R. R., & Davidson, B. J. (1980). Attention and the detection of signals. Journal of Experimental Psychology: General, 109(2), 160-174."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/cueing.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). The cue-target interval is the variable soa (0.5 s). The
+  validity ratio comes from the rows of cueing_ops.csv (8 valid, 2 invalid; the classic list). The pictures come
+  from EDGE's defence kit (tools/library/make_cueing_ops.py copies them).

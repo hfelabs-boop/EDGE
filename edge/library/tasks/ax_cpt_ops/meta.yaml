@@ -1,0 +1,41 @@
+id: ax_cpt_ops
+title: AX Continuous Performance Test (AX-CPT, operational)
+category: Cognitive control
+summary: Warn only when a hostile air track is then reported closing (or a high-threat emitter then switches to tracking); rare AY and BX pairs reveal how much operators use context.
+description: >
+  The library's AX-CPT with operator displays. Each trial is a cue (a track or emitter, 300 ms), a 1 s blank and a
+  probe (a status readout, 300 ms; 1.2 s to respond). The target response (M, "warn") is required only for the
+  critical status (X) preceded by the critical cue (A); every other probe gets the other key (Z). AX pairs make up
+  70% of trials and AY, BX and BY 10% each ("B" and "Y" stand for any other cue or status, chosen at random each
+  trial). Using the cue well helps on BX trials (a B cue means "no warning" whatever follows) but hurts on AY trials
+  (an A cue prepares a warning that must then be overridden). 10 practice trials with feedback, then 80 test
+  trials. Main outcomes, as in the classic task: errors and RT per pair type, especially AY vs BX (proactive vs
+  reactive control; d'-context can be computed from AX hits and BX false alarms).
+measures:
+  - accuracy by pair type (AX, AY, BX, BY)
+  - RT by pair type
+duration_min: 6
+input: keyboard
+languages: [en]
+variant_of: ax_cpt
+domain: defense
+themes: [c2, ew]
+adaptation: >
+  The cue letter and probe letter of the classic task become a report about a contact and a later status of the
+  same contact, so the warning rule needs the context of the cue, as in console work; the design, timing, keys and
+  measures stay the same. c2: on a radar-style plot, the A cue is a hostile air track (red diamond frame), B cues
+  are friendly, neutral or unknown air, surface or ground tracks; the X probe is the status CLOSING, Y probes are
+  other track status words (OPENING, HOLDING, ORBITING, ...). ew: on a waterfall display, the A cue is a
+  high-threat pulsed emitter (red, dashed trace), B cues are the other emitter marks (medium or low threat, or
+  continuous); the X probe is the mode TRACKING, Y probes are other modes (SEARCH, STANDBY, SCANNING, ...). Status
+  words, modes and symbols are generic and fictional.
+references:
+  - "Rosvold, H. E., Mirsky, A. F., Sarason, I., Bransome, E. D., Jr., & Beck, L. H. (1956). A continuous performance test of brain damage. Journal of Consulting Psychology, 20(5), 343-350."
+  - "Polizzotto, N. R., Hill-Jarrett, T., Walker, C., & Cho, R. Y. (2018). Normal development of context processing using the AXCPT paradigm. PLoS ONE, 13(5), e0197812."
+  - "Braver, T. S. (2012). The variable nature of cognitive control: A dual mechanisms framework. Trends in Cognitive Sciences, 16(2), 106-113."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/ax-cpt.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, ew). The cue-probe delay is the variable delay (1 s); longer
+  delays (e.g. 4-5 s) load goal maintenance more. The cue and probe actually shown are saved in shown.cue_pic and
+  shown.probe_word. The trial list is the classic one (cue_kind A/B, probe_kind X/Y). The pictures come from
+  EDGE's defence kit (tools/library/make_ax_cpt_ops.py copies them).

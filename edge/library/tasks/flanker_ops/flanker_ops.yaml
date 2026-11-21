@@ -1,0 +1,143 @@
+name: flanker_ops
+description: >
+  Eriksen flanker task, operational adaptation. The same paradigm and measures as the library's `flanker` task: a
+  row of five objects appears; the operator classifies only the middle one and ignores the ones on either side.
+  The flankers are the same object (identical), a different object with the same answer (same_response), an object
+  with the other answer (incongruent) or an object with no answer (neutral). One variable, `theme`, sets the
+  display: c2 (classify the middle track as hostile or friendly on the map grid) or uav (classify the middle
+  vehicle as tracked or wheeled in a camera frame). All pictures are synthetic and generic (EDGE's defence kit).
+
+# Theme switch as in search_ops: `theme` is the first variable; `looks` maps each theme's objects to the letters of
+# the classic trial list (H, K -> Z; S, C -> M; X -> no answer), so the five items show
+# $looks[theme][stimulus[i]] for the five letters of the row; the display around the row (map, camera frame,
+# reticle, instruction texts) is guarded with `if: $theme == ...`.
+# The trial list, timing, keys, correct answers and measures are the same for every theme (and as in flanker).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or uav
+  looks:
+    c2: {H: stimuli/hostile_air_64.png, K: stimuli/hostile_surface_64.png, S: stimuli/friendly_air_64.png,
+         C: stimuli/friendly_surface_64.png, X: stimuli/neutral_air_64.png}
+    uav: {H: stimuli/vehicle_tracked_light.png, K: stimuli/vehicle_tracked_dark.png, S: stimuli/vehicle_wheeled_light.png,
+          C: stimuli/vehicle_wheeled_dark.png, X: stimuli/vehicle_car_light.png}
+  z_name: {c2: HOSTILE, uav: TRACKED}
+  m_name: {c2: FRIENDLY, uav: WHEELED}
+  row_x: [-200, -100, 0, 100, 200]
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: median, units: s, expect: [0.2, 1.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: condition, label: Flanker condition, role: factor, column: condition}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 100]
+        text: |
+          You are classifying tracks on the tactical map.
+
+          A row of five tracks will appear. Look only at the track in the MIDDLE.
+
+          Middle track HOSTILE (red diamond; air or surface)        ->  press Z
+          Middle track FRIENDLY (blue rectangle; air or surface)    ->  press M
+
+          The other tracks try to distract you: ignore them (neutral green tracks never need an answer).
+          Answer as quickly as you can while staying accurate.
+          We start with a few practice rounds with feedback. Press SPACE to begin.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 100]
+        text: |
+          You are the payload operator of a surveillance aircraft, classifying vehicles in the camera picture.
+
+          A row of five vehicles will appear. Look only at the vehicle in the MIDDLE.
+
+          Middle vehicle TRACKED (tracks along both sides; light or dark)   ->  press Z
+          Middle vehicle WHEELED (wheels along both sides; light or dark)   ->  press M
+
+          The other vehicles try to distract you: ignore them (civilian cars never need an answer).
+          Answer as quickly as you can while staying accurate.
+          We start with a few practice rounds with feedback. Press SPACE to begin.
+      # the objects: Z ones on the left, M ones on the right, the no-answer one in the middle
+      - {id: example_bg, type: shape, shape: rect, size: [560, 120], pos: [0, -250], fill: "#26323a", line_color: "#5a7a8a", line_width: 1}
+      - {id: ex_h, type: image, image: "$looks[theme]['H']", size: [64, 64], pos: [-220, -250]}
+      - {id: ex_k, type: image, image: "$looks[theme]['K']", size: [64, 64], pos: [-130, -250]}
+      - {id: ex_x, type: image, image: "$looks[theme]['X']", size: [64, 64], pos: [0, -250]}
+      - {id: ex_s, type: image, image: "$looks[theme]['S']", size: [64, 64], pos: [130, -250]}
+      - {id: ex_c, type: image, image: "$looks[theme]['C']", size: [64, 64], pos: [220, -250]}
+      - {id: ex_z, type: text, text: Z, height: 22, pos: [-175, -320]}
+      - {id: ex_m, type: text, text: M, height: 22, pos: [175, -320]}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: "$f'Practice done. Now the real task begins (no more feedback).\\n\\n{z_name[theme]}  ->  Z          {m_name[theme]}  ->  M\\n\\nPress SPACE to start.'"
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: look, type: variable, set: {shown_theme: $theme}}   # puts the theme into every trial's data
+      # ---- the display around the row, one block per theme ----
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_01_farmland.jpg, size: [1280, 720]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_brackets.png, size: [240, 240], opacity: 0.6}
+      # ---- fixation, then the row of five (the same for every theme) ----
+      - {id: fix, type: text, text: "+", height: 36, color: "#9fe8ff", duration: 0.5}
+      - {id: f0, type: image, image: "$looks[theme][stimulus[0]]", size: [64, 64], pos: "$[row_x[0], 0]", start: 0.5}
+      - {id: f1, type: image, image: "$looks[theme][stimulus[1]]", size: [64, 64], pos: "$[row_x[1], 0]", start: 0.5}
+      - {id: stim, type: image, image: "$looks[theme][stimulus[2]]", size: [64, 64], pos: [0, 0], start: 0.5,
+         marker: "$f'flanker_{condition}'"}
+      - {id: f3, type: image, image: "$looks[theme][stimulus[3]]", size: [64, 64], pos: "$[row_x[3], 0]", start: 0.5}
+      - {id: f4, type: image, image: "$looks[theme][stimulus[4]]", size: [64, 64], pos: "$[row_x[4], 0]", start: 0.5}
+      - {id: resp, type: keyboard, keys: [z, m], correct: $correct_key, start: 0.5, duration: 2.0,
+         end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 32
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong key')"
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "$f'End of the watch. You were correct on {round(100 * main.accuracy)}% of the trials. Thank you!'"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: flanker_ops.csv
+    order: random
+    stop_if: $practice.n >= 11
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: flanker_ops.csv
+    order: random
+    repeats: 5
+    children: [trial, iti]
+  - thanks

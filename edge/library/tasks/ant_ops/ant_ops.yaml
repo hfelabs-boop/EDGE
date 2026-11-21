@@ -1,0 +1,157 @@
+name: ant_ops
+description: >
+  Attention Network Test, operational adaptation. The same paradigm and measures as the library's `ant` task: a
+  row of five objects appears above or below the fixation cross; report the heading of the middle one. Before the
+  row, a brief alert cue may appear: none, at the centre, at both possible places (double) or at the place where
+  the row will appear (spatial). Cue effects give the alerting and orienting scores, flanker effects the executive
+  (conflict) score. One variable, `theme`, sets the display: c2 (surface tracks with course leaders on the map grid,
+  amber alert ring) or uav (tracked vehicles with motion vectors in a camera frame, cyan tracker ring). All
+  pictures are synthetic and generic (EDGE's defence kit).
+
+# Theme switch as in search_ops: `theme` is the first variable; `looks` maps each theme to its heading pictures
+# (left / right / none) and cue colour, the variable item `pick` works out the flankers' heading from the trial
+# list, and the display around the stimuli (map, camera frame, instruction texts) is guarded with
+# `if: $theme == ...`. The trial list, timing, keys, correct answers and measures are the same for every theme
+# (and as in ant).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or uav
+  looks:
+    c2: {left: stimuli/c2_heading_left.png, right: stimuli/c2_heading_right.png, none: stimuli/c2_heading_none.png,
+         cue: "#ffb000"}
+    uav: {left: stimuli/uav_heading_left.png, right: stimuli/uav_heading_right.png, none: stimuli/uav_heading_none.png,
+          cue: "#00e5ff"}
+  row_x: [-260, -130, 0, 130, 260]
+  flank: none
+  d1: 1.0              # random fixation period before the cue (drawn anew on every trial)
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: mean, units: s, expect: [0.25, 1.7]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: cue, label: Cue condition, role: factor, column: cue}
+  - {id: flanker, label: Flanker condition, role: factor, column: flanker}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 23
+        wrap_width: 1100
+        pos: [0, 90]
+        text: |
+          You are monitoring the tactical map. Keep your eyes on the cross in the middle.
+          A row of five surface tracks will appear above or below the cross.
+          Report which way the MIDDLE track is heading (its course line with the arrowhead):
+
+          heads left  ->  LEFT arrow key          heads right ->  RIGHT arrow key
+
+          Sometimes an amber alert ring flashes briefly before the tracks; it tells you when,
+          and sometimes where, they will come. Ignore the tracks on either side of the middle one.
+          Be fast but accurate. First 24 practice trials with feedback. Press SPACE to begin.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 23
+        wrap_width: 1100
+        pos: [0, 90]
+        text: |
+          You are the payload operator of a surveillance aircraft. Keep your eyes on the cross in the middle.
+          A column of five vehicles will appear above or below the cross.
+          Report which way the MIDDLE vehicle is driving (the cyan arrow is the tracker's motion vector):
+
+          drives left  ->  LEFT arrow key          drives right ->  RIGHT arrow key
+
+          Sometimes a cyan tracker ring flashes briefly before the vehicles; it tells you when,
+          and sometimes where, they will come. Ignore the vehicles on either side of the middle one.
+          Be fast but accurate. First 24 practice trials with feedback. Press SPACE to begin.
+      - {id: example_bg, type: shape, shape: rect, size: [460, 110], pos: [0, -250], fill: "#26323a", line_color: "#5a7a8a", line_width: 1}
+      - {id: example_l, type: image, image: "$looks[theme]['left']", size: [120, 56], pos: [-140, -250]}
+      - {id: example_n, type: image, image: "$looks[theme]['none']", size: [120, 56], pos: [0, -250]}
+      - {id: example_r, type: image, image: "$looks[theme]['right']", size: [120, 56], pos: [140, -250]}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Practice done. The test has 96 trials (about 6 minutes) without feedback.
+          Keep looking at the central cross.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  # Timing after Fan et al. (2002): fixation for a random 400-1600 ms (d1), cue 100 ms, fixation 400 ms,
+  # the row until the response (max 1700 ms); the 'rest' screen then pads the trial to 4 s in total.
+  trial:
+    components:
+      - id: pick
+        type: variable
+        set:
+          shown_theme: $theme      # puts the theme into every trial's data (column pick.shown_theme)
+          d1: "$round(random.uniform(0.4, 1.6), 3)"
+          flank: "$direction if flanker == 'congruent' else ({'left': 'right', 'right': 'left'}[direction] if flanker == 'incongruent' else 'none')"
+      # ---- the display around the stimuli, one block per theme ----
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_04_river.jpg, size: [1280, 720]}
+      # ---- fixation, cue, row (the same for every theme) ----
+      - {id: fix, type: text, text: "+", height: 36, color: "#9fe8ff"}
+      - {id: cue_c, type: shape, shape: circle, radius: 14, fill: transparent, line_color: "$looks[theme]['cue']", line_width: 4,
+         pos: [0, 0], start: $d1, duration: 0.1, if: "$cue_center == 1", marker: "$f'cue_{cue}'"}
+      - {id: cue_t, type: shape, shape: circle, radius: 14, fill: transparent, line_color: "$looks[theme]['cue']", line_width: 4,
+         pos: [0, 100], start: $d1, duration: 0.1, if: "$cue_top == 1", marker: "$f'cue_{cue}'"}
+      - {id: cue_b, type: shape, shape: circle, radius: 14, fill: transparent, line_color: "$looks[theme]['cue']", line_width: 4,
+         pos: [0, -100], start: $d1, duration: 0.1, if: "$cue_bottom == 1"}
+      - {id: f0, type: image, image: "$looks[theme][flank]", size: [120, 56], pos: "$[row_x[0], target_y]", start: $d1 + 0.5}
+      - {id: f1, type: image, image: "$looks[theme][flank]", size: [120, 56], pos: "$[row_x[1], target_y]", start: $d1 + 0.5}
+      - {id: target, type: image, image: "$looks[theme][direction]", size: [120, 56], pos: "$[0, target_y]", start: $d1 + 0.5,
+         marker: "$f'target_{flanker}'"}
+      - {id: f3, type: image, image: "$looks[theme][flank]", size: [120, 56], pos: "$[row_x[3], target_y]", start: $d1 + 0.5}
+      - {id: f4, type: image, image: "$looks[theme][flank]", size: [120, 56], pos: "$[row_x[4], target_y]", start: $d1 + 0.5}
+      - {id: resp, type: keyboard, keys: [left, right], correct: $correct_key, start: $d1 + 0.5, duration: 1.7,
+         end_routine: true}
+
+  rest:
+    duration: "$max(0.0, 3.5 - d1 - (resp.rt if resp.rt is not None else 1.7))"
+    components:
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_04_river.jpg, size: [1280, 720]}
+      - {id: fix2, type: text, text: "+", height: 36, color: "#9fe8ff"}
+
+  feedback:
+    duration: 1.0
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong way')"
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "End of the watch. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: ant_ops.csv
+    order: random
+    stop_if: $practice.n >= 23
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: ant_ops.csv
+    order: random
+    repeats: 2
+    children: [trial, rest]
+  - thanks

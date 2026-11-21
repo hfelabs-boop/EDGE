@@ -1,0 +1,149 @@
+name: sart_ops
+description: >
+  Sustained Attention to Response Task, operational adaptation. The same paradigm and measures as the library's
+  `sart` task: objects appear one at a time in varying sizes, each followed by a mask; press SPACE for every object
+  except the one no-go object. The pace is fixed (one object every 1.15 s). One variable, `theme`, sets the
+  display: c2 (acknowledge every new track on a radar-style plot except friendly air tracks) or uav (acknowledge
+  every marker the image tracker puts on a camera frame except cleared boxes). All pictures are synthetic and
+  generic (EDGE's defence kit).
+
+# Theme switch as in search_ops: `theme` is the first variable; `looks` maps each theme to its nine objects (the
+# classic task's digits 1-9: the trial list's `digit` picks the object, 3 is the no-go object), and the display
+# around the stimulus (plot, camera frame, reticle, instruction texts) is guarded with `if: $theme == ...`.
+# The trial list, timing, key, correct answers and measures are the same for every theme (and as in sart).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or uav
+  # per theme: the objects that stand for the digits 1-9 (item 3, the third, is the no-go object), how big they are
+  # drawn for each digit size (scale x digit_size px), and whether a vehicle is drawn inside (uav: the tracker's box)
+  looks:
+    c2:
+      objects: [stimuli/hostile_air_64.png, stimuli/hostile_surface_64.png, stimuli/friendly_air_64.png,
+                stimuli/hostile_ground_64.png, stimuli/unknown_air_64.png, stimuli/unknown_surface_64.png,
+                stimuli/unknown_ground_64.png, stimuli/neutral_air_64.png, stimuli/neutral_surface_64.png]
+      scale: 0.7
+      inside: []
+    uav:
+      objects: [stimuli/box_confirmed_128.png, stimuli/box_candidate_128.png, stimuli/box_cleared_128.png,
+                stimuli/box_selected_128.png, stimuli/ring_confirmed_64.png, stimuli/ring_candidate_64.png,
+                stimuli/ring_selected_64.png, stimuli/box_confirmed_128.png, stimuli/box_candidate_128.png]
+      scale: 1.0
+      inside: [stimuli/vehicle_tracked_light.png, stimuli/vehicle_wheeled_light.png]
+  nogo_name: {c2: FRIENDLY AIR track, uav: CLEARED (green) box}
+  vehicle: stimuli/vehicle_tracked_light.png
+  vehicle_ori: 0
+  alt: 2200
+  hdg: 45
+  spd: 90
+
+measures:
+  - {id: go_rt, label: Go reaction time (hits), role: outcome, column: resp.rt,
+     trials: "$trial_type == 'go' and resp.corr == 1", loop: main, summary: mean, units: s, expect: [0.1, 1.15]}
+  - {id: accuracy, label: Accuracy (go - hit rate; no-go - correct withholding), role: outcome, column: resp.corr,
+     loop: main, summary: proportion}
+  - {id: trial_type, label: Trial type, role: factor, column: trial_type}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 90]
+        text: |
+          You are the track supervisor on an air-picture console.
+
+          New tracks will pop up in the middle of the plot, one after another,
+          each followed by an update ring.
+
+          Press SPACE to acknowledge EVERY track, EXCEPT a FRIENDLY AIR track
+          (blue rectangle, shown below): that one is our own and must NOT be acknowledged.
+
+          Accuracy and speed are equally important. The watch takes about 5 minutes.
+          A short practice comes first. Press SPACE to begin.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 90]
+        text: |
+          You are the payload operator of a surveillance aircraft, checking its image tracker.
+
+          The tracker will mark vehicles in the middle of the camera picture, one after another,
+          each followed by an update ring.
+
+          Press SPACE to acknowledge EVERY marker, EXCEPT a CLEARED box
+          (green, shown below): that vehicle has been cleared and must NOT be acknowledged.
+
+          Accuracy and speed are equally important. The watch takes about 5 minutes.
+          A short practice comes first. Press SPACE to begin.
+      - {id: example_bg, type: shape, shape: rect, size: [150, 150], pos: [0, -250], fill: "#26323a", line_color: "#5a7a8a", line_width: 1}
+      - {id: example, type: image, image: "$looks[theme]['objects'][2]", size: "$[100 * looks[theme]['scale'], 100 * looks[theme]['scale']]", pos: [0, -250]}
+      - {id: example_veh, type: image, if: "$theme == 'uav'", image: stimuli/vehicle_tracked_light.png, size: [44, 44], pos: [0, -250]}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: "$f'Practice done. The real watch now runs without breaks.\\n\\nSPACE for every object, except a {nogo_name[theme]}.\\n\\nPress SPACE to start.'"
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    duration: 1.15
+    components:
+      - id: look
+        type: variable
+        set:
+          shown_theme: $theme      # puts the theme into every trial's data (column look.shown_theme)
+          vehicle: "$random.choice(looks[theme]['inside']) if looks[theme]['inside'] else ''"
+          vehicle_ori: "$random.choice([0, 90, 180, 270])"
+          alt: "$random.randint(1800, 2600)"
+          hdg: "$random.randint(0, 359)"
+          spd: "$random.randint(80, 110)"
+      # ---- the display around the stimulus, one block per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_01_farmland.jpg, size: [1280, 720]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_cross.png, size: [240, 240], opacity: 0.5}
+      - {id: tel_uav, type: text, if: "$theme == 'uav'", font: DejaVu Sans Mono, height: 17, color: "#d8ffd8", pos: [-400, -340], text: "$f'ALT {alt} m   HDG {hdg:03d}   SPD {spd} kt'"}
+      # ---- the object, then the mask (the same timing for every theme) ----
+      - {id: inside, type: image, if: "$theme == 'uav'", image: $vehicle, size: "$[digit_size * 0.4, digit_size * 0.4]", ori: $vehicle_ori, duration: 0.25}
+      - {id: stim, type: image, image: "$looks[theme]['objects'][digit - 1]", size: "$[digit_size * looks[theme]['scale'], digit_size * looks[theme]['scale']]",
+         duration: 0.25, marker: "$f'digit_{trial_type}'"}
+      - {id: ring, type: shape, shape: circle, radius: 55, fill: transparent, line_color: "#9fe8ff", line_width: 4,
+         start: 0.25, duration: 0.9}
+      # the diagonal cross of the mask: two thin bars drawn as polygons
+      - {id: bar1, type: shape, shape: polygon, vertices: [[37, 41], [41, 37], [-37, -41], [-41, -37]], fill: "#9fe8ff",
+         start: 0.25, duration: 0.9}
+      - {id: bar2, type: shape, shape: polygon, vertices: [[-37, 41], [-41, 37], [37, -41], [41, -37]], fill: "#9fe8ff",
+         start: 0.25, duration: 0.9}
+      - {id: resp, type: keyboard, keys: [space], correct: $correct_key, duration: 1.15}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "End of the watch. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: sart_ops.csv
+    order: random
+    stop_if: $practice.n >= 17
+    children: [trial]
+  - main_intro
+  - loop: main
+    conditions: sart_ops.csv
+    order: random
+    repeats: 5
+    children: [trial]
+  - thanks

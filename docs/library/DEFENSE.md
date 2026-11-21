@@ -174,3 +174,32 @@ the **telemetry overlay** (monospace text in the corners: `ALT … m  HDG …  S
 The spectrum and waterfall pictures have their data area at pixels x 70-1250, y 50-690 (from the top left of the
 1280x720 picture; `plot_area` in `kit.yaml`), which is x -570 to 610, y 310 to -330 in EDGE's centred pixel
 coordinates. Channels are labelled CH 0-100 in relative units: they are not real frequencies.
+
+## Attention, inhibition and vigilance adaptations
+
+Fifteen classic attention tasks have an operational version. Each keeps its classic task's trial lists (usually
+copied unchanged), timing, keys and declared measures; the table says what the stimuli stand for. The default theme
+is listed first. `edge library show <id>_ops` gives the full description.
+
+| adaptation | themes | what the operator does |
+|---|---|---|
+| `go_no_go_ops` | c2, video | engage hostile air tracks with SPACE, hold on friendly ones (c2); designate vehicles in confirmed (red) boxes, hold on cleared (green) boxes (video) |
+| `sart_ops`, `sart2_ops` | c2, uav | acknowledge every new track except a friendly air track (c2), every tracker marker except a cleared box (uav); `sart2_ops` adds feedback after each object |
+| `stopsignal_ops` | c2, video | give the engage order by the target's heading (arrow keys); a red ABORT signal countermands it; the delay follows the classic staircase |
+| `flanker_ops` | c2, uav | classify the middle track as hostile or friendly (c2) or the middle vehicle as tracked or wheeled (uav) among flankers |
+| `flanker_arrows_ops` | c2, uav | report the heading of the middle track (course leader) or vehicle (motion vector) among flankers |
+| `ant_ops` | c2, uav | the flanker heading task with alert-ring cues (alerting, orienting and executive scores) |
+| `cueing_ops` | c2, uav | an arrow cue points to a sensor sector (c2) or a candidate box (uav); a contact then appears on the left or right |
+| `endo_exo_cueing_ops` | c2, uav | as `cueing_ops`, with an endogenous block (predictive arrow) and an exogenous block (a sector or box lights up) |
+| `ior_ops` | c2, uav | detect a contact after an uninformative sector or box highlight (inhibition of return) |
+| `ab_ops` | c2, ew | report the two numbered codes in a rapid stream of track identity codes (c2) or emitter codes (ew) |
+| `abba_ops` | c2, ew | hold a west/east order in mind while reporting a new friendly/unknown track (c2) or a low/medium-threat emitter (ew) |
+| `ax_cpt_ops` | c2, ew | warn (M) only when a hostile air track is then reported CLOSING (c2), or a high-threat emitter then switches to TRACKING (ew) |
+| `dotprobe_ops` | c2, uav | find a dot where a threat object (hostile track; armoured vehicle) or a neutral one (neutral track; civilian car) was |
+| `maabrams_ops` | c2, video | find the hostile diamond among round contacts and report its course while a red alert highlight competes for attention |
+
+Their pictures come from the kit, except the heading pictures of `flanker_arrows_ops`, `ant_ops` and
+`stopsignal_ops` (a track with a course leader, a vehicle with a motion vector), which
+`tools/library/ops_attention_pics.py` draws from kit symbols and vehicles. Tasks with fast, fixed-pace trials
+(`sart_ops`, `sart2_ops`, the stream of `ab_ops`) use still pictures rather than video, since a video starts again
+with every trial.

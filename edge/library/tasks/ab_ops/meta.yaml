@@ -1,0 +1,39 @@
+id: ab_ops
+title: Attentional blink (operational)
+category: Attention
+summary: Two numbered track or emitter codes hidden in a fast stream of letter codes; the second is often missed shortly after the first.
+description: >
+  The library's attentional-blink task with operator displays. Each trial shows a rapid serial visual presentation
+  (RSVP) of 20 codes in a readout window in the centre of the screen, 100 ms each (10 per second), after a 500 ms
+  fixation cross. Two numbers (2-9, different from each other) replace letter codes: the first (T1) at position
+  5-9, the second (T2) 1, 2, 3, 5 or 7 items later (lag). After the stream the operator types T1 and then T2. 5
+  practice streams with feedback, then 40 test streams (each lag 8 times, random order). The main outcome, as in
+  the classic task, is T2 accuracy on trials with T1 correct, by lag: a dip at lags 2-3 (200-300 ms) with recovery
+  by lag 7, and often "lag-1 sparing".
+measures:
+  - T2 accuracy given T1 correct, by lag
+  - T1 accuracy
+duration_min: 5
+input: keyboard
+languages: [en]
+variant_of: ab
+domain: defense
+themes: [c2, ew]
+adaptation: >
+  The letter stream of the classic task becomes a rapid stream of identity codes in a console readout window,
+  and the two digits become the two codes that must be reported, as when an operator has to catch two critical
+  items in a fast-changing readout; the stream, timing, keys and measures stay the same. c2: the TRACK ID readout
+  (amber codes) over a radar-style plot, while a stream of tracks passes through the sector; the numbered codes are
+  the tracks to report. ew: the EMITTER CODE readout (cyan codes) over a waterfall display during a busy intercept
+  period; the numbered codes are the emitters to report. The codes are single characters, as in the classic task,
+  and are generic and fictional.
+references:
+  - "Raymond, J. E., Shapiro, K. L., & Arnell, K. M. (1992). Temporary suppression of visual processing in an RSVP task: An attentional blink? Journal of Experimental Psychology: Human Perception and Performance, 18, 849-860."
+  - "Duncan, J., Ward, R., & Shapiro, K. (1994). Direct measurement of attentional dwell time in human vision. Nature, 369, 313-315."
+  - "Chun, M. M., & Potter, M. C. (1995). A two-stage model for multiple target detection in rapid serial visual presentation. Journal of Experimental Psychology: Human Perception and Performance, 21, 109-127."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/ab.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, ew). Dual-target identification version (numbers among
+  letters), as in the classic task. The item duration is the variable item_time; 100 ms is 6 frames at 60 Hz, so
+  use a monitor whose refresh rate divides it. The stream shown on each trial is saved in place.items; T1 and T2
+  onsets are sent as markers. Only the backgrounds come from EDGE's defence kit (tools/library/make_ab_ops.py).

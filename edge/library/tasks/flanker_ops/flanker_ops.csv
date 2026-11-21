@@ -1,0 +1,17 @@
+stimulus,target,condition,correct_key
+HHHHH,H,identical,z
+KKHKK,H,same_response,z
+SSHSS,H,incongruent,z
+XXHXX,H,neutral,z
+KKKKK,K,identical,z
+HHKHH,K,same_response,z
+CCKCC,K,incongruent,z
+XXKXX,K,neutral,z
+SSSSS,S,identical,m
+CCSCC,S,same_response,m
+HHSHH,S,incongruent,m
+XXSXX,S,neutral,m
+CCCCC,C,identical,m
+SSCSS,C,same_response,m
+KKCKK,C,incongruent,m
+XXCXX,C,neutral,m

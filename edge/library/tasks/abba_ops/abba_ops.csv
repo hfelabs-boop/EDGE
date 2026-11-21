@@ -1,0 +1,5 @@
+a_side,a_arrow,a_key,b_side,b_color,b_key,compatibility
+left,←,q,left,#3d7dff,f,compatible
+left,←,q,right,#ffd21f,j,incompatible
+right,→,p,left,#3d7dff,f,incompatible
+right,→,p,right,#ffd21f,j,compatible

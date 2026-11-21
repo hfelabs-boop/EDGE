@@ -1,0 +1,153 @@
+name: endo_exo_cueing_ops
+description: >
+  Endogenous versus exogenous spatial cueing, operational adaptation. The same paradigm and measures as the
+  library's `endo_exo_cueing` task. In one block a central arrow predicts the side of the contact (75% valid):
+  attention is moved voluntarily. In the other block one of the two places flashes briefly and does not predict the
+  side (50% valid): attention is captured automatically. Cue-target intervals of 100 and 600 ms show the different
+  time courses. Block order is counterbalanced by participant number. One variable, `theme`, sets the display: c2
+  (two sensor sectors on a radar-style plot; a new unknown air contact) or uav (two candidate boxes in a camera
+  frame; a vehicle). All pictures are synthetic and generic (EDGE's defence kit).
+
+# Theme switch as in search_ops: `theme` is the first variable; `looks` maps each theme to its target picture and
+# flash colour, and the display around the stimuli (plot and sector frames, camera frame, candidate boxes,
+# reticle, instruction texts) is guarded with `if: $theme == ...`. The trial lists, timing, keys, correct answers
+# and measures are the same for every theme (and as in endo_exo_cueing).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or uav
+  looks:
+    c2: {target: stimuli/unknown_air_48.png, size: [48, 48], flash: "#ffb000"}
+    uav: {target: stimuli/vehicle_tracked_light.png, size: [56, 56], flash: "#00e5ff"}
+  place_name: {c2: sector, uav: box}
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: mean, units: s, expect: [0.15, 1.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: cue_type, label: Cue type, role: factor, column: cue_type}
+  - {id: validity, label: Cue validity, role: factor, column: validity}
+  - {id: soa, label: Cue-target interval (s), role: factor, column: soa}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 25
+        wrap_width: 1100
+        pos: [0, 60]
+        text: |
+          You are watching two sensor sectors, WEST and EAST, on the air-picture plot.
+
+          Keep your eyes on the centre of the plot. A new contact (yellow, unknown) will appear
+          in the left or the right sector. Press the LEFT or RIGHT arrow key for its side, as fast as you can.
+
+          There are two parts. Each starts with a short practice.
+          Press SPACE to continue.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 25
+        wrap_width: 1100
+        pos: [0, 60]
+        text: |
+          You are the payload operator of a surveillance aircraft. The tracker has put two candidate boxes
+          on the camera picture, left and right.
+
+          Keep your eyes on the reticle in the centre. A vehicle will appear in the left or the right box.
+          Press the LEFT or RIGHT arrow key for its side, as fast as you can.
+
+          There are two parts. Each starts with a short practice.
+          Press SPACE to continue.
+      - {id: example_bg, type: shape, shape: rect, size: [140, 140], pos: [0, -260], fill: "#26323a", line_color: "#5a7a8a", line_width: 1}
+      - {id: example, type: image, image: "$looks[theme]['target']", size: "$looks[theme]['size']", pos: [0, -260]}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  block_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: >-
+          $(f'In this part a cyan ARROW in the centre points to one {place_name[theme]} before the target appears.\n'
+          'The arrow is right 3 times out of 4, so it pays to follow it.')
+          if cue_type == 'endogenous' else
+          (f'In this part one {place_name[theme]} FLASHES briefly before the target appears.\n'
+          'The flash does not tell you where the target will be: it is right only half of the time.')
+      - {id: more, type: text, height: 24, pos: [0, -150], text: "Practice first (8 trials, with feedback). Press SPACE."}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - {id: text, type: text, height: 26, text: "Practice done. 48 test trials follow without feedback. Press SPACE to start."}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: look, type: variable, set: {shown_theme: $theme}}   # puts the theme into every trial's data
+      # ---- the display: the two places, one block per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: box_l_c2, type: shape, if: "$theme == 'c2'", shape: rect, size: [130, 130], pos: [-300, 0], fill: transparent, line_color: "#5aa0c0", line_width: 3}
+      - {id: box_r_c2, type: shape, if: "$theme == 'c2'", shape: rect, size: [130, 130], pos: [300, 0], fill: transparent, line_color: "#5aa0c0", line_width: 3}
+      - {id: name_l_c2, type: text, if: "$theme == 'c2'", text: SECTOR WEST, font: DejaVu Sans Mono, height: 15, color: "#9fe8ff", pos: [-300, -85]}
+      - {id: name_r_c2, type: text, if: "$theme == 'c2'", text: SECTOR EAST, font: DejaVu Sans Mono, height: 15, color: "#9fe8ff", pos: [300, -85]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_03_forest.jpg, size: [1280, 720]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_cross.png, size: [240, 240], opacity: 0.5}
+      - {id: box_l_uav, type: image, if: "$theme == 'uav'", image: stimuli/box_candidate_128.png, size: [128, 128], pos: [-300, 0]}
+      - {id: box_r_uav, type: image, if: "$theme == 'uav'", image: stimuli/box_candidate_128.png, size: [128, 128], pos: [300, 0]}
+      # ---- fixation, cue, target (the same for every theme) ----
+      - {id: fix, type: text, text: "+", height: 36, color: "#9fe8ff", duration: 1.0, marker: {offset: "$f'cue_{cue_type}_{cue_side}'"}}
+      - {id: fix_after, type: text, text: "+", height: 36, color: "#9fe8ff", start: 1.0, if: "$cue_type == 'exogenous'"}
+      # endogenous cue: a central arrow that stays on until the response
+      - {id: cue_arrow, type: text, text: $cue, height: 60, color: "#00e5ff", start: 1.0, if: "$cue_type == 'endogenous'"}
+      # exogenous cue: the place on one side flashes (thick outline) for 100 ms
+      - {id: cue_flash, type: shape, shape: rect, size: [144, 144], pos: "$[cue_x, 0]", fill: transparent,
+         line_color: "$looks[theme]['flash']", line_width: 9, start: 1.0, duration: 0.1, if: "$cue_type == 'exogenous'"}
+      - {id: target, type: image, image: "$looks[theme]['target']", size: "$looks[theme]['size']", pos: "$[target_x, 0]",
+         start: $1.0 + soa, marker: "$f'target_{validity}'"}
+      - {id: resp, type: keyboard, keys: [left, right], correct: $correct_key, start: $1.0 + soa, duration: 1.5,
+         end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong side')"
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "End of the watch. Thank you!"}
+
+flow:
+  - instructions
+  - loop: blocks
+    conditions: blocks.csv
+    order: counterbalance
+    children:
+      - block_intro
+      - loop: practice
+        conditions: $trial_file
+        order: random
+        stop_if: $practice.n >= 7
+        children: [trial, feedback]
+      - main_intro
+      - loop: main
+        conditions: $trial_file
+        order: random
+        repeats: 3
+        children: [trial, iti]
+  - thanks

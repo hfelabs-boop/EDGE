@@ -1,0 +1,11 @@
+cue,cue_side,target_side,target_x,validity,correct_key
+←,left,left,-300,valid,left
+←,left,left,-300,valid,left
+←,left,left,-300,valid,left
+←,left,left,-300,valid,left
+←,left,right,300,invalid,right
+→,right,right,300,valid,right
+→,right,right,300,valid,right
+→,right,right,300,valid,right
+→,right,right,300,valid,right
+→,right,left,-300,invalid,left

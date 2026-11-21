@@ -1,0 +1,17 @@
+cue_type,soa,cue,cue_side,cue_x,target_side,target_x,validity,correct_key
+endogenous,0.1,←,left,-300,left,-300,valid,left
+endogenous,0.1,←,left,-300,left,-300,valid,left
+endogenous,0.1,←,left,-300,left,-300,valid,left
+endogenous,0.1,←,left,-300,right,300,invalid,right
+endogenous,0.1,→,right,300,right,300,valid,right
+endogenous,0.1,→,right,300,right,300,valid,right
+endogenous,0.1,→,right,300,right,300,valid,right
+endogenous,0.1,→,right,300,left,-300,invalid,left
+endogenous,0.6,←,left,-300,left,-300,valid,left
+endogenous,0.6,←,left,-300,left,-300,valid,left
+endogenous,0.6,←,left,-300,left,-300,valid,left
+endogenous,0.6,←,left,-300,right,300,invalid,right
+endogenous,0.6,→,right,300,right,300,valid,right
+endogenous,0.6,→,right,300,right,300,valid,right
+endogenous,0.6,→,right,300,right,300,valid,right
+endogenous,0.6,→,right,300,left,-300,invalid,left

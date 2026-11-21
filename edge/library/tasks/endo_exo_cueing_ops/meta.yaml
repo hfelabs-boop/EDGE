@@ -1,0 +1,39 @@
+id: endo_exo_cueing_ops
+title: Endogenous vs exogenous cueing (operational)
+category: Attention
+summary: Compares voluntary orienting to a predictive arrow cue with automatic capture by a non-predictive sector or box flash, before a contact appears.
+description: >
+  The library's endogenous vs exogenous cueing task with operator displays. In the endogenous block a central arrow
+  points to one of two places (sensor sectors or candidate boxes) and predicts the contact's side on 75% of trials;
+  in the exogenous block one place flashes for 100 ms and predicts nothing (50% valid). In both, a contact then
+  appears in one place after 100 or 600 ms and the operator presses the arrow key for its side (max 1.5 s). Each
+  block starts with 8 practice trials with feedback and has 48 test trials (96 in total); block order is
+  counterbalanced across participant numbers. Typical result, as in the classic task: the exogenous validity effect
+  is present at the short interval and shrinks (or reverses) at the long one, while the endogenous effect needs
+  time and is larger at the long interval.
+measures:
+  - RT by cue type x validity x cue-target interval (validity effects)
+  - accuracy
+duration_min: 7
+input: keyboard
+languages: [en]
+variant_of: endo_exo_cueing
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The boxes, cues and dot of the classic task become two sensor sectors or candidate boxes, an arrow cue from the
+  sensor chain or tracker (endogenous), a sudden highlight of one place (exogenous, as when a display flashes a
+  sector or box) and a new contact; the design, timing, keys and measures stay the same. c2: a radar-style plot with
+  two outlined sectors (WEST and EAST), an amber sector highlight as the flash, and a new unknown air contact
+  (yellow quatrefoil frame) as the target. uav: a camera frame under a reticle with two candidate boxes from the
+  image tracker, a cyan box highlight as the flash, and a vehicle appearing in a box as the target. Everything is
+  generic and fictional.
+references:
+  - "Filoteo, J. V., Delis, D. C., Salmon, D. P., Demadura, T., Roman, M. J., & Shults, C. W. (1997). An examination of the nature of attentional deficits in patients with Parkinson's disease: Evidence from a spatial orienting task. Journal of the International Neuropsychological Society, 3(4), 337-347. doi:10.1017/S1355617797003378"
+  - "Jonides, J. (1981). Voluntary versus automatic control over the mind's eye's movement. In J. B. Long & A. D. Baddeley (Eds.), Attention and Performance IX (pp. 187-203). Hillsdale, NJ: Erlbaum."
+  - "Posner, M. I. (1980). Orienting of attention. Quarterly Journal of Experimental Psychology, 32, 3-25."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/endo_exo_cueing.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav). blocks.csv names the trial list of each block
+  (endogenous.csv, exogenous.csv; the classic lists); the validity ratio and the intervals (column soa) are rows
+  in those lists. The pictures come from EDGE's defence kit (tools/library/make_endo_exo_cueing_ops.py copies them).

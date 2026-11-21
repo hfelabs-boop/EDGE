@@ -1,0 +1,162 @@
+name: ax_cpt_ops
+description: >
+  AX Continuous Performance Test, operational adaptation. The same paradigm and measures as the library's `ax_cpt`
+  task: reports come in pairs: a cue (a track or an emitter), a short delay, then a probe (a status readout).
+  Press M when the probe is the critical status after the critical cue (the target pair AX); press Z for every
+  other probe. AX pairs are frequent (70%), so the A cue prepares an M response and the X probe usually means M;
+  the rare AY and BX pairs show how much the operator relies on the context provided by the cue. One variable,
+  `theme`, sets the display: c2 (a hostile air track that is then reported CLOSING, on a radar-style plot) or ew
+  (a high-threat pulsed emitter that then switches to TRACKING, on a waterfall display). All pictures are
+  synthetic and generic (EDGE's defence kit).
+
+# Theme switch as in search_ops: `theme` is the first variable; `looks` maps each theme to its A cue, its other (B)
+# cues, its X probe and its other (Y) probes, and the display around the stimuli (plot, waterfall, instruction
+# texts) is guarded with `if: $theme == ...`. The trial list, timing, keys, correct answers and measures are the
+# same for every theme (and as in ax_cpt).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2              # display theme: c2 or ew
+  looks:
+    c2:
+      cues:
+        A: [stimuli/hostile_air_64.png]
+        B: [stimuli/friendly_air_64.png, stimuli/friendly_surface_64.png, stimuli/friendly_ground_64.png,
+            stimuli/neutral_air_64.png, stimuli/neutral_surface_64.png, stimuli/neutral_ground_64.png,
+            stimuli/unknown_air_64.png, stimuli/unknown_surface_64.png, stimuli/unknown_ground_64.png]
+      probes:
+        X: [CLOSING]
+        Y: [OPENING, HOLDING, ORBITING, CLIMBING, LANDING, CRUISING, TURNING, LOITERING]
+      size: [80, 80]
+    ew:
+      cues:
+        A: [stimuli/emitter_pulsed_high.png]
+        B: [stimuli/emitter_pulsed_medium.png, stimuli/emitter_pulsed_low.png, stimuli/emitter_continuous_high.png,
+            stimuli/emitter_continuous_medium.png, stimuli/emitter_continuous_low.png]
+      probes:
+        X: [TRACKING]
+        Y: [SEARCH, STANDBY, SCANNING, IDLE, SWEEPING, CALIBRATE, SILENT, RESET]
+      size: [40, 120]
+  rule: {c2: HOSTILE AIR track then CLOSING, ew: HIGH-THREAT PULSED emitter then TRACKING}
+  cue_pick: 0           # which cue / probe of the trial's kind is shown (set on every trial)
+  probe_pick: 0
+  track_no: 417
+  cue_time: 0.3        # cue on screen (s)
+  delay: 1.0           # blank between cue and probe (s)
+  probe_time: 0.3      # probe on screen (s)
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: mean, units: s, expect: [0.15, 1.2]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: trial_type, label: Pair type, role: factor, column: trial_type}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 100]
+        text: |
+          You are the air-picture controller. Reports come in pairs: first a TRACK appears on the plot,
+          then (after a short pause) its STATUS is shown. You only respond to the STATUS:
+
+          press M  if the status is CLOSING  AND  the track was HOSTILE AIR (red diamond, shown below)
+          press Z  for every other status
+
+          So: hostile air track, then CLOSING -> M (warn).   Anything else -> Z.
+          Be fast but accurate. First 10 practice pairs with feedback. Press SPACE to begin.
+      - id: text_ew
+        type: text
+        if: "$theme == 'ew'"
+        height: 24
+        wrap_width: 1100
+        pos: [0, 100]
+        text: |
+          You are monitoring the waterfall display of a signal receiver. Reports come in pairs: first an
+          EMITTER appears, then (after a short pause) its MODE is shown. You only respond to the MODE:
+
+          press M  if the mode is TRACKING  AND  the emitter was HIGH-THREAT PULSED (red, dashed; shown below)
+          press Z  for every other mode
+
+          So: high-threat pulsed emitter, then TRACKING -> M (warn).   Anything else -> Z.
+          Be fast but accurate. First 10 practice pairs with feedback. Press SPACE to begin.
+      - {id: example_bg, type: shape, shape: rect, size: [150, 150], pos: [0, -240], fill: "#26323a", line_color: "#5a7a8a", line_width: 1}
+      - {id: example, type: image, image: "$looks[theme]['cues']['A'][0]", size: "$looks[theme]['size']", pos: [0, -240]}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: "$f'Practice done. The test has 80 pairs (about 5 minutes) without feedback.\\n\\n{rule[theme]} -> M.   Anything else -> Z.\\n\\nPress SPACE to start.'"
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    duration: $cue_time + delay + 1.2     # as in ax_cpt (cue, delay, 1.2 s to respond); the backgrounds have no end
+    components:
+      - id: letters
+        type: variable
+        set:
+          shown_theme: $theme      # puts the theme into every trial's data (column letters.shown_theme)
+          cue_pick: "$random.randrange(len(looks[theme]['cues'][cue_kind]))"
+          probe_pick: "$random.randrange(len(looks[theme]['probes'][probe_kind]))"
+          track_no: "$random.randint(100, 989)"
+      # what was shown, for the data (columns shown.cue_pic, shown.probe_word)
+      - id: shown
+        type: variable
+        set:
+          cue_pic: "$looks[theme]['cues'][cue_kind][cue_pick]"
+          probe_word: "$looks[theme]['probes'][probe_kind][probe_pick]"
+      # ---- the display around the stimuli, one block per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: tn_c2, type: text, if: "$theme == 'c2'", font: DejaVu Sans Mono, height: 16, color: "#9fe8ff", pos: [0, -70],
+         text: "$f'TN {track_no:04d}'", duration: $cue_time}
+      - {id: waterfall_ew, type: image, if: "$theme == 'ew'", image: stimuli/waterfall_1280x720.jpg, size: [1280, 720]}
+      # ---- cue, delay, probe (the same for every theme) ----
+      - {id: cue, type: image, image: "$looks[theme]['cues'][cue_kind][cue_pick]", size: "$looks[theme]['size']", duration: $cue_time, marker: "$f'cue_{cue_kind}'"}
+      - {id: probe_box, type: shape, shape: rect, size: [300, 70], fill: "#0a2232", line_color: "#5aa0c0", line_width: 2,
+         start: $cue_time + delay, duration: $probe_time}
+      - {id: probe, type: text, text: "$looks[theme]['probes'][probe_kind][probe_pick]", font: DejaVu Sans Mono, bold: true, height: 36, color: "#9fe8ff",
+         start: $cue_time + delay, duration: $probe_time, marker: "$f'probe_{trial_type}'"}
+      - {id: resp, type: keyboard, keys: [m, z], correct: $correct_key, start: $cue_time + delay, duration: 1.2}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong key')"
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  iti:
+    components:
+      - {id: fix, type: text, text: "+", height: 36, color: "#9fe8ff", duration: 1.0}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "End of the watch. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: ax_cpt_ops.csv
+    order: random
+    children: [iti, trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: ax_cpt_ops.csv
+    order: random
+    repeats: 8
+    children: [iti, trial]
+  - thanks
