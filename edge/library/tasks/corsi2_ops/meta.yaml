@@ -1,0 +1,40 @@
+id: corsi2_ops
+title: Corsi block-tapping task (adaptive, operational)
+category: Working memory
+summary: >-
+  Waypoint routes or sensor paths to tap back, with an adaptive length (one up after a correct sequence, one down
+  after an error).
+description: >
+  The library's adaptive Corsi procedure with operator displays. Nine places stand at fixed positions: waypoints on
+  a tactical map grid, or candidate boxes in a surveillance camera picture. A sequence lights up (one place per
+  second) and is tapped back in the same order. The length follows a one-up/one-down staircase starting at 3: one
+  longer after a correct sequence, one shorter after an error, for 14 sequences. The span estimate is the mean
+  length at the staircase's turning points; the longest sequence reproduced and the proportion correct are
+  recorded as well.
+measures:
+- span estimate (staircase)
+- longest sequence reproduced
+- proportion of sequences correct
+- proportion of taps on the right block
+- time per tap
+duration_min: 6
+input: mouse
+languages: [en]
+variant_of: corsi2
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The nine blocks of the classic task become nine places on an operator display, at the same positions, with the
+  same ids, staircase, timing and measures. c2: the places are waypoints on a map grid with a made-up coastline;
+  a route lights its waypoints in amber one after another and the operator re-enters the route by tapping them.
+  uav: the places are candidate target boxes in a camera frame of a forest seen from above; the sensor visits some
+  of them one after another (the box fills in cyan) and the operator reproduces the sensor's path. Places, maps
+  and pictures are generic and fictional.
+references:
+- "Corsi, P. M. (1972). Human memory and the medial temporal region of the brain (Doctoral dissertation). McGill University, Montreal."
+- "Kessels, R. P. C., van Zandvoort, M. J. E., Postma, A., Kappelle, L. J., & de Haan, E. H. F. (2000). The Corsi Block-Tapping Task: Standardization and normative data. Applied Neuropsychology, 7(4), 252–258."
+- "Levitt, H. (1971). Transformed up-down methods in psychoacoustics. Journal of the Acoustical Society of America, 49, 467–477."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/corsi2.html"}
+notes: >
+  Uses EDGE's staircase loop (variable span, step -1) for the adaptive length, as corsi2. Switch the display with the
+  variable `theme` (c2, uav). Pictures from EDGE's defence kit (tools/library/make_corsi_ops.py).

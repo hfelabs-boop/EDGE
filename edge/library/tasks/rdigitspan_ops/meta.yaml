@@ -1,0 +1,35 @@
+id: rdigitspan_ops
+title: Digit span (backward, operational)
+category: Working memory
+summary: Read back ever longer track numbers or grid references in reverse order, until two of one length fail.
+description: >
+  The library's backward digit span with operator displays. The digits 1-9 are passed one per second, as a track
+  number coming in on the message panel of a tactical map or as a grid reference in the overlay of a surveillance
+  camera; afterwards the operator enters them in reverse order (last digit first) on an on-screen keypad. After
+  two practice lists of 2 digits, the test starts at 2 digits with two lists per length, growing by one while at
+  least one list is right and stopping when both are wrong (or after 8 digits). The backward span is the longest
+  list read back correctly.
+measures:
+- backward digit span (longest list recalled correctly)
+- number of lists correct
+- proportion of digits in the right place
+- time per keypad tap
+duration_min: 5
+input: mouse
+languages: [en]
+variant_of: rdigitspan
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The digit lists of the classic task become numbers an operator has to read back in reverse; lists, timing,
+  keypad, stopping rule and measures stay the same. c2: the digits are a track number coming in digit by digit on
+  the message panel of a tactical map (header INCOMING TRACK NUMBER). uav: the digits are a grid reference passed
+  in a box under the reticle of a surveillance camera picture with telemetry text. In both themes the keypad is a
+  console keypad over the dimmed display. Track numbers, grid references and pictures are generic and fictional.
+references:
+- "Wechsler, D. (2008). Wechsler Adult Intelligence Scale – Fourth Edition (WAIS-IV). San Antonio, TX: Pearson."
+- "Jones, G., & Macken, B. (2015). Questioning short-term memory and its measurement: Why digit span measures long-term associative learning. Cognition, 144, 1–13."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/rdigitspan.html"}
+notes: >
+  The same file as digitspan_ops with direction: backward (start 2, at most 8 digits) under variables. Switch the
+  display with the variable `theme` (c2, uav). Pictures from EDGE's defence kit (tools/library/make_digitspan_ops.py).

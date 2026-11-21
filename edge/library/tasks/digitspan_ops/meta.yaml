@@ -1,0 +1,39 @@
+id: digitspan_ops
+title: Digit span (forward, operational)
+category: Working memory
+summary: Read back ever longer track numbers or grid references in the order they came in, until two of one length fail.
+description: >
+  The library's forward digit span with operator displays. The digits 1-9 (no repeats within a list) are passed
+  one per second, as a track number coming in on the message panel of a tactical map or as a grid reference in
+  the overlay of a surveillance camera; afterwards the operator reads them back in the same order on an
+  on-screen keypad (mouse or touch). After two practice lists of 2 digits, the test starts at 3 digits with two
+  lists per length; the length grows by one while at least one of the two lists is right and the test stops when
+  both lists of a length are wrong (or after 9 digits). The span is the longest list read back correctly; the
+  number of correct lists and the digits in the right place are recorded too.
+measures:
+- digit span (longest list recalled correctly)
+- number of lists correct
+- proportion of digits in the right place
+- time per keypad tap
+duration_min: 5
+input: mouse
+languages: [en]
+variant_of: digitspan
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The digit lists of the classic task become numbers an operator has to read back; lists, timing, keypad,
+  stopping rule and measures stay the same. c2: the digits are a track number coming in digit by digit on the
+  message panel of a tactical map (header INCOMING TRACK NUMBER), as when a track number is passed by voice or
+  data link and has to be entered at the console. uav: the digits are a grid reference passed in a box under the
+  reticle of a surveillance camera picture with telemetry text, as when the payload operator is given the next
+  point to look at. In both themes the keypad is a console keypad over the dimmed display and the entry line
+  shows the digits typed so far. Track numbers, grid references and pictures are generic and fictional.
+references:
+- "Wechsler, D. (2008). Wechsler Adult Intelligence Scale – Fourth Edition (WAIS-IV). San Antonio, TX: Pearson."
+- "Jones, G., & Macken, B. (2015). Questioning short-term memory and its measurement: Why digit span measures long-term associative learning. Cognition, 144, 1–13."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/digitspan.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav); each list records the theme (shown.shown_theme). A
+  workflow (state machine) implements the two-tries-per-length stopping rule, as in digitspan. Pictures from
+  EDGE's defence kit (tools/library/make_digitspan_ops.py copies them).

@@ -1,0 +1,177 @@
+name: pvtb_touch_ops
+description: >
+  Brief Psychomotor Vigilance Test (PVT-B, 3 minutes) for phones and touchscreens, operational adaptation. The same
+  paradigm, timing, lapse and false-start rules and measures as the library's `pvtb_touch` task: at random intervals
+  of 1 to 4 s a new alert appears on the operator's display (a new contact on a tactical plot, a new target box in
+  a camera picture or a new emitter on a spectrum display) together with a millisecond counter in the alert box;
+  the operator taps the screen anywhere as fast as possible to acknowledge it, and the reaction time is shown for
+  1 s. Lapses = reactions slower than 355 ms (or none within 30 s); false starts = taps faster than 100 ms after
+  the alert (taps while waiting are not registered in this version). Outcomes follow Basner et al. (2011): mean
+  RT, mean response speed (1/RT), lapses, false starts and the performance score. One variable, `theme`, sets the
+  display: c2, uav or ew. Everything is generic and fictional.
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops)
+# - The waits, counter, tap, scoring and measures are the classic task's; the counter (the PVT stimulus) is one
+#   item for every theme. `alert` gives each theme's alert picture and its size; the item `alert_pic` shows it at
+#   the same moment as the counter.
+# - The display behind it (plot, camera frame and reticle, spectrum) and the instruction texts are items guarded
+#   with `if: "$theme == 'uav'"`, one per theme.
+
+settings:
+  window: {size: [540, 960], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2               # display theme: c2, uav or ew
+  # the alert that appears with the counter, per theme: the picture, its size and the words on the alert box
+  alert:
+    c2: {pic: stimuli/unknown_air_64.png, size: [64, 64], label: NEW CONTACT}
+    uav: {pic: stimuli/box_confirmed_96.png, size: [96, 96], label: NEW TARGET}
+    ew: {pic: stimuli/emitter_pulsed_high.png, size: [28, 84], label: NEW EMITTER}
+  test_length: 180        # seconds of testing (PVT-B: 3 min; the classic PVT: 600)
+  isi_min: 1.0            # random wait before the alert, in seconds
+  isi_max: 4.0
+  lapse_rt: 0.355         # PVT-B lapse threshold (s)
+  anticipation_rt: 0.1    # faster than this counts as a false start (s)
+  timeout: 30             # no reaction after this many seconds: a lapse, and the next trial starts
+  isi: 2.0
+  elapsed: 0
+  phase: practice
+
+measures:
+  - {id: mean_rt, label: Mean RT (valid reactions), role: outcome, column: score.rt_valid, loop: trials,
+     summary: mean, units: s, expect: [0.15, 1.0]}
+  - {id: median_rt, label: Median RT, role: outcome, column: score.rt_valid, loop: trials, summary: median,
+     units: s, expect: [0.15, 1.0]}
+  - {id: speed, label: Mean response speed (1/RT), role: outcome, column: score.speed, loop: trials,
+     summary: mean, units: 1/s}
+  - {id: lapses, label: Lapses (RT > 355 ms), role: outcome, column: score.lapse, loop: trials, summary: sum}
+  - {id: false_starts, label: False starts, role: outcome, column: score.false_start, loop: trials, summary: sum}
+  - {id: error_rate, label: Lapses + false starts per trial (performance score = 1 - this), role: outcome,
+     column: score.error, loop: trials, summary: proportion}
+  - {id: n_trials, label: Trials in 3 minutes, role: check, column: score.false_start, loop: trials, summary: count}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 24
+        wrap_width: 480
+        text: |
+          Alert response (3 minutes)
+
+          You are watching the tactical plot. Every few seconds a NEW CONTACT pops up and a red counter starts running in the alert box. As soon as you see it, tap the screen (anywhere) as fast as you can. Your reaction time is then shown for a second.
+
+          Do not tap before the alert appears. Keep your thumb ready just above the screen.
+
+          First three practice alerts. Tap the screen to start.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 24
+        wrap_width: 480
+        text: |
+          Alert response (3 minutes)
+
+          You are watching the camera feed. Every few seconds the tracker marks a NEW TARGET and a red counter starts running in the alert box. As soon as you see it, tap the screen (anywhere) as fast as you can. Your reaction time is then shown for a second.
+
+          Do not tap before the alert appears. Keep your thumb ready just above the screen.
+
+          First three practice alerts. Tap the screen to start.
+      - id: text_ew
+        type: text
+        if: "$theme == 'ew'"
+        height: 24
+        wrap_width: 480
+        text: |
+          Alert response (3 minutes)
+
+          You are watching the spectrum display. Every few seconds a NEW EMITTER is detected and a red counter starts running in the alert box. As soon as you see it, tap the screen (anywhere) as fast as you can. Your reaction time is then shown for a second.
+
+          Do not tap before the alert appears. Keep your thumb ready just above the screen.
+
+          First three practice alerts. Tap the screen to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 480
+        text: |
+          Now the 3-minute watch. Tap as fast as you can every time an alert appears.
+
+          Tap the screen to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  trial:
+    components:
+      - {id: wait, type: variable, set: {isi: "$random.uniform(isi_min, isi_max)", shown_theme: $theme}}
+      # ---- the display (upper part of the screen), one per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_800x800.png, size: [540, 540], pos: [0, 150]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_01_farmland.jpg, size: [960, 540], pos: [0, 150]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_brackets.png, size: [200, 200], pos: [0, 150]}
+      - {id: spectrum_ew, type: image, if: "$theme == 'ew'", image: stimuli/spectrum_1280x720.png, size: [960, 540], pos: [0, 150]}
+      # ---- the alert box (every theme) ----
+      - {id: box, type: shape, shape: rect, size: [300, 140], pos: [0, -260], fill: "#0a2232", line_color: "#5fb4d6", line_width: 3}
+      # ---- the alert: the theme's picture and the counter appear together ----
+      - {id: alert_pic, type: image, image: "$alert[theme]['pic']", size: "$alert[theme]['size']", pos: [0, 150], start: $isi}
+      - {id: alert_label, type: text, text: "$alert[theme]['label']", font: DejaVu Sans Mono, bold: true, height: 18,
+         color: "#ff3b30", pos: [0, -215], start: $isi}
+      - {id: counter, type: text, text: "$f'{int(max(0.0, t - isi) * 1000)}'", height: 64, color: "#ff3b30",
+         font: Courier New, bold: true, pos: [0, -275], start: $isi, marker: stimulus}
+      # a tap anywhere on the screen (or a mouse click) acknowledges the alert
+      - {id: resp, type: mouse, touch: true, start: $isi, duration: $timeout, end_routine: true}
+      - id: score
+        type: variable
+        when: end
+        set:
+          false_start: "$int(resp.rt is not None and resp.rt < anticipation_rt)"
+          lapse: "$int(resp.rt is None or resp.rt > lapse_rt)"
+          error: "$int(resp.rt is None or resp.rt < anticipation_rt or resp.rt > lapse_rt)"
+          rt_valid: "$resp.rt if resp.rt is not None and resp.rt >= anticipation_rt else None"
+          speed: "$1 / resp.rt if resp.rt is not None and resp.rt >= anticipation_rt else None"
+          elapsed: "$elapsed + t"
+
+  feedback:
+    duration: 1.0
+    components:
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_800x800.png, size: [540, 540], pos: [0, 150]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_01_farmland.jpg, size: [960, 540], pos: [0, 150]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_brackets.png, size: [200, 200], pos: [0, 150]}
+      - {id: spectrum_ew, type: image, if: "$theme == 'ew'", image: stimuli/spectrum_1280x720.png, size: [960, 540], pos: [0, 150]}
+      - {id: box, type: shape, shape: rect, size: [300, 140], pos: [0, -260], fill: "#0a2232", line_color: "#5fb4d6", line_width: 3}
+      - id: fb
+        type: text
+        height: 44
+        pos: [0, -260]
+        text: "$f'{int(resp.rt * 1000)}' if resp.rt is not None else 'no reaction'"
+        color: "$'#ffcc00' if score.false_start or resp.rt is None else '#ff3b30'"
+      - {id: tally, type: variable, when: end, set: {elapsed: "$elapsed + t"}}
+
+  start_test:
+    duration: 0.5
+    components:
+      - {id: reset, type: variable, set: {elapsed: 0, phase: main}}
+      - {id: box, type: shape, shape: rect, size: [300, 140], pos: [0, -260], fill: "#0a2232", line_color: "#5fb4d6", line_width: 3}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, wrap_width: 480, text: "End of the watch. Thank you, the test is finished."}
+
+flow:
+  - instructions
+  - loop: practice
+    repeats: 3
+    children: [trial, feedback]
+  - main_intro
+  - start_test
+  - loop: trials
+    repeats: 500                          # upper bound; the loop stops after test_length seconds
+    stop_if: "$elapsed >= test_length"
+    children: [trial, feedback]
+  - thanks

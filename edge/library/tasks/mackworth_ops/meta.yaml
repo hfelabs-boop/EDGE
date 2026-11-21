@@ -1,0 +1,39 @@
+id: mackworth_ops
+title: Mackworth clock test (operational)
+category: Vigilance
+summary: Watch a radar sweep or a camera feed that moves one step per second and press a key when it skips a step.
+description: >
+  The library's Mackworth clock test with operator displays. A radar sweep moves around a scope with 60 bearing
+  ticks, or a camera picture shifts along its orbit, one step every second; at rare, irregular moments it moves
+  two steps at once, and the operator presses SPACE (a press during that second or the next counts as a
+  detection). A 40-second practice with feedback, then 5 minutes with 15 double jumps (3 per minute). Outcomes:
+  the proportion of double jumps detected, false alarms and detection time, each per minute to show the vigilance
+  decrement.
+measures:
+- hit rate (double jumps detected)
+- false alarms
+- detection time
+- per minute of the test
+duration_min: 7
+input: keyboard
+languages: [en]
+variant_of: mackworth
+domain: defense
+themes: [c2, video]
+adaptation: >
+  The clock pointer of the classic task becomes something an operator watches move; the step lists, timing, key
+  and scoring stay the same (the trial lists are mackworth's). c2: the pointer is the sweep beam of a radar scope
+  with 60 bearing ticks, turning 6 degrees per second, and the double jump is a sweep that skips a step, close to
+  the radar-watch setting Mackworth's clock was designed to imitate. video: the pointer is a camera feed under a
+  crosshair whose picture moves along a small circle as the camera orbits, one step per second, and the double
+  jump is a feed that jumps (as when frames are dropped). Scope, feed and pictures are generic and fictional.
+references:
+- "Mackworth, N. H. (1948). The breakdown of vigilance during prolonged visual search. Quarterly Journal of Experimental Psychology, 1, 6–21."
+- "Lichstein, K. L., Riedel, B. W., & Richman, S. L. (2000). The Mackworth Clock Test: A computerized version. The Journal of Psychology, 134(2), 153–161."
+- "Warm, J. S., Parasuraman, R., & Matthews, G. (2008). Vigilance requires hard mental work and is stressful. Human Factors, 50(3), 433–441."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/mackworth.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, video). ticks.csv and practice.csv are mackworth's (one row per
+  step; a longer watch is a longer list). The scope and sweep pictures are drawn by tools/library/make_mackworth_ops.py,
+  which also copies the camera frame and crosshair from EDGE's defence kit. The video theme moves a still camera
+  frame (no video file), so the steps are exact on every computer.

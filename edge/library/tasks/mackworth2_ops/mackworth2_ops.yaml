@@ -1,0 +1,178 @@
+name: mackworth2_ops
+description: >
+  Mackworth clock test, lamp-ring version with four test periods, operational adaptation. The same paradigm, step
+  lists, key, alertness ratings and measures as the library's `mackworth2` task: sixty positions form a ring; one is
+  active and the activity moves on by one position every second. Now and then it skips a position (jumps two
+  places); the operator presses SPACE whenever that happens (a press during the jump's second or the next one
+  counts). A 40-second practice with feedback, then 8 minutes in four 2-minute periods with 6 skips each, at
+  irregular times; alertness is rated before and after. One variable, `theme`, sets what the ring is: c2 (the
+  posts of a perimeter sensor line on a map, polled one after another) or ew (the channels of a scanning receiver).
+  Everything is generic and fictional.
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops)
+# - The step lists (ticks.csv, practice.csv) and all scoring items are the classic task's; the lit position is one
+#   item for every theme (`lit`, at radius 250 px, 6 degrees per step) whose colour comes from `lit_color`.
+# - The ring picture, the background and the instruction texts are items guarded with `if: "$theme == 'ew'"`,
+#   one per theme.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2               # display theme: c2 or ew
+  lit_color: {c2: "#ffb000", ew: "#00e5ff"}
+  thing: {c2: sensor post, ew: channel}
+  step_time: 1.0          # seconds per step
+  pointer: 0              # current position, 0-59
+  pending: 0              # 1 while a double jump has not been reported yet
+  hits: 0
+  misses: 0
+  false_alarms: 0
+
+measures:
+  - {id: hit_rate, label: Skips detected, role: outcome, column: score.detected, loop: ticks,
+     trials: "$after == 1", summary: proportion}
+  - {id: false_alarms, label: False alarms (presses without a skip), role: outcome, column: score.fa_now,
+     loop: ticks, summary: sum}
+  - {id: hit_rt, label: Detection time (from the skip), role: outcome, column: score.hit_rt, loop: ticks,
+     trials: "$score.hit_now == 1", summary: median, units: s, expect: [0.15, 2.0]}
+  - {id: alert_before, label: Alertness before the test (1-9), role: covariate, column: alert_pre.rating, summary: last}
+  - {id: alert_after, label: Alertness after the test (1-9), role: outcome, column: alert_post.rating, summary: last}
+  - {id: period, label: Test period (2 min each), role: factor, column: period}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 27
+        wrap_width: 1100
+        text: |
+          Perimeter sensor watch
+
+          A ring of 60 sensor posts guards a site on the map. The posts report one after another:
+          the reporting post is lit, and the light moves on to the next post every second.
+          Once in a while the polling SKIPS a post (the light jumps two places).
+          Whenever you see such a skip, press SPACE straight away. Do not press for normal single steps.
+
+          Skips are rare, so keep watching the whole time.
+          First a 40-second practice with feedback. Press SPACE to start.
+      - id: text_ew
+        type: text
+        if: "$theme == 'ew'"
+        height: 27
+        wrap_width: 1100
+        text: |
+          Receiver scan watch
+
+          A receiver scans 60 channels in turn, shown as a ring: the channel being scanned is lit,
+          and the light moves on to the next channel every second.
+          Once in a while the scan SKIPS a channel (the light jumps two places).
+          Whenever you see such a skip, press SPACE straight away. Do not press for normal single steps.
+
+          Skips are rare, so keep watching the whole time.
+          First a 40-second practice with feedback. Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 28
+        wrap_width: 1100
+        text: "$f'Now the watch: 8 minutes without feedback and without breaks.\\nPress SPACE whenever a {thing[theme]} is skipped.\\n\\nPress SPACE to start.'"
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, when: end, set: {pointer: 0, pending: 0, hits: 0, misses: 0, false_alarms: 0}}
+
+  alert_pre:
+    components:
+      - {id: q, type: text, height: 28, pos: [0, 120], wrap_width: 1000,
+         text: "Before the watch: how alert do you feel right now?\n\nClick on the scale, then press SPACE."}
+      - {id: alert_pre, type: slider, ticks: [1, 2, 3, 4, 5, 6, 7, 8, 9], labels: [very sleepy, '', '', '', '', '', '', '', wide awake],
+         pos: [0, -60], size: [800, 30], require_confirm: true, end_routine: true}
+
+  alert_post:
+    components:
+      - {id: q, type: text, height: 28, pos: [0, 120], wrap_width: 1000,
+         text: "The watch is over. How alert do you feel right now?\n\nClick on the scale, then press SPACE."}
+      - {id: alert_post, type: slider, ticks: [1, 2, 3, 4, 5, 6, 7, 8, 9], labels: [very sleepy, '', '', '', '', '', '', '', wide awake],
+         pos: [0, -60], size: [800, 30], require_confirm: true, end_routine: true}
+
+  tick:
+    duration: $step_time
+    components:
+      - {id: move, type: variable, set: {pointer: "$(pointer + 1 + double) % 60", shown_theme: $theme}}
+      # c2: a dimmed map with the ring of sensor posts; ew: a dimmed spectrum display with the ring of channels
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_800x800.jpg, size: [720, 720], opacity: 0.5}
+      - {id: ring_c2, type: image, if: "$theme == 'c2'", image: stimuli/sensor_ring_600.png, size: [600, 600]}
+      - {id: spectrum_ew, type: image, if: "$theme == 'ew'", image: stimuli/spectrum_1280x720.png, size: [1280, 720], opacity: 0.4}
+      - {id: ring_ew, type: image, if: "$theme == 'ew'", image: stimuli/channel_ring_600.png, size: [600, 600]}
+      # the lit position (0 = top, clockwise)
+      - {id: lit, type: shape, shape: circle, radius: 13, fill: "$lit_color[theme]", line_color: "#ffffff", line_width: 3,
+         pos: "$[250 * math.sin(math.radians(pointer * 6)), 250 * math.cos(math.radians(pointer * 6))]",
+         marker: "$'double_jump' if double else ''"}
+      - id: resp
+        type: keyboard
+        keys: [space]
+        duration: $step_time
+        correct: "$'space' if double == 1 or (after == 1 and pending == 1) else 'none'"
+      - id: score
+        type: variable
+        when: end
+        set:
+          resp_now: "$int(resp.keys is not None)"
+          hit_now: "$int(resp.keys is not None and (double == 1 or (after == 1 and pending == 1)))"
+          fa_now: "$int(resp.keys is not None and not (double == 1 or (after == 1 and pending == 1)))"
+          miss_now: "$int(after == 1 and pending == 1 and resp.keys is None)"
+          detected: "$(0 if (pending == 1 and resp.keys is None) else 1) if after == 1 else None"
+          hit_rt: "$(resp.rt + (step_time if after == 1 and double == 0 else 0)) if resp.keys is not None and (double == 1 or (after == 1 and pending == 1)) else None"
+          pending: "$int(double == 1 and resp.keys is None)"
+      - id: tally
+        type: variable
+        when: end
+        set:
+          hits: "$hits + score.hit_now"
+          misses: "$misses + score.miss_now"
+          false_alarms: "$false_alarms + score.fa_now"
+
+  practice_feedback:
+    duration: 1.0
+    components:
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_800x800.jpg, size: [720, 720], opacity: 0.5}
+      - {id: ring_c2, type: image, if: "$theme == 'c2'", image: stimuli/sensor_ring_600.png, size: [600, 600]}
+      - {id: spectrum_ew, type: image, if: "$theme == 'ew'", image: stimuli/spectrum_1280x720.png, size: [1280, 720], opacity: 0.4}
+      - {id: ring_ew, type: image, if: "$theme == 'ew'", image: stimuli/channel_ring_600.png, size: [600, 600]}
+      - {id: lit, type: shape, shape: circle, radius: 13, fill: "$lit_color[theme]", line_color: "#ffffff", line_width: 3,
+         pos: "$[250 * math.sin(math.radians(pointer * 6)), 250 * math.cos(math.radians(pointer * 6))]"}
+      - {id: fb_bar, type: shape, shape: rect, size: [460, 50], pos: [0, -60], fill: "#0a2232", opacity: 0.9}
+      - id: fb
+        type: text
+        height: 30
+        pos: [0, -60]
+        text: "$'Well spotted!' if score.hit_now else ('You missed a skip' if score.miss_now else 'That was a single step')"
+        color: "$'#34c759' if score.hit_now else '#ff3b30'"
+
+  thanks:
+    duration: 4
+    components:
+      - {id: bye, type: text, height: 30, wrap_width: 1100,
+         text: "$f'End of the watch. Thank you! You spotted {hits} of {hits + misses} skips.'"}
+
+flow:
+  - alert_pre
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: sequential
+    children:
+      - tick
+      - {routine: practice_feedback, if: "$score.hit_now == 1 or score.miss_now == 1 or score.fa_now == 1"}
+  - main_intro
+  - loop: ticks
+    conditions: ticks.csv
+    order: sequential
+    children: [tick]
+  - alert_post
+  - thanks

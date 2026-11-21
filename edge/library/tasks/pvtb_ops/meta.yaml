@@ -1,0 +1,42 @@
+id: pvtb_ops
+title: Brief psychomotor vigilance test (PVT-B, operational)
+category: Vigilance
+summary: Acknowledge every new contact, target or emitter alert with a key press as fast as possible, for 3 minutes.
+description: >
+  The library's 3-minute PVT-B with operator displays. At random intervals of 1-4 s a new alert appears (a new
+  contact on a tactical plot, a new target box in a camera picture, or a new emitter on a spectrum display) and a
+  red millisecond counter starts in the alert box; the operator presses SPACE to acknowledge it and sees the
+  reaction time for 1 s. Presses before the alert or faster than 100 ms are false starts (the trial ends);
+  reactions slower than 355 ms are lapses (Basner et al., 2011). Three practice alerts, then the 3-minute watch.
+  Outcomes: mean and median RT, mean response speed (1/RT), lapses, false starts and the share of lapses + false
+  starts (performance score = 1 - that share).
+measures:
+- mean RT
+- median RT
+- mean response speed (1/RT)
+- lapses (> 355 ms)
+- false starts
+- lapses + false starts per trial
+duration_min: 4
+input: keyboard
+languages: [en]
+variant_of: pvtb
+domain: defense
+themes: [c2, uav, ew]
+adaptation: >
+  The PVT's running counter stays (it is the stimulus and the feedback), but it now runs in an alert box and starts
+  together with an operational alert; waits, key, rules and measures stay the same. c2: the alert is a new contact
+  (an unknown-air track symbol) popping up on a radar-style tactical plot, labelled NEW CONTACT. uav: the alert is a
+  new confirmed target box (red rounded rectangle) drawn by the tracker in a camera picture under a reticle,
+  labelled NEW TARGET. ew: the alert is a new high-threat pulsed emitter trace on a spectrum display, labelled NEW
+  EMITTER. The task measures how quickly and reliably an operator acknowledges alerts over a short watch.
+  Symbols, signals and pictures are generic and fictional.
+references:
+- "Basner, M., Mollicone, D., & Dinges, D. F. (2011). Validity and sensitivity of a brief psychomotor vigilance test (PVT-B) to total and partial sleep deprivation. Acta Astronautica, 69, 949–959."
+- "Dinges, D. F., & Powell, J. W. (1985). Microcomputer analyses of performance on a portable, simple visual RT task during sustained operations. Behavior Research Methods, Instruments, & Computers, 17(6), 652–655."
+- "Lim, J., & Dinges, D. F. (2008). Sleep deprivation and vigilant attention. Annals of the New York Academy of Sciences, 1129, 305–322."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/pvtb.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav, ew); each trial records the theme (wait.shown_theme). Set
+  test_length: 600 and lapse_rt: 0.5 under variables for the classic 10-minute PVT. Pictures from EDGE's defence kit
+  (tools/library/make_pvtb_ops.py copies them).

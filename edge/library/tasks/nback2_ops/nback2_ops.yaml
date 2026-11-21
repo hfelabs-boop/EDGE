@@ -1,0 +1,174 @@
+name: nback2_ops
+description: >
+  2-back, operational adaptation (keyboard). The same paradigm, letter lists and measures as the library's
+  `nback2` task: items are reported one at a time (0.5 s each, a new one every 3 s) and the operator presses
+  SPACE whenever the item is the same as the one reported two items earlier. A practice block of 22 items with
+  feedback, then 3 blocks of 32 (2 lead-in items + 30 scored, one third matches). One variable, `theme`, sets
+  what the items are: c2 (track numbers on a tactical plot), ew (emitter type codes on a spectrum display) or
+  uav (the grid sector a camera is looking at). All names, numbers and pictures are generic and fictional.
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops)
+# - The trial lists are the classic task's (column `letter`). `names` maps each letter to what it stands for in
+#   each theme, so one stimulus item shows $names[theme][letter] and the 2-back structure is untouched.
+# - The display around the stimulus (plot, spectrum, camera frame, symbol, reticle) and the instruction texts
+#   are items guarded with `if: "$theme == 'uav'"`, one per theme where needed.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2               # display theme: c2, ew or uav
+  letter_on: 0.5          # seconds each item is shown
+  soa: 3.0                # seconds from one item to the next (the response window)
+  # what each letter of the trial lists stands for, per theme (ten different names, as the ten letters)
+  names:
+    c2: {B: TRK 0417, C: TRK 2350, D: TRK 6081, F: TRK 1294, G: TRK 3768, H: TRK 5502, K: TRK 7136,
+         L: TRK 4829, M: TRK 8615, N: TRK 0973}
+    ew: {B: TYPE 21, C: TYPE 34, D: TYPE 47, F: TYPE 52, G: TYPE 68, H: TYPE 73, K: TYPE 85, L: TYPE 16,
+         M: TYPE 39, N: TYPE 90}
+    uav: {B: SECTOR BRAVO, C: SECTOR CHARLIE, D: SECTOR DELTA, F: SECTOR FOXTROT, G: SECTOR GOLF,
+          H: SECTOR HOTEL, K: SECTOR KILO, L: SECTOR LIMA, M: SECTOR MIKE, N: SECTOR NOVEMBER}
+  # what one item is called, per theme (instructions, status line, feedback)
+  item_name: {c2: track number, ew: emitter type, uav: sector}
+  item_caps: {c2: TRACK NUMBER, ew: EMITTER TYPE, uav: SECTOR}
+  # where the item's label is drawn and in which colour, per theme
+  label_pos: {c2: [0, -30], ew: [0, -30], uav: [0, -190]}
+  label_color: {c2: "#ffff80", ew: "#ffb000", uav: "#d8ffd8"}
+
+measures:
+  - {id: hit_rate, label: Hits (SPACE on a 2-back match), role: outcome, column: resp.corr, loop: trials,
+     trials: "$cond == 'target'", summary: proportion}
+  - {id: correct_rejections, label: Correct rejections (no press on non-matches), role: outcome, column: resp.corr,
+     loop: trials, trials: "$cond == 'nontarget'", summary: proportion}
+  - {id: accuracy, label: Accuracy (all scored items), role: outcome, column: resp.corr, loop: trials,
+     trials: "$cond != 'filler'", summary: proportion}
+  - {id: hit_rt, label: RT on hits, role: outcome, column: resp.rt, loop: trials,
+     trials: "$cond == 'target' and resp.corr == 1", summary: median, units: s, expect: [0.2, 3.0]}
+  - {id: cond, label: Item type, role: factor, column: cond}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 26
+        wrap_width: 1100
+        text: |
+          Track monitoring (2-back)
+
+          You are watching the tactical plot. Track numbers are reported one at a time.
+          Press SPACE whenever the track number is the SAME as the one reported TWO reports earlier.
+          For all other reports, do not press anything.
+
+          Example:   TRK 0417 ... TRK 2350 ... TRK 0417   <- press SPACE (reported two before)
+                     TRK 2350 ... TRK 6081 ... TRK 6081   <- no press (only one before)
+
+          First a short practice with feedback. Press SPACE to start.
+      - id: text_ew
+        type: text
+        if: "$theme == 'ew'"
+        height: 26
+        wrap_width: 1100
+        text: |
+          Emitter monitoring (2-back)
+
+          You are watching the spectrum display. The receiver classifies emitters one at a time.
+          Press SPACE whenever the emitter type is the SAME as the one classified TWO reports earlier.
+          For all other reports, do not press anything.
+
+          Example:   TYPE 21 ... TYPE 34 ... TYPE 21   <- press SPACE (reported two before)
+                     TYPE 34 ... TYPE 47 ... TYPE 47   <- no press (only one before)
+
+          First a short practice with feedback. Press SPACE to start.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 26
+        wrap_width: 1100
+        text: |
+          Sensor tasking (2-back)
+
+          You are the payload operator. The camera overlay reports the grid sector in view, one at a time.
+          Press SPACE whenever the sector is the SAME as the one reported TWO reports earlier.
+          For all other reports, do not press anything.
+
+          Example:   BRAVO ... CHARLIE ... BRAVO   <- press SPACE (reported two before)
+                     CHARLIE ... DELTA ... DELTA   <- no press (only one before)
+
+          First a short practice with feedback. Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 28
+        wrap_width: 1100
+        text: "$f'Well done. Now three blocks of about 1.5 minutes each, without feedback.\\nPress SPACE when the {item_name[theme]} is the same as two reports before; otherwise do nothing.\\n\\nPress SPACE to start.'"
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    duration: $soa
+    components:
+      - {id: show, type: variable, set: {shown_theme: $theme, item: "$names[theme][letter]"}}
+      # ---- the display around the item, one block per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: spectrum_ew, type: image, if: "$theme == 'ew'", image: stimuli/spectrum_1280x720.png, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_01_farmland.jpg, size: [1280, 720]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_brackets.png, size: [240, 240]}
+      - {id: tel_uav, type: text, if: "$theme == 'uav'", font: DejaVu Sans Mono, height: 17, color: "#d8ffd8",
+         pos: [-400, 330], text: "ALT  2200 m   HDG 045   SPD  90 kt"}
+      - {id: status_bar, type: shape, shape: rect, size: [1280, 40], pos: [0, -340], fill: "#0a2232", opacity: 0.85}
+      - {id: status, type: text, font: DejaVu Sans Mono, height: 17, color: "#9fe8ff", pos: [0, -340],
+         text: "$f'SAME {item_caps[theme]} AS TWO REPORTS BEFORE?   SPACE = yes'"}
+      # ---- the item (0.5 s) ----
+      - {id: symbol_c2, type: image, if: "$theme == 'c2'", image: stimuli/unknown_air_64.png, size: [64, 64],
+         pos: [0, 80], duration: $letter_on}
+      - {id: mark_ew, type: image, if: "$theme == 'ew'", image: stimuli/emitter_pulsed_medium.png, size: [28, 84],
+         pos: [0, 100], duration: $letter_on}
+      - {id: label_box, type: shape, shape: rect, size: [520, 96], pos: "$label_pos[theme]",
+         fill: "#04121c", line_color: "#1d4a5e", line_width: 2, opacity: 0.9, duration: $letter_on}
+      - {id: stim, type: text, text: "$names[theme][letter]", font: DejaVu Sans Mono, bold: true, height: 64,
+         color: "$label_color[theme]",
+         pos: "$label_pos[theme]", duration: $letter_on, marker: "$f'item_{cond}'"}
+      - {id: resp, type: keyboard, keys: [space], correct: $corr_key, duration: $soa}
+
+  practice_feedback:
+    duration: 0.7
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$('Correct' if resp.corr else ('Missed: that was a 2-back match' if target else 'Not a match'))"
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  rest:
+    components:
+      - id: text
+        type: text
+        height: 28
+        text: "$f'End of block {block[-1]} of 3. Take a short break.\\n\\nPress SPACE to go on.'"
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 32, text: "End of the watch. Thank you, the task is finished."}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: sequential
+    children: [trial, practice_feedback]
+  - main_intro
+  # main.csv holds the three blocks one after the other; a break after the last item of blocks 1 and 2
+  - loop: trials
+    conditions: main.csv
+    order: sequential
+    children:
+      - trial
+      - {routine: rest, if: "$last_in_block == 1 and block != 'block3'"}
+  - thanks

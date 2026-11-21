@@ -1,0 +1,264 @@
+name: corsi_ops
+description: >
+  Corsi block-tapping task (forward), operational adaptation. The same paradigm, layout, stopping rule and
+  measures as the library's `corsi` task: nine places are marked on the display (waypoints on a tactical map, or
+  candidate boxes in a camera picture). Some of them light up one after another (one per second); then the
+  operator taps or clicks the same places in the same order. Two sequences per length, starting with 2; the
+  sequence grows by one as long as at least one of the two is reproduced correctly, and the test stops when both
+  are wrong (or after 9). Corsi span = the longest sequence reproduced; total score = span x number of correct
+  sequences (Kessels et al., 2000). One variable, `theme`, sets the display: c2 or uav. Everything is generic
+  and fictional.
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops)
+# - The nine places, their layout, the sequences, timing, stopping rule and measures are the classic task's; the
+#   places keep their ids (b1-b9) so the data columns are the same. `look` gives each theme's colours (every
+#   block item uses $look[theme]['idle'] etc.) and `words` its names for the places.
+# - The display behind the places (map grid or camera frame) and the instruction texts are items guarded with
+#   `if: "$theme == 'uav'"`, one per theme.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2               # display theme: c2 or uav
+  # how the nine places look in each theme: fill and outline when idle, the fill when lit, the tap echo
+  look:
+    c2: {idle: "#0a2232", line: "#80e0ff", lit: "#ffb000", echo: "#9fe8ff"}
+    uav: {idle: transparent, line: "#ffc400", lit: "#00e5ff", echo: "#ffffff"}
+  # each theme's words for the nine places
+  words:
+    c2: {places: waypoints, watch: "WATCH THE ROUTE"}
+    uav: {places: boxes, watch: "WATCH THE SENSOR"}
+  seqs: {c2: routes, uav: sensor paths}
+  direction: forward      # forward: tap in the order shown; backward: in reverse order
+  start_span: 2
+  max_span: 9
+  light_on: 0.75          # seconds a block stays lit
+  light_soa: 1.0          # seconds from one block to the next
+  # centres of blocks 1-9 (the layout is fixed for everyone; move blocks here and in the screens below)
+  blocks: [[-380, 180], [-120, 235], [210, 190], [410, 60], [-290, 10], [40, 45], [-420, -180], [-90, -150], [260, -205]]
+  span: 2                 # current sequence length (practice first; the workflow sets it)
+  tries: 0
+  fails: 0
+  best: 0
+  n_correct_seqs: 0
+  i_show: 0               # position in the list being shown
+  i_rec: 0                # position being recalled
+  seq: []
+  target: []
+  n_ok: 0
+  phase: practice
+
+measures:
+  - {id: corsi_span, label: Corsi span (longest sequence reproduced), role: outcome, column: score.best,
+     trials: "$phase == 'main'", summary: last, expect: [0, 9]}
+  - {id: sequences_correct, label: Sequences reproduced correctly, role: outcome, column: score.n_correct_seqs,
+     trials: "$phase == 'main'", summary: last}
+  - {id: total_score, label: Total score (span x correct sequences), role: outcome, column: score.total_score,
+     trials: "$phase == 'main'", summary: last}
+  - {id: block_accuracy, label: Taps on the right block, role: outcome, column: pad.corr, trials: "$phase == 'main'",
+     summary: proportion}
+  - {id: tap_rt, label: Time per tap, role: outcome, column: pad.rt, trials: "$phase == 'main'", summary: median,
+     units: s, expect: [0.15, 10]}
+  - {id: seq_length, label: Sequence length, role: factor, column: span}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 26
+        wrap_width: 1050
+        text: |
+          Route memory
+
+          You are at a command-and-control console. Nine waypoints are marked on the map.
+          The waypoints of a route light up in amber, one after another. Watch carefully.
+          When the route has been shown, tap or click the same waypoints
+          in the SAME order.
+
+          The routes start short and get longer.
+          First, two practice routes. Click anywhere to start.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 26
+        wrap_width: 1050
+        text: |
+          Sensor path memory
+
+          You are the payload operator. Nine candidate boxes mark places in the camera picture.
+          The sensor visits some of them one after another: each lights up in cyan. Watch carefully.
+          When the path has been shown, tap or click the same boxes
+          in the SAME order.
+
+          The paths start short and get longer.
+          First, two practice paths. Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 27
+        wrap_width: 1050
+        text: "$f'Good. Now the test begins: the {seqs[theme]} start with 2 places and grow by one at a time.\\nThere is no feedback from now on.\\n\\nClick anywhere to start.'"
+      - {id: go, type: mouse, end_routine: true}
+
+  new_sequence:
+    duration: 1.0
+    components:
+      - {id: shown, type: variable, set: {shown_theme: $theme}}
+      - id: make
+        type: variable
+        set:
+          seq: "$random.sample(range(1, 10), int(span))"
+          n_ok: 0
+          i_show: 0
+          i_rec: 0
+      - id: order
+        type: variable
+        set: {target: "$list(seq) if direction == 'forward' else list(seq[::-1])"}
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_03_forest.jpg, size: [1280, 720]}
+      - {id: b1, type: shape, shape: rect, size: [90, 90], pos: [-380, 180], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b2, type: shape, shape: rect, size: [90, 90], pos: [-120, 235], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b3, type: shape, shape: rect, size: [90, 90], pos: [210, 190], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b4, type: shape, shape: rect, size: [90, 90], pos: [410, 60], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b5, type: shape, shape: rect, size: [90, 90], pos: [-290, 10], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b6, type: shape, shape: rect, size: [90, 90], pos: [40, 45], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b7, type: shape, shape: rect, size: [90, 90], pos: [-420, -180], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b8, type: shape, shape: rect, size: [90, 90], pos: [-90, -150], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b9, type: shape, shape: rect, size: [90, 90], pos: [260, -205], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: watch, type: text, text: "$words[theme]['watch']", font: DejaVu Sans Mono, pos: [0, -320], height: 24, color: "#9fe8ff"}
+
+  # one lit block; the loop 'show' runs once per block of the sequence
+  light:
+    duration: $light_soa
+    components:
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_03_forest.jpg, size: [1280, 720]}
+      - {id: b1, type: shape, shape: rect, size: [90, 90], pos: [-380, 180], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b2, type: shape, shape: rect, size: [90, 90], pos: [-120, 235], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b3, type: shape, shape: rect, size: [90, 90], pos: [210, 190], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b4, type: shape, shape: rect, size: [90, 90], pos: [410, 60], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b5, type: shape, shape: rect, size: [90, 90], pos: [-290, 10], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b6, type: shape, shape: rect, size: [90, 90], pos: [40, 45], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b7, type: shape, shape: rect, size: [90, 90], pos: [-420, -180], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b8, type: shape, shape: rect, size: [90, 90], pos: [-90, -150], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b9, type: shape, shape: rect, size: [90, 90], pos: [260, -205], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: lit, type: shape, shape: rect, size: [90, 90], pos: "$blocks[seq[i_show] - 1]", fill: "$look[theme]['lit']",
+         duration: $light_on, marker: "$f'block_{seq[i_show]}'"}
+      - {id: step, type: variable, when: end, set: {i_show: "$i_show + 1"}}
+      - {id: watch, type: text, text: "$words[theme]['watch']", font: DejaVu Sans Mono, pos: [0, -320], height: 24, color: "#9fe8ff"}
+
+  # one tap; the answer for this position is target[i_rec]
+  tap:
+    components:
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_03_forest.jpg, size: [1280, 720]}
+      - {id: b1, type: shape, shape: rect, size: [90, 90], pos: [-380, 180], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b2, type: shape, shape: rect, size: [90, 90], pos: [-120, 235], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b3, type: shape, shape: rect, size: [90, 90], pos: [210, 190], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b4, type: shape, shape: rect, size: [90, 90], pos: [410, 60], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b5, type: shape, shape: rect, size: [90, 90], pos: [-290, 10], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b6, type: shape, shape: rect, size: [90, 90], pos: [40, 45], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b7, type: shape, shape: rect, size: [90, 90], pos: [-420, -180], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b8, type: shape, shape: rect, size: [90, 90], pos: [-90, -150], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b9, type: shape, shape: rect, size: [90, 90], pos: [260, -205], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - id: prompt
+        type: text
+        pos: [0, -320]
+        height: 26
+        color: "#ffffff"
+        text: "$f\"Your turn: tap the {words[theme]['places']} {'in the same order' if direction == 'forward' else 'in REVERSE order'} ({i_rec + 1} of {int(span)})\""
+      - id: pad
+        type: mouse
+        clickable: [b1, b2, b3, b4, b5, b6, b7, b8, b9]
+        correct: "$f'b{target[i_rec]}'"
+        end_routine: true
+      - id: note
+        type: variable
+        when: end
+        set: {n_ok: "$n_ok + (pad.corr or 0)", i_rec: "$i_rec + 1"}
+
+  # the tapped block flashes briefly so the participant sees the tap was taken
+  echo:
+    duration: 0.25
+    components:
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_03_forest.jpg, size: [1280, 720]}
+      - {id: b1, type: shape, shape: rect, size: [90, 90], pos: [-380, 180], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b2, type: shape, shape: rect, size: [90, 90], pos: [-120, 235], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b3, type: shape, shape: rect, size: [90, 90], pos: [210, 190], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b4, type: shape, shape: rect, size: [90, 90], pos: [410, 60], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b5, type: shape, shape: rect, size: [90, 90], pos: [-290, 10], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b6, type: shape, shape: rect, size: [90, 90], pos: [40, 45], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b7, type: shape, shape: rect, size: [90, 90], pos: [-420, -180], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b8, type: shape, shape: rect, size: [90, 90], pos: [-90, -150], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: b9, type: shape, shape: rect, size: [90, 90], pos: [260, -205], fill: "$look[theme]['idle']", line_color: "$look[theme]['line']", line_width: 3}
+      - {id: flash, type: shape, shape: rect, size: [90, 90], fill: "$look[theme]['echo']",
+         pos: "$blocks[int(pad.clicked[1:]) - 1] if pad.clicked else [0, -500]"}
+
+  result:
+    duration: "$1.5 if phase == 'practice' else 0.8"
+    components:
+      - id: score
+        type: variable
+        set:
+          seq_ok: "$int(n_ok == int(span))"
+          tries: "$tries + 1"
+          fails: "$fails + (0 if n_ok == int(span) else 1)"
+          best: "$max(best, int(span)) if n_ok == int(span) and phase == 'main' else best"
+          n_correct_seqs: "$n_correct_seqs + (1 if n_ok == int(span) and phase == 'main' else 0)"
+          total_score: "$best * n_correct_seqs"
+      - id: fb
+        type: text
+        height: 34
+        text: "$('Correct!' if n_ok == int(span) else 'Not quite.') if phase == 'practice' else ''"
+        color: "$'#34c759' if n_ok == int(span) else '#ff3b30'"
+
+  thanks:
+    duration: 4
+    components:
+      - {id: bye, type: text, height: 32, text: "$f'End of the watch. Thank you! Your span: {best}'"}
+
+flow:
+  - instructions
+  - loop: practice
+    repeats: 2
+    children:
+      - new_sequence
+      - loop: show
+        repeats: $span
+        children: [light]
+      - loop: recall
+        repeats: $span
+        children: [tap, echo]
+      - result
+  - main_intro
+  - statemachine: span_test
+    start: setup
+    states:
+      setup:
+        run: []
+        next:
+          - {goto: sequence, set: {span: $start_span, tries: 0, fails: 0, phase: main}}
+      sequence:
+        run:
+          - new_sequence
+          - loop: show
+            repeats: $span
+            children: [light]
+          - loop: recall
+            repeats: $span
+            children: [tap, echo]
+          - result
+        next:
+          - {if: "$tries >= 2 and fails >= 2", goto: end}           # both sequences of this length wrong: stop
+          - {if: "$tries >= 2 and span >= max_span", goto: end}     # longest sequence done
+          - {if: "$tries >= 2", goto: sequence, set: {span: "$span + 1", tries: 0, fails: 0}}
+          - {goto: sequence}
+  - thanks

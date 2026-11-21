@@ -1,0 +1,43 @@
+id: aospan_ops
+title: Automated operation span (AOSPAN, operational)
+category: Working memory
+summary: Verify quick fuel or time-on-station calculations while remembering call-sign letters, then recall the letters of each set in order.
+description: >
+  The library's complex span measure of working memory capacity, worded as console work. Each element of a set
+  is a planning check (the arithmetic of the classic task, (a x b) +/- c, presented as a fuel check in tonnes or a
+  time-on-station check in minutes: solve, click, then judge a proposed result TRUE or FALSE) followed by a
+  call-sign letter shown for 0.8 s; after 3-7 elements the letters are recalled in order on a 4 x 3 letter grid.
+  Practice: letters alone, checks alone (each person's solving time limit = mean + 2.5 SD of practice times), and
+  both together. The test has set sizes 3-7, two sets each in random order (50 letters). Outcomes: absolute span,
+  partial span and calculation errors (speed and accuracy); the calculations should stay at or above 85% correct.
+measures:
+- absolute OSPAN score
+- partial OSPAN score
+- letters recalled in the right place
+- arithmetic accuracy (85% criterion)
+- speed errors
+- accuracy errors
+- time to solve a problem
+duration_min: 12
+input: mouse
+languages: [en]
+variant_of: aospan
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The processing part (arithmetic) becomes a quick planning check and the storage part (letters) becomes
+  call-sign letters; the numbers, letters, timing, time limit, recall grid and scores stay the same. c2: each
+  problem (a x b) +/- c is a fuel check in tonnes on a console panel over a dimmed map grid, explained as legs x
+  tonnes per leg, plus reserve or minus fuel already on board; the letter comes in on a message panel over the
+  map (header CALL SIGN LETTER). uav: the same problem is a time-on-station check in minutes, explained as orbits x
+  minutes per orbit, plus transit time or minus a delay, over a dimmed camera frame; the letter comes in a comms
+  box over the camera frame with telemetry text. Both stand for the dual demands of a console operator who checks
+  figures while keeping track of who called. Call signs, numbers and pictures are generic and fictional.
+references:
+- "Turner, M. L., & Engle, R. W. (1989). Is working memory capacity task dependent? Journal of Memory and Language, 28, 127–154."
+- "Unsworth, N., Heitz, R. P., Schrock, J. C., & Engle, R. W. (2005). An automated version of the operation span task. Behavior Research Methods, 37, 498–505."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/aospan.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav); each set records the theme (shown.shown_theme). Shortened
+  as aospan (2 sets per size; 'repeats: 3' on the 'sets' trial list for the full version). Pictures from EDGE's
+  defence kit (tools/library/make_aospan_ops.py copies them).

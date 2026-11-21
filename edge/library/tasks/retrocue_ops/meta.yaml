@@ -1,0 +1,39 @@
+id: retrocue_ops
+title: Retro-cue working memory task (operational)
+category: Working memory
+summary: Remember four boxed contacts; a cue during the delay points to the one that will be tested (or to all), then report whether it changed.
+description: >
+  The library's retro-cue task with operator displays. Four contacts (track symbols on a tactical plot, vehicles
+  in a camera picture, or emitter traces on a spectrum display) are shown for 0.5 s; 1 s later cyan target boxes
+  frame either the one place that will be tested (retro-cue, always valid) or all four (neutral). 0.9 s after the
+  cue one contact reappears at a studied place and the operator reports whether it is the same contact (F) or a
+  different one (J). 8 practice trials with feedback, then 48 trials: cue type x same/different, 12 each, random
+  order. The retro-cue benefit is the accuracy (and RT) difference between retro-cue and neutral trials.
+measures:
+- accuracy by cue type (retro-cue benefit)
+- RT of correct answers by cue type
+duration_min: 6
+input: keyboard
+languages: [en]
+variant_of: retrocue
+domain: defense
+themes: [c2, uav, ew]
+adaptation: >
+  The coloured squares of the classic task become contacts on an operator display; places, timing, cues, keys and
+  measures stay the same, and "a different colour" becomes "a different contact". c2: the contacts are track
+  symbols on a radar-style tactical plot, drawn from eight (friendly / hostile / neutral / unknown x air / ground),
+  so a change is a change of a track's affiliation or type. uav: the contacts are vehicles seen from above in a
+  dusk camera frame, drawn from six (tracked / wheeled / car x light / dark). ew: the contacts are emitter traces
+  on a spectrum display, drawn from six (pulsed / continuous x high / medium / low threat colour). In every theme
+  the cue is the cyan "selected" target box an operator's console draws around a contact of interest, so the
+  retro-cue stands for attention being directed, after the picture has gone, to one remembered contact. Symbols,
+  vehicles, signals and pictures are generic and fictional.
+references:
+- "Griffin, I. C., & Nobre, A. C. (2003). Orienting attention to locations in internal representations. Journal of Cognitive Neuroscience, 15(8), 1176–1194."
+- "Souza, A. S., & Oberauer, K. (2016). In search of the focus of attention in working memory: 13 years of the retro-cue effect. Attention, Perception, & Psychophysics, 78, 1839–1860."
+- "Loaiza, V. M., Cheung, H. W., & Goldenhaus-Manning, D. T. (2024). What you don't know can't hurt you: Retro-cues benefit working memory regardless of prior knowledge in long-term memory. Psychonomic Bulletin & Review, 31(3)."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/retrocue.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, uav, ew). Contacts are drawn at random on each trial (four
+  different ones of the theme's set); each trial records the theme and the pictures (draw.shown_theme, draw.pics,
+  pick.probe_pic). Pictures from EDGE's defence kit (tools/library/make_retrocue_ops.py copies them).

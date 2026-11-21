@@ -1,0 +1,259 @@
+name: digitspan_ops
+description: >
+  Forward digit span, operational adaptation. The same paradigm, stopping rule and measures as the library's
+  `digitspan` task: digits are passed one at a time (one per second) and the operator then reads them back in
+  the same order on an on-screen keypad (mouse or touch). Each length is tried twice, starting with 3 digits;
+  the list grows by one digit as long as at least one of the two tries is right, and the test stops when both
+  tries at one length are wrong (or after 9 digits). Digit span = the longest list read back correctly.
+  One variable, `theme`, sets the display: c2 (a track number passed on the message panel of a tactical map) or
+  uav (a grid reference passed in the overlay of a surveillance camera). All numbers and pictures are generic
+  and fictional.
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops)
+# - The digits, timing, keypad, stopping rule and measures are the classic task's; only the words and the
+#   display change. `words` holds each theme's wording, `num_pos` / `num_color` where and how the one digit
+#   item is drawn in each theme.
+# - The display around the digits (map and message panel, or camera frame, reticle and telemetry) and the
+#   instruction texts are items guarded with `if: "$theme == 'uav'"`, one per theme where needed.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2               # display theme: c2 or uav
+  direction: forward      # forward: recall in the order shown; backward: in reverse order
+  start_span: 3           # length of the first main list
+  max_span: 9             # longest list (digits 1-9, no digit twice in one list)
+  digit_on: 0.8           # seconds each digit is shown
+  digit_soa: 1.0          # seconds from one digit to the next
+  # each theme's words
+  words:
+    c2: {what: track number, enter: "READ BACK THE TRACK NUMBER (same order)"}
+    uav: {what: grid reference, enter: "READ BACK THE GRID REFERENCE (same order)"}
+  # where the digit is shown and in which colour: on the message panel (c2), in the box under the reticle (uav)
+  num_pos: {c2: [0, -10], uav: [0, -185]}
+  num_color: {c2: "#ffb000", uav: "#d8ffd8"}
+  span: 2                 # current list length (practice length first; the workflow sets it)
+  tries: 0                # tries at the current length
+  fails: 0                # wrong tries at the current length
+  best: 0                 # longest list recalled correctly
+  n_correct_lists: 0
+  i_show: 0               # position in the list being shown
+  i_rec: 0                # position being recalled
+  seq: []                 # the digits of the current list
+  target: []              # the answer in the order it must be entered
+  typed: ""
+  n_ok: 0
+  phase: practice
+
+measures:
+  - {id: digit_span, label: Digit span (longest list recalled correctly), role: outcome, column: score.best,
+     trials: "$phase == 'main'", summary: last, expect: [0, 9]}
+  - {id: lists_correct, label: Lists recalled correctly, role: outcome, column: score.n_correct_lists,
+     trials: "$phase == 'main'", summary: last}
+  - {id: list_accuracy, label: Proportion of lists recalled correctly, role: outcome, column: score.list_ok,
+     trials: "$phase == 'main'", summary: proportion}
+  - {id: digit_accuracy, label: Digits in the right place, role: outcome, column: pad.corr,
+     trials: "$phase == 'main'", summary: proportion}
+  - {id: tap_rt, label: Time per keypad tap, role: outcome, column: pad.rt, trials: "$phase == 'main'",
+     summary: median, units: s, expect: [0.15, 10]}
+  - {id: span_length, label: List length, role: factor, column: span}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 27
+        wrap_width: 1000
+        text: |
+          Track number read-back
+
+          You are at a command-and-control console. Track numbers come in on the message panel,
+          one digit after another. When the whole number has come in, a keypad appears:
+          read the number back by tapping or clicking its digits in the SAME order.
+
+          The numbers start short and get longer. Just do your best.
+
+          First, two practice numbers. Click anywhere to start.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 27
+        wrap_width: 1000
+        text: |
+          Grid reference read-back
+
+          You are the payload operator. A grid reference for the camera is passed in the overlay,
+          one digit after another. When the whole reference has come in, a keypad appears:
+          read it back by tapping or clicking its digits in the SAME order.
+
+          The references start short and get longer. Just do your best.
+
+          First, two practice references. Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 28
+        wrap_width: 1000
+        text: "$f'Well done. Now the real test begins.\\n\\nEach {words[theme][\"what\"]} starts with 3 digits and grows by one digit at a time.\\nThere is no feedback from now on.\\n\\nClick anywhere to start.'"
+      - {id: go, type: mouse, end_routine: true}
+
+  # draws a new list: digits 1-9, none repeated
+  new_list:
+    duration: 1.0
+    components:
+      - id: make
+        type: variable
+        set:
+          seq: "$random.sample(range(1, 10), int(span))"
+          typed: ""
+          n_ok: 0
+          i_show: 0
+          i_rec: 0
+      - id: order
+        type: variable
+        set: {target: "$list(seq) if direction == 'forward' else list(seq[::-1])"}
+      - {id: shown, type: variable, set: {shown_theme: $theme}}
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_02_village.jpg, size: [1280, 720]}
+      - {id: ready, type: text, text: "+", height: 48, color: "#9fe8ff"}
+
+  digit:
+    duration: $digit_soa
+    components:
+      # c2: the message panel on the tactical map
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - {id: panel_c2, type: image, if: "$theme == 'c2'", image: stimuli/message_panel_400x240.png, size: [400, 240]}
+      # uav: camera frame, reticle and telemetry; the digits in a box under the reticle
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_02_village.jpg, size: [1280, 720]}
+      - {id: reticle_uav, type: image, if: "$theme == 'uav'", image: stimuli/reticle_cross.png, size: [240, 240], pos: [0, 120]}
+      - {id: tel_uav, type: text, if: "$theme == 'uav'", font: DejaVu Sans Mono, height: 17, color: "#d8ffd8",
+         pos: [-400, 330], text: "ALT  2200 m   HDG 045   SPD  90 kt"}
+      - {id: box_uav, type: shape, shape: rect, if: "$theme == 'uav'", size: [400, 200], pos: [0, -170], fill: "#04121c",
+         line_color: "#d8ffd8", line_width: 2, opacity: 0.85}
+      - {id: head_c2, type: text, if: "$theme == 'c2'", font: DejaVu Sans Mono, bold: true, height: 17, color: "#9fe8ff",
+         pos: [0, 103], text: "$f'INCOMING TRACK NUMBER   digit {i_show + 1}'"}
+      - {id: head_uav, type: text, if: "$theme == 'uav'", font: DejaVu Sans Mono, bold: true, height: 17, color: "#d8ffd8",
+         pos: [0, -95], text: "$f'GRID REF   digit {i_show + 1}'"}
+      # the digit (one item for every theme, as in the classic task; only its place and colour differ)
+      - {id: num, type: text, text: "$str(seq[i_show])", font: DejaVu Sans Mono, bold: true, height: 110,
+         color: "$num_color[theme]", pos: "$num_pos[theme]", duration: $digit_on, marker: "$f'digit_{seq[i_show]}'"}
+      - {id: step, type: variable, when: end, set: {i_show: "$i_show + 1"}}
+
+  enter:
+    components:
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720], opacity: 0.35}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_02_village.jpg, size: [1280, 720], opacity: 0.35}
+      - {id: console, type: shape, shape: rect, size: [760, 640], pos: [0, 20], fill: "#0a2232", line_color: "#1d4a5e", line_width: 2, opacity: 0.92}
+      - id: prompt
+        type: text
+        pos: [0, 300]
+        height: 22
+        font: DejaVu Sans Mono
+        bold: true
+        color: "#9fe8ff"
+        text: "$words[theme]['enter']"
+      - {id: so_far, type: text, pos: [0, 220], height: 54, font: DejaVu Sans Mono, color: "#ffb000", text: "$typed + ' _'"}
+      - {id: k1, type: shape, shape: rect, size: [110, 80], pos: [-130, 100], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k2, type: shape, shape: rect, size: [110, 80], pos: [0, 100], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k3, type: shape, shape: rect, size: [110, 80], pos: [130, 100], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k4, type: shape, shape: rect, size: [110, 80], pos: [-130, 0], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k5, type: shape, shape: rect, size: [110, 80], pos: [0, 0], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k6, type: shape, shape: rect, size: [110, 80], pos: [130, 0], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k7, type: shape, shape: rect, size: [110, 80], pos: [-130, -100], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k8, type: shape, shape: rect, size: [110, 80], pos: [0, -100], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k9, type: shape, shape: rect, size: [110, 80], pos: [130, -100], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: l1, type: text, text: "1", pos: [-130, 100], height: 40, font: DejaVu Sans Mono, color: "#d8f4ff"}
+      - {id: l2, type: text, text: "2", pos: [0, 100], height: 40, font: DejaVu Sans Mono, color: "#d8f4ff"}
+      - {id: l3, type: text, text: "3", pos: [130, 100], height: 40, font: DejaVu Sans Mono, color: "#d8f4ff"}
+      - {id: l4, type: text, text: "4", pos: [-130, 0], height: 40, font: DejaVu Sans Mono, color: "#d8f4ff"}
+      - {id: l5, type: text, text: "5", pos: [0, 0], height: 40, font: DejaVu Sans Mono, color: "#d8f4ff"}
+      - {id: l6, type: text, text: "6", pos: [130, 0], height: 40, font: DejaVu Sans Mono, color: "#d8f4ff"}
+      - {id: l7, type: text, text: "7", pos: [-130, -100], height: 40, font: DejaVu Sans Mono, color: "#d8f4ff"}
+      - {id: l8, type: text, text: "8", pos: [0, -100], height: 40, font: DejaVu Sans Mono, color: "#d8f4ff"}
+      - {id: l9, type: text, text: "9", pos: [130, -100], height: 40, font: DejaVu Sans Mono, color: "#d8f4ff"}
+      - {id: count, type: text, pos: [0, -230], height: 22, color: "#9fe8ff",
+         text: "$f'digit {i_rec + 1} of {int(span)}'"}
+      # one tap per screen: the answer for this position is target[i_rec]
+      - id: pad
+        type: mouse
+        clickable: [k1, k2, k3, k4, k5, k6, k7, k8, k9]
+        correct: "$f'k{target[i_rec]}'"
+        end_routine: true
+      - id: note
+        type: variable
+        when: end
+        set:
+          typed: "$(typed + ' ' + pad.clicked[1:]).strip() if pad.clicked else typed"
+          n_ok: "$n_ok + (pad.corr or 0)"
+          i_rec: "$i_rec + 1"
+
+  result:
+    duration: "$1.5 if phase == 'practice' else 0.8"
+    components:
+      - id: score
+        type: variable
+        set:
+          list_ok: "$int(n_ok == int(span))"
+          tries: "$tries + 1"
+          fails: "$fails + (0 if n_ok == int(span) else 1)"
+          best: "$max(best, int(span)) if n_ok == int(span) and phase == 'main' else best"
+          n_correct_lists: "$n_correct_lists + (1 if n_ok == int(span) and phase == 'main' else 0)"
+      - id: fb
+        type: text
+        height: 34
+        wrap_width: 1000
+        text: "$(('Correct read-back!' if n_ok == int(span) else 'Not quite. It was ' + ' '.join([str(d) for d in target])) if phase == 'practice' else '')"
+        color: "$'#34c759' if n_ok == int(span) else '#ff3b30'"
+
+  thanks:
+    duration: 4
+    components:
+      - id: bye
+        type: text
+        height: 32
+        text: "$f'End of the watch. Thank you! Your digit span: {best}'"
+
+flow:
+  - instructions
+  - loop: practice
+    repeats: 2
+    children:
+      - {routine: new_list}
+      - loop: show
+        repeats: $span
+        children: [digit]
+      - loop: recall
+        repeats: $span
+        children: [enter]
+      - result
+  - main_intro
+  - statemachine: span_test
+    start: setup
+    states:
+      setup:
+        run: []
+        next:
+          - {goto: list, set: {span: $start_span, tries: 0, fails: 0, phase: main}}
+      list:
+        run:
+          - new_list
+          - loop: show
+            repeats: $span
+            children: [digit]
+          - loop: recall
+            repeats: $span
+            children: [enter]
+          - result
+        next:
+          - {if: "$tries >= 2 and fails >= 2", goto: end}           # both tries wrong: stop
+          - {if: "$tries >= 2 and span >= max_span", goto: end}     # longest list done
+          - {if: "$tries >= 2", goto: list, set: {span: "$span + 1", tries: 0, fails: 0}}
+          - {goto: list}
+  - thanks

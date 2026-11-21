@@ -1,0 +1,39 @@
+id: mackworth2_ops
+title: Mackworth clock test (sensor ring, 4 periods, operational)
+category: Vigilance
+summary: A ring of 60 sensor posts or receiver channels is polled one per second; press a key whenever one is skipped, for 8 minutes.
+description: >
+  The lamp-ring Mackworth clock with operator displays: one of 60 positions on a ring is active (the sensor post
+  being polled on a perimeter line, or the channel a receiver is scanning) and the activity moves on one position
+  per second; when it skips a position the operator presses SPACE (during that second or the next). Alertness is
+  rated on a 1-9 scale before and after. After a 40-second practice with feedback, the watch runs for 8 minutes
+  without breaks in four 2-minute periods with 6 skips each. Outcomes per period (the vigilance decrement): hit
+  rate, false alarms, detection time; plus the change in rated alertness.
+measures:
+- hit rate per period
+- false alarms per period
+- detection time per period
+- alertness before and after (1-9)
+duration_min: 10
+input: keyboard+mouse
+languages: [en]
+variant_of: mackworth2
+domain: defense
+themes: [c2, ew]
+adaptation: >
+  The ring of lamps of the classic task becomes a ring of positions an operator monitors; the step lists, timing,
+  key, ratings and scoring stay the same (the trial lists are mackworth2's). c2: the ring is a line of 60 perimeter
+  sensor posts (small diamonds, numbered every five) around a site on a dimmed map grid; the post being polled is
+  lit in amber, and a skip is a post the polling passed over. ew: the ring is the 60 channels (CH 00-59) of a
+  scanning receiver over a dimmed spectrum display; the channel being scanned is lit in cyan, and a skip is a
+  channel the scan passed over. Sensors, channels and pictures are generic and fictional (channel numbers are not
+  frequencies).
+references:
+- "Mackworth, N. H. (1948). The breakdown of vigilance during prolonged visual search. Quarterly Journal of Experimental Psychology, 1, 6–21."
+- "Lichstein, K. L., Riedel, B. W., & Richman, S. L. (2000). The Mackworth Clock Test: A computerized version. The Journal of Psychology, 134(2), 153–161."
+- "Warm, J. S., Parasuraman, R., & Matthews, G. (2008). Vigilance requires hard mental work and is stressful. Human Factors, 50(3), 433–441."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/mackworth2.html"}
+notes: >
+  Switch the display with the variable `theme` (c2, ew). ticks.csv and practice.csv are mackworth2's. The two ring
+  pictures are drawn by tools/library/make_mackworth_ops.py, which also copies the map grid and spectrum display
+  from EDGE's defence kit.

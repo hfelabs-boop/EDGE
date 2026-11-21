@@ -1,0 +1,42 @@
+id: corsi_ops
+title: Corsi block-tapping task (operational)
+category: Working memory
+summary: >-
+  Tap nine waypoints on a map, or nine boxes in a camera picture, in the order in which they lit up; sequences grow
+  until two of one length fail.
+description: >
+  The library's Corsi task with operator displays. Nine places keep the classic scattered layout: waypoints on a
+  tactical map grid, or candidate boxes in a surveillance camera picture. A sequence of them lights up, one per
+  second (a route on the map, or the places the sensor visits), and the operator then taps or clicks the same
+  places in the same order. After two practice sequences, the test starts at 2 places with two sequences per
+  length; the length grows by one while at least one sequence is right and the test stops when both are wrong (or
+  after 9). Outcomes as in Kessels et al. (2000): the Corsi span and the total score (span x number of correct
+  sequences).
+measures:
+- Corsi span
+- number of sequences correct
+- total score (span x correct sequences)
+- proportion of taps on the right block
+- time per tap
+duration_min: 6
+input: mouse
+languages: [en]
+variant_of: corsi
+domain: defense
+themes: [c2, uav]
+adaptation: >
+  The nine blocks of the classic task become nine places on an operator display, at the same positions, with the
+  same ids, sequences, timing, stopping rule and measures. c2: the places are waypoints on a map grid with a made-up
+  coastline (dark squares with a friendly-blue outline); a route lights its waypoints in amber one after another,
+  and the operator re-enters the route by tapping the waypoints, as when a route or a sequence of sensor sectors
+  passed on the plot has to be entered from memory. uav: the places are candidate target boxes (amber outlines) in
+  a camera frame of a forest seen from above; the sensor visits some of them one after another (the box fills in
+  cyan), and the operator reproduces the sensor's path. Places, maps and pictures are generic and fictional.
+references:
+- "Corsi, P. M. (1972). Human memory and the medial temporal region of the brain (Doctoral dissertation). McGill University, Montreal."
+- "Kessels, R. P. C., van Zandvoort, M. J. E., Postma, A., Kappelle, L. J., & de Haan, E. H. F. (2000). The Corsi Block-Tapping Task: Standardization and normative data. Applied Neuropsychology, 7(4), 252–258."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/corsi.html"}
+notes: >
+  Mouse or touch. Switch the display with the variable `theme` (c2, uav); each sequence records the theme
+  (shown.shown_theme). The layout is fixed (variables.blocks and the block items b1-b9, as in corsi); the colours
+  of each theme are in variables.look. Pictures from EDGE's defence kit (tools/library/make_corsi_ops.py).

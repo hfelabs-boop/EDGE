@@ -1,0 +1,197 @@
+name: retrocue_ops
+description: >
+  Retro-cue working-memory task (change detection), operational adaptation. The same paradigm, design, timing,
+  keys and measures as the library's `retrocue` task, with contacts instead of coloured squares: four contacts are
+  shown briefly at four places and must be held in memory. During the retention interval a cue appears: a
+  retro-cue boxes the ONE place that will be tested (always valid); a neutral cue boxes all four. Then one contact
+  comes back at one of the places and the operator reports whether it is the SAME contact or a DIFFERENT one
+  (F / J). 8 practice trials with feedback, then 48 trials (cue type x same/different, 12 each, random order).
+  One variable, `theme`, sets what the contacts are: c2 (track symbols on a tactical plot), uav (vehicles in a
+  camera frame) or ew (emitter traces on a spectrum display). Everything is generic and fictional.
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops)
+# - What differs between themes in the STIMULI is data: `looks` gives each theme's set of contacts (the "palette"
+#   of the classic task, from which four different ones are drawn on every trial) and the size they are drawn at.
+#   The four memory items and the probe show $pics[i] / $probe_pic, so one set of items serves every theme.
+# - The display around them (plot, camera frame, spectrum) and the instruction texts are items guarded with
+#   `if: "$theme == 'uav'"`, one per theme. The cue frames are the kit's "selected" target boxes in every theme.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2               # display theme: c2, uav or ew
+  # each theme's contacts (four different ones are drawn on every trial) and their drawing size
+  looks:
+    c2:
+      pool: [stimuli/friendly_air_64.png, stimuli/hostile_air_64.png, stimuli/neutral_air_64.png,
+             stimuli/unknown_air_64.png, stimuli/friendly_ground_64.png, stimuli/hostile_ground_64.png,
+             stimuli/neutral_ground_64.png, stimuli/unknown_ground_64.png]
+      size: [64, 64]
+    uav:
+      pool: [stimuli/vehicle_tracked_light.png, stimuli/vehicle_tracked_dark.png, stimuli/vehicle_wheeled_light.png,
+             stimuli/vehicle_wheeled_dark.png, stimuli/vehicle_car_light.png, stimuli/vehicle_car_dark.png]
+      size: [64, 64]
+    ew:
+      pool: [stimuli/emitter_pulsed_high.png, stimuli/emitter_pulsed_medium.png, stimuli/emitter_pulsed_low.png,
+             stimuli/emitter_continuous_high.png, stimuli/emitter_continuous_medium.png,
+             stimuli/emitter_continuous_low.png]
+      size: [28, 84]
+  contact_name: {c2: track, uav: vehicle, ew: emitter}
+  places: [[-150, 150], [150, 150], [-150, -150], [150, -150]]
+  array_time: 0.5         # memory array (s)
+  cue_onset: 2.0          # cue onset from trial start (1 s after the array goes off)
+  cue_time: 0.25
+  probe_onset: 3.15       # probe 0.9 s after the cue
+  max_rt: 3.0
+  # set for every trial by the variable items `draw` and `pick` (these are only starting values, used by the preview)
+  pics: [stimuli/friendly_air_64.png, stimuli/hostile_air_64.png, stimuli/neutral_air_64.png, stimuli/unknown_air_64.png]
+  probe_i: 0
+  probe_pic: stimuli/friendly_air_64.png
+
+measures:
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: rt, label: RT (correct trials), role: outcome, column: resp.rt, loop: trials, trials: "$resp.corr == 1",
+     summary: median, units: s, expect: [0.25, 3.0]}
+  - {id: cue, label: Cue (retro / neutral), role: factor, column: cue}
+  - {id: change, label: Probe contact (same / different), role: factor, column: change}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 25
+        wrap_width: 1100
+        text: |
+          Track picture memory
+
+          Four tracks will flash briefly on the tactical plot. Remember which track was where.
+          While you wait, cyan boxes appear:
+            - around ONE place: that is the track you will be asked about, so focus on it.
+            - around ALL four places: any of them can be asked about.
+
+          Then one track comes back. Is it the same track (same affiliation and type) as before at that place?
+            F = SAME track          J = DIFFERENT track
+
+          Keep your eyes on the cross in the middle. First 8 practice trials.
+          Press SPACE to start.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 25
+        wrap_width: 1100
+        text: |
+          Vehicle picture memory
+
+          Four vehicles will flash briefly in the camera picture. Remember which vehicle was where.
+          While you wait, cyan boxes appear:
+            - around ONE place: that is the vehicle you will be asked about, so focus on it.
+            - around ALL four places: any of them can be asked about.
+
+          Then one vehicle comes back. Is it the same vehicle (same kind and tone) as before at that place?
+            F = SAME vehicle          J = DIFFERENT vehicle
+
+          Keep your eyes on the cross in the middle. First 8 practice trials.
+          Press SPACE to start.
+      - id: text_ew
+        type: text
+        if: "$theme == 'ew'"
+        height: 25
+        wrap_width: 1100
+        text: |
+          Emitter picture memory
+
+          Four emitter traces will flash briefly on the spectrum display. Remember which was where.
+          While you wait, cyan boxes appear:
+            - around ONE place: that is the emitter you will be asked about, so focus on it.
+            - around ALL four places: any of them can be asked about.
+
+          Then one emitter comes back. Is it the same emitter (same pattern and threat colour) as before there?
+            F = SAME emitter          J = DIFFERENT emitter
+
+          Keep your eyes on the cross in the middle. First 8 practice trials.
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 28
+        wrap_width: 1100
+        text: "$f'Now 48 trials without feedback. Be as accurate as you can.\\n\\nF = SAME {contact_name[theme]}          J = DIFFERENT {contact_name[theme]}\\n\\nPress SPACE to start.'"
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - id: draw
+        type: variable
+        set:
+          shown_theme: $theme
+          pics: "$random.sample(looks[theme]['pool'], 4)"
+          probe_i: "$random.randint(0, 3)"
+      - id: pick
+        type: variable
+        set: {probe_pic: "$pics[probe_i] if change == 'same' else random.choice([p for p in looks[theme]['pool'] if p not in pics])"}
+      # ---- the display, one per theme ----
+      - {id: plot_c2, type: image, if: "$theme == 'c2'", image: stimuli/plot_radar_1280x720.png, size: [1280, 720]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_06_desert_dusk.jpg, size: [1280, 720]}
+      - {id: spectrum_ew, type: image, if: "$theme == 'ew'", image: stimuli/spectrum_1280x720.png, size: [1280, 720]}
+      - {id: fix, type: text, text: "+", height: 36, color: "#9fe8ff"}
+      # ---- the four contacts (one item each, for every theme) ----
+      - {id: sq1, type: image, image: "$pics[0]", size: "$looks[theme]['size']", pos: [-150, 150], start: 0.5, duration: $array_time, marker: memory_array}
+      - {id: sq2, type: image, image: "$pics[1]", size: "$looks[theme]['size']", pos: [150, 150], start: 0.5, duration: $array_time}
+      - {id: sq3, type: image, image: "$pics[2]", size: "$looks[theme]['size']", pos: [-150, -150], start: 0.5, duration: $array_time}
+      - {id: sq4, type: image, image: "$pics[3]", size: "$looks[theme]['size']", pos: [150, -150], start: 0.5, duration: $array_time}
+      # retro-cue: a target box around the place that will be tested
+      - {id: cue_one, type: image, image: stimuli/box_selected_128.png, size: [128, 128], pos: "$places[probe_i]",
+         start: $cue_onset, duration: $cue_time, if: "$cue == 'retro'", marker: retro_cue}
+      # neutral cue: boxes around all four places
+      - {id: cue_n1, type: image, image: stimuli/box_selected_128.png, size: [128, 128], pos: [-150, 150], start: $cue_onset, duration: $cue_time, if: "$cue == 'neutral'", marker: neutral_cue}
+      - {id: cue_n2, type: image, image: stimuli/box_selected_128.png, size: [128, 128], pos: [150, 150], start: $cue_onset, duration: $cue_time, if: "$cue == 'neutral'"}
+      - {id: cue_n3, type: image, image: stimuli/box_selected_128.png, size: [128, 128], pos: [-150, -150], start: $cue_onset, duration: $cue_time, if: "$cue == 'neutral'"}
+      - {id: cue_n4, type: image, image: stimuli/box_selected_128.png, size: [128, 128], pos: [150, -150], start: $cue_onset, duration: $cue_time, if: "$cue == 'neutral'"}
+      - {id: probe, type: image, image: $probe_pic, size: "$looks[theme]['size']", pos: "$places[probe_i]", start: $probe_onset, marker: probe}
+      - {id: keys_bar, type: shape, shape: rect, size: [520, 40], pos: [0, -300], fill: "#0a2232", opacity: 0.85, start: $probe_onset}
+      - {id: keys_hint, type: text, text: "F = same      J = different", font: DejaVu Sans Mono, pos: [0, -300], height: 20,
+         color: "#9fe8ff", start: $probe_onset}
+      - {id: resp, type: keyboard, keys: [f, j], correct: "$'f' if change == 'same' else 'j'", start: $probe_onset,
+         duration: $max_rt, end_routine: true}
+
+  practice_feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 32
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#34c759' if resp.corr else '#ff3b30'"
+
+  iti:
+    duration: 0.5
+    components:
+      - {id: blank, type: wait}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 32, text: "End of the watch. Thank you, the task is finished."}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: {factorial: {cue: [retro, neutral], change: [same, different]}}
+    order: random
+    repeats: 2
+    children: [trial, practice_feedback]
+  - main_intro
+  - loop: trials
+    conditions: {factorial: {cue: [retro, neutral], change: [same, different]}}
+    order: fullrandom
+    repeats: 12
+    max_repeat: {cue: 4}
+    children: [trial, iti]
+  - thanks

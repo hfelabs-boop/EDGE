@@ -1,0 +1,163 @@
+name: mackworth_ops
+description: >
+  Mackworth clock test (vigilance), operational adaptation. The same paradigm, step lists, key and measures as the
+  library's `mackworth` task: something moves on one step every second, and now and then it jumps TWO steps at
+  once; the operator presses SPACE whenever that happens (a press during the double jump's second or the next one
+  counts as a detection). A 40-second practice with feedback, then 5 minutes with 15 double jumps at irregular
+  times. Outcomes: hit rate, false alarms and detection time, per minute to show the drop in vigilance over time.
+  One variable, `theme`, sets what moves: c2 (the sweep of a radar scope, which now and then skips a step) or
+  video (a camera feed circling its orbit, which now and then jumps). Everything is generic and fictional.
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops)
+# - The step lists (ticks.csv, practice.csv) are the classic task's: `pointer` (0-59) moves on by 1 + double each
+#   step and the scoring items are unchanged. Only the item that shows `pointer` differs: the radar sweep turned
+#   by pointer * 6 degrees (c2), or the camera picture shifted along a circle at pointer * 6 degrees (video).
+# - Those items and the instruction texts are guarded with `if: "$theme == 'video'"`, one per theme.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2               # display theme: c2 or video
+  step_time: 1.0          # seconds per step
+  watch_line: {c2: "RADAR WATCH   SPACE = sweep skipped a step", video: "FEED WATCH   SPACE = feed jumped"}
+  orbit: 160              # video: radius (px) of the circle the camera picture moves along
+  pointer: 0              # current position, 0-59
+  pending: 0              # 1 while a double jump has not been reported yet
+  hits: 0
+  misses: 0
+  false_alarms: 0
+
+measures:
+  - {id: hit_rate, label: Double jumps detected, role: outcome, column: score.detected, loop: ticks,
+     trials: "$after == 1", summary: proportion}
+  - {id: false_alarms, label: False alarms (presses without a double jump), role: outcome, column: score.fa_now,
+     loop: ticks, summary: sum}
+  - {id: hit_rt, label: Detection time (from the double jump), role: outcome, column: score.hit_rt, loop: ticks,
+     trials: "$score.hit_now == 1", summary: median, units: s, expect: [0.15, 2.0]}
+  - {id: minute, label: Minute of the test, role: factor, column: period}
+
+routines:
+  instructions:
+    components:
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 27
+        wrap_width: 1100
+        text: |
+          Radar watch
+
+          You are watching a radar scope. The sweep moves around the scope one small step every second.
+          Once in a while the sweep SKIPS a step: it jumps TWO steps at once.
+          Whenever you see such a skip, press SPACE straight away.
+          Do not press for normal single steps.
+
+          Skips are rare, so keep watching the whole time.
+          First a 40-second practice with feedback. Press SPACE to start.
+      - id: text_video
+        type: text
+        if: "$theme == 'video'"
+        height: 27
+        wrap_width: 1100
+        text: |
+          Feed watch
+
+          You are watching a camera feed. The camera circles its orbit, so the picture shifts one
+          small step every second. Once in a while the feed JUMPS: it moves TWO steps at once.
+          Whenever you see such a jump, press SPACE straight away.
+          Do not press for normal single steps.
+
+          Jumps are rare, so keep watching the whole time.
+          First a 40-second practice with feedback. Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 28
+        wrap_width: 1100
+        text: "$'Now the watch: 5 minutes without feedback.\\nPress SPACE whenever the ' + ('sweep skips a step.' if theme == 'c2' else 'feed jumps two steps.') + '\\n\\nPress SPACE to start.'"
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, when: end, set: {pointer: 0, pending: 0, hits: 0, misses: 0, false_alarms: 0}}
+
+  tick:
+    duration: $step_time
+    components:
+      - {id: move, type: variable, set: {pointer: "$(pointer + 1 + double) % 60", shown_theme: $theme}}
+      # c2: the scope and its sweep beam, turned to the current step (0 = bearing 000, clockwise)
+      - {id: scope_c2, type: image, if: "$theme == 'c2'", image: stimuli/scope_600.png, size: [600, 600]}
+      - {id: sweep_c2, type: image, if: "$theme == 'c2'", image: stimuli/sweep_600.png, size: [600, 600],
+         ori: "$pointer * 6"}
+      # video: the camera picture, moved along a circle by the current step, under a crosshair
+      - {id: feed_video, type: image, if: "$theme == 'video'", image: stimuli/terrain_02_village.jpg, size: [1920, 1080],
+         pos: "$[-orbit * math.sin(math.radians(pointer * 6)), -orbit * math.cos(math.radians(pointer * 6))]"}
+      - {id: cross_video, type: image, if: "$theme == 'video'", image: stimuli/crosshair_full_1280x720.png, size: [1280, 720]}
+      - {id: tel_video, type: text, if: "$theme == 'video'", font: DejaVu Sans Mono, height: 17, color: "#d8ffd8",
+         pos: [-420, 330], text: "FEED 2   ORBIT   REC"}
+      # every theme: a status line (it also sends the marker of each step: double_jump on the signals)
+      - {id: status_bar, type: shape, shape: rect, size: [1280, 40], pos: [0, -340], fill: "#0a2232", opacity: 0.85}
+      - {id: status, type: text, font: DejaVu Sans Mono, height: 17, color: "#9fe8ff", pos: [0, -340],
+         text: "$watch_line[theme]", marker: "$'double_jump' if double else ''"}
+      - id: resp
+        type: keyboard
+        keys: [space]
+        duration: $step_time
+        correct: "$'space' if double == 1 or (after == 1 and pending == 1) else 'none'"
+      - id: score
+        type: variable
+        when: end
+        set:
+          resp_now: "$int(resp.keys is not None)"
+          hit_now: "$int(resp.keys is not None and (double == 1 or (after == 1 and pending == 1)))"
+          fa_now: "$int(resp.keys is not None and not (double == 1 or (after == 1 and pending == 1)))"
+          miss_now: "$int(after == 1 and pending == 1 and resp.keys is None)"
+          detected: "$(0 if (pending == 1 and resp.keys is None) else 1) if after == 1 else None"
+          hit_rt: "$(resp.rt + (step_time if after == 1 and double == 0 else 0)) if resp.keys is not None and (double == 1 or (after == 1 and pending == 1)) else None"
+          pending: "$int(double == 1 and resp.keys is None)"
+      - id: tally
+        type: variable
+        when: end
+        set:
+          hits: "$hits + score.hit_now"
+          misses: "$misses + score.miss_now"
+          false_alarms: "$false_alarms + score.fa_now"
+
+  practice_feedback:
+    duration: 1.0
+    components:
+      - {id: scope_c2, type: image, if: "$theme == 'c2'", image: stimuli/scope_600.png, size: [600, 600]}
+      - {id: sweep_c2, type: image, if: "$theme == 'c2'", image: stimuli/sweep_600.png, size: [600, 600], ori: "$pointer * 6"}
+      - {id: feed_video, type: image, if: "$theme == 'video'", image: stimuli/terrain_02_village.jpg, size: [1920, 1080],
+         pos: "$[-orbit * math.sin(math.radians(pointer * 6)), -orbit * math.cos(math.radians(pointer * 6))]"}
+      - {id: cross_video, type: image, if: "$theme == 'video'", image: stimuli/crosshair_full_1280x720.png, size: [1280, 720]}
+      - {id: fb_bar, type: shape, shape: rect, size: [700, 50], pos: [0, 320], fill: "#0a2232", opacity: 0.9}
+      - id: fb
+        type: text
+        height: 30
+        pos: [0, 320]
+        text: "$'Well spotted!' if score.hit_now else (('You missed a skip' if theme == 'c2' else 'You missed a jump') if score.miss_now else 'That was a single step')"
+        color: "$'#34c759' if score.hit_now else '#ff3b30'"
+
+  thanks:
+    duration: 4
+    components:
+      - {id: bye, type: text, height: 30, wrap_width: 1100,
+         text: "$f'End of the watch. Thank you! You spotted {hits} of {hits + misses} ' + ('skips.' if theme == 'c2' else 'jumps.')"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: sequential
+    children:
+      - tick
+      - {routine: practice_feedback, if: "$score.hit_now == 1 or score.miss_now == 1 or score.fa_now == 1"}
+  - main_intro
+  - loop: ticks
+    conditions: ticks.csv
+    order: sequential
+    children: [tick]
+  - thanks

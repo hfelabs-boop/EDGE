@@ -1,0 +1,40 @@
+id: touch_nback2_ops
+title: 2-back task (touchscreen, operational)
+category: Working memory
+summary: 'Operator 2-back on a tablet or touch monitor: tap MATCH or NO MATCH for every reported track number, emitter type or sector.'
+description: >
+  The library's touchscreen 2-back with operator displays. Items are reported one at a time for 0.5 s, one every
+  3 s: a track number on a tactical plot, an emitter type code on a spectrum display, or the grid sector a
+  surveillance camera is looking at. For every item the operator taps MATCH (the same item as two reports back)
+  or NO MATCH on two large on-screen buttons. A 22-item practice block with feedback is followed by three blocks
+  of 32 items (2 lead-in items plus 30 scored, a third of them matches). Outcomes as in the classic task: hit
+  rate, correct rejections, overall accuracy, RT of correct taps and items without a tap.
+measures:
+- hit rate (response on 2-back matches)
+- correct rejections (1 - false alarm rate)
+- overall accuracy
+- RT of correct taps
+- letters without a tap
+duration_min: 8
+input: touch
+languages: [en]
+variant_of: touch_nback2
+domain: defense
+themes: [c2, ew, uav]
+adaptation: >
+  The ten letters of the classic task become ten operational items; the sequences, timing, buttons and measures
+  stay the same (the trial lists are touch_nback2's, and the variable `names` maps each letter to its item in each
+  theme). c2: four-digit track numbers (TRK 0417 ...) reported next to an unknown-air track symbol on a
+  radar-style tactical plot. ew: emitter type codes (TYPE 21 ...) shown under an emitter mark on a spectrum
+  display, as a receiver classifies one emitter after another. uav: grid sectors (SECTOR BRAVO ...) reported in
+  the overlay of a surveillance camera picture under a reticle. Numbers, codes, sectors and pictures are generic
+  and fictional.
+references:
+- "Kirchner, W. K. (1958). Age differences in short-term retention of rapidly changing information. Journal of Experimental Psychology, 55, 352–358."
+- "Jaeggi, S. M., Buschkuehl, M., Perrig, W. J., & Meier, B. (2010). The concurrent validity of the N-back task as a working memory measure. Memory, 18, 394–412."
+- "Kane, M. J., Conway, A. R. A., Miura, T. K., & Colflesh, G. J. H. (2007). Working memory, attention control, and the n-back task: A question of construct validity. Journal of Experimental Psychology: Learning, Memory, and Cognition, 33(3), 615–622."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/touch_nback2.html"}
+notes: >
+  Works with a mouse as well. Switch the display with the variable `theme` (c2, ew, uav). The trial lists are those
+  of touch_nback2; each trial records the theme and the item shown (show.shown_theme, show.item). Pictures from
+  EDGE's defence kit (tools/library/make_nback2_ops.py).

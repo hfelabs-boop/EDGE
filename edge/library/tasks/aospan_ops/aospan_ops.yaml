@@ -1,0 +1,406 @@
+name: aospan_ops
+description: >
+  Automated operation span (AOSPAN), operational adaptation. The same paradigm, problems, letters, timing and
+  scores as the library's `aospan` task, worded as console work: the operator alternates between checking a
+  quick planning calculation and remembering call-sign letters. Solve a calculation such as (3 x 4) - 2 (c2: a
+  fuel check in tonnes; uav: a time-on-station check in minutes), click, decide whether the proposed result is
+  TRUE or FALSE, then see a call-sign letter for 0.8 s. After 3 to 7 such pairs, the letters are recalled in order
+  by clicking them on a 4 x 3 letter grid. Practice: letters alone, calculations alone (which sets each person's
+  time limit for solving: mean + 2.5 SD of their practice times), then both together. Main part: set sizes 3-7,
+  two sets each, in random order (50 letters; set 'repeats: 3' in the trial list 'sets' for the original three
+  sets each). Scores: absolute span, partial span, and calculation errors (speed and accuracy); the calculations
+  should stay at 85% correct or better. One variable, `theme`, sets the display: c2 or uav. Everything is
+  generic and fictional.
+
+# HOW THE THEME SWITCH WORKS (the pattern of search_ops)
+# - The problems (a x b +/- c), letters, timing, keys, scoring and measures are the classic task's. `words` holds
+#   each theme's wording of a problem (what a, b and c stand for) and of the letters; the texts look it up as
+#   $words[theme]['...'], so the same numbers are shown in every theme.
+# - The display around the problem and the letter (map and message panel, or camera frame and telemetry) and the
+#   instruction texts are items guarded with `if: "$theme == 'uav'"`, one per theme.
+
+settings:
+  window: {size: [1280, 720], background: "#04121c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  theme: c2               # display theme: c2 or uav
+  # each theme's words: the title of a calculation, what a x b means, what + c and - c mean, the unit, the
+  # header over the letter and what the letters are
+  words:
+    c2: {check: FUEL CHECK, times: "legs x tonnes per leg", plus: "+ reserve", minus: "- fuel already on board",
+         unit: t, letter: CALL SIGN LETTER, letters: call-sign letters}
+    uav: {check: TIME ON STATION, times: "orbits x minutes per orbit", plus: "+ transit time", minus: "- delay",
+          unit: min, letter: CALL SIGN LETTER, letters: call-sign letters}
+  pool: [F, H, J, K, L, "N", P, Q, R, S, T, "Y"]   # the 12 letters (Unsworth et al., 2005)
+  math_limit: 10.0        # time allowed to solve a problem; replaced after the arithmetic practice
+  practice_limit: 15.0    # time allowed during the arithmetic practice
+  letter_time: 0.8
+  math_rts: []
+  set_size: 2
+  set_letters: []
+  i_item: 0               # position in the current set
+  i_rec: 0                # position being recalled
+  n_ok: 0                 # letters recalled in the right place in this set
+  chosen: ""
+  set_math_errors: 0
+  a: 2
+  b: 3
+  c: 1
+  op: "+"
+  answer: 7
+  proposed: 7
+  is_true: 1
+  abs_total: 0            # absolute OSPAN score
+  partial_total: 0        # partial-credit OSPAN score
+  math_done: 0
+  math_correct: 0
+  speed_errors: 0
+  accuracy_errors: 0
+  phase: letters
+
+measures:
+  - {id: ospan_absolute, label: Absolute OSPAN score (letters of perfect sets), role: outcome,
+     column: setscore.abs_total, trials: "$phase == 'main'", summary: last, expect: [0, 50]}
+  - {id: ospan_partial, label: Partial OSPAN score (letters in the right place), role: outcome,
+     column: setscore.partial_total, trials: "$phase == 'main'", summary: last, expect: [0, 50]}
+  - {id: letter_accuracy, label: Letters recalled in the right place, role: outcome, column: pick.corr,
+     trials: "$phase == 'main'", summary: proportion}
+  - {id: math_accuracy, label: Arithmetic correct (in time and right), role: check, column: mathscore.math_ok,
+     trials: "$phase == 'main'", summary: proportion, expect: [0.85, 1]}
+  - {id: speed_errors, label: Arithmetic not solved in time, role: check, column: mathscore.speed_err,
+     trials: "$phase == 'main'", summary: sum}
+  - {id: accuracy_errors, label: Arithmetic answered wrongly, role: check, column: mathscore.acc_err,
+     trials: "$phase == 'main'", summary: sum}
+  - {id: solve_time, label: Time to solve a problem, role: outcome, column: solve.rt, trials: "$phase == 'main'",
+     summary: median, units: s, expect: [0.3, 15]}
+  - {id: set_size, label: Set size, role: factor, column: set_size}
+
+routines:
+  intro_letters:
+    components:
+      - {id: ph, type: variable, set: {phase: letters}}
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1100
+        text: |
+          Planning checks and call signs
+
+          You are at a busy console: you will check quick planning calculations while you keep
+          a list of call-sign letters in mind. You will first practise the two parts separately.
+
+          Practice 1, call signs: call-sign letters come in one at a time. Remember them in order.
+          Then click the letters in the order they came in on a grid of 12 letters.
+          If you forget one, click "don't remember" for that place and carry on.
+
+          Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  intro_math:
+    components:
+      - {id: ph, type: variable, set: {phase: math}}
+      - id: text_c2
+        type: text
+        if: "$theme == 'c2'"
+        height: 26
+        wrap_width: 1100
+        text: |
+          Practice 2, fuel checks: you will see a check such as  (2 x 3) + 1 = ?
+          meaning 2 legs at 3 tonnes per leg, plus 1 tonne reserve (or minus fuel already on board).
+          Work out the result as quickly as you can and click the mouse as soon as you have it.
+          A number then appears: click TRUE if it is the result, FALSE if it is not.
+
+          These practice checks also measure how long you need: in the real task,
+          you will have a little more than your usual time.
+
+          Click anywhere to start.
+      - id: text_uav
+        type: text
+        if: "$theme == 'uav'"
+        height: 26
+        wrap_width: 1100
+        text: |
+          Practice 2, time-on-station checks: you will see a check such as  (2 x 3) + 1 = ?
+          meaning 2 orbits of 3 minutes each, plus 1 minute transit (or minus a delay).
+          Work out the result as quickly as you can and click the mouse as soon as you have it.
+          A number then appears: click TRUE if it is the result, FALSE if it is not.
+
+          These practice checks also measure how long you need: in the real task,
+          you will have a little more than your usual time.
+
+          Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  set_limit:
+    duration: 0.5
+    components:
+      - id: limit
+        type: variable
+        set:
+          math_limit: "$round(max(2.0, statistics.mean(math_rts) + 2.5 * statistics.stdev(math_rts)), 2) if len(math_rts) >= 2 else math_limit"
+      - {id: blank, type: wait}
+
+  intro_both:
+    components:
+      - {id: ph, type: variable, set: {phase: both}}
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1100
+        text: |
+          Practice 3, both together: solve a check, judge the result, then a call-sign letter comes in.
+          This repeats a few times; then recall all the letters of the set in order.
+
+          Solve the checks quickly and correctly (aim for at least 85% correct)
+          while remembering as many call-sign letters as you can.
+
+          Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  intro_main:
+    components:
+      - id: ph
+        type: variable
+        set: {phase: main, abs_total: 0, partial_total: 0, math_done: 0, math_correct: 0, speed_errors: 0, accuracy_errors: 0}
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1100
+        text: |
+          Now the real task: 10 sets of 3 to 7 call-sign letters, in random order.
+          Keep the checks at 85% correct or better and remember as many letters as you can.
+
+          Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  new_set:
+    duration: 0.8
+    components:
+      - id: make
+        type: variable
+        set: {set_letters: "$random.sample(pool, int(set_size))", i_item: 0, i_rec: 0, n_ok: 0, chosen: "", set_math_errors: 0}
+      - {id: shown, type: variable, set: {shown_theme: $theme}}
+      - {id: ready, type: text, text: "+", height: 44, color: "#9fe8ff"}
+
+  math:
+    duration: "$practice_limit if phase == 'math' else math_limit"
+    components:
+      - id: problem
+        type: variable
+        set:
+          a: "$random.randint(1, 9)"
+          b: "$random.randint(2, 9)"
+          op: "$random.choice(['+', '-'])"
+          c: "$random.randint(1, 9)"
+          answer: "$a * b + c if op == '+' else a * b - c"
+          is_true: "$int(random.random() < 0.5)"
+          proposed: "$answer if is_true else (answer + random.choice([-3, -2, -1, 1, 2, 3]) if answer > 3 else answer + random.choice([1, 2, 3]))"
+      # the console around the check: a dimmed map (c2) or camera frame (uav) and a panel
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720], opacity: 0.4}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_04_river.jpg, size: [1280, 720], opacity: 0.4}
+      - {id: panel, type: shape, shape: rect, size: [760, 300], pos: [0, 20], fill: "#0a2232", line_color: "#1d4a5e", line_width: 2, opacity: 0.92}
+      - {id: check_head, type: text, font: DejaVu Sans Mono, bold: true, height: 20, color: "#9fe8ff", pos: [0, 140],
+         text: "$f'{words[theme][\"check\"]}  ({words[theme][\"unit\"]})'"}
+      - {id: sum_text, type: text, text: "$f'({a} x {b}) {op} {c} = ?'", font: DejaVu Sans Mono, height: 56, color: "#ffb000", pos: [0, 40], marker: problem}
+      - {id: legend, type: text, font: DejaVu Sans Mono, height: 18, color: "#9fe8ff", pos: [0, -60],
+         text: "$f'({words[theme][\"times\"]}) {words[theme][\"plus\"] if op == \"+\" else words[theme][\"minus\"]}'"}
+      - {id: hint, type: text, text: "When you have the result, click the mouse.", pos: [0, -260], height: 22, color: "#9fe8ff"}
+      - {id: solve, type: mouse, end_routine: true}
+      - id: rts
+        type: variable
+        when: end
+        set: {math_rts: "$math_rts + [solve.rt] if phase == 'math' and solve.rt is not None else math_rts"}
+
+  verify:
+    components:
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720], opacity: 0.4}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_04_river.jpg, size: [1280, 720], opacity: 0.4}
+      - {id: label, type: text, font: DejaVu Sans Mono, height: 20, color: "#9fe8ff", pos: [0, 220],
+         text: "$f'PROPOSED RESULT ({words[theme][\"unit\"]})'"}
+      - {id: number, type: text, text: $str(proposed), font: DejaVu Sans Mono, height: 64, color: "#ffb000", pos: [0, 140]}
+      - {id: b_true, type: shape, shape: rect, size: [240, 100], pos: [-180, -100], fill: "#1f6b45", line_color: "#34c759"}
+      - {id: b_false, type: shape, shape: rect, size: [240, 100], pos: [180, -100], fill: "#6b1f1f", line_color: "#ff3b30"}
+      - {id: l_true, type: text, text: "TRUE", pos: [-180, -100], height: 36}
+      - {id: l_false, type: text, text: "FALSE", pos: [180, -100], height: 36}
+      - {id: verify, type: mouse, clickable: [b_true, b_false], correct: "$'b_true' if is_true else 'b_false'", end_routine: true}
+
+  math_feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 34
+        text: "$'Too slow' if solve.rt is None else ('Correct' if verify.corr else 'Incorrect')"
+        color: "$'#34c759' if solve.rt is not None and verify.corr else '#ff3b30'"
+
+  letter:
+    duration: "$letter_time + 0.2"
+    components:
+      # arithmetic of this pair: solved in time and judged right? (verify only counts when it was shown)
+      - id: mathscore
+        type: variable
+        set:
+          speed_err: "$int(phase in ('both', 'main') and solve.rt is None)"
+          acc_err: "$int(phase in ('both', 'main') and solve.rt is not None and verify.corr != 1)"
+          math_ok: "$int(solve.rt is not None and verify.corr == 1) if phase in ('both', 'main') else None"
+      - id: tally
+        type: variable
+        set:
+          math_done: "$math_done + (1 if phase in ('both', 'main') else 0)"
+          math_correct: "$math_correct + (mathscore.math_ok or 0)"
+          speed_errors: "$speed_errors + mathscore.speed_err"
+          accuracy_errors: "$accuracy_errors + mathscore.acc_err"
+          set_math_errors: "$set_math_errors + mathscore.speed_err + mathscore.acc_err"
+      # c2: the letter comes in on the message panel over the map; uav: in a comms box over the camera frame
+      - {id: map_c2, type: image, if: "$theme == 'c2'", image: stimuli/map_grid_1280x720.jpg, size: [1280, 720]}
+      - {id: panel_c2, type: image, if: "$theme == 'c2'", image: stimuli/message_panel_400x240.png, size: [400, 240]}
+      - {id: camera_uav, type: image, if: "$theme == 'uav'", image: stimuli/terrain_04_river.jpg, size: [1280, 720]}
+      - {id: tel_uav, type: text, if: "$theme == 'uav'", font: DejaVu Sans Mono, height: 17, color: "#d8ffd8",
+         pos: [-400, 330], text: "ALT  2200 m   HDG 045   SPD  90 kt"}
+      - {id: box_uav, type: shape, shape: rect, if: "$theme == 'uav'", size: [400, 240], fill: "#04121c",
+         line_color: "#d8ffd8", line_width: 2, opacity: 0.85}
+      - {id: let_head, type: text, font: DejaVu Sans Mono, bold: true, height: 17, color: "#9fe8ff", pos: [0, 103],
+         text: "$words[theme]['letter']"}
+      - {id: let, type: text, text: "$set_letters[i_item]", font: DejaVu Sans Mono, bold: true, height: 96,
+         color: "#ffb000", pos: [0, -10], duration: $letter_time, marker: letter}
+      - {id: step, type: variable, when: end, set: {i_item: "$i_item + 1"}}
+
+  recall:
+    components:
+      - {id: prompt, type: text, pos: [0, 320], height: 24, color: "#9fe8ff",
+         text: "$f'Click the call-sign letters in the order they came in  ({i_rec + 1} of {int(set_size)})'"}
+      - {id: so_far, type: text, pos: [0, 250], height: 48, text: "$chosen + ' _'"}
+      - {id: k_F, type: shape, shape: rect, size: [130, 80], pos: [-240, 130], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k_H, type: shape, shape: rect, size: [130, 80], pos: [-80, 130], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k_J, type: shape, shape: rect, size: [130, 80], pos: [80, 130], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k_K, type: shape, shape: rect, size: [130, 80], pos: [240, 130], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k_L, type: shape, shape: rect, size: [130, 80], pos: [-240, 30], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k_N, type: shape, shape: rect, size: [130, 80], pos: [-80, 30], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k_P, type: shape, shape: rect, size: [130, 80], pos: [80, 30], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k_Q, type: shape, shape: rect, size: [130, 80], pos: [240, 30], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k_R, type: shape, shape: rect, size: [130, 80], pos: [-240, -70], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k_S, type: shape, shape: rect, size: [130, 80], pos: [-80, -70], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k_T, type: shape, shape: rect, size: [130, 80], pos: [80, -70], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k_Y, type: shape, shape: rect, size: [130, 80], pos: [240, -70], fill: "#123047", line_color: "#5fb4d6"}
+      - {id: k_blank, type: shape, shape: rect, size: [290, 70], pos: [0, -190], fill: "#2a3a46", line_color: "#9fe8ff"}
+      - {id: t_F, type: text, text: "F", pos: [-240, 130], height: 40}
+      - {id: t_H, type: text, text: "H", pos: [-80, 130], height: 40}
+      - {id: t_J, type: text, text: "J", pos: [80, 130], height: 40}
+      - {id: t_K, type: text, text: "K", pos: [240, 130], height: 40}
+      - {id: t_L, type: text, text: "L", pos: [-240, 30], height: 40}
+      - {id: t_N, type: text, text: "N", pos: [-80, 30], height: 40}
+      - {id: t_P, type: text, text: "P", pos: [80, 30], height: 40}
+      - {id: t_Q, type: text, text: "Q", pos: [240, 30], height: 40}
+      - {id: t_R, type: text, text: "R", pos: [-240, -70], height: 40}
+      - {id: t_S, type: text, text: "S", pos: [-80, -70], height: 40}
+      - {id: t_T, type: text, text: "T", pos: [80, -70], height: 40}
+      - {id: t_Y, type: text, text: "Y", pos: [240, -70], height: 40}
+      - {id: t_blank, type: text, text: "don't remember", pos: [0, -190], height: 26}
+      # one click per place in the set; the right answer for this place is set_letters[i_rec]
+      - id: pick
+        type: mouse
+        clickable: [k_F, k_H, k_J, k_K, k_L, k_N, k_P, k_Q, k_R, k_S, k_T, k_Y, k_blank]
+        correct: "$'k_' + set_letters[i_rec]"
+        end_routine: true
+      - id: note
+        type: variable
+        when: end
+        set:
+          chosen: "$(chosen + ' ' + ('_' if pick.clicked == 'k_blank' else pick.clicked[2:])).strip() if pick.clicked else chosen"
+          n_ok: "$n_ok + (pick.corr or 0)"
+          i_rec: "$i_rec + 1"
+
+  set_feedback:
+    duration: 2.5
+    components:
+      - id: setscore
+        type: variable
+        set:
+          set_ok: "$int(n_ok == int(set_size))"
+          abs_total: "$abs_total + (int(set_size) if n_ok == int(set_size) and phase == 'main' else 0)"
+          partial_total: "$partial_total + (n_ok if phase == 'main' else 0)"
+      - id: fb
+        type: text
+        height: 30
+        wrap_width: 1000
+        text: "$f'You recalled {n_ok} of {int(set_size)} call-sign letters correctly.' + ('' if phase == 'letters' else f'\\n\\nCheck errors in this set: {set_math_errors}')"
+      - id: pct
+        type: text
+        pos: [0, -150]
+        height: 40
+        text: "$'' if phase == 'letters' or math_done == 0 else f'{round(100 * math_correct / math_done)}%'"
+        color: "$'#ff3b30' if math_done and math_correct / math_done < 0.85 else '#34c759'"
+      - id: pct_note
+        type: text
+        pos: [0, -210]
+        height: 20
+        color: "#9aa4b8"
+        text: "$'' if phase == 'letters' or math_done == 0 else 'checks correct so far (keep it at 85% or more)'"
+
+  thanks:
+    duration: 4
+    components:
+      - {id: bye, type: text, height: 30, wrap_width: 1000,
+         text: "$f'End of the watch. Thank you, the task is finished.\\nLetters of perfectly recalled sets: {abs_total}'"}
+
+flow:
+  # 1. letters only
+  - intro_letters
+  - loop: letter_practice
+    conditions: [{set_size: 2}, {set_size: 3}]
+    order: sequential
+    children:
+      - new_set
+      - loop: letter_items
+        repeats: $set_size
+        children: [letter]
+      - loop: letter_recall
+        repeats: $set_size
+        children: [recall]
+      - set_feedback
+  # 2. arithmetic only (sets the time limit)
+  - intro_math
+  - loop: math_practice
+    repeats: 8
+    children:
+      - math
+      - {routine: verify, if: "$solve.rt is not None"}
+      - math_feedback
+  - set_limit
+  # 3. both together
+  - intro_both
+  - loop: both_practice
+    conditions: [{set_size: 2}, {set_size: 2}]
+    order: sequential
+    children:
+      - new_set
+      - loop: both_items
+        repeats: $set_size
+        children:
+          - math
+          - {routine: verify, if: "$solve.rt is not None"}
+          - letter
+      - loop: both_recall
+        repeats: $set_size
+        children: [recall]
+      - set_feedback
+  # 4. the test: set sizes 3-7, twice each, random order
+  - intro_main
+  - loop: sets
+    conditions: [{set_size: 3}, {set_size: 4}, {set_size: 5}, {set_size: 6}, {set_size: 7}]
+    order: fullrandom
+    repeats: 2
+    children:
+      - new_set
+      - loop: items
+        repeats: $set_size
+        children:
+          - math
+          - {routine: verify, if: "$solve.rt is not None"}
+          - letter
+      - loop: letters_recall
+        repeats: $set_size
+        children: [recall]
+      - set_feedback
+  - thanks
