@@ -1,0 +1,141 @@
+name: ab
+description: >
+  Attentional blink. A rapid stream of letters is shown in the centre of the screen, one every 100 ms.
+  Two digits are hidden in the stream. After the stream, the participant types the first digit and then
+  the second. The second digit is often missed when it comes 200-500 ms after the first (the "blink"),
+  but less so right after it (lag 1, "lag-1 sparing") or later.
+
+settings:
+  window: {size: [1280, 720], background: "#808080", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  item_time: 0.1       # time per item in the stream (s); 0.1 = 10 items per second
+  digits: ["2", "3", "4", "5", "6", "7", "8", "9"]
+  # letters used as distractors (I, O, S, Z, B, G, Q and D are left out: they look like digits)
+  letter_pool: [A, C, E, F, H, J, K, L, M, N, P, R, T, U, V, W, X, Y]
+  t1_pos: 6
+  t1_digit: "2"
+  t2_digit: "3"
+  items: [A, C, E, F, H, J, K, L, M, N, P, R, T, U, V, W, X, Y, A, C]
+
+measures:
+  - {id: t2_given_t1, label: Second digit correct (when the first was correct), role: outcome, column: resp_t2.corr,
+     trials: $resp_t1.corr == 1, loop: main, summary: proportion}
+  - {id: t1_accuracy, label: First digit correct, role: outcome, column: resp_t1.corr, loop: main, summary: proportion}
+  - {id: lag, label: Lag (items from first to second digit), role: factor, column: lag}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Spot the two digits
+
+          Letters will flash very quickly in the middle of the screen.
+          Somewhere in each stream there are TWO DIGITS (from 2 to 9).
+
+          After the stream, type the FIRST digit you saw, then the SECOND digit.
+          If you are not sure, make your best guess.
+
+          First 5 practice streams with feedback. Press SPACE to begin.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Practice done. The test has 40 streams (about 4 minutes) without feedback.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  stream:
+    duration: $0.5 + 20 * item_time
+    components:
+      # build this trial's stream: 20 different letters with the two digits put in at t1_pos and t1_pos + lag
+      - id: pick
+        type: variable
+        set: {t1_pos: "$random.randint(4, 8)", t1_digit: "$random.choice(digits)"}
+      - id: build
+        type: variable
+        set:
+          t2_digit: "$random.choice([d for d in digits if d != t1_digit])"
+          letters: "$random.sample(letter_pool, 18) + random.sample(letter_pool, 2)"
+      - id: place
+        type: variable
+        set:
+          items: "$[t1_digit if i == t1_pos else (t2_digit if i == t1_pos + lag else letters[i]) for i in range(20)]"
+      - {id: fix, type: text, text: "+", height: 40, color: black, duration: 0.5}
+      - {id: t1_mark, type: marker, label: T1, start: "$0.5 + t1_pos * item_time"}
+      - {id: t2_mark, type: marker, label: T2, start: "$0.5 + (t1_pos + lag) * item_time"}
+      - {id: s0, type: text, text: "$items[0]", height: 64, color: black, start: "$0.5 + 0 * item_time", duration: $item_time}
+      - {id: s1, type: text, text: "$items[1]", height: 64, color: black, start: "$0.5 + 1 * item_time", duration: $item_time}
+      - {id: s2, type: text, text: "$items[2]", height: 64, color: black, start: "$0.5 + 2 * item_time", duration: $item_time}
+      - {id: s3, type: text, text: "$items[3]", height: 64, color: black, start: "$0.5 + 3 * item_time", duration: $item_time}
+      - {id: s4, type: text, text: "$items[4]", height: 64, color: black, start: "$0.5 + 4 * item_time", duration: $item_time}
+      - {id: s5, type: text, text: "$items[5]", height: 64, color: black, start: "$0.5 + 5 * item_time", duration: $item_time}
+      - {id: s6, type: text, text: "$items[6]", height: 64, color: black, start: "$0.5 + 6 * item_time", duration: $item_time}
+      - {id: s7, type: text, text: "$items[7]", height: 64, color: black, start: "$0.5 + 7 * item_time", duration: $item_time}
+      - {id: s8, type: text, text: "$items[8]", height: 64, color: black, start: "$0.5 + 8 * item_time", duration: $item_time}
+      - {id: s9, type: text, text: "$items[9]", height: 64, color: black, start: "$0.5 + 9 * item_time", duration: $item_time}
+      - {id: s10, type: text, text: "$items[10]", height: 64, color: black, start: "$0.5 + 10 * item_time", duration: $item_time}
+      - {id: s11, type: text, text: "$items[11]", height: 64, color: black, start: "$0.5 + 11 * item_time", duration: $item_time}
+      - {id: s12, type: text, text: "$items[12]", height: 64, color: black, start: "$0.5 + 12 * item_time", duration: $item_time}
+      - {id: s13, type: text, text: "$items[13]", height: 64, color: black, start: "$0.5 + 13 * item_time", duration: $item_time}
+      - {id: s14, type: text, text: "$items[14]", height: 64, color: black, start: "$0.5 + 14 * item_time", duration: $item_time}
+      - {id: s15, type: text, text: "$items[15]", height: 64, color: black, start: "$0.5 + 15 * item_time", duration: $item_time}
+      - {id: s16, type: text, text: "$items[16]", height: 64, color: black, start: "$0.5 + 16 * item_time", duration: $item_time}
+      - {id: s17, type: text, text: "$items[17]", height: 64, color: black, start: "$0.5 + 17 * item_time", duration: $item_time}
+      - {id: s18, type: text, text: "$items[18]", height: 64, color: black, start: "$0.5 + 18 * item_time", duration: $item_time}
+      - {id: s19, type: text, text: "$items[19]", height: 64, color: black, start: "$0.5 + 19 * item_time", duration: $item_time}
+
+  ask_t1:
+    components:
+      - {id: q1, type: text, height: 30, text: "Which was the FIRST digit? (type 2-9)"}
+      - {id: resp_t1, type: keyboard, keys: ["2", "3", "4", "5", "6", "7", "8", "9"], correct: $t1_digit,
+         end_routine: true}
+
+  ask_t2:
+    components:
+      - {id: q2, type: text, height: 30, text: "Which was the SECOND digit? (type 2-9)"}
+      - {id: resp_t2, type: keyboard, keys: ["2", "3", "4", "5", "6", "7", "8", "9"], correct: $t2_digit,
+         end_routine: true}
+
+  feedback:
+    duration: 1.5
+    components:
+      - id: fb
+        type: text
+        height: 28
+        text: "$f'The digits were {t1_digit} and {t2_digit}. ' + ('Both right!' if resp_t1.corr and resp_t2.corr else '')"
+        color: "$'#106010' if resp_t1.corr and resp_t2.corr else 'black'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, color: black, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: ab.csv
+    order: random
+    children: [stream, ask_t1, ask_t2, feedback]
+  - main_intro
+  - loop: main
+    conditions: ab.csv
+    order: random
+    repeats: 8
+    children: [stream, ask_t1, ask_t2, iti]
+  - thanks

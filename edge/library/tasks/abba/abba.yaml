@@ -1,0 +1,107 @@
+name: abba
+description: >
+  ABBA task (reversed compatibility). An arrow tells the participant which response (A) to prepare, but
+  not to carry out yet. Then a coloured circle asks for an immediate second response (B). Only after B is
+  response A carried out. Responding B is slower when B is on the SAME side as the planned A response
+  than when it is on the other side: planning an action binds its features and makes them less available.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+measures:
+  - {id: rt_b, label: Reaction time to the circle (response B), role: outcome, column: resp_b.rt,
+     trials: "$resp_b.corr == 1 and resp_a.corr == 1", loop: main, summary: mean, units: s, expect: [0.2, 2.0]}
+  - {id: accuracy_b, label: Accuracy of response B, role: outcome, column: resp_b.corr, loop: main, summary: proportion}
+  - {id: accuracy_a, label: Accuracy of the planned response A, role: outcome, column: resp_a.corr, loop: main,
+     summary: proportion}
+  - {id: compatibility, label: B on the same side as A (compatible) or not, role: factor, column: compatibility}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 24
+        wrap_width: 1100
+        text: |
+          Plan, react, then act
+
+          1. An ARROW appears. Remember which way it points, but do not press anything yet.
+             Arrow left = Q later, arrow right = P later.
+
+          2. Then a coloured CIRCLE appears. Respond to it straight away:
+             BLUE circle -> F (left hand)      YELLOW circle -> J (right hand)
+
+          3. Then a question mark appears: now press the key you planned for the arrow (Q or P).
+
+          Respond to the circle as fast as you can. Take your time for the planned key, but get it right.
+          First 8 practice trials with feedback. Press SPACE to begin.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Practice done. The test has 48 trials (about 5 minutes) without feedback.
+
+          Arrow: plan Q (left) or P (right).   Circle: blue F, yellow J, at once.   Then: Q or P.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  plan_and_react:
+    components:
+      - {id: fix, type: text, text: "+", height: 36, duration: 0.5}
+      - {id: arrow_a, type: text, text: $a_arrow, height: 90, start: 0.5, duration: 1.0, marker: "$f'plan_{a_side}'"}
+      - {id: circle_b, type: shape, shape: circle, radius: 45, fill: $b_color, start: 2.5, duration: 0.2,
+         marker: "$f'stim_b_{compatibility}'"}
+      - {id: resp_b, type: keyboard, keys: [f, j], correct: $b_key, start: 2.5, duration: 2.0, end_routine: true}
+
+  act:
+    components:
+      - {id: ask, type: text, text: "?", height: 70}
+      - {id: resp_a, type: keyboard, keys: [q, p], correct: $a_key, duration: 4.0, end_routine: true}
+
+  feedback:
+    duration: 1.5
+    components:
+      - id: fb_b
+        type: text
+        height: 28
+        pos: [0, 30]
+        text: "$'Circle: correct' if resp_b.corr else ('Circle: too slow' if resp_b.keys is None else 'Circle: wrong key')"
+        color: "$'#55dd55' if resp_b.corr else '#ff5555'"
+      - id: fb_a
+        type: text
+        height: 28
+        pos: [0, -30]
+        text: "$'Planned key: correct' if resp_a.corr else ('Planned key: you were asked for ' + a_key.upper())"
+        color: "$'#55dd55' if resp_a.corr else '#ff5555'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.8}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: abba.csv
+    order: random
+    repeats: 2
+    children: [plan_and_react, act, feedback]
+  - main_intro
+  - loop: main
+    conditions: abba.csv
+    order: random
+    repeats: 12
+    children: [plan_and_react, act, iti]
+  - thanks

@@ -1,0 +1,88 @@
+name: flanker_arrows
+description: >
+  Flanker task with arrows. Five symbols appear in a row; the participant presses the arrow key that
+  matches the direction of the MIDDLE arrow. The outer arrows point the same way (congruent), the other
+  way (incongruent), or are plain dashes (neutral).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: median, units: s, expect: [0.2, 1.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: condition, label: Flanker condition, role: factor, column: condition}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: |
+          Arrow task
+
+          A row of five symbols will appear. Look only at the arrow in the MIDDLE
+          and press the arrow key that points the same way:
+
+          middle arrow points left   ->  LEFT arrow key
+          middle arrow points right  ->  RIGHT arrow key
+
+          Ignore the symbols on either side. Be fast but accurate.
+          First a short practice with feedback. Press SPACE to begin.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: |
+          Practice done. Now the real task begins (no more feedback).
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: fix, type: fixation, size: 24, line_width: 3, duration: 0.5}
+      - {id: stim, type: text, text: $stimulus, height: 56, start: 0.5, marker: "$f'flanker_{condition}'"}
+      - {id: resp, type: keyboard, keys: [left, right], correct: $correct_key, start: 0.5, duration: 2.0,
+         end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 32
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong key')"
+        color: "$'#55dd55' if resp.corr else '#ff5555'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "$f'Finished. You were correct on {round(100 * main.accuracy)}% of the trials. Thank you!'"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: flanker_arrows.csv
+    order: random
+    repeats: 2
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: flanker_arrows.csv
+    order: random
+    repeats: 16
+    max_repeat: {condition: 3}
+    children: [trial, iti]
+  - thanks

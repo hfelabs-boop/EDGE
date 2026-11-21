@@ -1,0 +1,23 @@
+id: sart2
+title: SART with response feedback
+category: Vigilance
+summary: The Sustained Attention to Response Task with a short right/wrong message after every digit.
+description: >
+  Same task as the standard SART (press SPACE for every digit 1-9 except 3; digit 250 ms, mask 900 ms,
+  five digit sizes, 18 practice and 225 test trials), but after every trial a 400 ms message says whether
+  the response was correct, a press on a 3, or a missed digit. Feedback makes errors salient, which keeps
+  participants more engaged and lets researchers study how people adjust after an error (post-error
+  slowing). Main outcomes are commission errors on 3s, omissions and go reaction time, as in the SART.
+measures:
+  - "commission errors: accuracy on no-go (3) trials"
+  - omissions (hit rate on go trials)
+  - go reaction time
+duration_min: 6
+input: keyboard
+languages: [en]
+variant_of: sart
+references:
+  - "Robertson, I. H., Manly, T., Andrade, J., Baddeley, B. T., & Yiend, J. (1997). 'Oops!': Performance correlates of everyday attentional failures in traumatic brain injured and normal subjects. Neuropsychologia, 35(6), 747-758."
+  - "Ralph, B. C. W., Thomson, D. R., Seli, P., Carriere, J. S. A., & Smilek, D. (2015). Media multitasking and behavioral measures of sustained attention. Attention, Perception, & Psychophysics, 77, 390-401."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/sart2.html"}
+notes: The feedback screen adds 400 ms to every trial (1.55 s per digit instead of 1.15 s); set the feedback screen's duration to change it.

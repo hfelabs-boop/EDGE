@@ -1,0 +1,103 @@
+name: ax_cpt
+description: >
+  AX Continuous Performance Test. Letters come in pairs: a cue letter, a short delay, then a probe letter.
+  Press M when the probe is an X that followed an A (the target pair AX); press Z for every other probe.
+  AX pairs are frequent (70%), so A prepares an M response and X usually means M; the rare AY and BX
+  pairs show how much a person relies on the context provided by the cue.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  # letters used as "B" cues and "Y" probes (A, X and letters that look like X are left out)
+  other_letters: [B, C, D, E, F, G, H, J, L, M, N, P, R, S, T, U, V, Z]
+  cue_letter: A
+  probe_letter: X
+  cue_time: 0.3        # cue on screen (s)
+  delay: 1.0           # blank between cue and probe (s)
+  probe_time: 0.3      # probe on screen (s)
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: mean, units: s, expect: [0.15, 1.2]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: trial_type, label: Pair type, role: factor, column: trial_type}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Letter pairs
+
+          Letters appear in pairs: first one letter, then (after a short pause) a second one.
+          You only respond to the SECOND letter of each pair:
+
+          press M  if the second letter is X  AND  the first letter was A
+          press Z  for every other second letter
+
+          So: A then X -> M.   Anything else -> Z.
+          Be fast but accurate. First 10 practice pairs with feedback. Press SPACE to begin.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Practice done. The test has 80 pairs (about 5 minutes) without feedback.
+
+          A then X -> M.   Anything else -> Z.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - id: letters
+        type: variable
+        set:
+          cue_letter: "$'A' if cue_kind == 'A' else random.choice(other_letters)"
+          probe_letter: "$'X' if probe_kind == 'X' else random.choice(other_letters)"
+      - {id: cue, type: text, text: $cue_letter, height: 80, duration: $cue_time, marker: "$f'cue_{cue_kind}'"}
+      - {id: probe, type: text, text: $probe_letter, height: 80, start: $cue_time + delay, duration: $probe_time,
+         marker: "$f'probe_{trial_type}'"}
+      - {id: resp, type: keyboard, keys: [m, z], correct: $correct_key, start: $cue_time + delay, duration: 1.2}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong key')"
+        color: "$'#55dd55' if resp.corr else '#ff5555'"
+
+  iti:
+    components:
+      - {id: fix, type: fixation, size: 20, line_width: 3, duration: 1.0}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: ax_cpt.csv
+    order: random
+    children: [iti, trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: ax_cpt.csv
+    order: random
+    repeats: 8
+    children: [iti, trial]
+  - thanks

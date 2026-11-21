@@ -1,0 +1,87 @@
+name: go_no_go
+description: >
+  Go/no-go task. Letters appear one at a time at a steady pace. Press SPACE as fast as possible for the
+  frequent go letter (P, 75% of trials) and do nothing for the rare no-go letter (R, 25%).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+measures:
+  - {id: go_rt, label: Go reaction time (hits), role: outcome, column: resp.rt,
+     trials: "$trial_type == 'go' and resp.corr == 1", loop: main, summary: mean, units: s, expect: [0.15, 1.0]}
+  - {id: accuracy, label: Accuracy (go - hit rate; no-go - correct withholding), role: outcome, column: resp.corr,
+     loop: main, summary: proportion}
+  - {id: trial_type, label: Trial type, role: factor, column: trial_type}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: |
+          Press or hold back
+
+          Letters will appear one after another.
+
+          P  ->  press SPACE as fast as you can
+          R  ->  do NOT press anything
+
+          Most letters are P, so be ready to stop yourself when an R comes.
+          First a short practice with feedback. Press SPACE to begin.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: |
+          Practice done. Now the real task (no more feedback).
+
+          P -> SPACE        R -> no press
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    duration: 1.5
+    components:
+      - {id: fix, type: fixation, size: 24, line_width: 3, duration: 0.5}
+      - {id: stim, type: text, text: $letter, height: 80, start: 0.5, duration: 0.5, marker: "$f'stim_{trial_type}'"}
+      - {id: resp, type: keyboard, keys: [space], correct: $correct_key, start: 0.5, duration: 1.0}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: >-
+          $('Correct' if resp.corr else 'Too slow - press faster for P') if trial_type == 'go'
+          else ('Correct - well held back' if resp.corr else 'Oops - R means do not press')
+        color: "$'#55dd55' if resp.corr else '#ff5555'"
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: go_no_go.csv
+    order: random
+    repeats: 3
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: go_no_go.csv
+    order: random
+    repeats: 25
+    max_repeat: {trial_type: {nogo: 1}}
+    children: [trial]
+  - thanks

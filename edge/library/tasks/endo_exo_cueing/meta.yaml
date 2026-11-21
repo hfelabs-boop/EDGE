@@ -1,0 +1,27 @@
+id: endo_exo_cueing
+title: Endogenous vs exogenous cueing
+category: Attention
+summary: Compares voluntary orienting to a predictive central arrow with automatic capture by a non-predictive box flash.
+description: >
+  This version of the spatial cueing task contrasts two ways attention moves. In the endogenous block a
+  central arrow points to one of two boxes and predicts the target side on 75% of trials; in the exogenous
+  block one box flashes for 100 ms and predicts nothing (50% valid). In both, a white dot then appears in a
+  box after 100 or 600 ms and the participant presses the arrow key for its side (max 1.5 s). Each block
+  starts with 8 practice trials with feedback and has 48 test trials (96 in total); block order is
+  counterbalanced across participant numbers. Typical result: the exogenous validity effect is present at
+  the short interval and shrinks (or reverses) at the long one, while the endogenous effect needs time and
+  is larger at the long interval.
+measures:
+  - RT by cue type x validity x cue-target interval (validity effects)
+  - accuracy
+duration_min: 7
+input: keyboard
+languages: [en]
+references:
+  - "Filoteo, J. V., Delis, D. C., Salmon, D. P., Demadura, T., Roman, M. J., & Shults, C. W. (1997). An examination of the nature of attentional deficits in patients with Parkinson's disease: Evidence from a spatial orienting task. Journal of the International Neuropsychological Society, 3(4), 337-347. doi:10.1017/S1355617797003378"
+  - "Jonides, J. (1981). Voluntary versus automatic control over the mind's eye's movement. In J. B. Long & A. D. Baddeley (Eds.), Attention and Performance IX (pp. 187-203). Hillsdale, NJ: Erlbaum."
+  - "Posner, M. I. (1980). Orienting of attention. Quarterly Journal of Experimental Psychology, 32, 3-25."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/endo_exo_cueing.html"}
+notes: >
+  blocks.csv names the trial list of each block (endogenous.csv, exogenous.csv); the validity ratio and the
+  intervals (column soa) are rows in those lists.

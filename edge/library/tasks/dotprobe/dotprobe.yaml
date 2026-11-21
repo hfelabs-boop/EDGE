@@ -1,0 +1,95 @@
+name: dotprobe
+description: >
+  Dot-probe task. Two words appear briefly, one above and one below the centre: on test trials one of them
+  is threat-related and the other neutral. Then a dot appears where one of the words was; press the UP or
+  DOWN arrow key for its position. Faster responses when the dot replaces the threat word (congruent)
+  than when it replaces the neutral word (incongruent) indicate attention drawn to threat.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  word_time: 0.5       # how long the word pair is shown (s)
+
+measures:
+  - {id: rt, label: Reaction time to the dot (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: mean, units: s, expect: [0.2, 1.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: congruence, label: Dot at the threat word (congruent) or at the neutral word, role: factor, column: congruence}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Find the dot
+
+          Look at the cross in the middle. Two words will flash, one above and one below it.
+          Then a small dot appears where one of the words was.
+
+          Dot above the centre  ->  UP arrow key
+          Dot below the centre  ->  DOWN arrow key
+
+          Respond as fast as you can without making mistakes.
+          First 8 practice trials with feedback. Press SPACE to begin.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Practice done. The test has 80 trials (about 3 minutes) without feedback.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: fix, type: text, text: "+", height: 36, duration: $0.5 + word_time}
+      - {id: word_top, type: text, text: $top_word, height: 34, pos: [0, 80], start: 0.5, duration: $word_time,
+         marker: "$f'words_threat_{threat_pos}'"}
+      - {id: word_bottom, type: text, text: $bottom_word, height: 34, pos: [0, -80], start: 0.5, duration: $word_time}
+      - {id: dot, type: shape, shape: circle, radius: 8, fill: white, pos: "$[0, probe_y]", start: $0.5 + word_time,
+         marker: "$f'probe_{congruence}'"}
+      - {id: resp, type: keyboard, keys: [up, down], correct: $correct_key, start: $0.5 + word_time, duration: 2.0,
+         end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong key')"
+        color: "$'#55dd55' if resp.corr else '#ff5555'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    stop_if: $practice.n >= 7
+    children: [trial, feedback]
+  - main_intro
+  - loop: main
+    conditions: dotprobe.csv
+    order: random
+    max_repeat: {probe_pos: 4}
+    children: [trial, iti]
+  - thanks

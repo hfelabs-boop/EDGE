@@ -1,0 +1,140 @@
+name: maabrams
+description: >
+  Attentional capture and visual grouping. Six shapes stand on a circle: five circles and one diamond.
+  Find the diamond and report whether the line inside it is horizontal (Z) or vertical (M). On most
+  trials one circle is red instead of green: a salient distractor that tends to capture attention. A thin
+  bar connects two neighbouring shapes; it either joins the red distractor to the diamond (grouped) or to
+  another circle (ungrouped). Comparing the conditions shows how much the distractor slows search and
+  whether being part of the same group as the target changes that.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  green: "#26b34a"
+  red: "#e8402f"
+  # the six places on a circle (radius 220 px), counter-clockwise from the top
+  xy: [[0, 220], [-191, 110], [-191, -110], [0, -220], [191, -110], [191, 110]]
+  # connector bars: bars[j] joins place j and place j+1
+  bars: [[[2, 217], [-189, 107], [-193, 113], [-2, 223]], [[-187, 110], [-187, -110], [-195, -110], [-195, 110]], [[-189, -107], [2, -217], [-2, -223], [-193, -113]], [[-2, -217], [189, -107], [193, -113], [2, -223]], [[187, -110], [187, 110], [195, 110], [195, -110]], [[189, 107], [-2, 217], [2, 223], [193, 113]]]
+  # the line inside each shape, as a thin polygon
+  line_shapes:
+    vertical: [[-3, -20], [3, -20], [3, 20], [-3, 20]]
+    horizontal: [[-20, -3], [20, -3], [20, 3], [-20, 3]]
+    tilt_right: [[12, 16], [16, 12], [-12, -16], [-16, -12]]
+    tilt_left: [[-12, 16], [-16, 12], [12, -16], [16, -12]]
+  tp: 0                # place of the diamond (target)
+  side: 1              # the distractor sits next to the target: +1 counter-clockwise, -1 clockwise
+  dp: 1                # place of the red distractor
+  bar_edge: 0
+  line_kinds: [horizontal, tilt_left, tilt_right, tilt_left, tilt_right, tilt_left]
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: main, summary: mean, units: s, expect: [0.3, 2.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: main, summary: proportion}
+  - {id: distractor, label: Distractor (none / grouped with target / ungrouped), role: factor, column: distractor}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 25
+        wrap_width: 1100
+        text: |
+          Find the diamond
+
+          Six shapes will appear around the centre: five circles and one DIAMOND.
+          Find the diamond and look at the line inside it:
+
+          horizontal line  ->  press Z
+          vertical line    ->  press M
+
+          Sometimes one circle is red and some shapes are linked by a bar: ignore both,
+          they never tell you where the diamond is. Keep your eyes on the centre cross
+          until the shapes appear. First 12 practice trials with feedback. Press SPACE to begin.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Practice done. The test has 72 trials (about 4 minutes) without feedback.
+
+          diamond with horizontal line -> Z      vertical line -> M
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  # Fixation; meanwhile choose this trial's layout (the search screen's items use it to decide what to show).
+  prep:
+    components:
+      - {id: pick, type: variable, set: {tp: "$random.randint(0, 5)", side: "$random.choice([-1, 1])"}}
+      - id: place
+        type: variable
+        set:
+          dp: "$(tp + side) % 6"
+          # grouped: the bar joins target and distractor; otherwise it joins the distractor's place to its
+          # other neighbour (the same bar position with and without a red distractor)
+          bar_edge: >-
+            $(tp if side == 1 else (tp - 1) % 6) if distractor == 'grouped'
+            else ((tp + 1) % 6 if side == 1 else (tp - 2) % 6)
+          line_kinds: "$[target_line if i == tp else random.choice(['tilt_left', 'tilt_right']) for i in range(6)]"
+      - {id: fix, type: text, text: "+", height: 36, duration: 0.8}
+
+  search:
+    components:
+      - {id: fix2, type: text, text: "+", height: 36}
+      - {id: bar, type: shape, shape: polygon, vertices: "$bars[bar_edge]", fill: "#9a9a9a", marker: "$f'display_{distractor}'"}
+      - {id: circle0, type: shape, shape: circle, radius: 40, pos: "$xy[0]", fill: "$red if distractor != 'none' and dp == 0 else green", if: "$tp != 0"}
+      - {id: circle1, type: shape, shape: circle, radius: 40, pos: "$xy[1]", fill: "$red if distractor != 'none' and dp == 1 else green", if: "$tp != 1"}
+      - {id: circle2, type: shape, shape: circle, radius: 40, pos: "$xy[2]", fill: "$red if distractor != 'none' and dp == 2 else green", if: "$tp != 2"}
+      - {id: circle3, type: shape, shape: circle, radius: 40, pos: "$xy[3]", fill: "$red if distractor != 'none' and dp == 3 else green", if: "$tp != 3"}
+      - {id: circle4, type: shape, shape: circle, radius: 40, pos: "$xy[4]", fill: "$red if distractor != 'none' and dp == 4 else green", if: "$tp != 4"}
+      - {id: circle5, type: shape, shape: circle, radius: 40, pos: "$xy[5]", fill: "$red if distractor != 'none' and dp == 5 else green", if: "$tp != 5"}
+      - {id: diamond, type: shape, shape: rect, size: [64, 64], ori: 45, pos: "$xy[tp]", fill: $green}
+      - {id: line0, type: shape, shape: polygon, pos: "$xy[0]", vertices: "$line_shapes[line_kinds[0]]", fill: black}
+      - {id: line1, type: shape, shape: polygon, pos: "$xy[1]", vertices: "$line_shapes[line_kinds[1]]", fill: black}
+      - {id: line2, type: shape, shape: polygon, pos: "$xy[2]", vertices: "$line_shapes[line_kinds[2]]", fill: black}
+      - {id: line3, type: shape, shape: polygon, pos: "$xy[3]", vertices: "$line_shapes[line_kinds[3]]", fill: black}
+      - {id: line4, type: shape, shape: polygon, pos: "$xy[4]", vertices: "$line_shapes[line_kinds[4]]", fill: black}
+      - {id: line5, type: shape, shape: polygon, pos: "$xy[5]", vertices: "$line_shapes[line_kinds[5]]", fill: black}
+      - {id: resp, type: keyboard, keys: [z, m], correct: $correct_key, duration: 3.0, end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#55dd55' if resp.corr else '#ff5555'"
+
+  iti:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: maabrams.csv
+    order: random
+    repeats: 2
+    children: [prep, search, feedback]
+  - main_intro
+  - loop: main
+    conditions: maabrams.csv
+    order: random
+    repeats: 12
+    children: [prep, search, iti]
+  - thanks

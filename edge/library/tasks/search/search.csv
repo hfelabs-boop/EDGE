@@ -1,0 +1,13 @@
+search_type,set_size,target,correct_key
+feature,4,present,m
+feature,4,absent,z
+feature,8,present,m
+feature,8,absent,z
+feature,16,present,m
+feature,16,absent,z
+conjunction,4,present,m
+conjunction,4,absent,z
+conjunction,8,present,m
+conjunction,8,absent,z
+conjunction,16,present,m
+conjunction,16,absent,z

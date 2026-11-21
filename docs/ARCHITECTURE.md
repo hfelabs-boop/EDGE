@@ -40,6 +40,7 @@ edge/
                     LabJack, parallel), the watcher (connect/disconnect events), whether the experiment's devices are there
   hardware_db.py    what a device probably is and how to add it (built-in list + the lab's hardware.yaml)
   importers/        PsychoPy, E-Prime, OpenSesame and jsPsych importers (`edge import`)
+  library/          task library: classic paradigms as ready-made experiments (tasks/<id>/: experiment, trial lists, meta.yaml)
   templates.py      starter experiments (and hidden starting points for tutorials)
   survey.py         survey questions: model, validation, display logic, page renderer, auto-answers, data, scoring
   survey_library.py validated questionnaires and answer scales (citations, licences, scoring rules)

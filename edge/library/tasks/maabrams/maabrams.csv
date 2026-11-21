@@ -1,0 +1,7 @@
+distractor,target_line,correct_key
+none,horizontal,z
+none,vertical,m
+grouped,horizontal,z
+grouped,vertical,m
+ungrouped,horizontal,z
+ungrouped,vertical,m

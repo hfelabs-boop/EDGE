@@ -1,0 +1,35 @@
+id: stopsignal
+title: Stop-signal task
+category: Inhibition and conflict
+summary: Respond to an arrow as fast as possible, but cancel the response when the arrow turns red.
+description: >
+  The stop-signal task measures how quickly a person can cancel an action that is already under way.
+  On every trial a white arrow appears after a 500 ms fixation cross and the participant presses the
+  matching arrow key (1 s to respond). On 25% of trials the arrow turns red after the stop-signal delay
+  (SSD) and the participant should withhold the press. The SSD adapts with a one-up/one-down staircase on
+  the stop trials only (start 250 ms, +50 ms after a successful stop, -50 ms after a failed stop, range
+  50-900 ms), which converges on 50% successful stopping. 16 practice trials with feedback, then 120 test
+  trials (30 stop trials, never more than two in a row). The main outcome is the stop-signal reaction time
+  (SSRT), estimated at the end by the mean method (mean go RT minus mean SSD); go RT and the probability
+  of stopping are also reported.
+measures:
+  - stop-signal reaction time (SSRT, mean method)
+  - go reaction time
+  - "probability of successful stopping (accuracy on stop trials, about 0.5)"
+  - mean stop-signal delay
+duration_min: 6
+input: keyboard
+languages: [en]
+references:
+  - "Logan, G. D., Cowan, W. B., & Davis, K. A. (1984). On the ability to inhibit simple and choice reaction time responses: A model and a method. Journal of Experimental Psychology: Human Perception and Performance, 10, 276-291."
+  - "Verbruggen, F., & Logan, G. D. (2008). Response inhibition in the stop-signal paradigm. Trends in Cognitive Sciences, 12(11), 418-424."
+  - "Verbruggen, F., Aron, A. R., Band, G. P. H., et al. (2019). A consensus guide to capturing the ability to inhibit actions and impulsive behaviors in the stop-signal task. eLife, 8, e46323."
+  - "Logan, G. D. (2015). The point of no return: A fundamental limit on the ability to control thought and action. Quarterly Journal of Experimental Psychology, 68, 833-857."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/stopsignal.html"}
+notes: >
+  The SSD staircase is a variable item (track) at the end of each trial, because only stop trials may move
+  the delay while go and stop trials stay mixed in one random trial list; the built-in staircase loop
+  updates after every trial. The stop signal is visual (the arrow turns red); set the variable stop_tone to
+  true to add a 750 Hz beep. The SSRT here uses the simple mean method; the integration method (recommended
+  by the 2019 consensus guide) can be computed from trials.csv (columns resp.rt, trial_type, delay.trial_ssd).
+  In test runs the virtual participant does not race the stop signal, so its SSRT is not meaningful.

@@ -1,0 +1,82 @@
+name: sart
+description: >
+  Sustained Attention to Response Task. Digits 1-9 appear one at a time in varying sizes, each followed
+  by a mask. Press SPACE for every digit except 3. The pace is fixed (one digit every 1.15 s).
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+measures:
+  - {id: go_rt, label: Go reaction time (hits), role: outcome, column: resp.rt,
+     trials: "$trial_type == 'go' and resp.corr == 1", loop: main, summary: mean, units: s, expect: [0.1, 1.15]}
+  - {id: accuracy, label: Accuracy (go - hit rate; no-go - correct withholding), role: outcome, column: resp.corr,
+     loop: main, summary: proportion}
+  - {id: trial_type, label: Trial type, role: factor, column: trial_type}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: |
+          Digit task
+
+          Digits from 1 to 9 will appear in the middle of the screen, one after another,
+          each followed by a circle with a cross.
+
+          Press SPACE for every digit EXCEPT 3.
+          When you see a 3, do not press.
+
+          Accuracy and speed are equally important. The task takes about 5 minutes.
+          A short practice comes first. Press SPACE to begin.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: |
+          Practice done. The real task now runs without breaks.
+
+          SPACE for every digit, except 3.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    duration: 1.15
+    components:
+      - {id: stim, type: text, text: $digit, height: $digit_size, duration: 0.25, marker: "$f'digit_{trial_type}'"}
+      - {id: ring, type: shape, shape: circle, radius: 55, fill: transparent, line_color: white, line_width: 4,
+         start: 0.25, duration: 0.9}
+      # the diagonal cross of the mask: two thin bars drawn as polygons
+      - {id: bar1, type: shape, shape: polygon, vertices: [[37, 41], [41, 37], [-37, -41], [-41, -37]], fill: white,
+         start: 0.25, duration: 0.9}
+      - {id: bar2, type: shape, shape: polygon, vertices: [[-37, 41], [-41, 37], [37, -41], [41, -37]], fill: white,
+         start: 0.25, duration: 0.9}
+      - {id: resp, type: keyboard, keys: [space], correct: $correct_key, duration: 1.15}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: sart.csv
+    order: random
+    stop_if: $practice.n >= 17
+    children: [trial]
+  - main_intro
+  - loop: main
+    conditions: sart.csv
+    order: random
+    repeats: 5
+    children: [trial]
+  - thanks
