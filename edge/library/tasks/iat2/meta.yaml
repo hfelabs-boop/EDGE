@@ -1,0 +1,32 @@
+id: iat2
+title: Implicit Association Test (IAT)
+category: Social and implicit
+summary: Sort words into paired categories with two keys; faster sorting for one pairing reveals an implicit association.
+description: 'Measures the relative strength of associations between two target categories and two attributes. Default
+  (neutral) version: Flowers vs Insects with Pleasant vs Unpleasant words. Seven blocks (20, 20, 20, 40, 40, 20,
+  40 trials): target practice, attribute practice, the first combined pairing (practice and test), the targets with
+  sides switched, and the opposite combined pairing (practice and test). Keys E (left) and I (right); a wrong key
+  shows a red X and must be corrected. Which pairing comes first alternates with the participant number. Main outcome:
+  the D score (Greenwald, Nosek & Banaji, 2003); also latency and accuracy per pairing.'
+measures:
+- D score (Greenwald et al., 2003)
+- latency per pairing (compatible / incompatible)
+- accuracy of the first key
+- share of responses under 300 ms (exclusion check)
+duration_min: 6
+input: keyboard
+languages:
+- en
+references:
+- 'Greenwald, A. G., McGhee, D. E., & Schwartz, J. L. K. (1998). Measuring individual differences in implicit cognition:
+  The Implicit Association Test. Journal of Personality and Social Psychology, 74(6), 1464–1480.'
+- 'Greenwald, A. G., Nosek, B. A., & Banaji, M. R. (2003). Understanding and using the Implicit Association Test:
+  I. An improved scoring algorithm. Journal of Personality and Social Psychology, 85(2), 197–216.'
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/iat2.html
+notes: 'To measure another association, swap the categories: set the four names under variables (cat_a, cat_b, attr_pos,
+  attr_neg) and put the words in lists/block1-7.csv, keeping the role column (target_a, target_b, positive, negative);
+  or edit the four word lists in tools/library/make_iat2.py and run it. Everything else (keys, corner labels, pairing,
+  D score) follows from the roles. No version about social groups is included. The D score is computed at the end
+  by a small code item; trials over 10 s are dropped and the share of responses under 300 ms is reported for the
+  usual exclusion rule.'

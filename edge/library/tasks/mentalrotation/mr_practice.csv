@@ -1,0 +1,9 @@
+shape,angle,disparity,match,mirror_sign,corr_key
+P,90,90,same,1,f
+P,90,90,mirror,-1,j
+F,180,180,mirror,-1,j
+F,45,45,same,1,f
+L,270,90,same,1,f
+N,135,135,mirror,-1,j
+N,0,0,same,1,f
+L,315,45,mirror,-1,j

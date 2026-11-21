@@ -64,6 +64,7 @@ edge/
   updater.py        `edge update`: git clones and installed copies; `edge.__version__` names the exact commit
   help.py           docs topics, search, tutorials, generated reference pages (`edge help`, `edge docs build`)
   tutorials/        interactive tutorial definitions (YAML; also rendered into docs/TUTORIALS.md)
+  library/          the task library: tasks/<id>/ holds a ready-made classic paradigm (experiment, trial lists, meta.yaml)
   assets/           the EDGE icon in every size the desktop shortcuts need
   assistant/        the natural-language assistant: providers (Claude, OpenAI-compatible, Ollama, LM Studio over
                     urllib), settings (user config folder, 0600), attachments and their previews, the agent loop

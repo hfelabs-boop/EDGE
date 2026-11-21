@@ -1,0 +1,21 @@
+item,practice,subject_version,object_version,question,answer
+1,0,The lawyer who called the banker left the office early.,The lawyer who the banker called left the office early.,Did the lawyer leave early?,y
+2,0,The pilot who greeted the mechanic boarded the plane at noon.,The pilot who the mechanic greeted boarded the plane at noon.,Did the mechanic board the plane?,n
+3,0,The teacher who praised the student smiled at the whole class.,The teacher who the student praised smiled at the whole class.,Did the teacher smile at the class?,y
+4,0,The doctor who visited the nurse ordered a new test.,The doctor who the nurse visited ordered a new test.,Did the nurse order a new test?,n
+5,0,The singer who admired the dancer won the first prize.,The singer who the dancer admired won the first prize.,Did the singer win a prize?,y
+6,0,The farmer who helped the neighbour sold the old tractor.,The farmer who the neighbour helped sold the old tractor.,Did the neighbour sell the tractor?,n
+7,0,The chef who hired the waiter opened a second restaurant.,The chef who the waiter hired opened a second restaurant.,Did the chef open a restaurant?,y
+8,0,The coach who thanked the player missed the morning bus.,The coach who the player thanked missed the morning bus.,Did the player miss the bus?,n
+9,0,The author who met the editor finished the book in May.,The author who the editor met finished the book in May.,Did the author finish the book?,y
+10,0,The guard who stopped the driver closed the main gate.,The guard who the driver stopped closed the main gate.,Did the driver close the gate?,n
+11,0,The artist who painted the model moved to a small village.,The artist who the model painted moved to a small village.,Did the artist move to a village?,y
+12,0,The clerk who phoned the manager lost the important letter.,The clerk who the manager phoned lost the important letter.,Did the manager lose the letter?,n
+13,0,The nurse who trusted the surgeon worked through the night.,The nurse who the surgeon trusted worked through the night.,Did the nurse work through the night?,y
+14,0,The student who interviewed the professor forgot the meeting time.,The student who the professor interviewed forgot the meeting time.,Did the professor forget the meeting?,n
+15,0,The baker who supplied the grocer raised the price of bread.,The baker who the grocer supplied raised the price of bread.,Did the baker raise the price?,y
+16,0,The captain who warned the sailor checked the ropes twice.,The captain who the sailor warned checked the ropes twice.,Did the sailor check the ropes?,n
+17,0,The actor who imitated the comedian told a funny story.,The actor who the comedian imitated told a funny story.,Did the actor tell a story?,y
+18,0,The tenant who sued the landlord painted the front door.,The tenant who the landlord sued painted the front door.,Did the landlord paint the door?,n
+19,0,The scientist who advised the engineer built a faster engine.,The scientist who the engineer advised built a faster engine.,Did the scientist build an engine?,y
+20,0,The mayor who criticised the journalist resigned last week.,The mayor who the journalist criticised resigned last week.,Did the journalist resign?,n

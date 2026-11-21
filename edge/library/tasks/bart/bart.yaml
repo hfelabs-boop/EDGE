@@ -1,0 +1,155 @@
+name: bart
+description: >
+  Balloon Analogue Risk Task (after Lejuez et al., 2002). Pump up 30 balloons one pump at a time; each pump
+  adds money to a temporary bank, but a balloon can burst and then that balloon's money is lost. Collect to move
+  the money to the permanent total. Each balloon bursts at a point drawn at random between 1 and 128 pumps (the
+  same as a burst chance of 1/128 on the first pump, 1/127 on the second, and so on). Main outcome: the adjusted
+  number of pumps (mean pumps on balloons that did not burst).
+
+settings:
+  window: {size: [1280, 720], background: "#1e1e24", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  max_pumps: 128          # a balloon bursts at the latest on this pump
+  cents_per_pump: 5       # money per pump, in cents
+  total: 0                # permanent bank (cents)
+  pumps: 0                # pumps on the current balloon
+  burst_at: 128           # pump on which the current balloon bursts (drawn anew for every balloon)
+  popped: false
+  collected: false
+
+measures:
+  - {id: adjusted_pumps, label: Adjusted pumps (balloons that did not burst), role: outcome, column: result.balloon_pumps,
+     trials: $result.exploded == 0, loop: balloons, summary: mean, expect: [0, 128]}
+  - {id: all_pumps, label: Pumps on all balloons, role: outcome, column: result.balloon_pumps, loop: balloons, summary: mean}
+  - {id: explosions, label: Balloons that burst, role: outcome, column: result.exploded, loop: balloons, summary: sum}
+  - {id: earnings, label: Total earned (cents), role: outcome, column: result.total_cents, loop: balloons, summary: last}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: |
+          In this game you inflate balloons to earn money.
+
+          Every pump (SPACE) puts 5 cents into the balloon's bank.
+          When you collect (ENTER), that money goes into your total and the next balloon comes.
+
+          But balloons burst! If a balloon bursts before you collect, the money in it is lost.
+          Some balloons burst early, others hold out much longer: you cannot know in advance.
+
+          There are 30 balloons. Try to earn as much as you can.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  new_balloon:
+    duration: 0.6
+    components:
+      # draw this balloon's burst point (uniform over 1..max_pumps) and reset the per-balloon state
+      - id: setup
+        type: variable
+        set: {burst_at: "$random.randint(1, max_pumps)", pumps: 0, popped: false, collected: false}
+      - id: next_text
+        type: text
+        height: 28
+        text: "$f'Balloon {balloons.n + 1} of {balloons.total}'"
+
+  pump:
+    components:
+      - id: string
+        type: shape
+        shape: rect
+        size: [3, 240]
+        pos: [0, -140]
+        fill: "#bbbbbb"
+      - id: balloon
+        type: shape
+        shape: ellipse
+        size: "$[60 + pumps * 2.6, 72 + pumps * 3.0]"
+        pos: [0, -20]
+        fill: "#d8443c"
+        line_color: "#ffb4a8"
+        line_width: 2
+      - {id: info_balloon, type: text, pos: [440, 260], height: 24, text: "$f'This balloon: {pumps * cents_per_pump / 100:.2f}'"}
+      - {id: info_total, type: text, pos: [440, 220], height: 24, text: "$f'Total: {total / 100:.2f}'"}
+      - {id: info_count, type: text, pos: [440, 180], height: 20, color: "#aaaaaa", text: "$f'Balloon {balloons.n + 1} of {balloons.total}'"}
+      - id: keys_help
+        type: text
+        pos: [0, -310]
+        height: 20
+        color: "#aaaaaa"
+        text: "SPACE = pump        ENTER = collect"
+      - id: resp
+        type: keyboard
+        keys: [space, return]
+        end_routine: true
+      # after the key: count the pump, or note the collection, then see whether the balloon burst
+      - id: update
+        type: variable
+        when: end
+        set:
+          pumps: "$pumps + (1 if resp.keys == 'space' else 0)"
+          collected: "$resp.keys == 'return'"
+          popped: "$resp.keys == 'space' and pumps >= burst_at"
+
+  outcome:
+    duration: 1.5
+    components:
+      - id: result
+        type: variable
+        set:
+          balloon_pumps: $pumps
+          exploded: "$1 if popped else 0"
+          earned_cents: "$0 if popped else pumps * cents_per_pump"
+          total_cents: "$total + (0 if popped else pumps * cents_per_pump)"
+          burst_point: $burst_at
+      - id: bank
+        type: variable
+        set: {total: $result.total_cents}
+      - id: burst
+        type: shape
+        if: $popped
+        shape: polygon
+        pos: [0, -20]
+        fill: "#ffcc33"
+        vertices: [[0, 120], [30, 40], [110, 60], [50, 0], [100, -80], [20, -40], [0, -120], [-20, -40],
+                   [-100, -80], [-50, 0], [-110, 60], [-30, 40]]
+      - id: message
+        type: text
+        height: 34
+        pos: [0, 200]
+        text: "$'POP! The money in this balloon is lost.' if popped else f'You collected {result.earned_cents / 100:.2f}'"
+        color: "$'#ff7766' if popped else '#77dd77'"
+      - id: total_text
+        type: text
+        height: 24
+        pos: [0, -300]
+        text: "$f'Total: {total / 100:.2f}'"
+
+  thanks:
+    components:
+      - id: bye
+        type: text
+        height: 30
+        text: "$f'Finished! You earned {total / 100:.2f} in total.\\n\\nThank you. Press SPACE to end.'"
+      - {id: done, type: keyboard, keys: [space], end_routine: true, duration: 10}
+
+flow:
+  - instructions
+  - loop: balloons
+    conditions: [{balloon_size: standard}]
+    repeats: 30
+    children:
+      - new_balloon
+      - loop: pumps_loop
+        conditions: [{step: pump}]
+        repeats: $max_pumps
+        stop_if: $popped or collected
+        children: [pump]
+      - outcome
+  - thanks

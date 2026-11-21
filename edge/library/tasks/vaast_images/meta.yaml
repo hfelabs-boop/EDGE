@@ -1,0 +1,30 @@
+id: vaast_images
+title: Visual approach/avoidance task (VAAST), pictures
+category: Social and implicit
+summary: Walk towards or away from pictures in a virtual corridor; faster approach to smiling faces shows an approach
+  tendency.
+description: 'Measures spontaneous approach and avoidance tendencies with visual whole-body movement, with pictures.
+  A corridor in perspective fills the screen and a picture (a simple drawn face, smiling or frowning) appears in
+  the middle; Y moves you forward (the scene and the picture grow), N moves you backward (they shrink). In one block
+  smiling faces are approached and frowning ones avoided, in the other the reverse; the order alternates with the
+  participant number. Each block: 4 practice and 32 test trials (16 pictures twice). Main outcome: the compatibility
+  effect in response times (category × movement).'
+measures:
+- RT by picture category × movement (approach / avoid)
+- accuracy
+duration_min: 4
+input: keyboard
+languages:
+- en
+variant_of: vaast_words
+references:
+- 'Rougier, M., Muller, D., Ric, F., Alexopoulos, T., Batailler, C., Smeding, A., & Aubé, B. (2018). A new look
+  at sensorimotor aspects in approach/avoidance tendencies: The role of visual whole-body movement information.
+  Journal of Experimental Social Psychology, 76, 42–53.'
+- 'Aubé, B., Rougier, M., Muller, D., Ric, F., & Yzerbyt, V. (2019). The online-VAAST: A short and online tool to
+  measure spontaneous approach and avoidance tendencies. Acta Psychologica, 201, 102942.'
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/vaast_images.html
+notes: 'The 20 cartoon faces in stimuli/ were drawn by tools/library/make_vaast_images.py (standard library only).
+  To use your own pictures, put them in stimuli/ and list them in images.csv and practice_images.csv (column valence:
+  smiling/frowning, or rename the categories in block_intro). The online VAAST''s start key (H) is left out.'

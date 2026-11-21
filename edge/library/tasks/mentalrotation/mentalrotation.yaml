@@ -1,0 +1,114 @@
+name: mentalrotation
+description: >
+  Mental rotation with flat shapes (after Shepard & Metzler, 1971; two-dimensional version in the spirit of
+  Collins & Kimura, 1997, and Cooper & Shepard). Two shapes made of five squares are shown side by side: the right
+  one is the left one turned by 0-315 degrees (in steps of 45), either as it is or mirror-reversed. Press F if
+  they are the same shape, J if one is the mirror image of the other. 4 shapes x 8 angles x same/mirror = 64
+  trials after 8 practice trials with feedback. Main outcome: response time (correct trials) rising with the
+  angular difference (0, 45, 90, 135, 180 degrees); accuracy.
+
+settings:
+  window: {size: [1280, 720], background: "#202020", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  cell: 42                    # size of one square of a shape (px)
+  # each shape: the centres of its five squares, in squares (x to the right, y up); all four are chiral, so a
+  # mirror image can never be turned into the original
+  shapes:
+    F: [[0, 1], [1, 1], [-1, 0], [0, 0], [0, -1]]
+    L: [[-0.5, 1.5], [-0.5, 0.5], [-0.5, -0.5], [-0.5, -1.5], [0.5, -1.5]]
+    N: [[-0.5, 1.5], [-0.5, 0.5], [-0.5, -0.5], [0.5, -0.5], [0.5, -1.5]]
+    P: [[-0.5, 1], [0.5, 1], [-0.5, 0], [0.5, 0], [-0.5, -1]]
+  corners: [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
+  ref: []
+  probe: []
+
+measures:
+  - {id: rt, label: Response time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.3, 7.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: disparity, label: Angular difference (degrees), role: factor, column: disparity}
+  - {id: match, label: Same or mirror image, role: factor, column: match}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 25
+        wrap_width: 1050
+        text: |
+          You will see two shapes side by side. The right shape is always turned around
+          compared with the left one. Sometimes it is the very same shape, sometimes it is
+          its mirror image (flipped over).
+
+          Press F if the shapes are the SAME (only turned).
+          Press J if one is the MIRROR image of the other.
+
+          Answer as quickly as you can without making mistakes. First 8 practice trials.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      # corner points of the five squares: the reference as it is, the probe mirrored (mirror_sign = -1)
+      # and turned counter-clockwise by 'angle' degrees
+      - id: geo
+        type: variable
+        save: false
+        set:
+          ref: "$[[[(c[0] + d[0]) * cell, (c[1] + d[1]) * cell] for d in corners] for c in shapes[shape]]"
+          probe: "$[[[mirror_sign * (c[0] + d[0]) * cell * math.cos(math.radians(angle)) - (c[1] + d[1]) * cell * math.sin(math.radians(angle)), mirror_sign * (c[0] + d[0]) * cell * math.sin(math.radians(angle)) + (c[1] + d[1]) * cell * math.cos(math.radians(angle))] for d in corners] for c in shapes[shape]]"
+      - {id: fix, type: fixation, duration: 0.5}
+      - {id: ref1, type: shape, shape: polygon, vertices: "$ref[0]", pos: [-260, 0], fill: "#5fa8e8", start: 0.5}
+      - {id: ref2, type: shape, shape: polygon, vertices: "$ref[1]", pos: [-260, 0], fill: "#5fa8e8", start: 0.5}
+      - {id: ref3, type: shape, shape: polygon, vertices: "$ref[2]", pos: [-260, 0], fill: "#5fa8e8", start: 0.5}
+      - {id: ref4, type: shape, shape: polygon, vertices: "$ref[3]", pos: [-260, 0], fill: "#5fa8e8", start: 0.5}
+      - {id: ref5, type: shape, shape: polygon, vertices: "$ref[4]", pos: [-260, 0], fill: "#5fa8e8", start: 0.5}
+      - {id: probe1, type: shape, shape: polygon, vertices: "$probe[0]", pos: [260, 0], fill: "#5fa8e8", start: 0.5}
+      - {id: probe2, type: shape, shape: polygon, vertices: "$probe[1]", pos: [260, 0], fill: "#5fa8e8", start: 0.5}
+      - {id: probe3, type: shape, shape: polygon, vertices: "$probe[2]", pos: [260, 0], fill: "#5fa8e8", start: 0.5}
+      - {id: probe4, type: shape, shape: polygon, vertices: "$probe[3]", pos: [260, 0], fill: "#5fa8e8", start: 0.5}
+      - {id: probe5, type: shape, shape: polygon, vertices: "$probe[4]", pos: [260, 0], fill: "#5fa8e8", start: 0.5}
+      - {id: keymap, type: text, text: "F = same          J = mirror image", color: "#999999", height: 20, pos: [0, -300]}
+      - {id: resp, type: keyboard, keys: [f, j], correct: $corr_key, start: 0.5, duration: 7.5, end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 34
+        text: "$'Correct' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#66dd66' if resp.corr else '#ff6655'"
+
+  iti:
+    duration: 0.4
+    components:
+      - {id: blank, type: wait}
+
+  ready:
+    components:
+      - {id: ready_text, type: text, height: 26, text: "Practice done. Now the real test begins, without feedback.\n\nPress SPACE to start."}
+      - {id: ready_key, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: mr_practice.csv
+    order: random
+    children: [trial, feedback]
+  - ready
+  - loop: trials
+    conditions: mr_trials.csv
+    order: random
+    max_repeat: {match: 4, shape: 2}
+    children: [trial, iti]
+  - thanks

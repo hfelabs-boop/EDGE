@@ -1,0 +1,122 @@
+name: igt
+description: >
+  Iowa Gambling Task (after Bechara, Damasio, Damasio & Anderson, 1994). 100 card choices from four decks,
+  starting with a loan of 2000. Decks A and B pay 100 per card but lose 1250 every 10 cards (net -250 per 10
+  cards); decks C and D pay 50 per card but lose 250 every 10 cards (net +250 per 10 cards). A has frequent
+  small losses, B one large loss per 10 cards; C frequent small losses, D one loss per 10 cards. Main outcome:
+  the net score (good choices C+D minus bad choices A+B) in each block of 20 choices.
+
+settings:
+  window: {size: [1280, 720], background: "#20402c", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  total: 2000                                   # the loan everyone starts with
+  gains: {A: 100, B: 100, C: 50, D: 50}         # paid on every card of the deck
+  # loss on each of the 40 cards of a deck (per 10 cards: A 5 losses = 1250, B 1 loss of 1250,
+  # C 5 losses = 250, D 1 loss of 250). After card 40 a deck starts again from its first card.
+  losses:
+    A: [0, 0, 350, 0, 250, 0, 300, 0, 150, 200, 0, 150, 200, 0, 300, 0, 0, 350, 0, 250,
+        0, 0, 250, 150, 0, 200, 0, 350, 0, 300, 0, 0, 200, 250, 350, 150, 0, 0, 300, 0]
+    B: [0, 0, 0, 1250, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1250,
+        1250, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1250, 0, 0, 0]
+    C: [0, 0, 0, 50, 25, 50, 0, 75, 50, 0, 0, 50, 0, 50, 25, 0, 0, 0, 75, 50,
+        0, 25, 75, 50, 50, 50, 0, 0, 0, 0, 0, 50, 0, 75, 0, 0, 50, 0, 25, 50]
+    D: [0, 0, 0, 0, 0, 0, 0, 0, 250, 0, 0, 0, 0, 0, 0, 0, 0, 0, 250, 0,
+        250, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 250, 0, 0]
+  drawn: {A: 0, B: 0, C: 0, D: 0}               # cards taken from each deck so far
+
+measures:
+  - {id: net_score, label: Net score (C+D minus A+B), role: outcome, column: card.net_choice, loop: trials,
+     summary: sum, expect: [-100, 100]}
+  - {id: good_choices, label: Proportion of good-deck choices, role: outcome, column: card.good, loop: trials,
+     summary: proportion}
+  - {id: final_money, label: Money at the end, role: outcome, column: card.total, loop: trials, summary: last}
+  - {id: choice_rt, label: Choice time, role: outcome, column: choice.rt, loop: trials, summary: median, units: s,
+     expect: [0.2, 20]}
+  - {id: block, label: Block of 20 choices, role: factor, column: block}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 24
+        wrap_width: 1050
+        text: |
+          On the next screen you see four decks of cards: A, B, C and D.
+
+          Click a deck to take its top card. Every card wins you some money,
+          but some cards also take money away.
+
+          Some decks are better than others. You may switch between decks as often as you like.
+          Try to end with as much money as possible.
+
+          You start with a loan of 2000.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  choose:
+    components:
+      - {id: money, type: text, pos: [0, 280], height: 30, text: "$f'Money: {total}'"}
+      - {id: deck_A, type: shape, shape: rect, size: [170, 250], pos: [-390, -20], fill: "#2f5ea8", line_color: white, line_width: 3}
+      - {id: deck_B, type: shape, shape: rect, size: [170, 250], pos: [-130, -20], fill: "#2f5ea8", line_color: white, line_width: 3}
+      - {id: deck_C, type: shape, shape: rect, size: [170, 250], pos: [130, -20], fill: "#2f5ea8", line_color: white, line_width: 3}
+      - {id: deck_D, type: shape, shape: rect, size: [170, 250], pos: [390, -20], fill: "#2f5ea8", line_color: white, line_width: 3}
+      - {id: label_A, type: text, text: A, pos: [-390, -20], height: 60, bold: true}
+      - {id: label_B, type: text, text: B, pos: [-130, -20], height: 60, bold: true}
+      - {id: label_C, type: text, text: C, pos: [130, -20], height: 60, bold: true}
+      - {id: label_D, type: text, text: D, pos: [390, -20], height: 60, bold: true}
+      - {id: hint, type: text, pos: [0, -260], height: 20, color: "#bbccbb", text: "Click a deck"}
+      - {id: choice, type: mouse, clickable: [deck_A, deck_B, deck_C, deck_D], end_routine: true}
+      # the payoff of the chosen card: the deck's gain, and the loss on the deck's next card
+      - id: card
+        type: variable
+        when: end
+        set:
+          deck: "$choice.clicked[-1] if choice.clicked else ''"
+          win: "$gains[card.deck] if card.deck else 0"
+          loss: "$losses[card.deck][drawn[card.deck] % 40] if card.deck else 0"
+          good: "$1 if card.deck in ('C', 'D') else 0"
+          net_choice: "$1 if card.deck in ('C', 'D') else -1"
+          total: "$total + card.win - card.loss"
+      - id: tally
+        type: variable
+        when: end
+        set:
+          total: $card.total
+          drawn: "${**drawn, card.deck: drawn[card.deck] + 1} if card.deck else drawn"
+
+  feedback:
+    duration: 1.6
+    components:
+      - id: won
+        type: text
+        pos: [0, 60]
+        height: 40
+        color: "#88ee88"
+        text: "$f'Deck {card.deck}:  you won {card.win}'"
+      - id: lost
+        type: text
+        pos: [0, -10]
+        height: 40
+        color: "#ff8877"
+        text: "$f'but you lost {card.loss}' if card.loss else ''"
+      - {id: money_now, type: text, pos: [0, -120], height: 28, text: "$f'Money: {total}'"}
+
+  thanks:
+    components:
+      - id: bye
+        type: text
+        height: 30
+        text: "$f'The game is over. You ended with {total}.\\n\\nThank you! Press SPACE to finish.'"
+      - {id: done, type: keyboard, keys: [space], end_routine: true, duration: 10}
+
+flow:
+  - instructions
+  - loop: trials
+    conditions: igt_trials.csv
+    order: sequential
+    children: [choose, feedback]
+  - thanks

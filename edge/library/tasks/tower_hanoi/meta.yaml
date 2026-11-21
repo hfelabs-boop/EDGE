@@ -1,0 +1,29 @@
+id: tower_hanoi
+title: Tower of Hanoi
+category: Problem solving
+summary: Move a tower of disks to another peg, one disk at a time, never a larger disk on a smaller one.
+description: 'Measures planning and problem solving. Click a peg to lift its top disk, then click the peg where
+  it should go; illegal moves (a larger disk on a smaller one) are refused and counted. A 2-disk practice problem,
+  then three test problems: 3 disks (fewest moves 7), 4 disks to the right peg and 4 disks to the middle peg (15
+  each). Main outcomes per problem: moves, excess moves over the minimum 2^n − 1, rule violations, solved or not,
+  and solution time.'
+measures:
+- moves and excess moves over the minimum
+- rule violations
+- problems solved
+- solution time
+duration_min: 7
+input: mouse
+languages:
+- en
+references:
+- Byrnes, M. M., & Spitz, H. H. (1979). Developmental progression of performance on the Tower of Hanoi problem.
+  Bulletin of the Psychonomic Society, 14(5), 379–381.
+- Davis, H. P., & Klebe, K. J. (2001). A longitudinal study of the performance of the elderly and the young on the
+  Tower of Hanoi puzzle and Rey recall. Brain and Cognition, 46(1–2), 95–99.
+- Simon, H. A. (1975). The functional equivalence of problem solving skills. Cognitive Psychology, 7(2), 268–288.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/tower_hanoi.html
+notes: The moves are handled by two short code items (where the disks are drawn; what a click does). Every click
+  is a row of the data; each problem ends after 300 clicks if unsolved. Add rows to hanoi_problems.csv (n_disks
+  1-4, start_peg, goal_peg 0-2, min_moves) for other problems.

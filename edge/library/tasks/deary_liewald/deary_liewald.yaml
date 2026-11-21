@@ -1,0 +1,116 @@
+name: deary_liewald
+description: >
+  Deary-Liewald reaction time task (after Deary, Liewald & Nissan, 2011). Simple reaction time: a cross appears in a
+  single box after a random wait of 1-3 s; press SPACE as fast as possible (8 practice, 20 test trials). Choice
+  reaction time: four boxes in a row; the cross appears in one of them and the key under that box must be pressed
+  (Z, X, N, M from left to right; 8 practice, 40 test trials, each box 10 times in random order). Main outcomes: mean
+  and SD of simple RT, mean and SD of choice RT on correct trials, choice accuracy.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  delay: 2.0                    # wait before the cross (s), drawn anew on every trial
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: "$phase == 'test' and resp.corr == 1",
+     summary: mean, units: s, expect: [0.15, 1.5]}
+  - {id: rt_sd, label: SD of reaction time (correct trials), role: outcome, column: resp.rt,
+     trials: "$phase == 'test' and resp.corr == 1", summary: sd, units: s}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, trials: "$phase == 'test'", summary: proportion}
+  - {id: task, label: Simple or choice reaction time, role: factor, column: task}
+
+routines:
+  simple_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1000
+        text: |
+          Part 1: simple reaction time
+
+          Rest a finger on the SPACE bar. A box is shown in the middle of the screen.
+          Every now and then a cross appears in the box: press SPACE as fast as you can.
+
+          First 8 practice trials. Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  choice_intro:
+    components:
+      - id: text
+        type: text
+        height: 26
+        wrap_width: 1050
+        text: |
+          Part 2: choice reaction time
+
+          Now there are four boxes in a row. Put your fingers on Z, X, N and M
+          (left middle finger on Z, left index on X, right index on N, right middle finger on M).
+
+          When a cross appears in a box, press the key that belongs to that box, as fast as you can:
+          Z = first box   X = second   N = third   M = fourth
+
+          First 8 practice trials. Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - id: wait_time
+        type: variable
+        set: {delay: "$round(random.uniform(1.0, 3.0), 3)"}
+      - {id: box_c, type: shape, if: "$task == 'simple'", shape: rect, size: [130, 130], pos: [0, 0], fill: transparent, line_color: white, line_width: 4}
+      - {id: box_1, type: shape, if: "$task == 'choice'", shape: rect, size: [130, 130], pos: [-330, 0], fill: transparent, line_color: white, line_width: 4}
+      - {id: box_2, type: shape, if: "$task == 'choice'", shape: rect, size: [130, 130], pos: [-110, 0], fill: transparent, line_color: white, line_width: 4}
+      - {id: box_3, type: shape, if: "$task == 'choice'", shape: rect, size: [130, 130], pos: [110, 0], fill: transparent, line_color: white, line_width: 4}
+      - {id: box_4, type: shape, if: "$task == 'choice'", shape: rect, size: [130, 130], pos: [330, 0], fill: transparent, line_color: white, line_width: 4}
+      - {id: key_labels, type: text, if: "$task == 'choice'", text: "Z                    X                    N                    M", pos: [0, -110], height: 24, color: "#888888"}
+      - {id: cross, type: text, text: X, height: 90, pos: "$[xpos, 0]", start: $delay}
+      - {id: resp, type: keyboard, keys: "$['space'] if task == 'simple' else ['z', 'x', 'n', 'm']", correct: $corr_key,
+         start: $delay, duration: 2.0, end_routine: true}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        height: 32
+        text: "$'' if resp.corr else ('Too slow' if resp.keys is None else 'Wrong key')"
+        color: "#ff6655"
+
+  ready:
+    components:
+      - {id: ready_text, type: text, height: 26, text: "Practice done. Now the real trials begin.\n\nPress SPACE to start."}
+      - {id: ready_key, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 30, text: "Finished. Thank you!"}
+
+flow:
+  - simple_intro
+  - loop: simple_practice
+    conditions: [{task: simple, phase: practice, box: 0, xpos: 0, corr_key: space}]
+    repeats: 8
+    children: [trial, feedback]
+  - ready
+  - loop: simple_test
+    conditions: [{task: simple, phase: test, box: 0, xpos: 0, corr_key: space}]
+    repeats: 20
+    children: [trial]
+  - choice_intro
+  - loop: choice_practice
+    conditions: choice_practice.csv
+    order: random
+    repeats: 2
+    children: [trial, feedback]
+  - ready
+  - loop: choice_test
+    conditions: choice_test.csv
+    order: random
+    repeats: 10
+    max_repeat: {box: 3}
+    children: [trial]
+  - thanks
