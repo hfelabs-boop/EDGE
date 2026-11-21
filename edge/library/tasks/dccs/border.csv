@@ -1,0 +1,13 @@
+phase,hint,card,shape,colour,colour_rgb,border,rule,correct_card
+border,Border game,red_triangle,triangle,red,#e8312f,1,colour,card_right
+border,Border game,blue_circle,circle,blue,#3d6df2,1,colour,card_left
+border,Border game,red_triangle,triangle,red,#e8312f,0,shape,card_left
+border,Border game,blue_circle,circle,blue,#3d6df2,0,shape,card_right
+border,Border game,red_triangle,triangle,red,#e8312f,1,colour,card_right
+border,Border game,blue_circle,circle,blue,#3d6df2,1,colour,card_left
+border,Border game,red_triangle,triangle,red,#e8312f,0,shape,card_left
+border,Border game,blue_circle,circle,blue,#3d6df2,0,shape,card_right
+border,Border game,red_triangle,triangle,red,#e8312f,1,colour,card_right
+border,Border game,blue_circle,circle,blue,#3d6df2,1,colour,card_left
+border,Border game,red_triangle,triangle,red,#e8312f,0,shape,card_left
+border,Border game,blue_circle,circle,blue,#3d6df2,0,shape,card_right

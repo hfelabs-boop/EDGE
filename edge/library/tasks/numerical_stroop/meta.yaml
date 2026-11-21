@@ -1,0 +1,28 @@
+id: numerical_stroop
+title: Numerical Stroop task (size congruity effect)
+category: Inhibition and conflict
+summary: Pick the numerically larger of two digits while ignoring their print size.
+description: >
+  Measures interference between a number's value and its physical size. After a 500 ms fixation cross two
+  digits appear side by side and the participant presses A (left) or L (right) for the digit with the
+  larger value, within 2 seconds. On congruent trials the larger value is also printed larger, on
+  incongruent trials it is printed smaller, on neutral trials both have the same size. Digit pairs differ
+  by 1 or by 5 (8 pairs), and the larger value is equally often left and right: 48 combinations, shown
+  twice in random order (96 test trials) after 8 practice trials with feedback. Main outcome: the size
+  congruity effect (incongruent minus congruent RT; facilitation and interference relative to neutral),
+  plus the numerical distance effect.
+measures:
+  - "Median RT on correct trials by size congruity (congruent, neutral, incongruent)"
+  - "Accuracy by size congruity"
+  - "Numerical distance effect (distance 1 vs 5)"
+duration_min: 5
+input: keyboard
+languages: [en]
+references:
+  - "Henik, A., & Tzelgov, J. (1982). Is three greater than five: The relation between physical and semantic size in comparison tasks. Memory & Cognition, 10, 389–395."
+  - "Besner, D., & Coltheart, M. (1979). Ideographic and alphabetic processing in skilled reading of English. Neuropsychologia, 17, 467–472."
+  - "Reike, D., & Schwarz, W. (2017). Exploring the origin of the number-size congruency effect: Sensitivity or response bias? Attention, Perception, & Psychophysics, 79, 383–388."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/numerical_stroop.html"}
+notes: >
+  The digit print size is the variable digit_size (px); trial lists are made by
+  tools/library/make_numerical_stroop.py.

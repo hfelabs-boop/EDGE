@@ -1,0 +1,5 @@
+colour,colour_rgb,side,x,correct_key,condition
+blue,#3d6df2,left,-350,a,congruent
+blue,#3d6df2,right,350,a,incongruent
+orange,#f28c28,left,-350,l,incongruent
+orange,#f28c28,right,350,l,congruent

@@ -1,0 +1,32 @@
+id: dccs
+title: Dimensional Change Card Sort (DCCS)
+category: Cognitive control
+summary: Sort cards first by colour, then by shape, then by a border rule; measures the ability to switch rules.
+description: >
+  A measure of cognitive flexibility developed for young children (from about 3 years) that also works
+  with older children and adults. Two target cards stay on the screen, a blue triangle (left) and a red
+  circle (right). Each test card (a red triangle or a blue circle) matches one target by colour and the
+  other by shape, and is sorted by tapping or clicking the target it belongs to. After two demonstration
+  cards with feedback, the participant sorts 6 cards by colour (pre-switch), then 6 cards by shape
+  (post-switch), then 12 cards in the border game: cards with a black border by colour, cards without by
+  shape. There is no feedback after the demonstration. Main outcome: the number (proportion) of correct
+  sorts in the post-switch and border phases; children who perseverate keep sorting by the first rule
+  after the switch. Sorting times are recorded as well.
+measures:
+  - "Correct sorts per phase (post-switch: 5 of 6 or more = passed)"
+  - "Median sorting time on correct sorts per phase"
+duration_min: 4
+input: touch
+languages: [en]
+references:
+  - "Zelazo, P. D. (2006). The Dimensional Change Card Sort (DCCS): A method of assessing executive function in children. Nature Protocols, 1, 297–301."
+  - "Doebel, S., & Zelazo, P. D. (2015). A meta-analysis of the Dimensional Change Card Sort: Implications for developmental theories and the measurement of executive function in children. Developmental Review, 38, 241–268."
+  - "Doebel, S. (2020). Rethinking executive function and its development. Perspectives on Psychological Science, 15, 942–956."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/dccs.html"}
+notes: >
+  Simple geometric shapes stand in for the pictures of the original cards. In the standard procedure only
+  children who pass the post-switch phase go on to the border phase; here everyone plays all three (remove
+  intro_border and the border_game trial list from the flow, or put them in a flow branch on
+  post_switch.n_correct, to change that).
+  An experimenter usually reads the rules aloud for young children. Trial lists are made by
+  tools/library/make_dccs.py. Works with a mouse too.

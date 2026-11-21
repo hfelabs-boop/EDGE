@@ -1,0 +1,110 @@
+name: stroop_de
+description: >
+  Stroop-Aufgabe (Farbe-Wort-Interferenz) auf Deutsch. German colour-word Stroop task: the words ROT,
+  GRÜN, BLAU and GELB appear in coloured ink and the participant presses the key for the INK colour
+  (D, F, J, K). Half congruent, half incongruent; practice with feedback, then 96 test trials.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+measures:
+  - {id: rt, label: Reaktionszeit (richtige Antworten), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.25, 2.0]}
+  - {id: accuracy, label: Anteil richtiger Antworten, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: condition, label: Kongruent oder inkongruent, role: factor, column: condition}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          FARBWÖRTER
+
+          Jedes Wort ist in einer Farbe gedruckt.
+          Drücken Sie die Taste für die FARBE DER SCHRIFT, nicht für das, was das Wort bedeutet.
+
+          D = rot     F = grün     J = blau     K = gelb
+
+          Beispiel: Das Wort BLAU in roter Schrift -> Taste D.
+          Antworten Sie so schnell wie möglich, aber ohne Fehler.
+
+          Zuerst kommt eine kurze Übung. Weiter mit der LEERTASTE.
+        height: 26
+        wrap_width: 1000
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: fix, type: fixation, duration: 0.5, size: 30}
+      - id: stimulus
+        type: text
+        text: $word
+        color: $ink_rgb
+        height: 80
+        bold: true
+        start: 0.5
+        marker: $f"word_{condition}"
+      - id: reminder
+        type: text
+        text: "D = rot     F = grün     J = blau     K = gelb"
+        color: "#888888"
+        height: 20
+        pos: [0, -300]
+      - id: resp
+        type: keyboard
+        keys: [d, f, j, k]
+        start: 0.5
+        duration: 2.0
+        correct: $correct_key
+        end_routine: true
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Richtig' if resp.corr == 1 else ('Zu langsam' if resp.keys is None else 'Falsche Taste')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 40
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: |
+          Die Übung ist beendet.
+
+          Jetzt beginnt der eigentliche Test (etwa 4 Minuten).
+          Eine Rückmeldung erscheint nur noch nach einem Fehler.
+
+          Weiter mit der LEERTASTE.
+        height: 28
+        wrap_width: 1000
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - id: bye
+        type: text
+        text: "Vielen Dank! Diese Aufgabe ist beendet."
+        height: 34
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    children: [trial, feedback]
+  - practice_done
+  - loop: trials
+    conditions: stroop.csv
+    order: random
+    repeats: 4
+    max_repeat: {ink: 3}
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - thanks

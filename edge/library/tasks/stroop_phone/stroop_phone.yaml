@@ -1,0 +1,108 @@
+name: stroop_phone
+description: >
+  Colour-word Stroop task for phones and tablets (portrait screen). The participant taps one of four
+  coloured buttons for the INK colour of the word, ignoring what the word says. Half congruent, half
+  incongruent; practice with feedback, then 96 test trials. Works with a mouse too.
+
+settings:
+  window: {size: [540, 960], background: "#000000", units: height}
+  participant: {participant: "001", session: "1"}
+
+measures:
+  - {id: rt, label: Reaction time (correct taps), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.3, 2.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: condition, label: Congruent or incongruent, role: factor, column: condition}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          COLOUR WORDS
+
+          A colour word will appear, printed in a coloured ink.
+
+          Tap the button with the colour of the INK. Ignore what the word says.
+
+          Be as fast as you can without making mistakes.
+        height: 0.03
+        wrap_width: 0.5
+        pos: [0, 0.12]
+      - {id: start_btn, type: shape, shape: rect, size: [0.3, 0.09], fill: "#3a3a3a", line_color: "#aaaaaa", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start practice", height: 0.03, pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  trial:
+    components:
+      - {id: fix, type: fixation, duration: 0.5, size: 0.04, pos: [0, 0.15]}
+      - id: stimulus
+        type: text
+        text: $word
+        color: $ink_rgb
+        height: 0.07
+        bold: true
+        start: 0.5
+        pos: [0, 0.15]
+        marker: $f"word_{condition}"
+      # four answer buttons (2 x 2) in the lower half, always in the same places
+      - {id: btn_red, type: shape, shape: rect, size: [0.22, 0.12], fill: "#e8312f", pos: [-0.125, -0.12]}
+      - {id: btn_green, type: shape, shape: rect, size: [0.22, 0.12], fill: "#22b14c", pos: [0.125, -0.12]}
+      - {id: btn_blue, type: shape, shape: rect, size: [0.22, 0.12], fill: "#3d6df2", pos: [-0.125, -0.27]}
+      - {id: btn_yellow, type: shape, shape: rect, size: [0.22, 0.12], fill: "#f2d230", pos: [0.125, -0.27]}
+      - id: resp
+        type: mouse
+        clickable: [btn_red, btn_green, btn_blue, btn_yellow]
+        touch: true
+        start: 0.5
+        duration: 2.5
+        correct: $correct_button
+        end_routine: true
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr == 1 else ('Too slow' if resp.clicked is None else 'Wrong colour')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 0.05
+        pos: [0, 0.15]
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: |
+          Practice finished.
+
+          Now the real test (about 4 minutes). You will only see a message after a mistake.
+        height: 0.03
+        wrap_width: 0.5
+        pos: [0, 0.12]
+      - {id: start_btn, type: shape, shape: rect, size: [0.3, 0.09], fill: "#3a3a3a", line_color: "#aaaaaa", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start", height: 0.03, pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "Thank you! This task is finished.", height: 0.035, wrap_width: 0.5}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    children: [trial, feedback]
+  - practice_done
+  - loop: trials
+    conditions: stroop.csv
+    order: random
+    repeats: 4
+    max_repeat: {ink: 3}
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - thanks

@@ -1,0 +1,17 @@
+pair,letter_class,digit_class,letter_key,digit_key,congruency
+A2,vowel,even,a,a,congruent
+A3,vowel,odd,a,l,incongruent
+E4,vowel,even,a,a,congruent
+E5,vowel,odd,a,l,incongruent
+I6,vowel,even,a,a,congruent
+I7,vowel,odd,a,l,incongruent
+U8,vowel,even,a,a,congruent
+U9,vowel,odd,a,l,incongruent
+G2,consonant,even,l,a,incongruent
+G3,consonant,odd,l,l,congruent
+K4,consonant,even,l,a,incongruent
+K5,consonant,odd,l,l,congruent
+M6,consonant,even,l,a,incongruent
+M7,consonant,odd,l,l,congruent
+R8,consonant,even,l,a,incongruent
+R9,consonant,odd,l,l,congruent

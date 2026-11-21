@@ -1,0 +1,113 @@
+name: touch_simon
+description: >
+  Simon task for touchscreens. A blue or orange circle appears on the left or right; the participant
+  taps the LEFT button for blue and the RIGHT button for orange, ignoring where the circle appears.
+  Congruent trials: the circle is on the side of the correct button; incongruent: on the other side.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: height}
+  participant: {participant: "001", session: "1"}
+
+measures:
+  - {id: rt, label: Reaction time (correct taps), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.25, 2.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: condition, label: Spatially congruent or incongruent, role: factor, column: condition}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          COLOURED CIRCLES
+
+          A circle will appear on the left or on the right.
+
+          BLUE circle: tap the LEFT button.     ORANGE circle: tap the RIGHT button.
+
+          Only the colour matters, not where the circle appears.
+          Tap as fast as you can without making mistakes.
+        height: 0.04
+        wrap_width: 1.5
+        pos: [0, 0.15]
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#3a3a3a", line_color: "#aaaaaa", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start practice", height: 0.04, pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  trial:
+    components:
+      - {id: fix, type: fixation, size: 0.05, pos: [0, 0.1]}
+      - {id: btn_left, type: shape, shape: rect, size: [0.3, 0.2], fill: "#3d6df2", line_color: "#ffffff", pos: [-0.62, -0.35]}
+      - {id: btn_right, type: shape, shape: rect, size: [0.3, 0.2], fill: "#f28c28", line_color: "#ffffff", pos: [0.62, -0.35]}
+      - id: target
+        type: shape
+        shape: circle
+        radius: 0.07
+        fill: $colour_rgb
+        pos: $[x, 0.1]
+        start: 0.5
+        marker: $f"circle_{condition}"
+      - id: resp
+        type: mouse
+        clickable: [btn_left, btn_right]
+        touch: true
+        start: 0.5
+        duration: 2.0
+        correct: $correct_button
+        end_routine: true
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr == 1 else ('Too slow' if resp.clicked is None else 'Wrong button')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 0.06
+        pos: [0, 0.1]
+
+  iti:
+    duration: 0.5
+    components:
+      - {id: fix, type: fixation, size: 0.05, pos: [0, 0.1]}
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: |
+          Practice finished.
+
+          Now the real test (about 4 minutes). You will only see a message after a mistake.
+          Remember: BLUE = left button, ORANGE = right button.
+        height: 0.04
+        wrap_width: 1.5
+        pos: [0, 0.15]
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#3a3a3a", line_color: "#aaaaaa", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start", height: 0.04, pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "Thank you! This task is finished.", height: 0.05}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: trials.csv
+    order: random
+    repeats: 2
+    children: [trial, feedback, iti]
+  - practice_done
+  - loop: trials
+    conditions: trials.csv
+    order: random
+    repeats: 20
+    max_repeat: {colour: 4, side: 4}
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+      - iti
+  - thanks

@@ -1,0 +1,5 @@
+global_letter,local_letter,cells,consistency,global_key,local_key
+H,H,x...xx...xxxxxxx...xx...x,consistent,h,h
+H,S,x...xx...xxxxxxx...xx...x,inconsistent,h,s
+S,H,xxxxxx....xxxxx....xxxxxx,inconsistent,s,h
+S,S,xxxxxx....xxxxx....xxxxxx,consistent,s,s

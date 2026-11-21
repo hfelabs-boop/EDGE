@@ -1,0 +1,176 @@
+name: dccs
+description: >
+  Dimensional Change Card Sort (DCCS, after Zelazo, 2006), for children from about 3 years and adults.
+  Two target cards stay on the screen (a blue triangle and a red circle). Test cards (a red triangle or a
+  blue circle) are sorted by tapping or clicking the target card they belong to: first by COLOUR
+  (pre-switch, 6 cards), then by SHAPE (post-switch, 6 cards), then by colour if the card has a black
+  border and by shape if not (border phase, 12 cards). An experimenter can read the instructions aloud.
+
+settings:
+  window: {size: [1280, 720], background: "#d8d8d8", units: height}
+  participant: {participant: "001", session: "1"}
+
+measures:
+  # the three test phases (the demonstration cards have phase 'demo' and are left out)
+  - {id: accuracy, label: Correct sorts, role: outcome, column: resp.corr, trials: "$phase != 'demo'", summary: proportion}
+  - {id: correct_sorts, label: Number of correct sorts, role: outcome, column: resp.corr, trials: "$phase != 'demo'", summary: sum}
+  - {id: rt, label: Sorting time (correct sorts), role: outcome, column: resp.rt, trials: "$resp.corr == 1 and phase != 'demo'",
+     summary: median, units: s, expect: [0.3, 10]}
+  - {id: phase, label: "Phase (pre-switch, post-switch, border)", role: factor, column: phase}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          CARD GAMES
+
+          Here are two cards: a blue triangle and a red circle.
+          You will get more cards, and your job is to put each card with the right one
+          by tapping (or clicking) where it goes.
+
+          We will play different games. Listen carefully to the rules of each game.
+        height: 0.042
+        wrap_width: 1.5
+        color: "#111111"
+        pos: [0, 0.15]
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#ffffff", line_color: "#333333", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start", height: 0.045, color: "#111111", pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  intro_colour:
+    components:
+      - id: text
+        type: text
+        text: |
+          THE COLOUR GAME
+
+          In the colour game, red cards go with the RED one and blue cards go with the BLUE one.
+          Let's try two cards first.
+        height: 0.045
+        wrap_width: 1.5
+        color: "#111111"
+        pos: [0, 0.12]
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#ffffff", line_color: "#333333", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Let's play", height: 0.045, color: "#111111", pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  intro_colour_go:
+    components:
+      - id: text
+        type: text
+        text: |
+          Good. Now let's play the colour game: red cards to the RED one, blue cards to the BLUE one.
+        height: 0.045
+        wrap_width: 1.5
+        color: "#111111"
+        pos: [0, 0.12]
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#ffffff", line_color: "#333333", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Let's play", height: 0.045, color: "#111111", pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  intro_shape:
+    components:
+      - id: text
+        type: text
+        text: |
+          NOW A NEW GAME: THE SHAPE GAME
+
+          We are not playing the colour game any more. In the shape game,
+          triangles go with the TRIANGLE and circles go with the CIRCLE.
+        height: 0.045
+        wrap_width: 1.5
+        color: "#111111"
+        pos: [0, 0.12]
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#ffffff", line_color: "#333333", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Let's play", height: 0.045, color: "#111111", pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  intro_border:
+    components:
+      - id: text
+        type: text
+        text: |
+          NOW THE BORDER GAME
+
+          If the card has a black border, play the COLOUR game.
+          If the card has no border, play the SHAPE game.
+        height: 0.045
+        wrap_width: 1.5
+        color: "#111111"
+        pos: [0, 0.12]
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#ffffff", line_color: "#333333", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Let's play", height: 0.045, color: "#111111", pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  trial:
+    components:
+      # target cards (always the same)
+      - {id: card_left, type: shape, shape: rect, size: [0.32, 0.32], fill: "#ffffff", line_color: "#555555", pos: [-0.5, -0.22]}
+      - {id: left_pic, type: shape, shape: triangle, size: [0.17, 0.17], fill: "#3d6df2", pos: [-0.5, -0.22]}
+      - {id: card_right, type: shape, shape: rect, size: [0.32, 0.32], fill: "#ffffff", line_color: "#555555", pos: [0.5, -0.22]}
+      - {id: right_pic, type: shape, shape: circle, radius: 0.085, fill: "#e8312f", pos: [0.5, -0.22]}
+      # the card to sort, at the top (a black frame when the border game says so)
+      - {id: frame, type: shape, shape: rect, size: [0.36, 0.36], fill: "#000000", pos: [0, 0.22], start: 0.3, opacity: $border}
+      - {id: test_card, type: shape, shape: rect, size: [0.3, 0.3], fill: "#ffffff", line_color: "#555555", pos: [0, 0.22], start: 0.3,
+         marker: '$f"card_{phase}"'}
+      - {id: test_pic, type: shape, shape: $shape, size: [0.17, 0.17], radius: 0.085, fill: $colour_rgb, pos: [0, 0.22], start: 0.3}
+      - {id: rule_hint, type: text, text: $hint, height: 0.035, color: "#333333", pos: [0, 0.45], start: 0.3}
+      - id: resp
+        type: mouse
+        clickable: [card_left, card_right]
+        touch: true
+        start: 0.3
+        correct: $correct_card
+        end_routine: true
+
+  feedback:
+    duration: 1.2
+    components:
+      - id: fb
+        type: text
+        text: "$'Well done, that is where it goes!' if resp.corr == 1 else 'Not quite: in the colour game, a red card goes to the red one.'"
+        color: "$'#1a7f37' if resp.corr == 1 else '#b42318'"
+        height: 0.045
+        wrap_width: 1.5
+
+  pause:
+    duration: 0.6
+    components:
+      - {id: card_left, type: shape, shape: rect, size: [0.32, 0.32], fill: "#ffffff", line_color: "#555555", pos: [-0.5, -0.22]}
+      - {id: left_pic, type: shape, shape: triangle, size: [0.17, 0.17], fill: "#3d6df2", pos: [-0.5, -0.22]}
+      - {id: card_right, type: shape, shape: rect, size: [0.32, 0.32], fill: "#ffffff", line_color: "#555555", pos: [0.5, -0.22]}
+      - {id: right_pic, type: shape, shape: circle, radius: 0.085, fill: "#e8312f", pos: [0.5, -0.22]}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "All done. Thank you for playing!", height: 0.06, color: "#111111"}
+
+flow:
+  - instructions
+  - intro_colour
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    children: [trial, feedback, pause]
+  - intro_colour_go
+  - loop: pre_switch
+    conditions: pre_switch.csv
+    order: random
+    max_repeat: {card: 2}
+    children: [trial, pause]
+  - intro_shape
+  - loop: post_switch
+    conditions: post_switch.csv
+    order: random
+    max_repeat: {card: 2}
+    children: [trial, pause]
+  - intro_border
+  - loop: border_game
+    conditions: border.csv
+    order: random
+    max_repeat: {card: 2}
+    children: [trial, pause]
+  - thanks

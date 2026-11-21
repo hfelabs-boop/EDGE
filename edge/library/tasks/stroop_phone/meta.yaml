@@ -1,0 +1,25 @@
+id: stroop_phone
+title: Stroop task for phones
+category: Inhibition and conflict
+summary: Colour-word Stroop task for a portrait touchscreen, answered by tapping one of four coloured buttons.
+description: >
+  The colour-word Stroop task laid out for phones and tablets held upright. A colour word appears in the
+  upper half of the screen after a 500 ms fixation cross; the participant taps the coloured button (red,
+  green, blue, yellow; a fixed 2 x 2 grid in the lower half) that matches the ink, within 2.5 seconds.
+  Half of the trials are congruent and half incongruent; 8 practice trials with feedback come first,
+  then 96 test trials in random order with feedback after errors only. Sizes are in screen-height units,
+  so the layout scales to any screen. Outcome: the Stroop effect in tap times and accuracy.
+measures:
+  - "Median tap RT on correct trials, congruent vs incongruent (Stroop effect)"
+  - "Accuracy, congruent vs incongruent"
+duration_min: 5
+input: touch
+languages: [en]
+variant_of: stroop
+references:
+  - "Stroop, J. R. (1935). Studies of interference in serial verbal reactions. Journal of Experimental Psychology, 18, 643–662."
+  - "MacLeod, C. M. (1991). Half a century of research on the Stroop effect: An integrative review. Psychological Bulletin, 109, 163–203."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/stroop_phone.html"}
+notes: >
+  Tap RTs include the movement to the button, so they are longer than key-press RTs. Trials without a tap
+  in time have an empty resp.corr (count them as errors or misses in the analysis).

@@ -1,0 +1,110 @@
+name: negative_priming
+description: >
+  Negative priming with overlapping letters. Each trial is a prime display followed by a probe display;
+  in both, a RED and a GREEN letter overlap and the participant presses the key of the RED letter
+  (D, F, J or K), ignoring the green one. In ignored-repetition pairs the probe's red letter is the
+  letter that had to be ignored in the prime; in control pairs both probe letters are new.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  target_rgb: "#ff4040"
+  distractor_rgb: "#30c050"
+
+measures:
+  - {id: probe_rt, label: Probe reaction time (prime and probe correct), role: outcome, column: probe_resp.rt,
+     trials: $probe_resp.corr == 1 and prime_resp.corr == 1, loop: trials, summary: median, units: s, expect: [0.25, 2.0]}
+  - {id: probe_accuracy, label: Probe accuracy, role: outcome, column: probe_resp.corr, loop: trials, summary: proportion}
+  - {id: prime_accuracy, label: Prime accuracy, role: check, column: prime_resp.corr, loop: trials, summary: proportion}
+  - {id: condition, label: Ignored repetition or control, role: factor, column: condition}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          RED LETTERS
+
+          You will see a red letter and a green letter on top of each other.
+          Press the key of the RED letter and ignore the green one.
+
+          The letters are D, F, J and K: press the key with the same letter.
+          Put your fingers on D, F, J and K now.
+
+          Two displays come quickly one after the other; answer each one.
+          Be fast, but try not to make mistakes.
+
+          First a short practice. Press SPACE to start.
+        height: 26
+        wrap_width: 1000
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  prime:
+    components:
+      - {id: fix, type: fixation, duration: 0.5, size: 30}
+      - {id: prime_dist, type: text, text: $prime_distractor, color: $distractor_rgb, height: 110, bold: true, pos: [14, -10], start: 0.5}
+      - {id: prime_targ, type: text, text: $prime_target, color: $target_rgb, height: 110, bold: true, pos: [-14, 10], start: 0.5,
+         marker: prime_on}
+      - {id: prime_resp, type: keyboard, keys: [d, f, j, k], start: 0.5, duration: 2.0, correct: $prime_key, end_routine: true}
+
+  probe:
+    components:
+      - {id: blank, type: wait, duration: 0.5}
+      - {id: probe_dist, type: text, text: $probe_distractor, color: $distractor_rgb, height: 110, bold: true, pos: [14, -10], start: 0.5}
+      - {id: probe_targ, type: text, text: $probe_target, color: $target_rgb, height: 110, bold: true, pos: [-14, 10], start: 0.5,
+         marker: '$f"probe_{condition}"'}
+      - {id: probe_resp, type: keyboard, keys: [d, f, j, k], start: 0.5, duration: 2.0, correct: $probe_key, end_routine: true}
+
+  feedback:
+    duration: 1.0
+    components:
+      - id: fb
+        type: text
+        text: "$'Both correct' if (prime_resp.corr == 1 and probe_resp.corr == 1) else 'Not quite: press the key of the RED letter'"
+        color: "$'#55dd55' if (prime_resp.corr == 1 and probe_resp.corr == 1) else '#ff5555'"
+        height: 34
+
+  iti:
+    duration: 0.8
+    components:
+      - {id: blank, type: wait}
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: |
+          Practice finished.
+
+          Now the real test (about 4 minutes). You will see a message only after a mistake.
+
+          Press SPACE to start.
+        height: 28
+        wrap_width: 1000
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "Thank you! This task is finished.", height: 34}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    children: [prime, probe, feedback, iti]
+  - practice_done
+  - loop: trials
+    conditions: trials.csv
+    order: random
+    max_repeat: {condition: 3}
+    children:
+      - prime
+      - probe
+      - {routine: feedback, if: "$prime_resp.corr != 1 or probe_resp.corr != 1"}
+      - iti
+  - thanks

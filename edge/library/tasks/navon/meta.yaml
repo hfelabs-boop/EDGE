@@ -1,0 +1,27 @@
+id: navon
+title: Navon task (global/local)
+category: Perception and motor
+summary: Identify either the big letter or the small letters of a compound letter (a big H made of small S's).
+description: >
+  Measures global precedence and interference between the global and local levels of a visual scene.
+  Compound letters (a big H or S made of 5 x 5 small H's or S's) appear in the centre 500 ms after a
+  fixation cross; the participant presses H or S within 2 seconds. In the global block the answer is
+  the big letter, in the local block the small letters; the block order is counterbalanced across
+  participants. Consistent stimuli have the same letter at both levels, inconsistent ones a different
+  letter. Each block has 8 practice trials with feedback and 48 test trials (the four stimuli, 12 times
+  each, in random order). Main outcomes: faster global than local responses (global advantage) and
+  interference from the unattended level on inconsistent trials, typically larger from global to local.
+measures:
+  - "Median RT on correct trials by level (global, local) and consistency"
+  - "Accuracy by level and consistency"
+duration_min: 6
+input: keyboard
+languages: [en]
+references:
+  - "Navon, D. (1977). Forest before trees: The precedence of global features in visual perception. Cognitive Psychology, 9, 353–383."
+  - "Navon, D. (2003). What does a compound letter tell the psychologist's mind? Acta Psychologica, 114, 273–309."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/navon.html"}
+notes: >
+  The compound letters are drawn from 25 text items placed on a grid (made by tools/library/make_navon.py,
+  which also writes the experiment), so they look the same on every computer. Stimuli stay on until the
+  answer; for brief exposure give the grid items a duration.

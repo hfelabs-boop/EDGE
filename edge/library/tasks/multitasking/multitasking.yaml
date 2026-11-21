@@ -1,0 +1,184 @@
+name: multitasking
+description: >
+  Multitasking (after Stoet et al., 2013). A figure appears in the top or the bottom half of a frame.
+  Top half: SHAPE task (diamond = A, rectangle = L). Bottom half: FILLING task (2 dots = A, 3 dots = L).
+  Two single-task blocks (only shape, only filling) are followed by a mixed (dual-task) block in which
+  the figure appears in either half at random. Mixing cost: repeat trials in the mixed block vs single-task
+  trials. Switch cost: switch vs repeat trials in the mixed block.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  prev_task: ""        # the previous trial's task in this block (empty at the start of a block)
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt,
+     trials: "$stage == 'test' and resp.corr == 1 and cond.trial_type != 'first'", summary: median, units: s, expect: [0.3, 3.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, trials: "$stage == 'test' and cond.trial_type != 'first'",
+     summary: proportion}
+  - {id: trial_type, label: "Single task, mixed-block repeat or mixed-block switch", role: factor, column: cond.trial_type}
+  - {id: task, label: Shape or filling task, role: factor, column: task}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          SHAPES AND DOTS
+
+          A yellow figure will appear inside a frame. It is a diamond or a rectangle,
+          and it has 2 or 3 dots inside.
+
+          If the figure is in the TOP half (SHAPE):     diamond = A key     rectangle = L key
+          If the figure is in the BOTTOM half (FILLING): 2 dots = A key     3 dots = L key
+
+          There are three parts: shapes only, dots only, and then both mixed.
+          Each part starts with a short practice. Press SPACE to continue.
+        height: 24
+        wrap_width: 1150
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  intro_shape:
+    components:
+      - id: text
+        type: text
+        text: |
+          PART 1: SHAPES ONLY
+
+          The figure is always in the TOP half. Judge its SHAPE:
+          diamond = A key        rectangle = L key
+
+          Press SPACE to practise.
+        height: 26
+        wrap_width: 1100
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {prev_task: ""}}
+
+  intro_filling:
+    components:
+      - id: text
+        type: text
+        text: |
+          PART 2: DOTS ONLY
+
+          The figure is always in the BOTTOM half. Count the DOTS:
+          2 dots = A key        3 dots = L key
+
+          Press SPACE to practise.
+        height: 26
+        wrap_width: 1100
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {prev_task: ""}}
+
+  intro_mixed:
+    components:
+      - id: text
+        type: text
+        text: |
+          PART 3: BOTH MIXED
+
+          Now the figure can be in either half.
+          TOP half: shape (diamond = A, rectangle = L)
+          BOTTOM half: dots (2 dots = A, 3 dots = L)
+
+          Press SPACE to practise.
+        height: 26
+        wrap_width: 1100
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {prev_task: ""}}
+
+  trial:
+    components:
+      - id: cond                      # trial type from the block and the previous task (saved as cond.*)
+        type: variable
+        set:
+          trial_type: "$'single' if block_type == 'single' else ('first' if prev_task == '' else ('repeat' if task == prev_task else 'switch'))"
+          y: "$100 if half == 'top' else -100"
+      - {id: frame, type: shape, shape: rect, size: [360, 400], fill: "#000000", line_color: "#aaaaaa", line_width: 3}
+      - {id: divider, type: shape, shape: rect, size: [360, 3], fill: "#aaaaaa"}
+      - {id: label_top, type: text, text: SHAPE, color: "#888888", height: 22, pos: [-290, 100]}
+      - {id: label_bottom, type: text, text: FILLING, color: "#888888", height: 22, pos: [-290, -100]}
+      - id: figure
+        type: shape
+        shape: rect
+        size: "$[100, 100] if shape == 'diamond' else [160, 90]"
+        ori: "$45 if shape == 'diamond' else 0"
+        fill: "#e0c341"
+        pos: $[0, y]
+        start: 0.5
+        marker: $f"figure_{task}_{trial_type}"
+      - {id: dot1, type: shape, shape: circle, radius: 9, fill: "#202020", pos: "$[-28 if dots == 3 else -16, y]", start: 0.5}
+      - {id: dot2, type: shape, shape: circle, radius: 9, fill: "#202020", pos: "$[0 if dots == 3 else 16, y]", start: 0.5}
+      - {id: dot3, type: shape, shape: circle, radius: 9, fill: "#202020", pos: "$[28, y]", start: 0.5,
+         opacity: "$1 if dots == 3 else 0"}
+      - id: resp
+        type: keyboard
+        keys: [a, l]
+        start: 0.5
+        duration: 3.0
+        correct: $correct_key
+        end_routine: true
+      - {id: remember, type: variable, when: end, set: {prev_task: $task}}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr == 1 else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 36
+
+  ready:
+    components:
+      - {id: text, type: text, text: "Practice finished. Now the test part. Press SPACE to start.", height: 28}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {prev_task: ""}}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "Thank you! This task is finished.", height: 34}
+
+flow:
+  - instructions
+  - intro_shape
+  - loop: practice_shape
+    conditions: practice_shape.csv
+    order: random
+    children: [trial, feedback]
+  - ready
+  - loop: shape_block
+    conditions: shape.csv
+    order: random
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - intro_filling
+  - loop: practice_filling
+    conditions: practice_filling.csv
+    order: random
+    children: [trial, feedback]
+  - ready
+  - loop: filling_block
+    conditions: filling.csv
+    order: random
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - intro_mixed
+  - loop: practice_mixed
+    conditions: practice_mixed.csv
+    order: random
+    children: [trial, feedback]
+  - ready
+  - loop: mixed_block
+    conditions: mixed.csv
+    order: random
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - thanks

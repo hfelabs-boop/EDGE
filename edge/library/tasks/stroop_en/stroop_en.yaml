@@ -1,0 +1,110 @@
+name: stroop_en
+description: >
+  Colour-word Stroop task written to be translated. EVERY text the participant sees is in the
+  `variables` section below (also editable in the builder under Experiment settings > Variables):
+  translate those values and nothing else. The colour words are looked up from `colour_words`, and
+  the response keys (D F J K) don't depend on the language. Half congruent, half incongruent trials;
+  practice with feedback, then 96 test trials.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+# ----------------------------------------------------------------------------------------------
+#  TRANSLATE HERE. Change only the text to the right of each colon; keep the names on the left.
+#  Keep the key letters D, F, J, K as they are (they are positions on the keyboard).
+# ----------------------------------------------------------------------------------------------
+variables:
+  colour_words: {red: RED, green: GREEN, blue: BLUE, yellow: YELLOW}
+  txt_instructions: |
+    COLOUR WORDS
+
+    Each word on the screen is printed in a colour.
+    Press the key for the colour of the INK, not for what the word says.
+
+    Example: the word BLUE printed in red ink -> press D.
+    Answer as fast as you can without making mistakes.
+
+    First a short practice. Press SPACE to start.
+  txt_keys: "D = red     F = green     J = blue     K = yellow"
+  txt_correct: "Correct"
+  txt_wrong: "Wrong key"
+  txt_too_slow: "Too slow"
+  txt_practice_done: |
+    Practice finished.
+
+    Now the real test begins (about 4 minutes).
+    You will only see a message when you make a mistake.
+
+    Press SPACE to start.
+  txt_thanks: "Thank you! This task is finished."
+# ----------------------------------------------------------------------------------------------
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.25, 2.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: condition, label: Congruent or incongruent, role: factor, column: condition}
+
+routines:
+  instructions:
+    components:
+      - {id: text, type: text, text: $txt_instructions, height: 26, wrap_width: 1000, pos: [0, 40]}
+      - {id: keys_shown, type: text, text: $txt_keys, height: 26, color: "#cccccc", pos: [0, -250]}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: fix, type: fixation, duration: 0.5, size: 30}
+      - id: stimulus
+        type: text
+        text: $colour_words[word_id]
+        color: $ink_rgb
+        height: 80
+        bold: true
+        start: 0.5
+        marker: $f"word_{condition}"
+      - {id: reminder, type: text, text: $txt_keys, color: "#888888", height: 20, pos: [0, -300]}
+      - id: resp
+        type: keyboard
+        keys: [d, f, j, k]
+        start: 0.5
+        duration: 2.0
+        correct: $correct_key
+        end_routine: true
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$txt_correct if resp.corr == 1 else (txt_too_slow if resp.keys is None else txt_wrong)"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 40
+
+  practice_done:
+    components:
+      - {id: text, type: text, text: $txt_practice_done, height: 28, wrap_width: 1000}
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: $txt_thanks, height: 34}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    children: [trial, feedback]
+  - practice_done
+  - loop: trials
+    conditions: stroop.csv
+    order: random
+    repeats: 4
+    max_repeat: {ink: 3}
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - thanks

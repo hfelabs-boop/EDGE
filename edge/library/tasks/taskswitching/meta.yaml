@@ -1,0 +1,32 @@
+id: taskswitching
+title: Task switching (alternating runs)
+category: Cognitive control
+summary: Judge the letter or the digit of a letter-digit pair; the task changes predictably every second trial.
+description: >
+  Measures the cost of switching between two simple tasks when the switch is fully predictable
+  (alternating-runs paradigm). A letter-digit pair (e.g. G7) appears in one of four boxes and moves
+  clockwise one box per trial. In the two top boxes the participant decides whether the letter is a vowel
+  (A key) or a consonant (L key); in the two bottom boxes whether the digit is even (A) or odd (L). The
+  task therefore alternates in runs of two (letter, letter, digit, digit ...), so every other trial is a
+  switch. The pair appears 600 ms after the previous response (response-stimulus interval, variable rsi)
+  and stays until the answer (3 s at most). 16 practice trials with feedback, then 96 test trials. Half of
+  the pairs are congruent (both tasks give the same key). Main outcome: the switch cost, slower and less
+  accurate switch trials than repeat trials (the first trial of a block is excluded).
+measures:
+  - "Median RT on correct trials, switch vs repeat (switch cost), per task"
+  - "Accuracy, switch vs repeat"
+duration_min: 5
+input: keyboard
+languages: [en]
+references:
+  - "Rogers, R. D., & Monsell, S. (1995). Costs of a predictable switch between simple cognitive tasks. Journal of Experimental Psychology: General, 124, 207–231."
+  - "Jersild, A. T. (1927). Mental set and shift. Archives of Psychology, 89, 5–82."
+  - "Monsell, S. (2003). Task switching. Trends in Cognitive Sciences, 7, 134–140."
+  - "Stoet, G., & Snyder, L. H. (2007). Extensive practice does not eliminate human switch costs. Cognitive, Affective, & Behavioral Neuroscience, 7, 192–197."
+  - "Vandierendonck, A., Liefooghe, B., & Verbruggen, F. (2010). Task switching: Interplay of reconfiguration and interference control. Psychological Bulletin, 136, 601–626."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/taskswitching.html"}
+notes: >
+  The grid position, task and transition (first / switch / repeat) come from a trial counter (variable
+  step) and are saved as cond.quadrant, cond.task and cond.transition; the stimuli are shuffled from
+  stimuli.csv (made by tools/library/make_taskswitching.py), which also holds the correct key for each
+  task and the congruency.

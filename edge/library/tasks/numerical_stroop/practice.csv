@@ -1,0 +1,9 @@
+left_digit,right_digit,left_size,right_size,larger_side,distance,condition,correct_key
+3,2,1.0,0.5,left,1,congruent,a
+4,5,1.0,0.5,right,1,incongruent,l
+7,6,0.75,0.75,left,1,neutral,a
+7,8,0.5,1.0,right,1,congruent,l
+6,1,0.5,1.0,left,5,incongruent,a
+2,7,1.0,0.5,right,5,incongruent,l
+8,3,1.0,0.5,left,5,congruent,a
+4,9,0.75,0.75,right,5,neutral,l

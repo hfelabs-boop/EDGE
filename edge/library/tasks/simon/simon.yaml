@@ -1,0 +1,108 @@
+name: simon
+description: >
+  Simon task. A blue or orange circle appears on the left or right of the screen. The participant
+  responds to its COLOUR (blue = A, left hand; orange = L, right hand) and ignores where it appears.
+  Congruent trials: the circle is on the side of the correct key; incongruent: on the opposite side.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.2, 1.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: condition, label: Spatially congruent or incongruent, role: factor, column: condition}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          COLOURED CIRCLES
+
+          Keep your eyes on the cross in the middle. A circle will appear on the left or on the right.
+
+          BLUE circle   -> press A (left hand)
+          ORANGE circle -> press L (right hand)
+
+          Only the colour matters, not where the circle appears.
+          Answer as fast as you can without making mistakes.
+
+          First a short practice. Press SPACE to start.
+        height: 26
+        wrap_width: 1000
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: fix, type: fixation, size: 30}
+      - id: target
+        type: shape
+        shape: circle
+        radius: 50
+        fill: $colour_rgb
+        pos: $[x, 0]
+        start: 0.5
+        marker: $f"circle_{condition}"
+      - id: resp
+        type: keyboard
+        keys: [a, l]
+        start: 0.5
+        duration: 1.5
+        correct: $correct_key
+        end_routine: true
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr == 1 else ('Too slow' if resp.keys is None else 'Wrong key')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 40
+
+  iti:
+    duration: 0.5
+    components:
+      - {id: fix, type: fixation, size: 30}
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: |
+          Practice finished.
+
+          Now the real test (about 3 minutes). You will only see a message after a mistake.
+          Remember: BLUE = A, ORANGE = L.
+
+          Press SPACE to start.
+        height: 28
+        wrap_width: 1000
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "Thank you! This task is finished.", height: 34}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: trials.csv
+    order: random
+    repeats: 2
+    children: [trial, feedback, iti]
+  - practice_done
+  - loop: trials
+    conditions: trials.csv
+    order: random
+    repeats: 20
+    max_repeat: {colour: 4, side: 4}
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+      - iti
+  - thanks

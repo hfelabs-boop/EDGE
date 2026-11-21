@@ -1,0 +1,24 @@
+id: touch_simon
+title: Simon task (touchscreen)
+category: Inhibition and conflict
+summary: Tap the left or right button for the colour of a circle while ignoring where the circle appears.
+description: >
+  The Simon task for tablets and touchscreens. Two response buttons sit in the bottom corners (left blue,
+  right orange). 500 ms after the fixation cross a blue or orange circle appears on the left or the right
+  of the screen, and the participant taps the button of the same colour within 2 seconds. When the circle
+  is on the side of the correct button the trial is congruent, otherwise incongruent. 8 practice trials
+  with feedback, then 80 test trials (the four colour x side combinations, balanced, in random order),
+  with feedback after errors and a 500 ms pause between trials. Main outcome: the Simon effect in tap
+  times and accuracy.
+measures:
+  - "Median tap RT on correct trials, congruent vs incongruent (Simon effect)"
+  - "Accuracy, congruent vs incongruent"
+duration_min: 4
+input: touch
+languages: [en]
+variant_of: simon
+references:
+  - "Simon, J. R., & Wolf, J. D. (1963). Choice reaction times as a function of angular stimulus-response correspondence and age. Ergonomics, 6, 99–105."
+  - "Hommel, B. (1993). Inverting the Simon effect by intention: Determinants of direction and extent of effects of irrelevant spatial information. Psychological Research, 55, 270–279."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/touch_simon.html"}
+notes: Tap RTs include the hand movement to the button. Trials without a tap in time have an empty resp.corr.

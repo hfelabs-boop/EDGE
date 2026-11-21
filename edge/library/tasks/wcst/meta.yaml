@@ -1,0 +1,33 @@
+id: wcst
+title: Card sorting task (WCST-inspired)
+category: Problem solving
+summary: Find the hidden sorting rule (colour, shape or number) from right/wrong feedback; the rule changes without warning.
+description: >
+  A computerised card sorting task modelled on the Wisconsin Card Sorting Test, measuring set shifting and
+  perseveration. Four key cards stay on screen (1 red triangle, 2 green stars, 3 yellow crosses, 4 blue
+  circles). Each new card (one of 64: 4 colours x 4 shapes x 1-4 symbols) is sorted by clicking a key card,
+  without a time limit, and is followed by RIGHT or WRONG for 0.9 s. The rule is never stated; it starts
+  with colour and, after 10 correct sorts in a row, changes silently to shape, then number, then colour
+  again. The task ends when 6 categories (rules) are completed or after 128 cards. Main outcomes:
+  categories completed, total errors and perseverative errors (here: errors that would have been correct
+  under the previous category's rule), plus the number of cards used.
+measures:
+  - "Categories completed (0-6)"
+  - "Total errors"
+  - "Perseverative errors (sorting by the previous rule)"
+  - "Proportion of correct sorts and number of cards used"
+duration_min: 8
+input: mouse
+languages: [en]
+references:
+  - "Berg, E. A. (1948). A simple objective technique for measuring flexibility in thinking. Journal of General Psychology, 39, 15–22."
+  - "Grant, D. A., & Berg, E. (1948). A behavioral analysis of degree of reinforcement and ease of shifting to new responses in a Weigl-type card-sorting problem. Journal of Experimental Psychology, 38, 404–411."
+  - "Milner, B. (1963). Effects of different brain lesions on card sorting: The role of the frontal lobes. Archives of Neurology, 9, 100–110."
+  - "Nyhus, E., & Barceló, F. (2009). The Wisconsin Card Sorting Test and the cognitive assessment of prefrontal executive functions: A critical update. Brain and Cognition, 71, 437–451."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/wcst.html"}
+notes: >
+  Not the copyrighted clinical WCST and not normed: own card drawings (tools/library/make_wcst.py) and a
+  simplified perseveration score (the full Heaton scoring also tracks the perseverative principle before
+  the first category is completed). The scoring uses variable items, not code: score.chosen,
+  score.error, score.persev_error, score.streak and score.categories are saved for every card. The rule
+  order, run length and number of categories are variables. Works with touch too.

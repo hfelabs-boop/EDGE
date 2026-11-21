@@ -1,0 +1,23 @@
+id: stroop_de
+title: Stroop task (German)
+category: Inhibition and conflict
+summary: German colour-word Stroop task with German instructions and the colour words ROT, GRÜN, BLAU, GELB.
+description: >
+  The colour-word interference task for German-speaking participants. After a 500 ms fixation cross a
+  colour word (ROT, GRÜN, BLAU, GELB) appears in one of the four ink colours, and the participant presses
+  the key for the ink colour within 2 seconds: D (red), F (green), J (blue), K (yellow). Position keys are
+  used instead of first letters because GRÜN and GELB start with the same letter. Half of the trials are
+  congruent, half incongruent; 8 practice trials with feedback, then 96 test trials in random order with
+  feedback after errors only. The Stroop effect is the slowing (and extra errors) on incongruent trials.
+measures:
+  - "Median RT on correct trials, congruent vs incongruent (Stroop effect)"
+  - "Accuracy, congruent vs incongruent"
+duration_min: 5
+input: keyboard
+languages: [de]
+variant_of: stroop
+references:
+  - "Stroop, J. R. (1935). Studies of interference in serial verbal reactions. Journal of Experimental Psychology, 18, 643–662."
+  - "MacLeod, C. M. (1991). Half a century of research on the Stroop effect: An integrative review. Psychological Bulletin, 109, 163–203."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/stroop_de.html"}
+notes: Same design as the English stroop task; trial lists made by tools/library/make_stroop.py.

@@ -1,0 +1,136 @@
+name: prp
+description: >
+  Psychological refractory period (PRP). Two tasks on every trial: first a tone (low = A, high = S, left
+  hand), then, after a stimulus onset asynchrony (SOA) of 50 to 1000 ms, a letter (X = K, O = L, right
+  hand). Participants answer the tone first, then the letter, each as fast as possible. The second
+  response slows down as the SOA gets shorter (the PRP effect), while the first stays about the same.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+measures:
+  - {id: rt2, label: Task 2 (letter) RT, role: outcome, column: resp2.rt,
+     trials: "$resp1.corr == 1 and resp2.corr == 1 and order.tone_first == 1", loop: trials, summary: median, units: s, expect: [0.25, 3.0]}
+  - {id: rt1, label: Task 1 (tone) RT, role: outcome, column: resp1.rt,
+     trials: "$resp1.corr == 1 and resp2.corr == 1 and order.tone_first == 1", loop: trials, summary: median, units: s, expect: [0.25, 3.0]}
+  - {id: accuracy1, label: Task 1 accuracy, role: outcome, column: resp1.corr, loop: trials, summary: proportion}
+  - {id: accuracy2, label: Task 2 accuracy, role: outcome, column: resp2.corr, loop: trials, summary: proportion}
+  - {id: order_ok, label: Answered the tone first, role: check, column: order.tone_first, loop: trials, summary: proportion}
+  - {id: soa, label: SOA (ms), role: factor, column: soa_ms}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          TWO TASKS AT ONCE
+
+          On every trial you hear a tone and then see a letter.
+
+          1. THE TONE (left hand):    low tone = A     high tone = S
+          2. THE LETTER (right hand):  X = K     O = L
+
+          Answer the tone FIRST and then the letter, both as fast as you can.
+          Sometimes the letter comes almost together with the tone; still answer the tone first.
+
+          Please turn on your sound. First you hear the two tones, then a short practice.
+          Press SPACE to continue.
+        height: 25
+        wrap_width: 1150
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  tone_demo:
+    components:
+      - {id: lbl_low, type: text, text: "This is the LOW tone (A)", height: 30, pos: [0, 60], duration: 1.5}
+      - {id: low, type: sound, sound: 400, tone_duration: 0.15, start: 0.3}
+      - {id: lbl_high, type: text, text: "This is the HIGH tone (S)", height: 30, pos: [0, -20], start: 1.5, duration: 1.5}
+      - {id: high, type: sound, sound: 900, tone_duration: 0.15, start: 1.8}
+      - {id: more, type: text, text: "Press SPACE to hear them again, or ENTER to start the practice.", height: 22,
+         color: "#aaaaaa", pos: [0, -200], start: 3.0}
+      - {id: go, type: keyboard, keys: [space, return], start: 3.0, end_routine: true}
+
+  trial:
+    duration: 5.0
+    end_if: "$resp1.keys is not None and resp2.keys is not None"
+    components:
+      - {id: fix, type: fixation, size: 30}
+      - {id: tone_stim, type: sound, sound: $tone_hz, tone_duration: 0.15, start: 0.5, marker: '$f"tone_{tone}"'}
+      - {id: letter_stim, type: text, text: $letter, height: 70, bold: true, start: $0.5 + soa, marker: '$f"letter_soa{soa_ms}"'}
+      - {id: resp1, type: keyboard, keys: [a, s], start: 0.5, duration: 3.0, correct: $correct_key1}
+      - {id: resp2, type: keyboard, keys: [k, l], start: $0.5 + soa, duration: 3.0, correct: $correct_key2}
+      - id: order
+        type: variable
+        when: end
+        set:
+          tone_first: "$int(resp1.rt is not None and resp2.rt is not None and resp1.rt < soa + resp2.rt)"
+
+  feedback:
+    duration: 1.2
+    components:
+      - id: fb1
+        type: text
+        text: "$'Tone: correct' if resp1.corr == 1 else ('Tone: too slow' if resp1.keys is None else 'Tone: wrong key')"
+        color: "$'#55dd55' if resp1.corr == 1 else '#ff5555'"
+        height: 30
+        pos: [0, 40]
+      - id: fb2
+        type: text
+        text: "$'Letter: correct' if resp2.corr == 1 else ('Letter: too slow' if resp2.keys is None else 'Letter: wrong key')"
+        color: "$'#55dd55' if resp2.corr == 1 else '#ff5555'"
+        height: 30
+        pos: [0, -10]
+      - id: fb3
+        type: text
+        text: "$'' if order.tone_first == 1 else 'Remember: answer the tone first'"
+        color: "#ffcc44"
+        height: 24
+        pos: [0, -70]
+
+  iti:
+    duration: 0.8
+    components:
+      - {id: blank, type: wait}
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: |
+          Practice finished.
+
+          Now the real test (about 5 minutes). Tone first (A / S), then letter (K / L).
+          You will only see a message after a mistake.
+
+          Press SPACE to start.
+        height: 26
+        wrap_width: 1150
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "Thank you! This task is finished.", height: 34}
+
+flow:
+  - instructions
+  - loop: demo
+    conditions: [{}]
+    repeats: 5
+    stop_if: "$go.keys == 'return'"
+    children: [tone_demo]
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    children: [trial, feedback, iti]
+  - practice_done
+  - loop: trials
+    conditions: trials.csv
+    order: random
+    repeats: 4
+    children:
+      - trial
+      - {routine: feedback, if: "$resp1.corr != 1 or resp2.corr != 1 or order.tone_first != 1"}
+      - iti
+  - thanks

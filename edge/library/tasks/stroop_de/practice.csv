@@ -1,0 +1,9 @@
+word,ink,ink_rgb,congruent,condition,correct_key
+ROT,red,#e8312f,1,congruent,d
+GRÜN,blue,#3d6df2,0,incongruent,j
+BLAU,yellow,#f2d230,0,incongruent,k
+GELB,yellow,#f2d230,1,congruent,k
+ROT,green,#22b14c,0,incongruent,f
+GRÜN,green,#22b14c,1,congruent,f
+BLAU,blue,#3d6df2,1,congruent,j
+GELB,red,#e8312f,0,incongruent,d

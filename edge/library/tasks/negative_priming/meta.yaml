@@ -1,0 +1,30 @@
+id: negative_priming
+title: Negative priming
+category: Inhibition and conflict
+summary: Identify the red one of two overlapping letters; responding to a letter you just ignored is slower.
+description: >
+  Measures the after-effect of ignoring a distractor. Every trial is a prime display followed by a probe
+  display. In both, a red and a green letter (D, F, J or K) overlap, and the participant presses the key of
+  the red letter within 2 seconds, ignoring the green one. The prime follows a 500 ms fixation cross; the
+  probe follows the prime response after a 500 ms blank. In ignored-repetition pairs the probe's red letter
+  is the letter that was green (ignored) in the prime; in control pairs both probe letters are new. All 24
+  ignored-repetition and 24 control pairs possible with four letters are shown once in random order (48
+  pairs), after 6 practice pairs with feedback. Main outcome: the negative priming effect, slower (and
+  less accurate) probe responses after ignored repetition than in control pairs, counting only pairs with
+  correct prime and probe responses.
+measures:
+  - "Median probe RT (prime and probe correct), ignored repetition vs control (negative priming effect)"
+  - "Probe accuracy, ignored repetition vs control"
+  - "Prime accuracy (check)"
+duration_min: 5
+input: keyboard
+languages: [en]
+references:
+  - "Tipper, S. P. (1985). The negative priming effect: Inhibitory priming by ignored objects. Quarterly Journal of Experimental Psychology, 37A, 571–590."
+  - "Dalrymple-Alford, E. C., & Budayr, B. (1966). Examination of some aspects of the Stroop color-word test. Perceptual and Motor Skills, 23, 1211–1214."
+  - "Mayr, S., & Buchner, A. (2007). Negative priming as a memory phenomenon: A review of 20 years of negative priming research. Zeitschrift für Psychologie / Journal of Psychology, 215, 35–51."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/negative_priming.html"}
+notes: >
+  The prime and probe are two screens of one trial, so trials_wide.csv has prime_resp.* and probe_resp.* in
+  the same row. Target and distractor colours are the variables target_rgb and distractor_rgb. Trial lists
+  are made by tools/library/make_negative_priming.py.

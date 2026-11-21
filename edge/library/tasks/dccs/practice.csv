@@ -1,0 +1,3 @@
+phase,hint,card,shape,colour,colour_rgb,border,rule,correct_card
+demo,Colour game,red_triangle,triangle,red,#e8312f,0,colour,card_right
+demo,Colour game,blue_circle,circle,blue,#3d6df2,0,colour,card_left

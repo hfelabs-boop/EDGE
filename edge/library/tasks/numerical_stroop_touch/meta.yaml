@@ -1,0 +1,27 @@
+id: numerical_stroop_touch
+title: Numerical Stroop task (touchscreen)
+category: Inhibition and conflict
+summary: Tap the numerically larger of two digits while ignoring their print size.
+description: >
+  The size congruity task for tablets and touchscreens. Two boxes stay on the screen; after a 500 ms
+  fixation cross a digit appears in each box and the participant taps the box whose digit has the larger
+  value, within 2.5 seconds. On congruent trials the larger value is printed larger, on incongruent trials
+  smaller, on neutral trials both digits have the same size; digit pairs differ by 1 or 5 and the larger
+  value is equally often left and right (48 combinations, shown twice: 96 test trials) after 8 practice
+  trials with feedback. Sizes are in screen-height units so the layout scales. Main outcome: the size
+  congruity effect in tap times and accuracy.
+measures:
+  - "Median tap RT on correct trials by size congruity (congruent, neutral, incongruent)"
+  - "Accuracy by size congruity"
+  - "Numerical distance effect (distance 1 vs 5)"
+duration_min: 5
+input: touch
+languages: [en]
+variant_of: numerical_stroop
+references:
+  - "Henik, A., & Tzelgov, J. (1982). Is three greater than five: The relation between physical and semantic size in comparison tasks. Memory & Cognition, 10, 389–395."
+  - "Besner, D., & Coltheart, M. (1979). Ideographic and alphabetic processing in skilled reading of English. Neuropsychologia, 17, 467–472."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/numerical_stroop_touch.html"}
+notes: >
+  Tap RTs include the movement to the box. Trials without a tap in time have an empty resp.corr.
+  Trial lists are made by tools/library/make_numerical_stroop.py.

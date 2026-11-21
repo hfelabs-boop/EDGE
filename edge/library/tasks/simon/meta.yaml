@@ -1,0 +1,23 @@
+id: simon
+title: Simon task
+category: Inhibition and conflict
+summary: Respond to the colour of a circle with the left or right hand while ignoring where it appears.
+description: >
+  Measures interference from irrelevant stimulus location. A fixation cross stays in the centre; 500 ms
+  after it appears a blue or orange circle is shown 350 px left or right of it, and the participant
+  presses A (left hand) for blue and L (right hand) for orange within 1.5 seconds. When the circle is on
+  the same side as the correct key the trial is congruent, otherwise incongruent. The four colour x side
+  combinations are balanced: 8 practice trials with feedback, then 80 test trials in random order (at most
+  four of the same colour or side in a row), with feedback after errors and a 500 ms pause between
+  trials. Main outcome: the Simon effect, slower and less accurate responses on incongruent trials.
+measures:
+  - "Median RT on correct trials, congruent vs incongruent (Simon effect)"
+  - "Accuracy, congruent vs incongruent"
+duration_min: 4
+input: keyboard
+languages: [en]
+references:
+  - "Simon, J. R., & Wolf, J. D. (1963). Choice reaction times as a function of angular stimulus-response correspondence and age. Ergonomics, 6, 99–105."
+  - "Hommel, B. (1993). Inverting the Simon effect by intention: Determinants of direction and extent of effects of irrelevant spatial information. Psychological Research, 55, 270–279."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/simon.html"}
+notes: The colour-to-hand mapping is fixed (blue = left); swap correct_key in trials.csv to counterbalance it.

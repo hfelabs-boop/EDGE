@@ -1,0 +1,125 @@
+name: taskswitching
+description: >
+  Task switching with predictable alternating runs (after Rogers & Monsell, 1995). A letter-digit pair
+  moves clockwise around a 2 x 2 grid, one cell per trial. In the TOP cells the participant judges the
+  letter (vowel = A, consonant = L), in the BOTTOM cells the digit (even = A, odd = L). The task
+  therefore changes every second trial (AABB...): switch trials vs repeat trials give the switch cost.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  step: 0          # trial counter within a block; sets the grid cell (step % 4). Reset before each block.
+  rsi: 0.6         # response-stimulus interval (s): empty grid between a response and the next pair
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt,
+     trials: "$resp.corr == 1 and cond.transition != 'first'", loop: trials, summary: median, units: s, expect: [0.3, 3.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, trials: "$cond.transition != 'first'",
+     loop: trials, summary: proportion}
+  - {id: transition, label: Switch or repeat trial, role: factor, column: cond.transition}
+  - {id: task, label: Letter or digit task, role: factor, column: cond.task}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          LETTERS AND DIGITS
+
+          A letter and a digit (for example G7) appear in one of four boxes,
+          moving clockwise to the next box on every trial.
+
+          In the TOP two boxes judge the LETTER:    vowel (A E I U) = A key     consonant = L key
+          In the BOTTOM two boxes judge the DIGIT:  even = A key     odd = L key
+
+          So you do two letter trials, then two digit trials, and so on.
+          Answer as fast as you can without making mistakes.
+
+          First a practice. Press SPACE to start.
+        height: 24
+        wrap_width: 1150
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {step: 0}}
+
+  trial:
+    components:
+      - id: cond                      # what this trial is, from its place in the run (saved as cond.*)
+        type: variable
+        set:
+          quadrant: $step % 4         # 0 top left, 1 top right, 2 bottom right, 3 bottom left
+          task: "$'letter' if step % 4 < 2 else 'digit'"
+          transition: "$'first' if step == 0 else ('switch' if step % 4 in (0, 2) else 'repeat')"
+          x: "$-150 if step % 4 in (0, 3) else 150"
+          y: "$100 if step % 4 < 2 else -100"
+      - {id: box_tl, type: shape, shape: rect, size: [300, 200], fill: "#000000", line_color: "#888888", pos: [-150, 100]}
+      - {id: box_tr, type: shape, shape: rect, size: [300, 200], fill: "#000000", line_color: "#888888", pos: [150, 100]}
+      - {id: box_br, type: shape, shape: rect, size: [300, 200], fill: "#000000", line_color: "#888888", pos: [150, -100]}
+      - {id: box_bl, type: shape, shape: rect, size: [300, 200], fill: "#000000", line_color: "#888888", pos: [-150, -100]}
+      - {id: top_label, type: text, text: "LETTER:  vowel = A   consonant = L", color: "#777777", height: 18, pos: [0, 225]}
+      - {id: bottom_label, type: text, text: "DIGIT:  even = A   odd = L", color: "#777777", height: 18, pos: [0, -225]}
+      - id: stimulus
+        type: text
+        text: $pair
+        height: 56
+        bold: true
+        pos: $[x, y]
+        start: $rsi
+        marker: $f"pair_{task}_{transition}"
+      - id: resp
+        type: keyboard
+        keys: [a, l]
+        start: $rsi
+        duration: 3.0
+        correct: "$letter_key if task == 'letter' else digit_key"
+        end_routine: true
+      - {id: count, type: variable, when: end, set: {step: $step + 1}}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr == 1 else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 36
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: |
+          Practice finished.
+
+          Now the real test (about 4 minutes). The pair keeps moving clockwise.
+          Top boxes: LETTER (vowel = A, consonant = L). Bottom boxes: DIGIT (even = A, odd = L).
+          You will only see a message after a mistake.
+
+          Press SPACE to start.
+        height: 26
+        wrap_width: 1150
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {step: 0}}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "Thank you! This task is finished.", height: 34}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: stimuli.csv
+    order: random
+    children: [trial, feedback]
+  - practice_done
+  - loop: trials
+    conditions: stimuli.csv
+    order: random
+    repeats: 6
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - thanks

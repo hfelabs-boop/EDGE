@@ -1,0 +1,11 @@
+tone,tone_hz,correct_key1,letter,correct_key2,soa,soa_ms
+low,400,a,X,k,0.05,50
+low,400,a,X,k,0.15,150
+low,400,a,X,k,0.3,300
+low,400,a,X,k,0.6,600
+low,400,a,X,k,1.0,1000
+high,900,s,O,l,0.05,50
+high,900,s,O,l,0.15,150
+high,900,s,O,l,0.3,300
+high,900,s,O,l,0.6,600
+high,900,s,O,l,1.0,1000

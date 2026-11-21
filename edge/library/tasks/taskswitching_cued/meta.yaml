@@ -1,0 +1,28 @@
+id: taskswitching_cued
+title: Task switching (cued)
+category: Cognitive control
+summary: A cue word says whether to judge the letter or the digit of a pair; the task changes at random.
+description: >
+  Measures switch costs when the task sequence is unpredictable and how much advance preparation reduces
+  them. Each trial starts with a 500 ms blank; then a cue (the word LETTER in blue or DIGIT in orange, with
+  a frame of the same colour) appears, and after a cue-target interval of 200 or 1000 ms a letter-digit
+  pair (e.g. G7) is shown under it. Letter task: vowel = A key, consonant = L key; digit task: even = A,
+  odd = L; the pair stays until the answer (3 s at most). Task and CTI are crossed with the 16 pairs (64
+  combinations) and shown twice in random order (128 test trials) after 16 practice trials with feedback.
+  Trials are classified as switch or repeat from the previous trial's task. Main outcomes: the switch
+  cost (switch minus repeat RT) and its reduction with the long CTI (preparation effect).
+measures:
+  - "Median RT on correct trials, switch vs repeat, by cue-target interval"
+  - "Accuracy, switch vs repeat, by cue-target interval"
+duration_min: 7
+input: keyboard
+languages: [en]
+variant_of: taskswitching
+references:
+  - "Meiran, N. (1996). Reconfiguration of processing mode prior to task performance. Journal of Experimental Psychology: Learning, Memory, and Cognition, 22, 1423–1442."
+  - "Monsell, S. (2003). Task switching. Trends in Cognitive Sciences, 7, 134–140."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/taskswitching_cued.html"}
+notes: >
+  Meiran (1996) used spatial tasks in a 2 x 2 grid; this version uses the common letter/digit tasks with
+  word cues. Switch/repeat comes from the variable prev_task and is saved as cond.transition. The trial
+  list is made by tools/library/make_taskswitching.py; change the CTIs there or in trials.csv.

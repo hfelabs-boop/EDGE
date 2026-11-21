@@ -1,0 +1,107 @@
+name: numerical_stroop
+description: >
+  Numerical Stroop / size congruity task. Two digits appear side by side in different print sizes and
+  the participant presses A (left) or L (right) for the NUMERICALLY larger digit, ignoring print size.
+  Congruent, incongruent and neutral (same size) trials; numerical distance 1 or 5.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  digit_size: 160          # print size (px) of a "big" digit; small = half, neutral = three quarters
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.25, 2.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: condition, label: Size congruity, role: factor, column: condition}
+  - {id: distance, label: Numerical distance, role: factor, column: distance}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          WHICH NUMBER IS LARGER?
+
+          You will see two digits, one on the left and one on the right.
+          Choose the digit with the larger VALUE. Ignore how big or small it is printed.
+
+          A = the left digit is larger          L = the right digit is larger
+
+          Answer as fast as you can without making mistakes.
+          First a short practice. Press SPACE to start.
+        height: 26
+        wrap_width: 1100
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    components:
+      - {id: fix, type: fixation, duration: 0.5, size: 30}
+      - id: left
+        type: text
+        text: $str(left_digit)
+        height: $digit_size * left_size
+        pos: [-200, 0]
+        start: 0.5
+        marker: $f"digits_{condition}"
+      - id: right
+        type: text
+        text: $str(right_digit)
+        height: $digit_size * right_size
+        pos: [200, 0]
+        start: 0.5
+      - id: resp
+        type: keyboard
+        keys: [a, l]
+        start: 0.5
+        duration: 2.0
+        correct: $correct_key
+        end_routine: true
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr == 1 else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 40
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: |
+          Practice finished.
+
+          Now the real test (about 4 minutes). You will only see a message after a mistake.
+
+          Press SPACE to start.
+        height: 28
+        wrap_width: 1000
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "Thank you! This task is finished.", height: 34}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    children: [trial, feedback]
+  - practice_done
+  - loop: trials
+    conditions: trials.csv
+    order: random
+    repeats: 2
+    max_repeat: {larger_side: 4}
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - thanks

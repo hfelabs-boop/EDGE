@@ -1,0 +1,25 @@
+id: stroop
+title: Stroop task
+category: Inhibition and conflict
+summary: Name the ink colour of colour words while ignoring what the word says.
+description: >
+  The classic colour-word interference task. On each trial a colour word (RED, GREEN, BLUE or YELLOW)
+  appears in one of the four ink colours after a 500 ms fixation cross, and the participant presses the
+  key for the ink colour (r, g, b, y) within 2 seconds. Half of the trials are congruent (the word names
+  its own ink), half incongruent. Eight practice trials with feedback are followed by 96 test trials in
+  random order (no more than three of the same ink in a row), with feedback only after errors. Reading
+  the word is automatic, so incongruent trials are slower and more error-prone: the difference in
+  reaction time between incongruent and congruent trials is the Stroop effect.
+measures:
+  - "Median RT on correct trials, congruent vs incongruent (Stroop effect)"
+  - "Accuracy, congruent vs incongruent"
+duration_min: 5
+input: keyboard
+languages: [en]
+references:
+  - "Stroop, J. R. (1935). Studies of interference in serial verbal reactions. Journal of Experimental Psychology, 18, 643–662."
+  - "MacLeod, C. M. (1991). Half a century of research on the Stroop effect: An integrative review. Psychological Bulletin, 109, 163–203."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/stroop.html"}
+notes: >
+  Trial lists are made by tools/library/make_stroop.py. Change the number of test trials with the
+  trial list's repeats (24 rows per pass).

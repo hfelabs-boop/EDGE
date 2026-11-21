@@ -1,0 +1,112 @@
+name: wcst
+description: >
+  Card sorting task inspired by the Wisconsin Card Sorting Test. Four key cards are on the screen
+  (1 red triangle, 2 green stars, 3 yellow crosses, 4 blue circles). Each new card is sorted by clicking
+  (or tapping) the key card it belongs with. The rule (colour, shape or number) is never told: the only
+  help is "Right" or "Wrong". After 10 correct sorts in a row the rule changes without warning
+  (colour -> shape -> number -> colour ...). The task ends after 6 completed rules or 128 cards.
+
+settings:
+  window: {size: [1280, 720], background: "#2b2b2b", units: height}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  rules: [colour, shape, number]     # the order the sorting rule cycles through
+  run_length: 10                     # correct sorts in a row that complete a rule (a "category")
+  max_categories: 6                  # the task stops after this many completed categories
+  categories: 0                      # completed categories so far
+  streak: 0                          # correct sorts in a row under the current rule
+  prev_rule: ""                      # the rule of the previous category (for perseverative errors)
+
+measures:
+  - {id: categories, label: Categories completed, role: outcome, column: score.categories, loop: trials, summary: last}
+  - {id: errors, label: Errors, role: outcome, column: score.error, loop: trials, summary: sum}
+  - {id: persev_errors, label: Perseverative errors, role: outcome, column: score.persev_error, loop: trials, summary: sum}
+  - {id: accuracy, label: Correct sorts, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: cards, label: Cards used, role: outcome, column: resp.corr, loop: trials, summary: count}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          CARD SORTING
+
+          At the top you see four cards. Below them a new card will appear.
+          Click (or tap) the card at the top that you think the new card goes with.
+
+          I won't tell you how to sort the cards. After each card you will only see
+          whether it was RIGHT or WRONG. Use this to find the rule.
+          The rule may change during the task; when it does, find the new rule.
+
+          There is no time limit. Click Start when you are ready.
+        height: 0.038
+        wrap_width: 1.5
+        pos: [0, 0.1]
+      - {id: start_btn, type: shape, shape: rect, size: [0.36, 0.09], fill: "#4a4a4a", line_color: "#bbbbbb", pos: [0, -0.33]}
+      - {id: start_label, type: text, text: "Start", height: 0.04, pos: [0, -0.33]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  trial:
+    components:
+      - id: rule_now                  # the current rule and the key card that is right for this card
+        type: variable
+        set:
+          streak: "$0 if streak >= run_length else streak"
+          rule: $rules[categories % len(rules)]
+          target: "$'key' + str({'colour': key_colour, 'shape': key_shape, 'number': key_number}[rule])"
+      - {id: key1, type: image, image: stimuli/1_red_triangle.png, size: [0.22, 0.308], pos: [-0.54, 0.24]}
+      - {id: key2, type: image, image: stimuli/2_green_star.png, size: [0.22, 0.308], pos: [-0.18, 0.24]}
+      - {id: key3, type: image, image: stimuli/3_yellow_cross.png, size: [0.22, 0.308], pos: [0.18, 0.24]}
+      - {id: key4, type: image, image: stimuli/4_blue_circle.png, size: [0.22, 0.308], pos: [0.54, 0.24]}
+      - {id: card, type: image, image: $card_image, size: [0.22, 0.308], pos: [0, -0.24], marker: card_on}
+      - id: resp
+        type: mouse
+        clickable: [key1, key2, key3, key4]
+        touch: true
+        correct: $target
+        end_routine: true
+      - id: score                     # scoring, in order: each line can use the ones above it
+        type: variable
+        when: end
+        set:
+          chosen: "$int(resp.clicked[-1]) if resp.clicked else 0"
+          error: "$int(resp.corr != 1)"
+          # an error that would have been right under the previous category's rule
+          persev_error: "$int(resp.corr != 1 and prev_rule != '' and {'colour': key_colour, 'shape': key_shape, 'number': key_number}[prev_rule] == chosen)"
+          streak: "$streak + 1 if resp.corr == 1 else 0"
+          category_done: "$int(streak >= run_length)"
+          prev_rule: "$rule if streak >= run_length else prev_rule"
+          categories: "$categories + (1 if streak >= run_length else 0)"
+
+  feedback:
+    duration: 0.9
+    components:
+      - {id: key1, type: image, image: stimuli/1_red_triangle.png, size: [0.22, 0.308], pos: [-0.54, 0.24]}
+      - {id: key2, type: image, image: stimuli/2_green_star.png, size: [0.22, 0.308], pos: [-0.18, 0.24]}
+      - {id: key3, type: image, image: stimuli/3_yellow_cross.png, size: [0.22, 0.308], pos: [0.18, 0.24]}
+      - {id: key4, type: image, image: stimuli/4_blue_circle.png, size: [0.22, 0.308], pos: [0.54, 0.24]}
+      - id: fb
+        type: text
+        text: "$'RIGHT' if resp.corr == 1 else 'WRONG'"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 0.08
+        bold: true
+        pos: [0, -0.24]
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "Thank you! This task is finished.", height: 0.05}
+
+flow:
+  - instructions
+  - loop: trials
+    conditions: cards.csv
+    order: random
+    repeats: 2
+    max_repeat: {colour: 2, shape: 2, number: 2}
+    stop_if: "$categories >= max_categories"
+    children: [trial, feedback]
+  - thanks

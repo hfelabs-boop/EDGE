@@ -1,0 +1,28 @@
+id: multitasking
+title: Multitasking (single vs mixed task blocks)
+category: Cognitive control
+summary: Judge the shape or count the dots of a figure, depending on where it appears; single-task blocks vs a mixed block.
+description: >
+  Measures the costs of doing two tasks in alternation. A frame on the screen has a top half (SHAPE) and a
+  bottom half (FILLING). 500 ms into each trial a yellow figure, a diamond or a rectangle with 2 or 3 dots
+  inside, appears in one half. In the top half the participant judges the shape (diamond = A, rectangle =
+  L), in the bottom half counts the dots (2 = A, 3 = L), within 3 seconds. Block 1 has only the shape task
+  (24 trials), block 2 only the filling task (24 trials), block 3 mixes both at random (64 trials); each
+  block starts with 8 practice trials with feedback. Half of the figures are incongruent (the two tasks
+  call for different keys). Main outcomes: the mixing cost (repeat trials in the mixed block vs single-task
+  trials) and the switch cost (switch vs repeat trials in the mixed block).
+measures:
+  - "Median RT on correct trials: single task vs mixed-block repeat vs mixed-block switch (mixing and switch costs)"
+  - "Accuracy by trial type and task"
+duration_min: 6
+input: keyboard
+languages: [en]
+references:
+  - "Stoet, G., O'Connor, D. B., Conner, M., & Laws, K. R. (2013). Are women better than men at multi-tasking? BMC Psychology, 1, 18."
+  - "Monsell, S. (2003). Task switching. Trends in Cognitive Sciences, 7, 134–140."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/multitasking.html"}
+notes: >
+  The block and practice lists (shape.csv, filling.csv, mixed.csv, practice_*.csv) are made by
+  tools/library/make_multitasking.py; their stage column (practice / test) keeps practice out of the
+  measures. The trial type (single / first / repeat / switch) is saved as cond.trial_type. Stoet et al.
+  counterbalanced the order of the two single-task blocks; swap the two parts in the flow to do that.

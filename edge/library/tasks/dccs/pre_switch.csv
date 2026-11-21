@@ -1,0 +1,7 @@
+phase,hint,card,shape,colour,colour_rgb,border,rule,correct_card
+pre_switch,Colour game,red_triangle,triangle,red,#e8312f,0,colour,card_right
+pre_switch,Colour game,blue_circle,circle,blue,#3d6df2,0,colour,card_left
+pre_switch,Colour game,red_triangle,triangle,red,#e8312f,0,colour,card_right
+pre_switch,Colour game,blue_circle,circle,blue,#3d6df2,0,colour,card_left
+pre_switch,Colour game,red_triangle,triangle,red,#e8312f,0,colour,card_right
+pre_switch,Colour game,blue_circle,circle,blue,#3d6df2,0,colour,card_left

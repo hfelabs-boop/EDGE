@@ -1,0 +1,119 @@
+name: taskswitching_cued
+description: >
+  Cued task switching. Before each letter-digit pair a cue says which task to do: LETTER (vowel = A,
+  consonant = L) or DIGIT (even = A, odd = L). The task is chosen at random, so it switches
+  unpredictably; the cue-target interval (CTI) is short (200 ms) or long (1000 ms). Switch costs are
+  usually smaller with a long CTI, when there is time to prepare.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  prev_task: ""        # the task of the previous trial (empty at the start of a block)
+
+measures:
+  - {id: rt, label: Reaction time (correct trials), role: outcome, column: resp.rt,
+     trials: "$resp.corr == 1 and cond.transition != 'first'", loop: trials, summary: median, units: s, expect: [0.3, 3.0]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, trials: "$cond.transition != 'first'",
+     loop: trials, summary: proportion}
+  - {id: transition, label: Switch or repeat trial, role: factor, column: cond.transition}
+  - {id: cti, label: Cue-target interval (s), role: factor, column: cti}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          LETTERS AND DIGITS
+
+          You will see a letter and a digit together, for example G7.
+          Just before it, a word tells you what to judge:
+
+          LETTER (blue):  vowel (A E I U) = A key     consonant = L key
+          DIGIT (orange): even = A key     odd = L key
+
+          The task changes at random, so always look at the word.
+          Answer as fast as you can without making mistakes.
+
+          First a practice. Press SPACE to start.
+        height: 25
+        wrap_width: 1150
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {prev_task: ""}}
+
+  trial:
+    components:
+      - id: cond                      # switch or repeat, from the previous trial's task (saved as cond.*)
+        type: variable
+        set:
+          transition: "$'first' if prev_task == '' else ('repeat' if task == prev_task else 'switch')"
+      - {id: blank, type: wait, duration: 0.5}
+      - {id: frame, type: shape, shape: rect, size: [360, 220], fill: "#000000", line_color: $cue_rgb, line_width: 4, start: 0.5}
+      - {id: cue_word, type: text, text: $cue, color: $cue_rgb, height: 30, bold: true, pos: [0, 60], start: 0.5,
+         marker: cue_on}
+      - id: stimulus
+        type: text
+        text: $pair
+        height: 56
+        bold: true
+        pos: [0, -20]
+        start: $0.5 + cti
+        marker: $f"pair_{task}_{transition}"
+      - id: resp
+        type: keyboard
+        keys: [a, l]
+        start: $0.5 + cti
+        duration: 3.0
+        correct: $correct_key
+        end_routine: true
+      - {id: remember, type: variable, when: end, set: {prev_task: $task}}
+      - {id: reminder, type: text, text: "LETTER: vowel = A, consonant = L        DIGIT: even = A, odd = L", color: "#777777", height: 18, pos: [0, -300]}
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr == 1 else ('Too slow' if resp.keys is None else 'Wrong')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 36
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: |
+          Practice finished.
+
+          Now the real test (about 5 minutes). Always look at the word before the pair.
+          You will only see a message after a mistake.
+
+          Press SPACE to start.
+        height: 26
+        wrap_width: 1150
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+      - {id: reset, type: variable, set: {prev_task: ""}}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "Thank you! This task is finished.", height: 34}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: trials.csv
+    order: random
+    stop_if: "$practice.n >= 15"
+    children: [trial, feedback]
+  - practice_done
+  - loop: trials
+    conditions: trials.csv
+    order: random
+    repeats: 2
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - thanks

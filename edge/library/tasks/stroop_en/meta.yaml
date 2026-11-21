@@ -1,0 +1,27 @@
+id: stroop_en
+title: Stroop task (easy to translate)
+category: Inhibition and conflict
+summary: A colour-word Stroop task with every participant-facing text in one block of variables, ready for translation.
+description: >
+  The same colour-word Stroop design as the standard task (4 colours, 500 ms fixation, response within
+  2 s, half congruent and half incongruent trials, 8 practice trials with feedback and 96 test trials),
+  built for student projects in other languages. All instructions, feedback messages and the four colour
+  words live in the experiment's variables (the block marked TRANSLATE HERE in the file, or Experiment
+  settings > Variables in the builder), so translating means changing those values only; the trial lists
+  name the colours by an id (red, green, blue, yellow) that never changes. The response keys D, F, J and
+  K are keyboard positions, so they work whatever the colour words are. Outcome: the Stroop effect, the
+  slowing and extra errors on incongruent trials.
+measures:
+  - "Median RT on correct trials, congruent vs incongruent (Stroop effect)"
+  - "Accuracy, congruent vs incongruent"
+duration_min: 5
+input: keyboard
+languages: [en]
+variant_of: stroop
+references:
+  - "Stroop, J. R. (1935). Studies of interference in serial verbal reactions. Journal of Experimental Psychology, 18, 643–662."
+  - "MacLeod, C. M. (1991). Half a century of research on the Stroop effect: An integrative review. Psychological Bulletin, 109, 163–203."
+see_also: {psytoolkit: "https://www.psytoolkit.org/experiment-library/stroop_en.html"}
+notes: >
+  When translating, also update txt_keys so the key reminder names the colours in the new language.
+  Languages written right to left work too (text items pick the direction automatically).

@@ -1,0 +1,112 @@
+name: numerical_stroop_touch
+description: >
+  Numerical Stroop / size congruity task for touchscreens. Two digits appear in two boxes, in different
+  print sizes; the participant taps the box with the NUMERICALLY larger digit, ignoring print size.
+  Congruent, incongruent and neutral (same size) trials; numerical distance 1 or 5.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: height}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  digit_size: 0.25         # print size (fraction of screen height) of a "big" digit
+
+measures:
+  - {id: rt, label: Reaction time (correct taps), role: outcome, column: resp.rt, trials: $resp.corr == 1,
+     loop: trials, summary: median, units: s, expect: [0.3, 2.5]}
+  - {id: accuracy, label: Accuracy, role: outcome, column: resp.corr, loop: trials, summary: proportion}
+  - {id: condition, label: Size congruity, role: factor, column: condition}
+  - {id: distance, label: Numerical distance, role: factor, column: distance}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        text: |
+          WHICH NUMBER IS LARGER?
+
+          You will see two digits, each in a box.
+          Tap the box with the larger VALUE. Ignore how big or small the digit is printed.
+
+          Tap as fast as you can without making mistakes.
+        height: 0.04
+        wrap_width: 1.4
+        pos: [0, 0.12]
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#3a3a3a", line_color: "#aaaaaa", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start practice", height: 0.04, pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  trial:
+    components:
+      - {id: fix, type: fixation, duration: 0.5, size: 0.05}
+      # the two tap targets, always visible
+      - {id: box_left, type: shape, shape: rect, size: [0.4, 0.4], fill: "#1c1c1c", line_color: "#777777", line_width: 3, pos: [-0.3, 0]}
+      - {id: box_right, type: shape, shape: rect, size: [0.4, 0.4], fill: "#1c1c1c", line_color: "#777777", line_width: 3, pos: [0.3, 0]}
+      - id: left
+        type: text
+        text: $str(left_digit)
+        height: $digit_size * left_size
+        pos: [-0.3, 0]
+        start: 0.5
+        marker: $f"digits_{condition}"
+      - id: right
+        type: text
+        text: $str(right_digit)
+        height: $digit_size * right_size
+        pos: [0.3, 0]
+        start: 0.5
+      - id: resp
+        type: mouse
+        clickable: [box_left, box_right]
+        touch: true
+        start: 0.5
+        duration: 2.5
+        correct: $correct_box
+        end_routine: true
+
+  feedback:
+    duration: 0.8
+    components:
+      - id: fb
+        type: text
+        text: "$'Correct' if resp.corr == 1 else ('Too slow' if resp.clicked is None else 'Wrong')"
+        color: "$'#55dd55' if resp.corr == 1 else '#ff5555'"
+        height: 0.06
+
+  practice_done:
+    components:
+      - id: text
+        type: text
+        text: |
+          Practice finished.
+
+          Now the real test (about 4 minutes). You will only see a message after a mistake.
+        height: 0.04
+        wrap_width: 1.4
+        pos: [0, 0.12]
+      - {id: start_btn, type: shape, shape: rect, size: [0.4, 0.1], fill: "#3a3a3a", line_color: "#aaaaaa", pos: [0, -0.3]}
+      - {id: start_label, type: text, text: "Start", height: 0.04, pos: [0, -0.3]}
+      - {id: go, type: mouse, clickable: [start_btn], touch: true, end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, text: "Thank you! This task is finished.", height: 0.05}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: random
+    children: [trial, feedback]
+  - practice_done
+  - loop: trials
+    conditions: trials.csv
+    order: random
+    repeats: 2
+    max_repeat: {larger_side: 4}
+    children:
+      - trial
+      - {routine: feedback, if: "$resp.corr != 1"}
+  - thanks

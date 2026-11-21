@@ -1,0 +1,9 @@
+word,ink,ink_rgb,congruent,condition,correct_button
+RED,red,#e8312f,1,congruent,btn_red
+GREEN,blue,#3d6df2,0,incongruent,btn_blue
+BLUE,yellow,#f2d230,0,incongruent,btn_yellow
+YELLOW,yellow,#f2d230,1,congruent,btn_yellow
+RED,green,#22b14c,0,incongruent,btn_green
+GREEN,green,#22b14c,1,congruent,btn_green
+BLUE,blue,#3d6df2,1,congruent,btn_blue
+YELLOW,red,#e8312f,0,incongruent,btn_red
