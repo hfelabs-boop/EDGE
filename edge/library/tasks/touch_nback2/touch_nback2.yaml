@@ -1,0 +1,122 @@
+name: touch_nback2
+description: >
+  2-back task for touchscreens (tablet or touch monitor, landscape). Letters appear one at a time (0.5 s each,
+  a new letter every 3 s). For every letter the participant taps MATCH (same letter as two letters before)
+  or NO MATCH. A practice block of 22 letters with feedback, then 3 blocks of 32 letters (2 lead-in letters +
+  30 scored, one third matches). Works with a mouse too. Outcomes: hit rate, correct rejections, RT.
+
+settings:
+  window: {size: [1280, 720], background: "#101010", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  letter_on: 0.5          # seconds each letter is shown
+  soa: 3.0                # seconds from one letter to the next (the response window)
+
+measures:
+  - {id: hit_rate, label: Hits (MATCH on a 2-back match), role: outcome, column: score.ok, loop: trials,
+     trials: "$cond == 'target'", summary: proportion}
+  - {id: correct_rejections, label: Correct rejections (NO MATCH on non-matches), role: outcome, column: score.ok,
+     loop: trials, trials: "$cond == 'nontarget'", summary: proportion}
+  - {id: accuracy, label: Accuracy (all scored letters), role: outcome, column: score.ok, loop: trials,
+     trials: "$cond != 'filler'", summary: proportion}
+  - {id: rt, label: RT of correct taps, role: outcome, column: tap.rt, loop: trials,
+     trials: "$cond != 'filler' and tap.corr == 1", summary: median, units: s, expect: [0.2, 3.0]}
+  - {id: no_answer, label: Letters without a tap, role: check, column: score.missed, loop: trials, summary: sum}
+  - {id: cond, label: Letter type, role: factor, column: cond}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 27
+        wrap_width: 1100
+        pos: [0, 60]
+        text: |
+          2-back
+
+          Letters will appear one at a time.
+          For EVERY letter, tap one of the two buttons:
+          MATCH if it is the same letter as the one shown TWO letters earlier,
+          NO MATCH otherwise.
+
+          Example:  F ... K ... F  -> MATCH        K ... B ... B  -> NO MATCH
+
+          First a short practice with feedback.
+      - {id: start_btn, type: shape, shape: rect, size: [300, 110], pos: [0, -250], fill: "#2e7d4f"}
+      - {id: start_lbl, type: text, text: Start, pos: [0, -250], height: 36}
+      - {id: go, type: mouse, clickable: [start_btn], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 28
+        wrap_width: 1100
+        pos: [0, 60]
+        text: |
+          Well done. Now three blocks of about 1.5 minutes each, without feedback.
+          Answer every letter: MATCH or NO MATCH.
+      - {id: start_btn, type: shape, shape: rect, size: [300, 110], pos: [0, -250], fill: "#2e7d4f"}
+      - {id: start_lbl, type: text, text: Start, pos: [0, -250], height: 36}
+      - {id: go, type: mouse, clickable: [start_btn], end_routine: true}
+
+  trial:
+    duration: $soa
+    components:
+      - {id: stim, type: text, text: $letter, height: 130, pos: [0, 80], duration: $letter_on, marker: "$f'letter_{cond}'"}
+      - {id: b_nomatch, type: shape, shape: rect, size: [380, 150], pos: [-360, -230], fill: "#5a2e2e", line_color: "#c07070", line_width: 3}
+      - {id: b_match, type: shape, shape: rect, size: [380, 150], pos: [360, -230], fill: "#2e5a3a", line_color: "#70c090", line_width: 3}
+      - {id: l_nomatch, type: text, text: NO MATCH, pos: [-360, -230], height: 38}
+      - {id: l_match, type: text, text: MATCH, pos: [360, -230], height: 38}
+      - {id: tap, type: mouse, clickable: [b_nomatch, b_match], correct: $corr_button, duration: $soa}
+      # a white frame around the button that was tapped, so the participant sees the tap was taken
+      - {id: ack, type: shape, shape: rect, size: [400, 170], fill: transparent, line_color: "#ffffff", line_width: 6,
+         pos: "$[360, -230] if tap.clicked == 'b_match' else [-360, -230]", start_if: "$tap.clicked is not None"}
+      - id: score
+        type: variable
+        when: end
+        set: {ok: "$int(tap.corr == 1)", missed: "$int(tap.clicked is None)"}
+
+  practice_feedback:
+    duration: 0.7
+    components:
+      - id: fb
+        type: text
+        height: 32
+        pos: [0, 80]
+        text: "$('Correct' if tap.corr else ('Too slow' if tap.clicked is None else ('That was a match' if target else 'Not a match')))"
+        color: "$'#5fd38d' if tap.corr else '#ff7a7a'"
+
+  rest:
+    components:
+      - id: text
+        type: text
+        height: 28
+        pos: [0, 60]
+        text: "$f'End of block {block[-1]} of 3. Take a short break.'"
+      - {id: start_btn, type: shape, shape: rect, size: [300, 110], pos: [0, -250], fill: "#2e7d4f"}
+      - {id: start_lbl, type: text, text: Continue, pos: [0, -250], height: 36}
+      - {id: go, type: mouse, clickable: [start_btn], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 32, text: "Thank you, the task is finished."}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: sequential
+    children: [trial, practice_feedback]
+  - main_intro
+  # main.csv holds the three blocks one after the other; a break after the last letter of blocks 1 and 2
+  - loop: trials
+    conditions: main.csv
+    order: sequential
+    children:
+      - trial
+      - {routine: rest, if: "$last_in_block == 1 and block != 'block3'"}
+  - thanks

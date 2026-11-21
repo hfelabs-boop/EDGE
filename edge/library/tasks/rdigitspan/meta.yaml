@@ -1,0 +1,27 @@
+id: rdigitspan
+title: Digit span (backward)
+category: Working memory
+summary: Recall ever longer lists of digits in reverse order, until two lists of one length fail.
+description: >-
+  Backward digit span, a measure of working memory (holding and reordering). Digits 1-9 are shown one per second;
+  the participant enters them in reverse order (last digit first) on an on-screen keypad. After two practice lists
+  of 2 digits, the test starts at 2 digits with two lists per length, growing by one while at least one list is
+  right and stopping when both are wrong (or after 8 digits). The backward span is the longest list recalled correctly.
+measures:
+- backward digit span (longest list recalled correctly)
+- number of lists correct
+- proportion of digits in the right place
+- time per keypad tap
+duration_min: 5
+input: mouse
+languages:
+- en
+references:
+- >-
+  Wechsler, D. (2008). Wechsler Adult Intelligence Scale – Fourth Edition (WAIS-IV). San Antonio, TX: Pearson.
+- >-
+  Jones, G., & Macken, B. (2015). Questioning short-term memory and its measurement: Why digit span measures long-term
+  associative learning. Cognition, 144, 1–13.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/rdigitspan.html
+notes: 'Same file as digitspan with direction: backward under variables.'

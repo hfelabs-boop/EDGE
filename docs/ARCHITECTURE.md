@@ -65,6 +65,7 @@ edge/
   help.py           docs topics, search, tutorials, generated reference pages (`edge help`, `edge docs build`)
   tutorials/        interactive tutorial definitions (YAML; also rendered into docs/TUTORIALS.md)
   assets/           the EDGE icon in every size the desktop shortcuts need
+  library/          the task library: tasks/<id>/ holds a ready-made classic paradigm (<id>.yaml, meta.yaml, trial lists)
   assistant/        the natural-language assistant: providers (Claude, OpenAI-compatible, Ollama, LM Studio over
                     urllib), settings (user config folder, 0600), attachments and their previews, the agent loop
                     over ExperimentDoc operations, JSON fallback mode, change lists, jobs and the builder API

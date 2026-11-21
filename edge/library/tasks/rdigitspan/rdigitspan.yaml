@@ -1,0 +1,210 @@
+name: rdigitspan
+description: >
+  Backward (reverse) digit span. Digits appear one at a time (one per second); the participant then
+  enters them in REVERSE order on an on-screen keypad (mouse or touch): the last digit first. Each length
+  is tried twice, starting with 2 digits; the list grows by one digit as long as at least one of the two
+  tries is right, and the test stops when both tries at one length are wrong (or after 8 digits).
+  Backward span = the longest list recalled correctly.
+
+settings:
+  window: {size: [1280, 720], background: "#1e1e24", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  direction: backward     # forward: recall in the order shown; backward: in reverse order
+  start_span: 2           # length of the first main list
+  max_span: 8             # longest list (digits 1-9, no digit twice in one list)
+  digit_on: 0.8           # seconds each digit is shown
+  digit_soa: 1.0          # seconds from one digit to the next
+  span: 2                 # current list length (practice length first; the workflow sets it)
+  tries: 0                # tries at the current length
+  fails: 0                # wrong tries at the current length
+  best: 0                 # longest list recalled correctly
+  n_correct_lists: 0
+  i_show: 0               # position in the list being shown
+  i_rec: 0                # position being recalled
+  seq: []                 # the digits of the current list
+  target: []              # the answer in the order it must be entered
+  typed: ""
+  n_ok: 0
+  phase: practice
+
+measures:
+  - {id: digit_span, label: Backward digit span (longest list recalled correctly), role: outcome, column: score.best,
+     trials: "$phase == 'main'", summary: last, expect: [0, 8]}
+  - {id: lists_correct, label: Lists recalled correctly, role: outcome, column: score.n_correct_lists,
+     trials: "$phase == 'main'", summary: last}
+  - {id: list_accuracy, label: Proportion of lists recalled correctly, role: outcome, column: score.list_ok,
+     trials: "$phase == 'main'", summary: proportion}
+  - {id: digit_accuracy, label: Digits in the right place, role: outcome, column: pad.corr,
+     trials: "$phase == 'main'", summary: proportion}
+  - {id: tap_rt, label: Time per keypad tap, role: outcome, column: pad.rt, trials: "$phase == 'main'",
+     summary: median, units: s, expect: [0.15, 10]}
+  - {id: span_length, label: List length, role: factor, column: span}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 28
+        wrap_width: 1000
+        text: |
+          Remember the digits
+
+          Digits will appear in the middle of the screen, one after another.
+          When they have all been shown, a keypad appears: tap or click the digits
+          in REVERSE order. Start with the LAST digit you saw and end with the first.
+          Example: you see 3 8 1, you enter 1 8 3.
+
+          The lists start short and get longer. Just do your best.
+
+          First, two practice lists. Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 28
+        wrap_width: 1000
+        text: |
+          Well done. Now the real test begins.
+
+          Remember: enter the digits backwards, last one first.
+          The lists start with 2 digits and grow by one digit at a time.
+          There is no feedback from now on.
+
+          Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  # draws a new list: digits 1-9, none repeated
+  new_list:
+    duration: 1.0
+    components:
+      - id: make
+        type: variable
+        set:
+          seq: "$random.sample(range(1, 10), int(span))"
+          typed: ""
+          n_ok: 0
+          i_show: 0
+          i_rec: 0
+      - id: order
+        type: variable
+        set: {target: "$list(seq) if direction == 'forward' else list(seq[::-1])"}
+      - {id: ready, type: text, text: "+", height: 48, color: "#9aa0b4"}
+
+  digit:
+    duration: $digit_soa
+    components:
+      - {id: num, type: text, text: "$str(seq[i_show])", height: 120, duration: $digit_on,
+         marker: "$f'digit_{seq[i_show]}'"}
+      - {id: step, type: variable, when: end, set: {i_show: "$i_show + 1"}}
+
+  enter:
+    components:
+      - id: prompt
+        type: text
+        pos: [0, 300]
+        height: 26
+        color: "#c8cbe0"
+        text: "$'Enter the digits in the order shown' if direction == 'forward' else 'Enter the digits in REVERSE order (last one first)'"
+      - {id: so_far, type: text, pos: [0, 220], height: 54, text: "$typed + ' _'"}
+      - {id: k1, type: shape, shape: rect, size: [110, 80], pos: [-130, 100], fill: "#3b3f58", line_color: "#8088b0"}
+      - {id: k2, type: shape, shape: rect, size: [110, 80], pos: [0, 100], fill: "#3b3f58", line_color: "#8088b0"}
+      - {id: k3, type: shape, shape: rect, size: [110, 80], pos: [130, 100], fill: "#3b3f58", line_color: "#8088b0"}
+      - {id: k4, type: shape, shape: rect, size: [110, 80], pos: [-130, 0], fill: "#3b3f58", line_color: "#8088b0"}
+      - {id: k5, type: shape, shape: rect, size: [110, 80], pos: [0, 0], fill: "#3b3f58", line_color: "#8088b0"}
+      - {id: k6, type: shape, shape: rect, size: [110, 80], pos: [130, 0], fill: "#3b3f58", line_color: "#8088b0"}
+      - {id: k7, type: shape, shape: rect, size: [110, 80], pos: [-130, -100], fill: "#3b3f58", line_color: "#8088b0"}
+      - {id: k8, type: shape, shape: rect, size: [110, 80], pos: [0, -100], fill: "#3b3f58", line_color: "#8088b0"}
+      - {id: k9, type: shape, shape: rect, size: [110, 80], pos: [130, -100], fill: "#3b3f58", line_color: "#8088b0"}
+      - {id: l1, type: text, text: "1", pos: [-130, 100], height: 40}
+      - {id: l2, type: text, text: "2", pos: [0, 100], height: 40}
+      - {id: l3, type: text, text: "3", pos: [130, 100], height: 40}
+      - {id: l4, type: text, text: "4", pos: [-130, 0], height: 40}
+      - {id: l5, type: text, text: "5", pos: [0, 0], height: 40}
+      - {id: l6, type: text, text: "6", pos: [130, 0], height: 40}
+      - {id: l7, type: text, text: "7", pos: [-130, -100], height: 40}
+      - {id: l8, type: text, text: "8", pos: [0, -100], height: 40}
+      - {id: l9, type: text, text: "9", pos: [130, -100], height: 40}
+      - {id: count, type: text, pos: [0, -230], height: 22, color: "#9aa0b4",
+         text: "$f'digit {i_rec + 1} of {int(span)}'"}
+      # one tap per screen: the answer for this position is target[i_rec]
+      - id: pad
+        type: mouse
+        clickable: [k1, k2, k3, k4, k5, k6, k7, k8, k9]
+        correct: "$f'k{target[i_rec]}'"
+        end_routine: true
+      - id: note
+        type: variable
+        when: end
+        set:
+          typed: "$(typed + ' ' + pad.clicked[1:]).strip() if pad.clicked else typed"
+          n_ok: "$n_ok + (pad.corr or 0)"
+          i_rec: "$i_rec + 1"
+
+  result:
+    duration: "$1.5 if phase == 'practice' else 0.8"
+    components:
+      - id: score
+        type: variable
+        set:
+          list_ok: "$int(n_ok == int(span))"
+          tries: "$tries + 1"
+          fails: "$fails + (0 if n_ok == int(span) else 1)"
+          best: "$max(best, int(span)) if n_ok == int(span) and phase == 'main' else best"
+          n_correct_lists: "$n_correct_lists + (1 if n_ok == int(span) and phase == 'main' else 0)"
+      - id: fb
+        type: text
+        height: 34
+        wrap_width: 1000
+        text: "$(('Correct!' if n_ok == int(span) else 'Not quite. The list was ' + ' '.join([str(d) for d in target])) if phase == 'practice' else '')"
+        color: "$'#5fd38d' if n_ok == int(span) else '#ff7a7a'"
+
+  thanks:
+    duration: 4
+    components:
+      - id: bye
+        type: text
+        height: 32
+        text: "$f'Thank you! Your backward digit span: {best}'"
+
+flow:
+  - instructions
+  - loop: practice
+    repeats: 2
+    children:
+      - {routine: new_list}
+      - loop: show
+        repeats: $span
+        children: [digit]
+      - loop: recall
+        repeats: $span
+        children: [enter]
+      - result
+  - main_intro
+  - statemachine: span_test
+    start: setup
+    states:
+      setup:
+        run: []
+        next:
+          - {goto: list, set: {span: $start_span, tries: 0, fails: 0, phase: main}}
+      list:
+        run:
+          - new_list
+          - loop: show
+            repeats: $span
+            children: [digit]
+          - loop: recall
+            repeats: $span
+            children: [enter]
+          - result
+        next:
+          - {if: "$tries >= 2 and fails >= 2", goto: end}           # both tries wrong: stop
+          - {if: "$tries >= 2 and span >= max_span", goto: end}     # longest list done
+          - {if: "$tries >= 2", goto: list, set: {span: "$span + 1", tries: 0, fails: 0}}
+          - {goto: list}
+  - thanks

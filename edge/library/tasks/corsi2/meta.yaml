@@ -1,0 +1,35 @@
+id: corsi2
+title: Corsi block-tapping task (adaptive)
+category: Working memory
+summary: >-
+  Corsi blocks on a fixed board with an adaptive sequence length (one up after a hit, one down after an error).
+description: >-
+  An alternative Corsi procedure. The nine blocks stand at fixed places on a board; a sequence lights up (one block
+  per second) and is tapped back in the same order. Instead of two tries per length, the length follows a one-up/one-down
+  staircase starting at 3 blocks: one block longer after a correct sequence, one shorter after an error, for 14
+  sequences. The span estimate is the mean length at the staircase's turning points (the length recalled correctly
+  half of the time); the longest sequence reproduced and the proportion correct are recorded as well.
+measures:
+- span estimate (staircase)
+- longest sequence reproduced
+- proportion of sequences correct
+- proportion of taps on the right block
+- time per tap
+duration_min: 6
+input: mouse
+languages:
+- en
+variant_of: corsi
+references:
+- >-
+  Corsi, P. M. (1972). Human memory and the medial temporal region of the brain (Doctoral dissertation). McGill
+  University, Montreal.
+- >-
+  Kessels, R. P. C., van Zandvoort, M. J. E., Postma, A., Kappelle, L. J., & de Haan, E. H. F. (2000). The Corsi
+  Block-Tapping Task: Standardization and normative data. Applied Neuropsychology, 7(4), 252–258.
+- >-
+  Levitt, H. (1971). Transformed up-down methods in psychoacoustics. Journal of the Acoustical Society of America,
+  49, 467–477.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/corsi2.html
+notes: Uses EDGE's staircase loop (variable span, step -1) for the adaptive length.

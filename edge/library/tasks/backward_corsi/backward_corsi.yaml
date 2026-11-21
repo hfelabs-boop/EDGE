@@ -1,0 +1,224 @@
+name: backward_corsi
+description: >
+  Backward Corsi block-tapping task. Nine blue blocks are scattered on the screen. Some of them light
+  up one after another (one per second); then the participant taps or clicks the same blocks in REVERSE
+  order, starting with the last one that lit up. Two sequences per length, starting with 2 blocks; the sequence grows by one block as long as at
+  least one of the two is reproduced correctly, and the test stops when both are wrong (or after 9 blocks).
+  Backward Corsi span = the longest sequence reproduced; total score = span x number of correct sequences
+  (Kessels et al., 2000).
+
+settings:
+  window: {size: [1280, 720], background: "#202020", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  direction: backward     # forward: tap in the order shown; backward: in reverse order
+  start_span: 2
+  max_span: 9
+  light_on: 0.75          # seconds a block stays lit
+  light_soa: 1.0          # seconds from one block to the next
+  # centres of blocks 1-9 (the layout is fixed for everyone; move blocks here and in the screens below)
+  blocks: [[-380, 180], [-120, 235], [210, 190], [410, 60], [-290, 10], [40, 45], [-420, -180], [-90, -150], [260, -205]]
+  span: 2                 # current sequence length (practice first; the workflow sets it)
+  tries: 0
+  fails: 0
+  best: 0
+  n_correct_seqs: 0
+  i_show: 0               # position in the list being shown
+  i_rec: 0                # position being recalled
+  seq: []
+  target: []
+  n_ok: 0
+  phase: practice
+
+measures:
+  - {id: corsi_span, label: Backward Corsi span (longest sequence reproduced), role: outcome, column: score.best,
+     trials: "$phase == 'main'", summary: last, expect: [0, 9]}
+  - {id: sequences_correct, label: Sequences reproduced correctly, role: outcome, column: score.n_correct_seqs,
+     trials: "$phase == 'main'", summary: last}
+  - {id: total_score, label: Total score (span x correct sequences), role: outcome, column: score.total_score,
+     trials: "$phase == 'main'", summary: last}
+  - {id: block_accuracy, label: Taps on the right block, role: outcome, column: pad.corr, trials: "$phase == 'main'",
+     summary: proportion}
+  - {id: tap_rt, label: Time per tap, role: outcome, column: pad.rt, trials: "$phase == 'main'", summary: median,
+     units: s, expect: [0.15, 10]}
+  - {id: seq_length, label: Sequence length, role: factor, column: span}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 27
+        wrap_width: 1050
+        text: |
+          Block tapping
+
+          You will see nine blue blocks. Some of them will light up in yellow, one after another.
+          Watch carefully. When the blocks stop lighting up, tap or click the same blocks
+          in REVERSE order: start with the block that lit up LAST and finish with the first one.
+
+          The sequences start short and get longer.
+          First, two practice sequences. Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 27
+        wrap_width: 1050
+        text: |
+          Good. Now the test begins: remember to tap the blocks backwards, last one first.
+          Sequences start with 2 blocks and grow by one block at a time.
+          There is no feedback from now on.
+
+          Click anywhere to start.
+      - {id: go, type: mouse, end_routine: true}
+
+  new_sequence:
+    duration: 1.0
+    components:
+      - id: make
+        type: variable
+        set:
+          seq: "$random.sample(range(1, 10), int(span))"
+          n_ok: 0
+          i_show: 0
+          i_rec: 0
+      - id: order
+        type: variable
+        set: {target: "$list(seq) if direction == 'forward' else list(seq[::-1])"}
+      - {id: b1, type: shape, shape: rect, size: [90, 90], pos: [-380, 180], fill: "#2f5fd0"}
+      - {id: b2, type: shape, shape: rect, size: [90, 90], pos: [-120, 235], fill: "#2f5fd0"}
+      - {id: b3, type: shape, shape: rect, size: [90, 90], pos: [210, 190], fill: "#2f5fd0"}
+      - {id: b4, type: shape, shape: rect, size: [90, 90], pos: [410, 60], fill: "#2f5fd0"}
+      - {id: b5, type: shape, shape: rect, size: [90, 90], pos: [-290, 10], fill: "#2f5fd0"}
+      - {id: b6, type: shape, shape: rect, size: [90, 90], pos: [40, 45], fill: "#2f5fd0"}
+      - {id: b7, type: shape, shape: rect, size: [90, 90], pos: [-420, -180], fill: "#2f5fd0"}
+      - {id: b8, type: shape, shape: rect, size: [90, 90], pos: [-90, -150], fill: "#2f5fd0"}
+      - {id: b9, type: shape, shape: rect, size: [90, 90], pos: [260, -205], fill: "#2f5fd0"}
+      - {id: watch, type: text, text: Watch, pos: [0, -320], height: 26, color: "#bbbbbb"}
+
+  # one lit block; the loop 'show' runs once per block of the sequence
+  light:
+    duration: $light_soa
+    components:
+      - {id: b1, type: shape, shape: rect, size: [90, 90], pos: [-380, 180], fill: "#2f5fd0"}
+      - {id: b2, type: shape, shape: rect, size: [90, 90], pos: [-120, 235], fill: "#2f5fd0"}
+      - {id: b3, type: shape, shape: rect, size: [90, 90], pos: [210, 190], fill: "#2f5fd0"}
+      - {id: b4, type: shape, shape: rect, size: [90, 90], pos: [410, 60], fill: "#2f5fd0"}
+      - {id: b5, type: shape, shape: rect, size: [90, 90], pos: [-290, 10], fill: "#2f5fd0"}
+      - {id: b6, type: shape, shape: rect, size: [90, 90], pos: [40, 45], fill: "#2f5fd0"}
+      - {id: b7, type: shape, shape: rect, size: [90, 90], pos: [-420, -180], fill: "#2f5fd0"}
+      - {id: b8, type: shape, shape: rect, size: [90, 90], pos: [-90, -150], fill: "#2f5fd0"}
+      - {id: b9, type: shape, shape: rect, size: [90, 90], pos: [260, -205], fill: "#2f5fd0"}
+      - {id: lit, type: shape, shape: rect, size: [90, 90], pos: "$blocks[seq[i_show] - 1]", fill: "#ffd23f",
+         duration: $light_on, marker: "$f'block_{seq[i_show]}'"}
+      - {id: step, type: variable, when: end, set: {i_show: "$i_show + 1"}}
+      - {id: watch, type: text, text: Watch, pos: [0, -320], height: 26, color: "#bbbbbb"}
+
+  # one tap; the answer for this position is target[i_rec]
+  tap:
+    components:
+      - {id: b1, type: shape, shape: rect, size: [90, 90], pos: [-380, 180], fill: "#2f5fd0"}
+      - {id: b2, type: shape, shape: rect, size: [90, 90], pos: [-120, 235], fill: "#2f5fd0"}
+      - {id: b3, type: shape, shape: rect, size: [90, 90], pos: [210, 190], fill: "#2f5fd0"}
+      - {id: b4, type: shape, shape: rect, size: [90, 90], pos: [410, 60], fill: "#2f5fd0"}
+      - {id: b5, type: shape, shape: rect, size: [90, 90], pos: [-290, 10], fill: "#2f5fd0"}
+      - {id: b6, type: shape, shape: rect, size: [90, 90], pos: [40, 45], fill: "#2f5fd0"}
+      - {id: b7, type: shape, shape: rect, size: [90, 90], pos: [-420, -180], fill: "#2f5fd0"}
+      - {id: b8, type: shape, shape: rect, size: [90, 90], pos: [-90, -150], fill: "#2f5fd0"}
+      - {id: b9, type: shape, shape: rect, size: [90, 90], pos: [260, -205], fill: "#2f5fd0"}
+      - id: prompt
+        type: text
+        pos: [0, -320]
+        height: 26
+        color: "#ffffff"
+        text: "$f\"Your turn: tap the blocks {'in the same order' if direction == 'forward' else 'in REVERSE order'} ({i_rec + 1} of {int(span)})\""
+      - id: pad
+        type: mouse
+        clickable: [b1, b2, b3, b4, b5, b6, b7, b8, b9]
+        correct: "$f'b{target[i_rec]}'"
+        end_routine: true
+      - id: note
+        type: variable
+        when: end
+        set: {n_ok: "$n_ok + (pad.corr or 0)", i_rec: "$i_rec + 1"}
+
+  # the tapped block flashes briefly so the participant sees the tap was taken
+  echo:
+    duration: 0.25
+    components:
+      - {id: b1, type: shape, shape: rect, size: [90, 90], pos: [-380, 180], fill: "#2f5fd0"}
+      - {id: b2, type: shape, shape: rect, size: [90, 90], pos: [-120, 235], fill: "#2f5fd0"}
+      - {id: b3, type: shape, shape: rect, size: [90, 90], pos: [210, 190], fill: "#2f5fd0"}
+      - {id: b4, type: shape, shape: rect, size: [90, 90], pos: [410, 60], fill: "#2f5fd0"}
+      - {id: b5, type: shape, shape: rect, size: [90, 90], pos: [-290, 10], fill: "#2f5fd0"}
+      - {id: b6, type: shape, shape: rect, size: [90, 90], pos: [40, 45], fill: "#2f5fd0"}
+      - {id: b7, type: shape, shape: rect, size: [90, 90], pos: [-420, -180], fill: "#2f5fd0"}
+      - {id: b8, type: shape, shape: rect, size: [90, 90], pos: [-90, -150], fill: "#2f5fd0"}
+      - {id: b9, type: shape, shape: rect, size: [90, 90], pos: [260, -205], fill: "#2f5fd0"}
+      - {id: flash, type: shape, shape: rect, size: [90, 90], fill: "#9fd0ff",
+         pos: "$blocks[int(pad.clicked[1:]) - 1] if pad.clicked else [0, -500]"}
+
+  result:
+    duration: "$1.5 if phase == 'practice' else 0.8"
+    components:
+      - id: score
+        type: variable
+        set:
+          seq_ok: "$int(n_ok == int(span))"
+          tries: "$tries + 1"
+          fails: "$fails + (0 if n_ok == int(span) else 1)"
+          best: "$max(best, int(span)) if n_ok == int(span) and phase == 'main' else best"
+          n_correct_seqs: "$n_correct_seqs + (1 if n_ok == int(span) and phase == 'main' else 0)"
+          total_score: "$best * n_correct_seqs"
+      - id: fb
+        type: text
+        height: 34
+        text: "$('Correct!' if n_ok == int(span) else 'Not quite.') if phase == 'practice' else ''"
+        color: "$'#5fd38d' if n_ok == int(span) else '#ff7a7a'"
+
+  thanks:
+    duration: 4
+    components:
+      - {id: bye, type: text, height: 32, text: "$f'Thank you! Your backward block span: {best}'"}
+
+flow:
+  - instructions
+  - loop: practice
+    repeats: 2
+    children:
+      - new_sequence
+      - loop: show
+        repeats: $span
+        children: [light]
+      - loop: recall
+        repeats: $span
+        children: [tap, echo]
+      - result
+  - main_intro
+  - statemachine: span_test
+    start: setup
+    states:
+      setup:
+        run: []
+        next:
+          - {goto: sequence, set: {span: $start_span, tries: 0, fails: 0, phase: main}}
+      sequence:
+        run:
+          - new_sequence
+          - loop: show
+            repeats: $span
+            children: [light]
+          - loop: recall
+            repeats: $span
+            children: [tap, echo]
+          - result
+        next:
+          - {if: "$tries >= 2 and fails >= 2", goto: end}           # both sequences of this length wrong: stop
+          - {if: "$tries >= 2 and span >= max_span", goto: end}     # longest sequence done
+          - {if: "$tries >= 2", goto: sequence, set: {span: "$span + 1", tries: 0, fails: 0}}
+          - {goto: sequence}
+  - thanks

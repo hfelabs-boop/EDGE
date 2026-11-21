@@ -1,0 +1,102 @@
+name: nback2
+description: >
+  2-back task with letters (keyboard). Letters appear one at a time (0.5 s each, a new letter every 3 s).
+  Press SPACE when the letter is the same as the one shown two letters before; do nothing otherwise.
+  A practice block of 22 letters with feedback, then 3 blocks of 32 letters (2 lead-in letters + 30 scored,
+  one third targets). Outcomes: hit rate, correct rejections (1 - false alarm rate), RT on hits.
+
+settings:
+  window: {size: [1280, 720], background: "#000000", units: px}
+  participant: {participant: "001", session: "1"}
+
+variables:
+  letter_on: 0.5          # seconds each letter is shown
+  soa: 3.0                # seconds from one letter to the next (the response window)
+
+measures:
+  - {id: hit_rate, label: Hits (SPACE on a 2-back match), role: outcome, column: resp.corr, loop: trials,
+     trials: "$cond == 'target'", summary: proportion}
+  - {id: correct_rejections, label: Correct rejections (no press on non-matches), role: outcome, column: resp.corr,
+     loop: trials, trials: "$cond == 'nontarget'", summary: proportion}
+  - {id: accuracy, label: Accuracy (all scored letters), role: outcome, column: resp.corr, loop: trials,
+     trials: "$cond != 'filler'", summary: proportion}
+  - {id: hit_rt, label: RT on hits, role: outcome, column: resp.rt, loop: trials,
+     trials: "$cond == 'target' and resp.corr == 1", summary: median, units: s, expect: [0.2, 3.0]}
+  - {id: cond, label: Letter type, role: factor, column: cond}
+
+routines:
+  instructions:
+    components:
+      - id: text
+        type: text
+        height: 27
+        wrap_width: 1100
+        text: |
+          2-back
+
+          Letters will appear one at a time in the middle of the screen.
+          Press SPACE whenever the letter is the SAME as the letter shown TWO letters earlier.
+          For all other letters, do not press anything.
+
+          Example:   F  ...  K  ...  F  <- press SPACE (F was shown two letters ago)
+                     K  ...  B  ...  B  <- no press (B is only one letter back)
+
+          First a short practice with feedback. Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  main_intro:
+    components:
+      - id: text
+        type: text
+        height: 28
+        wrap_width: 1100
+        text: |
+          Well done. Now three blocks of about 1.5 minutes each, without feedback.
+          Press SPACE for a 2-back match; otherwise do nothing.
+
+          Press SPACE to start.
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  trial:
+    duration: $soa
+    components:
+      - {id: stim, type: text, text: $letter, height: 110, duration: $letter_on, marker: "$f'letter_{cond}'"}
+      - {id: resp, type: keyboard, keys: [space], correct: $corr_key, duration: $soa}
+
+  practice_feedback:
+    duration: 0.7
+    components:
+      - id: fb
+        type: text
+        height: 30
+        text: "$('Correct' if resp.corr else ('Missed: that was a match' if target else 'Not a match'))"
+        color: "$'#5fd38d' if resp.corr else '#ff7a7a'"
+
+  rest:
+    components:
+      - id: text
+        type: text
+        height: 28
+        text: "$f'End of block {block[-1]} of 3. Take a short break.\\n\\nPress SPACE to go on.'"
+      - {id: go, type: keyboard, keys: [space], end_routine: true}
+
+  thanks:
+    duration: 3
+    components:
+      - {id: bye, type: text, height: 32, text: "Thank you, the task is finished."}
+
+flow:
+  - instructions
+  - loop: practice
+    conditions: practice.csv
+    order: sequential
+    children: [trial, practice_feedback]
+  - main_intro
+  # main.csv holds the three blocks one after the other; a break after the last letter of blocks 1 and 2
+  - loop: trials
+    conditions: main.csv
+    order: sequential
+    children:
+      - trial
+      - {routine: rest, if: "$last_in_block == 1 and block != 'block3'"}
+  - thanks

@@ -1,0 +1,35 @@
+id: nback2_phone
+title: 2-back task (phone)
+category: Working memory
+summary: '2-back with letters on a phone held upright: tap MATCH or NO MATCH for every letter.'
+description: >-
+  The 2-back task laid out for a portrait phone screen with two large thumb buttons. Letters appear for 0.5 s, one
+  every 3 s; for every letter the participant taps MATCH (same as two letters back) or NO MATCH, so every trial
+  has an answer and a response time. Practice block of 22 letters with feedback, then three blocks of 32 letters
+  (30 scored, one third matches). Outcomes: hits, correct rejections, accuracy, RT of correct taps and the number
+  of letters left without a tap.
+measures:
+- hit rate (response on 2-back matches)
+- correct rejections (1 - false alarm rate)
+- overall accuracy
+- RT of correct taps
+- letters without a tap
+duration_min: 8
+input: touch
+languages:
+- en
+variant_of: nback2
+references:
+- >-
+  Kirchner, W. K. (1958). Age differences in short-term retention of rapidly changing information. Journal of Experimental
+  Psychology, 55, 352–358.
+- >-
+  Jaeggi, S. M., Buschkuehl, M., Perrig, W. J., & Meier, B. (2010). The concurrent validity of the N-back task as
+  a working memory measure. Memory, 18, 394–412.
+- >-
+  Kane, M. J., Conway, A. R. A., Miura, T. K., & Colflesh, G. J. H. (2007). Working memory, attention control, and
+  the n-back task: A question of construct validity. Journal of Experimental Psychology: Learning, Memory, and Cognition,
+  33(3), 615–622.
+see_also:
+  psytoolkit: https://www.psytoolkit.org/experiment-library/nback2_phone.html
+notes: Window 540 x 960 px (portrait). Uses the same letter lists as nback2. Works with a mouse as well.
