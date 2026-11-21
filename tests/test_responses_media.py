@@ -31,6 +31,8 @@ def _exp(tmp_path, routines, flow=None, devices=None, conditions=None):
 
 
 def _dry(exp, tmp_path, **kw):
+    from edge.participant import VirtualParticipant
+    kw.setdefault("virtual_participant", VirtualParticipant(seed=7))   # the same answers every run (no flaky RTs)
     s = run_experiment(exp, dry_run=True, data_dir=str(tmp_path / "data"), log=lambda *a: None, **kw)
     root = Path(s["data_dir"])
     rows = [json.loads(line) for line in (root / "trials.jsonl").read_text().splitlines() if line.strip()]

@@ -66,6 +66,8 @@ class RoutineRun:
             ns.update(frame["row"])
             ns[frame["loop"]] = frame["state"]
         ns.update(self.runner.results)
+        for frame in self.runner.stack:          # a trial list running again: its live state, not last run's result
+            ns[frame["loop"]] = frame["state"]
         for cid, c in self.components.items():
             ns[cid] = c.out
         # trial-list values win over component results with the same name ("text: $word" in a
@@ -403,6 +405,7 @@ class Runner:
         ns.update(self.results)
         for f in self.stack:
             ns.update(f["row"])
+            ns[f["loop"]] = f["state"]
         ns["vars"] = self.session.vars
         return expressions.evaluate(src[1:] if src.startswith("$") else src, ns)
 

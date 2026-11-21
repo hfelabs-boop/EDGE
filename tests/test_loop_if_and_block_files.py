@@ -53,3 +53,16 @@ def test_estimate_counts_trial_list_files_named_by_a_column(tmp_path):
     s = run_experiment(exp, dry_run=True, data_dir=str(tmp_path / "d"), log=lambda *a: None)
     rows = [json.loads(x) for x in open(f"{s['data_dir']}/trials.jsonl")]
     assert sum(r.get("routine") == "t" for r in rows) == 6
+
+
+def test_a_trial_list_that_runs_again_counts_from_zero(tmp_path):
+    exp = Experiment.from_dict({
+        "name": "e",
+        "routines": {"t": {"components": [{"id": "w", "type": "text", "text": "$f'{show.n}'", "duration": 0.05},
+                                          {"id": "v", "type": "variable", "set": {"seen": "$show.n"}}]}},
+        "flow": [{"loop": "outer", "repeats": 2, "children": [
+            {"loop": "show", "conditions": [{"x": 1}, {"x": 2}, {"x": 3}], "children": ["t"]}]}]}, base_dir=tmp_path)
+    s = run_experiment(exp, dry_run=True, data_dir=str(tmp_path / "d"), log=lambda *a: None)
+    rows = [json.loads(x) for x in open(f"{s['data_dir']}/trials.jsonl")]
+    seen = [r.get("v.seen", r.get("seen")) for r in rows if r.get("routine") == "t"]
+    assert seen == [0, 1, 2, 0, 1, 2], seen

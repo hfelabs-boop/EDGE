@@ -361,18 +361,18 @@ edge backups [-h] [--restore [RESTORE]] experiment
 
 ## edge import
 
-import a PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Psychtoolbox or Gorilla experiment
+import a PsychoPy, E-Prime, OpenSesame, jsPsych, Inquisit, Presentation, Psychtoolbox, Gorilla or PsyToolkit experiment
 
 ```
 edge import [-h] [--out OUT]
-                   [--platform {psychopy,eprime,opensesame,jspsych,inquisit,presentation,psychtoolbox,gorilla}]
+                   [--platform {psychopy,eprime,opensesame,jspsych,inquisit,presentation,psychtoolbox,gorilla,psytoolkit}]
                    [--name NAME]
                    source
 ```
 
 | argument | description |
 |---|---|
-| `source` | .psyexp, .ebs3/.ebs2, .osexp/.opensesame, jsPsych .html/.js, Inquisit .iqx/.exp, Presentation .sce, Psychtoolbox .m, or a Gorilla task .json / spreadsheet .csv/.xlsx |
+| `source` | .psyexp, .ebs3/.ebs2, .osexp/.opensesame, jsPsych .html/.js, Inquisit .iqx/.exp, Presentation .sce, Psychtoolbox .m, a Gorilla task .json / spreadsheet .csv/.xlsx, or a PsyToolkit .zip / script .psy |
 | `--out` | output folder (default: <source>_edge next to the source) |
 | `--platform` | force the source platform (normally detected) |
 | `--name` | name for the imported experiment |
@@ -471,4 +471,16 @@ edge gamma [-h] [--levels LEVELS] [--csv CSV] [--readings READINGS]
 | `--monitor` | a description of the monitor (model, settings) saved in the file |
 | `--use` | also set the experiment's settings.window.gamma to the new file |
 | `--fit-only` | show the fit without saving anything |
+
+## edge library
+
+ready-made classic tasks (Stroop, flanker, n-back …): list, show, start from one
+
+```
+edge library [-h] <list|show|new> ...
+```
+
+| argument | description |
+|---|---|
+| `action` | list the tasks, show one, or start an experiment from one (default: list) |
 
