@@ -864,7 +864,8 @@ def main(argv: list[str] | None = None) -> int:
     p = _Parser(prog="edge", description="EDGE experiment builder and runtime")
     from . import __version__
     from .launcher import WORKSPACE_HELP
-    p.add_argument("--version", action="version", version=f"edge {__version__}")
+    from . import version_line
+    p.add_argument("--version", action="version", version=f"edge {version_line()}")
     sub = p.add_subparsers(dest="cmd", metavar="<command>")
 
     st = sub.add_parser("start", help="open the builder on your experiments folder (what `edge` alone does)")

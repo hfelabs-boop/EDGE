@@ -32,6 +32,7 @@ const S = {
   files: null,                   // experiments in the builder folder (GET /api/files?status=1)
   root: "",
   appVersion: "",               // edge.__version__ from /api/files (About EDGE)
+  appBuilt: "",                 // the build date (YYYY-MM-DD) from /api/files
   pageBase: "",                  // "/api/page/<key>/": experiment files by path, for sandboxed page previews
 };
 
@@ -366,7 +367,7 @@ async function loadPlaceholder() {
 }
 
 async function refreshFiles() {
-  try { const r = await api("/api/files?status=1"); S.files = r.files; S.root = r.root || S.root; S.appVersion = r.version || S.appVersion; S.pageBase = r.page_base || S.pageBase; }
+  try { const r = await api("/api/files?status=1"); S.files = r.files; S.root = r.root || S.root; S.appVersion = r.version || S.appVersion; S.appBuilt = r.built || S.appBuilt; S.pageBase = r.page_base || S.pageBase; }
   catch { try { const r = await api("/api/files"); S.files = r.files; S.root = r.root || S.root; S.appVersion = r.version || S.appVersion; S.pageBase = r.page_base || S.pageBase; } catch { S.files = S.files || []; } }
   return S.files;
 }
@@ -2846,7 +2847,7 @@ function aboutDialog() {
   ui.dialog({title: "About EDGE", size: "sm", buttons: [{label: "Close", value: null}], onOpen: (_d, close) => { closeIt = close; }, body: h("div", {class: "about"},
     h("img", {src: "/assets/edge-128.png", alt: "", width: 56, height: 56}),
     h("div", {}, h("p", {}, h("b", {}, "EDGE experiment builder"), " for behavioural, eye-tracking, EEG and physiology experiments."),
-      h("p", {class: "t-small", id: "about-version"}, S.appVersion ? `Version ${S.appVersion}` : "Version unknown"),
+      h("p", {class: "t-small", id: "about-version"}, S.appVersion ? `Version ${S.appVersion}${S.appBuilt ? ` · last updated ${S.appBuilt}` : ""}` : "Version unknown"),
       h("p", {class: "t-small t-2"}, `The builder runs on this computer${S.root ? ` and works in ${shortRoot()}` : ""}. Nothing leaves it unless you use an online assistant.`),
       h("p", {}, h("button", {class: "linkbtn", onclick: () => { closeIt(); openHelp("README"); }}, "Documentation"), " · ", h("button", {class: "linkbtn", onclick: () => { closeIt(); keyboardDialog(); }}, "Keyboard shortcuts"))))});
 }

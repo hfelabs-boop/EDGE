@@ -1020,8 +1020,8 @@ def make_handler(app: BuilderApp):
                 if u.path == "/api/schema":
                     return self._json(schema())
                 if u.path == "/api/files":
-                    from .. import __version__
-                    return self._json({"root": str(app.root), "version": __version__, "page_base": f"{PAGE_PREFIX}{app.page_key}/",
+                    from .. import __version__, __build_date__
+                    return self._json({"root": str(app.root), "version": __version__, "built": __build_date__, "page_base": f"{PAGE_PREFIX}{app.page_key}/",
                                        "files": app.list_files(q.get("status") == "1")})
                 if u.path == "/api/runs":
                     return self._json({"runs": app.list_runs()})

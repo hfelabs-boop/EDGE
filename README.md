@@ -241,7 +241,9 @@ From a copy of the repository you can also double-click `update.bat` (Windows) o
 you made to EDGE's own files, it stops and tells you instead; with `--stash` it sets them aside and
 puts them back afterwards, and if they clash with the update they stay safe in git's stash and the
 folder is left clean on the new version. Commits of your own are combined with the update.
-`edge --version` shows the release and the exact commit (`0.1.0+g61bc96e`), which is also recorded in
+`edge --version` shows the release, the exact commit and the date it was made (`0.1.0+g61bc96e (built 2026-11-21)`);
+the same line is in **About EDGE** in the builder (the menu ⋯ → About EDGE). Both show when this build was last
+updated. The commit is also recorded in
 every session's data and in experiment locks, so `edge verify` notices when EDGE changed.
 
 ## Hardware

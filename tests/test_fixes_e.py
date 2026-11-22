@@ -440,7 +440,9 @@ def test_version_names_the_commit(tmp_path, capsys):
         from edge.cli import main
         with pytest.raises(SystemExit):
             main(["--version"])
-        assert capsys.readouterr().out.strip() == f"edge {edge.__version__}"
+        out = capsys.readouterr().out.strip()
+        assert out == f"edge {edge.version_line()}" and out.startswith(f"edge {edge.__version__}")
+        assert edge.__build_date__ is None or re.fullmatch(r"\d{4}-\d{2}-\d{2}", edge.__build_date__)
     assert re.search(r'^version = "' + re.escape(edge.__release__) + '"', (ROOT / "pyproject.toml").read_text(), re.M)
 
 

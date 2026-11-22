@@ -91,6 +91,40 @@ def installed_source(running: bool = True) -> dict[str, Any] | None:
     return None
 
 
+def _commit_date(top: Path, commit: str) -> str | None:
+    """The date (YYYY-MM-DD) of ``commit`` in the git clone at ``top``, read from the packed or loose object
+    store without running git (falls back to None when it can't be read)."""
+    try:
+        import subprocess
+        out = subprocess.run(["git", "-C", str(top), "log", "-1", "--format=%cs", commit], capture_output=True,
+                             text=True, timeout=5)
+        if out.returncode == 0 and out.stdout.strip():
+            return out.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def build_date() -> str | None:
+    """When this build was made: the commit date (YYYY-MM-DD) of the running code, or None when unknown."""
+    top = checkout_dir()
+    if top is not None:
+        commit = _git_commit(top)
+        return _commit_date(top, commit) if commit else None
+    src = installed_source()
+    if src and src.get("commit"):
+        # an installed copy: pip doesn't keep the commit date, so use the install time of the package
+        try:
+            from importlib import metadata
+            dist = next(iter(metadata.distributions(name="edge-experiments")))
+            from datetime import datetime, timezone
+            ts = Path(str(dist.locate_file("edge/__init__.py"))).stat().st_mtime
+            return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%d")
+        except Exception:
+            return None
+    return None
+
+
 def checkout_dir() -> Path | None:
     """The git clone this EDGE runs from, if it does."""
     top = Path(__file__).resolve().parent.parent
@@ -114,6 +148,12 @@ def build_version() -> str:
 
 
 __version__ = build_version()
+__build_date__ = build_date()
+
+
+def version_line() -> str:
+    """e.g. ``0.1.0+g2f5d945 (built 2026-11-21)`` for `edge --version` and the About dialog."""
+    return f"{__version__} (built {__build_date__})" if __build_date__ else __version__
 
 from .model import Experiment  # noqa: E402
 
@@ -139,4 +179,4 @@ def run(path_or_experiment: Any, participant: Any = None, **kw: Any) -> dict[str
     return run_experiment(exp, participant=participant, **kw)
 
 
-__all__ = ["Experiment", "run", "__version__"]
+__all__ = ["Experiment", "run", "__version__", "__build_date__", "version_line"]
