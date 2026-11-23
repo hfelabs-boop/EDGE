@@ -49,7 +49,8 @@ edge report data/012_1_study_…     # timing, data-integrity and sync report
    **Already downloaded the EDGE folder?** Double-click **`INSTALL.bat`** (Windows) or **`INSTALL.command`** (macOS),
    or run `sh INSTALL.sh` (Linux). It installs from that folder and puts the **EDGE** icon on your desktop and in the
    folder. To get the newest version later, double-click **`UPDATE.bat`** / **`UPDATE.command`** (or `sh UPDATE.sh`):
-   it does `git pull` and reinstalls.
+   it does `git pull` and reinstalls. To remove EDGE from the computer, double-click **`UNINSTALL.bat`** /
+   **`UNINSTALL.command`** (or `sh UNINSTALL.sh`): it deletes what the installer made and keeps your experiments and data.
 2. Open EDGE. On **Home**, click **Answer a few questions**: what participants see, how they respond,
    timing, practice ("until 80% correct"), blocks. You get a finished experiment, already checked by a
    virtual participant: *"64 trials, about 6 minutes"*. Or **Describe it** to the [assistant](#describe-it-the-assistant).

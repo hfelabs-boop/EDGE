@@ -16,6 +16,14 @@ and not yet tested on every OS**; the release workflow (`.github/workflows/relea
 when a version tag is pushed and checks that the app starts and runs a dry run.
 
 
+## Uninstalling
+
+Double-click **`UNINSTALL.bat`** (Windows) or **`UNINSTALL.command`** (macOS), or run `sh UNINSTALL.sh` (Linux), in the
+EDGE folder. It removes the private environment (`~/.edge`), the `edge` command, the EDGE icons and the icon in the EDGE
+folder, and asks whether to delete the assistant settings (your API key). Your experiments and data (the "EDGE
+Experiments" folder) and the EDGE folder itself are never deleted. By hand: delete `%USERPROFILE%\.edge` and the EDGE
+icons on the desktop and in the Start menu (Windows), or `rm -rf ~/.edge ~/.local/bin/edge` plus the icons.
+
 ## Updating
 
 `edge update` downloads the newest version and says what changed (`EDGE updated: 61bc96e → baceab7`,

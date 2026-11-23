@@ -172,3 +172,33 @@ def test_desktop_shortcut_can_also_be_put_in_a_folder(tmp_path, monkeypatch):
     assert main(["desktop-shortcut", "--folder", str(tmp_path / "repo")]) == 0
     names = {p.name for p in (tmp_path / "repo").iterdir()}
     assert names & {"edge.desktop", "EDGE.app", "EDGE.lnk", "EDGE.bat"}, names
+
+
+def test_uninstall_removes_what_the_installer_made_and_keeps_the_experiments(tmp_path):
+    import os
+    import shutil
+    from pathlib import Path
+    if shutil.which("sh") is None or sys.platform.startswith("win"):
+        pytest.skip("shell script")
+    root = Path(__file__).resolve().parent.parent
+    home = tmp_path / "home"
+    (home / ".edge" / "venv" / "bin").mkdir(parents=True)
+    (home / ".local" / "bin").mkdir(parents=True)
+    (home / ".local" / "bin" / "edge").symlink_to(home / ".edge" / "venv" / "bin" / "edge")
+    (home / ".local" / "share" / "applications").mkdir(parents=True)
+    (home / ".local" / "share" / "applications" / "edge.desktop").write_text("x")
+    (home / "Desktop").mkdir()
+    (home / "Desktop" / "edge.desktop").write_text("x")
+    (home / ".config" / "edge").mkdir(parents=True)
+    (home / ".config" / "edge" / "assistant.json").write_text("{}")
+    (home / "EDGE Experiments").mkdir()
+    (home / "EDGE Experiments" / "mine.yaml").write_text("name: mine")
+    env = {**os.environ, "HOME": str(home), "XDG_CONFIG_HOME": "", "XDG_DESKTOP_DIR": ""}
+    r = subprocess.run(["sh", str(root / "UNINSTALL.sh")], input="n\n", capture_output=True, text=True, env=env, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert not (home / ".edge").exists() and not (home / ".local" / "bin" / "edge").is_symlink()
+    assert not (home / "Desktop" / "edge.desktop").exists()
+    assert (home / ".config" / "edge" / "assistant.json").exists()           # asked, answered no
+    assert (home / "EDGE Experiments" / "mine.yaml").read_text() == "name: mine"
+    r = subprocess.run(["sh", str(root / "UNINSTALL.sh")], input="y\n", capture_output=True, text=True, env=env, timeout=60)
+    assert r.returncode == 0
