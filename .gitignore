@@ -8,3 +8,8 @@ data/
 /edge_data/
 .venv/
 edge/_build.json
+
+# shortcuts that `edge desktop-shortcut` makes in this folder
+/EDGE.lnk
+/EDGE.app/
+/edge.desktop

@@ -87,7 +87,7 @@ if (-not $ok) {
 }
 
 Say "3/3  Creating the desktop icon"
-& $vpy -m edge desktop-shortcut
+if ($edgeOnly) { & $vpy -m edge desktop-shortcut } else { & $vpy -m edge desktop-shortcut --folder $source }
 if ($LASTEXITCODE -ne 0) { Write-Host "The icon could not be created. You can still start EDGE with:  $vpy -m edge"; break }
 
 Say "Done. Double-click EDGE on your desktop (or find it in the Start menu)."

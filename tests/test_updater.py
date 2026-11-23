@@ -141,6 +141,34 @@ def test_installed_copies_use_pip_and_explain_missing_git():
 def test_cli_and_scripts_exist():
     from edge.cli import main
     root = Path(__file__).resolve().parent.parent
-    assert (root / "update.sh").read_text().startswith("#!/bin/sh") and "-m edge update" in (root / "update.sh").read_text()
-    assert "-m edge update" in (root / "update.bat").read_text()
+    assert (root / "UPDATE.sh").read_text().startswith("#!/bin/sh") and "-m edge update" in (root / "UPDATE.sh").read_text()
+    assert "-m edge update" in (root / "UPDATE.bat").read_text()
     assert main(["update", "--check"]) in (0, 1)
+
+
+def test_the_root_folder_has_clear_install_and_update_launchers_and_the_icon():
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    for name in ("INSTALL.bat", "INSTALL.sh", "INSTALL.command", "UPDATE.bat", "UPDATE.sh", "UPDATE.command",
+                 "EDGE.ico", "EDGE.png"):
+        assert (root / name).is_file(), name
+    assert "install_edge.ps1" in (root / "INSTALL.bat").read_text()
+    assert "install_edge.sh" in (root / "INSTALL.sh").read_text() and "install_edge.sh" in (root / "INSTALL.command").read_text()
+    assert "UPDATE.sh" in (root / "UPDATE.command").read_text()
+    assert (root / "EDGE.ico").read_bytes() == (root / "edge" / "assets" / "edge.ico").read_bytes()
+    import os
+    for name in ("INSTALL.sh", "INSTALL.command", "UPDATE.sh", "UPDATE.command"):
+        assert os.access(root / name, os.X_OK), f"{name} is not executable"
+
+
+def test_desktop_shortcut_can_also_be_put_in_a_folder(tmp_path, monkeypatch):
+    import sys
+    if not sys.platform.startswith("linux"):
+        pytest.skip("makes a real shortcut; only checked on Linux with a throwaway home folder")
+    from edge.cli import main
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("XDG_DESKTOP_DIR", str(tmp_path / "home" / "Desktop"))
+    (tmp_path / "repo").mkdir()
+    assert main(["desktop-shortcut", "--folder", str(tmp_path / "repo")]) == 0
+    names = {p.name for p in (tmp_path / "repo").iterdir()}
+    assert names & {"edge.desktop", "EDGE.app", "EDGE.lnk", "EDGE.bat"}, names

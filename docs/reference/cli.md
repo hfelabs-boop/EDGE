@@ -21,12 +21,13 @@ edge start [-h] [--port PORT] [--no-browser] [directory]
 put an EDGE icon on the desktop / in the app menu
 
 ```
-edge desktop-shortcut [-h] [--workspace WORKSPACE]
+edge desktop-shortcut [-h] [--workspace WORKSPACE] [--folder FOLDER]
 ```
 
 | argument | description |
 |---|---|
 | `--workspace` | folder the icon opens (default: 'EDGE Experiments' in your Documents folder, or in your home folder if there is none) |
+| `--folder` | also put the icon in this folder (the installers pass the EDGE folder they installed from) |
 
 ## edge wizard
 

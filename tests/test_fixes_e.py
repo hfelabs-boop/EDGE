@@ -234,12 +234,12 @@ def test_update_sh_uses_the_python_that_has_this_clone(tmp_path):
     clone = tmp_path / "EDGE"
     (clone / ".git").mkdir(parents=True)
     (clone / "pyproject.toml").write_text('[project]\nname = "edge-experiments"\n')
-    shutil.copy(ROOT / "update.sh", clone / "update.sh")
+    shutil.copy(ROOT / "UPDATE.sh", clone / "UPDATE.sh")
     home = tmp_path / "home"
     _fake_python(home / ".edge" / "venv" / "bin" / "python", "installer-python", 1)   # EDGE from elsewhere
     _fake_python(tmp_path / "bin" / "python3", "clone-python", 0)                     # has this clone (-e)
     env = {"HOME": str(home), "PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin"}
-    r = subprocess.run(["/bin/sh", str(clone / "update.sh")], capture_output=True, text=True, env=env, timeout=60,
+    r = subprocess.run(["/bin/sh", str(clone / "UPDATE.sh")], capture_output=True, text=True, env=env, timeout=60,
                        cwd=str(tmp_path))
     assert r.stdout.strip() == f"clone-python ran edge update in {clone}", r.stdout + r.stderr
 

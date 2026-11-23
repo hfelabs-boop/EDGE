@@ -4,7 +4,7 @@
 |---|---|
 | **macOS / Linux** | `curl -fsSL https://raw.githubusercontent.com/hfelabs-boop/edge/main/install/install_edge.sh \| sh` |
 | **Windows** | In PowerShell: `irm https://raw.githubusercontent.com/hfelabs-boop/edge/main/install/install_edge.ps1 \| iex` |
-| A downloaded copy of EDGE | run `install/install_edge.sh` (macOS/Linux) or right-click `install/install_edge.ps1` → *Run with PowerShell* |
+| A downloaded copy of EDGE | double-click **`INSTALL.bat`** (Windows) or **`INSTALL.command`** (macOS); on Linux `sh INSTALL.sh`. They run the installers in `install/` and also put the **EDGE** icon in the EDGE folder. **`UPDATE.bat`** / **`UPDATE.command`** / `sh UPDATE.sh` do `git pull` and reinstall. |
 | Python experience | `pip install "edge-experiments[all] @ git+https://github.com/hfelabs-boop/edge.git"` |
 
 The installers need Python 3.10+ (they tell you where to get it), make a private environment in
@@ -24,7 +24,7 @@ repository), it compares the commit you have with the newest one and reinstalls 
 repository; `edge update --check` only looks. If you cloned the repository, it brings the clone up to
 date (`git pull`; commits of your own are combined with the update) and reinstalls it into the Python
 that has the clone installed, keeping any uncommitted changes of your own safe (`--stash`).
-`update.bat` / `update.sh` in the repository's top folder do the same and find the right Python for
+`UPDATE.bat` / `UPDATE.sh` in the repository's top folder do the same and find the right Python for
 you; an EDGE installed separately by these scripts (`~/.edge`, used by the desktop icon) is left
 alone. Running the installer again also updates. (An installed copy whose `edge --version` shows
 just `0.1.0` has the old `edge update`, which can say it updated without changing anything: run the

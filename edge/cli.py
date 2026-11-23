@@ -782,6 +782,16 @@ def cmd_shortcut(a: argparse.Namespace) -> int:
         folder, _ = workspace_for(a.workspace)
         ws = folder.resolve()
     files = desktop_shortcut(workspace=ws)
+    here = a.folder or None
+    if here is None:     # run from a clone of EDGE: the icon goes into the clone's folder too
+        from . import checkout_dir
+        top = checkout_dir()
+        here = str(top) if top else None
+    if here and Path(here).is_dir():
+        try:
+            files += desktop_shortcut(workspace=ws, desktop=Path(here))
+        except Exception as e:
+            print(f"(the icon could not be put in {here}: {e})", file=sys.stderr)
     for f in files:
         print(f"created {f}")
     print(f"The icon opens the builder on {ws or default_workspace()}")
@@ -878,6 +888,8 @@ def main(argv: list[str] | None = None) -> int:
 
     sc = sub.add_parser("desktop-shortcut", help="put an EDGE icon on the desktop / in the app menu")
     sc.add_argument("--workspace", help=f"folder the icon opens (default: {WORKSPACE_HELP})")
+    sc.add_argument("--folder", help="also put the icon in this folder (the installers pass the EDGE folder they "
+                                     "installed from)")
     sc.set_defaults(fn=cmd_shortcut)
 
     wz = sub.add_parser("wizard", help="answer a few questions and get a finished experiment")

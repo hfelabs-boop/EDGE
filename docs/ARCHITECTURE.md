@@ -80,7 +80,7 @@ edge/
   cli.py            `edge` command
 docs/               the guides (copied into the package as edge/docs when a wheel is built, see setup.py)
 install/            installer scripts (sh, PowerShell), experimental PyInstaller recipe (edge.spec)
-update.sh, .bat     `edge update` for clones, finding the Python that has the clone installed
+UPDATE.sh, .bat     `edge update` for clones, finding the Python that has the clone installed
 ```
 
 ## Frame loop (RoutineRun.run)

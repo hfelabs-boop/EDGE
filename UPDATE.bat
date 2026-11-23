@@ -1,5 +1,5 @@
 @echo off
-rem Update EDGE to the newest version (Windows): double-click this file, or run  update.bat --check
+rem Update EDGE to the newest version (Windows): double-click this file, or run  UPDATE.bat --check
 rem Works from a git clone of EDGE and for copies made by install\install_edge.ps1.
 rem Your experiments and data are never touched.
 setlocal

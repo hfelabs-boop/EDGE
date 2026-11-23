@@ -94,7 +94,8 @@ case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *)
 esac
 
 say "4/4  Creating the desktop icon"
-"$VPY" -m edge desktop-shortcut || true
+if [ -f "$EDGE_SOURCE/pyproject.toml" ]; then "$VPY" -m edge desktop-shortcut --folder "$EDGE_SOURCE" || true
+else "$VPY" -m edge desktop-shortcut || true; fi
 
 say "Done. Double-click the EDGE icon, or type:  $EDGE_CMD"
 echo "If the icon does not open, look at ~/.edge/launch.log or run:  $EDGE_CMD doctor"

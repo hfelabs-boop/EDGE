@@ -46,6 +46,10 @@ edge report data/012_1_study_…     # timing, data-integrity and sync report
 1. Install with one command (it adds an **EDGE** icon to your desktop):
    macOS/Linux `curl -fsSL https://raw.githubusercontent.com/hfelabs-boop/edge/main/install/install_edge.sh | sh`,
    Windows (PowerShell) `irm https://raw.githubusercontent.com/hfelabs-boop/edge/main/install/install_edge.ps1 | iex`.
+   **Already downloaded the EDGE folder?** Double-click **`INSTALL.bat`** (Windows) or **`INSTALL.command`** (macOS),
+   or run `sh INSTALL.sh` (Linux). It installs from that folder and puts the **EDGE** icon on your desktop and in the
+   folder. To get the newest version later, double-click **`UPDATE.bat`** / **`UPDATE.command`** (or `sh UPDATE.sh`):
+   it does `git pull` and reinstalls.
 2. Open EDGE. On **Home**, click **Answer a few questions**: what participants see, how they respond,
    timing, practice ("until 80% correct"), blocks. You get a finished experiment, already checked by a
    virtual participant: *"64 trials, about 6 minutes"*. Or **Describe it** to the [assistant](#describe-it-the-assistant).
@@ -236,7 +240,7 @@ edge update --check    # only look whether there is something new
 edge update --stash    # keep your own uncommitted changes (put back afterwards)
 ```
 
-From a copy of the repository you can also double-click `update.bat` (Windows) or run `sh update.sh`
+From a copy of the repository you can also double-click `UPDATE.bat` (Windows) or run `sh UPDATE.sh`
 (macOS / Linux). Your experiments and data are never touched. If the update would overwrite changes
 you made to EDGE's own files, it stops and tells you instead; with `--stash` it sets them aside and
 puts them back afterwards, and if they clash with the update they stay safe in git's stash and the

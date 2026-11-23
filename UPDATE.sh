@@ -1,5 +1,5 @@
 #!/bin/sh
-# Update EDGE to the newest version (macOS / Linux).   sh update.sh   [--check] [--stash]
+# Update EDGE to the newest version (macOS / Linux).   sh UPDATE.sh   [--check] [--stash]
 # Works from a git clone of EDGE and for copies made by install/install_edge.sh.
 # Your experiments and data are never touched.
 HERE="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"

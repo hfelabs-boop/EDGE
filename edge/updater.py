@@ -1,4 +1,4 @@
-"""Update EDGE to the newest version: ``edge update`` (or ``update.sh`` / ``update.bat``).
+"""Update EDGE to the newest version: ``edge update`` (or ``UPDATE.sh`` / ``UPDATE.bat``).
 
 Two kinds of installation are handled:
 
