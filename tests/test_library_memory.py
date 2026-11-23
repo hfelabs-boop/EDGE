@@ -34,7 +34,9 @@ def _run(task: str, tmp_root: Path) -> Path:
         work = tmp_root / task
         shutil.copytree(TASKS_DIR / task, work)
         exp = Experiment.load(work / f"{task}.yaml")
-        summary = run_experiment(exp, dry_run=True, data_dir=str(work / "data"), log=lambda *a: None)
+        from edge.participant import VirtualParticipant
+        summary = run_experiment(exp, dry_run=True, data_dir=str(work / "data"), log=lambda *a: None,
+                                 virtual_participant=VirtualParticipant(seed=3))      # same answers every run
         assert not summary.get("errors"), summary.get("errors")
         _RUNS[task] = Path(summary["data_dir"])
     return _RUNS[task]
