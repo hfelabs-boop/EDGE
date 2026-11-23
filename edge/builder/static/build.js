@@ -969,7 +969,7 @@ function storyEstimate(onReady) {
 function thumbTime(rid, doc = S.exp) {
   let t = 0;
   for (const c of doc.routines?.[rid]?.components || []) {
-    const d = S.schema.components[c.type];
+    const d = S.schema?.components?.[c.type];
     if (!d || !d.visual || c.start_after || c.start_if || c.if || c.disabled === true || (typeof c.start !== "number" && c.start != null)) continue;
     t = Math.max(t, numOr(c.start, 0));
   }

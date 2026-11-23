@@ -406,6 +406,7 @@ function loadDoc(exp, path, fp = null, opts = {}) {
 }
 
 async function openFile(path, opts = {}) {
+  if (!S.schema) S.schema = await api("/api/schema");        // opened before the builder finished starting
   const j = await api(`/api/experiment?path=${encodeURIComponent(path)}`);
   loadDoc(j.experiment, path, j.fingerprint, opts);
   if (j.migrations && j.migrations.length) toast("Upgraded from an older format: " + j.migrations.join("; "), 6000);
