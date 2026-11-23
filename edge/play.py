@@ -273,6 +273,8 @@ class Player:
         from .model import Experiment
 
         full = doc
+        self.full = full
+        self.routine = routine
         if routine:
             doc = single_screen_experiment(doc, routine, max_trials)
         else:
@@ -324,12 +326,38 @@ class Player:
         except Exception as e:  # shown in the builder
             from .diagnostics import format_report, plain_error
             rep = getattr(e, "report", None)
+            prepared = self._prepared_elsewhere(rep or {"message": str(e)})
+            if prepared:      # "Try this screen" on a screen that uses values an earlier screen prepares
+                names = ", ".join("“" + n + "”" for n in prepared)
+                self.error = (f"“{self.routine}” uses {names}, which an earlier screen prepares, so it can only be "
+                              "tried as part of the whole experiment: use Try it (whole experiment)")
+                self.problem = {"title": "Try it with the whole experiment", "text": self.error}
+                return
             self.error = format_report(rep) if rep else f"{type(e).__name__}: {e}"
             try:
                 self.problem = plain_error(rep or {"type": type(e).__name__, "message": str(e)}, self.doc)
             except Exception:
                 self.problem = None
             self.logs.append(traceback.format_exc())
+
+    def _prepared_elsewhere(self, rep: dict[str, Any]) -> list[str]:
+        """Single-screen Try it only: the names in a failing expression that this screen reads but that screens left
+        out of the cut-down run give their value (a letter set chosen per set, a Corsi sequence ...)."""
+        if not self.routine:
+            return []
+        routines = self.full.get("routines") or {}
+        kept = set(self.screens or [self.routine])
+        reads: set[str] = set()
+        for rid in kept:
+            reads |= _routine_reads(routines.get(rid) or {})
+        elsewhere: set[str] = set()
+        for rid, r in routines.items():
+            if rid not in kept:
+                elsewhere |= _routine_defines(r or {})
+        text = " ".join(str(rep.get(k) or "") for k in ("message", "what", "expression", "detail"))
+        import re as _re
+        words = set(_re.findall(r"[A-Za-z_][A-Za-z0-9_]*", text))
+        return sorted(n for n in reads & elsewhere if n in words)
 
     def _watchdog(self) -> None:
         # stop sessions whose tab went away (nobody asked for a frame for 30 s)
