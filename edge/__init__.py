@@ -111,6 +111,9 @@ def build_date() -> str | None:
     if top is not None:
         commit = _git_commit(top)
         return _commit_date(top, commit) if commit else None
+    info = _baked_build_info()
+    if info and isinstance(info.get("date"), str) and info["date"]:
+        return info["date"]
     src = installed_source()
     if src and src.get("commit"):
         # an installed copy: pip doesn't keep the commit date, so use the install time of the package
@@ -137,7 +140,19 @@ def build_commit() -> str | None:
     if top is not None:
         return _git_commit(top)
     src = installed_source()
-    return src["commit"] if src else None
+    if src and src["commit"]:
+        return src["commit"]
+    info = _baked_build_info()
+    return info.get("commit") if info else None
+
+
+def _baked_build_info() -> dict[str, Any] | None:
+    """edge/_build.json, written by setup.py when the wheel was built from a clone."""
+    try:
+        data = json.loads((Path(__file__).resolve().parent / "_build.json").read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) and _is_commit(str(data.get("commit", ""))) else None
+    except (OSError, ValueError):
+        return None
 
 
 def build_version() -> str:

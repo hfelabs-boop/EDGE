@@ -7,3 +7,4 @@ dist/
 data/
 /edge_data/
 .venv/
+edge/_build.json

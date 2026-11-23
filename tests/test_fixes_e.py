@@ -556,3 +556,20 @@ def test_docs_describe_the_terminal_wizard_and_tutorials_as_they_are():
     n = len(help.tutorials())
     line = next(l for l in (ROOT / "docs" / "README.md").read_text(encoding="utf-8").splitlines() if "(TUTORIALS.md)" in l)
     assert words.get(n, str(n)) in line
+
+
+def test_a_wheel_built_from_a_clone_knows_its_commit_and_date(tmp_path):
+    """pip install <folder> (the Windows/macOS installers from a downloaded copy) must still say which build it is."""
+    import json
+    import subprocess
+    import sys
+    import zipfile
+    if not (ROOT / ".git").exists():
+        pytest.skip("not a git clone")
+    out = subprocess.run([sys.executable, "-m", "pip", "wheel", str(ROOT), "--no-deps", "-q", "-w", str(tmp_path)],
+                         capture_output=True, text=True, timeout=600)
+    assert out.returncode == 0, out.stderr[-500:]
+    whl = next(tmp_path.glob("edge_experiments-*.whl"))
+    info = json.loads(zipfile.ZipFile(whl).read("edge/_build.json"))
+    real = sh(ROOT, "git", "rev-parse", "HEAD").strip()
+    assert info["commit"] == real and re.fullmatch(r"\d{4}-\d{2}-\d{2}", info["date"])
