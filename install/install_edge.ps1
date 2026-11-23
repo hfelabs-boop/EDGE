@@ -51,10 +51,23 @@ if ($source -like "git+*" -and -not (Get-Command git -ErrorAction SilentlyContin
 }
 
 $venv = Join-Path $env:USERPROFILE ".edge\venv"
-Say "1/3  Making a private Python environment in $venv"
-& cmd /c "$py -m venv ""$venv"""
 $vpy = Join-Path $venv "Scripts\python.exe"
-if (-not (Test-Path $vpy)) { Write-Host "Could not make the private Python environment (see the messages above)."; break }
+# An environment from an earlier install is reused: making it again would overwrite python.exe / pythonw.exe,
+# which Windows refuses ("Permission denied") while EDGE or the builder is still running.
+$reuse = $false
+if (Test-Path $vpy) { & $vpy -c "import sys" 2>$null; $reuse = ($LASTEXITCODE -eq 0) }
+if ($reuse) {
+  Say "1/3  Using the private Python environment in $venv"
+} else {
+  Say "1/3  Making a private Python environment in $venv"
+  & cmd /c "$py -m venv ""$venv"""
+}
+if (-not (Test-Path $vpy)) {
+  Write-Host "Could not make the private Python environment (see the messages above)."
+  Write-Host "If it says 'Permission denied': close EDGE and the builder (and any terminal running 'edge'), delete the"
+  Write-Host "folder $venv, and run this again."
+  break
+}
 & $vpy -m pip install --quiet --upgrade pip
 $wasInstalled = Test-Edge
 
