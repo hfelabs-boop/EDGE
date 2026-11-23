@@ -265,6 +265,16 @@ def _needs_the_rest(full: dict[str, Any], cut: dict[str, Any], routine: str, bas
 
 
 # ---------------------------------------------------------------- a playing session
+def _flow_nodes(nodes: list[Any]):
+    """Every node of a flow, nested ones included."""
+    for n in nodes or []:
+        yield n
+        if isinstance(n, dict):
+            for kids in [n.get("children"), n.get("then"), n.get("else"),
+                         *[(st or {}).get("run") for st in (n.get("states") or {}).values()]]:
+                yield from _flow_nodes(kids or [])
+
+
 class Player:
     """One "Try it" session running in a background thread."""
 
@@ -354,6 +364,12 @@ class Player:
         for rid, r in routines.items():
             if rid not in kept:
                 elsewhere |= _routine_defines(r or {})
+        cut_loops = {n.get("loop") for n in _flow_nodes(self.doc.get("flow") or []) if isinstance(n, dict)}
+        for n in _flow_nodes(self.full.get("flow") or []):        # trial lists and workflows left out of the run
+            if isinstance(n, dict):
+                for k in ("loop", "statemachine"):
+                    if isinstance(n.get(k), str) and n[k] not in cut_loops:
+                        elsewhere.add(n[k])
         text = " ".join(str(rep.get(k) or "") for k in ("message", "what", "expression", "detail"))
         import re as _re
         words = set(_re.findall(r"[A-Za-z_][A-Za-z0-9_]*", text))
